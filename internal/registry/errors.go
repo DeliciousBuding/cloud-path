@@ -14,6 +14,21 @@ var (
 	ErrDigestUnavailable = errors.New("release asset digest unavailable")
 	// ErrDigestMismatch means the downloaded asset digest does not match.
 	ErrDigestMismatch = errors.New("release asset digest mismatch")
+	// ErrInvalidDigest means --digest was not a valid sha256 digest.
+	ErrInvalidDigest = errors.New("invalid digest")
+	// ErrTrustConfirmationRequired means install has no independent digest,
+	// verified Registry entry or attestation, and unreviewed TOFU was not
+	// explicitly allowed.
+	ErrTrustConfirmationRequired = errors.New("trust confirmation required")
+	// ErrRegistryBindingMismatch means a verified Registry entry did not bind
+	// plugin id/version/source/digest/publisher.
+	ErrRegistryBindingMismatch = errors.New("registry binding mismatch")
+	// ErrAttestationFailed means an attestation verifier did not authenticate
+	// the artifact.
+	ErrAttestationFailed = errors.New("attestation verification failed")
+	// ErrTrustDowngrade means an update would replace a verified installation
+	// with unreviewed TOFU or change source/publisher without confirmation.
+	ErrTrustDowngrade = errors.New("trust downgrade rejected")
 	// ErrUnsupportedSource means the source could not be resolved.
 	ErrUnsupportedSource = errors.New("unsupported plugin source")
 	// ErrNotFound means a repository, manifest or installed plugin was not found.

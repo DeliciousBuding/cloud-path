@@ -13,18 +13,34 @@ import (
 
 // InstallOptions controls one install operation.
 type InstallOptions struct {
-	Source       string
-	Asset        string
-	Digest       string
+	Source string
+	Asset  string
+	// Digest is an independent, user-supplied sha256 (--digest). It is never
+	// derived from a same-origin release response.
+	Digest string
+	// ConfirmPerms confirms the displayed permissions (fresh installs always
+	// require it; upgrades require it only on permission expansion).
 	ConfirmPerms bool
+	// AllowUnreviewed explicitly permits trust-on-first-use from a same-origin
+	// release checksum. The resulting lock entry is recorded as unverified.
+	AllowUnreviewed bool
+	// Existing is the previously locked plugin during an update. When set,
+	// update trust invariants are enforced before any install side effect.
+	Existing *LockedPlugin
 }
 
 // InstallResult is the successful local installation outcome.
 type InstallResult struct {
-	Manifest      *Manifest
-	PluginDir     string
-	AssetPath     string
-	Digest        string
+	Manifest  *Manifest
+	PluginDir string
+	AssetPath string
+	Digest    string
+	// Mode records the trust mode used to authenticate the artifact.
+	Mode TrustMode
+	// Verified is true only when independent evidence authenticated the artifact.
+	Verified bool
+	// Evidence is a non-secret, human-readable reference to the trust evidence.
+	Evidence      string
 	LockEntry     LockedPlugin
 	RegistryEntry RegistryEntry
 }
@@ -38,6 +54,12 @@ type Installer struct {
 	CoreVersion       string
 	SupportedProtocol int
 	MaxDownloadBytes  int64
+	// RegistryIndex, when set, supplies curated verified entries.
+	RegistryIndex *RegistryIndex
+	// Attestation, when set, authenticates artifacts via build attestations.
+	// A nil value means attestation is unavailable and is never treated as
+	// verified evidence.
+	Attestation AttestationVerifier
 }
 
 // NewInstaller constructs an installer with repository-local defaults.
@@ -53,11 +75,13 @@ func NewInstaller(pluginsDir, lockPath, schemaPath, coreVersion string) *Install
 	}
 }
 
-// Install resolves the source, validates manifest/version/protocol fail-closed
-// fail-closed, downloads the selected release asset while streaming its sha256,
-// verifies the digest, writes plugins.d/ and updates plugins.lock. The asset is
-// stored under the plugin dir by digest name, so a malicious asset name cannot
-// overwrite another plugin or escape the plugin data root.
+// Install resolves the source, validates manifest/version/protocol fail-closed,
+// resolves a trust decision (independent digest, verified Registry entry,
+// attestation, or explicitly allowed unreviewed TOFU), downloads the selected
+// release asset while streaming its sha256, verifies the digest, writes
+// plugins.d/ and updates plugins.lock. The asset is stored under the plugin dir
+// by digest name, so a malicious asset name cannot overwrite another plugin or
+// escape the plugin data root.
 func (i *Installer) Install(ctx context.Context, opts InstallOptions) (*InstallResult, error) {
 	if strings.TrimSpace(opts.Source) == "" {
 		return nil, fmt.Errorf("%w: source is required", ErrUnsupportedSource)
@@ -114,9 +138,15 @@ func (i *Installer) Install(ctx context.Context, opts InstallOptions) (*InstallR
 	if err != nil {
 		return nil, err
 	}
-	expected, err := i.expectedDigest(ctx, release, asset.Name, opts.Digest)
+
+	plan, err := i.planTrust(ctx, release, asset, manifest, repo, opts)
 	if err != nil {
 		return nil, err
+	}
+	if opts.Existing != nil {
+		if err := validateUpdateTrust(*opts.Existing, repo, plan); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := os.MkdirAll(i.PluginsDir, 0o755); err != nil {
@@ -134,9 +164,42 @@ func (i *Installer) Install(ctx context.Context, opts InstallOptions) (*InstallR
 		_ = os.Remove(tmpName)
 		return nil, err
 	}
-	if !strings.EqualFold(actual, expected) {
-		_ = os.Remove(tmpName)
-		return nil, fmt.Errorf("%w: expected %s, got %s", ErrDigestMismatch, expected, actual)
+
+	mode := plan.mode
+	verified := plan.verified
+	evidence := plan.evidence
+	expected := plan.expected
+
+	switch mode {
+	case TrustModeAttestation:
+		if i.Attestation == nil {
+			_ = os.Remove(tmpName)
+			return nil, fmt.Errorf("%w: attestation verifier is not configured", ErrAttestationFailed)
+		}
+		att, err := i.Attestation.Verify(ctx, AttestationSubject{Owner: repo.Owner, Name: repo.Name, Digest: actual})
+		if err != nil {
+			_ = os.Remove(tmpName)
+			return nil, fmt.Errorf("%w: %v", ErrAttestationFailed, err)
+		}
+		if att == nil {
+			_ = os.Remove(tmpName)
+			return nil, fmt.Errorf("%w: verifier returned no evidence", ErrAttestationFailed)
+		}
+		if att.Digest != "" && !strings.EqualFold(att.Digest, actual) {
+			_ = os.Remove(tmpName)
+			return nil, fmt.Errorf("%w: attestation covers %s but artifact is %s", ErrDigestMismatch, att.Digest, actual)
+		}
+		verified = true
+		evidence = attestationEvidence(att)
+	default:
+		if expected == "" {
+			_ = os.Remove(tmpName)
+			return nil, fmt.Errorf("%w: no expected digest for trust mode %q", ErrDigestUnavailable, mode)
+		}
+		if !strings.EqualFold(actual, expected) {
+			_ = os.Remove(tmpName)
+			return nil, fmt.Errorf("%w: expected %s, got %s", ErrDigestMismatch, expected, actual)
+		}
 	}
 
 	assetsDir := filepath.Join(pluginDir, "assets")
@@ -160,13 +223,16 @@ func (i *Installer) Install(ctx context.Context, opts InstallOptions) (*InstallR
 	}
 
 	locked := LockedPlugin{
-		ID:            manifest.ID,
-		Version:       manifest.Version,
-		Digest:        expected,
-		Source:        repo.URL,
-		Verified:      true,
-		Protocol:      manifest.Protocol,
-		Compatibility: manifest.Compatibility.Core,
+		ID:                manifest.ID,
+		Version:           manifest.Version,
+		Digest:            actual,
+		Source:            repo.URL,
+		Verified:          verified,
+		Mode:              mode,
+		Evidence:          evidence,
+		VerifiedPublisher: plan.publisher,
+		Protocol:          manifest.Protocol,
+		Compatibility:     manifest.Compatibility.Core,
 	}
 	// The load-update-save on plugins.lock must be one atomic critical section per
 	// install root, otherwise concurrent installs sharing the lockfile race the read
@@ -182,22 +248,106 @@ func (i *Installer) Install(ctx context.Context, opts InstallOptions) (*InstallR
 		return nil, fmt.Errorf("update plugins.lock: %w", err)
 	}
 
+	registryEntry := RegistryEntry{
+		ID:            manifest.ID,
+		Version:       manifest.Version,
+		Kind:          manifest.Kind,
+		Source:        repo.URL,
+		Digest:        actual,
+		Protocol:      manifest.Protocol,
+		Compatibility: manifest.Compatibility.Core,
+	}
+	if mode == TrustModeVerifiedRegistry {
+		if entry, ok := i.RegistryIndex.Find(manifest.ID); ok {
+			registryEntry = *entry
+		}
+	}
+
 	return &InstallResult{
-		Manifest:  manifest,
-		PluginDir: pluginDir,
-		AssetPath: assetPath,
-		Digest:    expected,
-		LockEntry: locked,
-		RegistryEntry: RegistryEntry{
-			ID:            manifest.ID,
-			Version:       manifest.Version,
-			Kind:          manifest.Kind,
-			Source:        repo.URL,
-			Digest:        expected,
-			Protocol:      manifest.Protocol,
-			Compatibility: manifest.Compatibility.Core,
-		},
+		Manifest:      manifest,
+		PluginDir:     pluginDir,
+		AssetPath:     assetPath,
+		Digest:        actual,
+		Mode:          mode,
+		Verified:      verified,
+		Evidence:      evidence,
+		LockEntry:     locked,
+		RegistryEntry: registryEntry,
 	}, nil
+}
+
+// planTrust resolves the trust mode and expected digest before any install side
+// effect. A same-origin checksum is only ever TOFU; independent evidence is
+// required for a verified result.
+func (i *Installer) planTrust(ctx context.Context, release *Release, asset ReleaseAsset, manifest *Manifest, repo Repo, opts InstallOptions) (trustPlan, error) {
+	if opts.Digest != "" {
+		digest, err := NormalizeDigest(opts.Digest)
+		if err != nil {
+			return trustPlan{}, fmt.Errorf("%w: %v", ErrInvalidDigest, err)
+		}
+		return trustPlan{
+			mode:     TrustModeExplicitDigest,
+			expected: digest,
+			verified: true,
+			evidence: "user supplied sha256 digest",
+		}, nil
+	}
+
+	if i.RegistryIndex != nil {
+		if entry, ok := i.RegistryIndex.Find(manifest.ID); ok {
+			if err := ValidateRegistryBinding(entry, manifest, repo.URL); err != nil {
+				return trustPlan{}, err
+			}
+			return trustPlan{
+				mode:      TrustModeVerifiedRegistry,
+				expected:  entry.Digest,
+				verified:  true,
+				evidence:  "verified registry entry",
+				publisher: entry.VerifiedPublisher,
+			}, nil
+		}
+	}
+
+	if i.Attestation != nil {
+		return trustPlan{
+			mode:     TrustModeAttestation,
+			verified: false,
+			evidence: "build attestation",
+		}, nil
+	}
+
+	if opts.AllowUnreviewed {
+		digest, err := i.sameOriginDigest(ctx, release, asset.Name)
+		if err != nil {
+			return trustPlan{}, err
+		}
+		return trustPlan{
+			mode:     TrustModeUnreviewedTOFU,
+			expected: digest,
+			verified: false,
+			evidence: "same-origin release checksum (trust-on-first-use)",
+		}, nil
+	}
+
+	return trustPlan{}, fmt.Errorf("%w: no independent digest, verified Registry entry or attestation for %s@%s (re-run with --allow-unreviewed to accept an unreviewed trust-on-first-use checksum)", ErrTrustConfirmationRequired, manifest.ID, manifest.Version)
+}
+
+// sameOriginDigest resolves the sha256 for assetName from the same-origin
+// release checksum assets. It is only used for unreviewed TOFU.
+func (i *Installer) sameOriginDigest(ctx context.Context, release *Release, assetName string) (string, error) {
+	for _, asset := range release.Assets {
+		if asset.Name == assetName || !isChecksumAsset(asset.Name) {
+			continue
+		}
+		data, err := i.Client.Download(ctx, asset.URL, i.MaxDownloadBytes)
+		if err != nil {
+			return "", fmt.Errorf("download checksum asset %s: %w", asset.Name, err)
+		}
+		if digest, ok := ParseChecksumBlob(data, assetName); ok {
+			return NormalizeDigest(digest)
+		}
+	}
+	return "", fmt.Errorf("%w: no sha256 checksum found for %q", ErrDigestUnavailable, assetName)
 }
 
 // checkPermissionConfirmation requires explicit confirmation. For a fresh install
@@ -258,25 +408,6 @@ func selectInstallAsset(release *Release, requested string) (ReleaseAsset, error
 		names = append(names, asset.Name)
 	}
 	return ReleaseAsset{}, fmt.Errorf("multiple release assets, use --asset: %s", strings.Join(names, ", "))
-}
-
-func (i *Installer) expectedDigest(ctx context.Context, release *Release, assetName, explicit string) (string, error) {
-	if explicit != "" {
-		return NormalizeDigest(explicit)
-	}
-	for _, asset := range release.Assets {
-		if asset.Name == assetName || !isChecksumAsset(asset.Name) {
-			continue
-		}
-		data, err := i.Client.Download(ctx, asset.URL, i.MaxDownloadBytes)
-		if err != nil {
-			return "", fmt.Errorf("download checksum asset %s: %w", asset.Name, err)
-		}
-		if digest, ok := ParseChecksumBlob(data, assetName); ok {
-			return NormalizeDigest(digest)
-		}
-	}
-	return "", fmt.Errorf("%w: no sha256 checksum found for %q (use --digest only after an out-of-band check)", ErrDigestUnavailable, assetName)
 }
 
 func isMetadataAsset(name string) bool {

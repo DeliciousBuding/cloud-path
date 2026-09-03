@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // RegistryEntry is one reviewed plugin record. Field names are fixed by
@@ -37,6 +40,26 @@ func (idx *RegistryIndex) Find(id string) (*RegistryEntry, bool) {
 		}
 	}
 	return nil, false
+}
+
+// LoadRegistryIndex reads and validates a curated registry index YAML file.
+// Malformed entries are rejected before use so a corrupt index fails closed
+// rather than silently supplying unverified metadata.
+func LoadRegistryIndex(path string) (*RegistryIndex, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read registry index %s: %w", path, err)
+	}
+	var idx RegistryIndex
+	if err := yaml.Unmarshal(data, &idx); err != nil {
+		return nil, fmt.Errorf("parse registry index %s: %w", path, err)
+	}
+	for _, entry := range idx.Plugins {
+		if err := ValidateRegistryEntry(entry); err != nil {
+			return nil, fmt.Errorf("registry index %s: %w", path, err)
+		}
+	}
+	return &idx, nil
 }
 
 // ValidateRegistryEntry enforces the fixed registry fields. A registry record

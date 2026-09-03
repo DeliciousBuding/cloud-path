@@ -18,14 +18,16 @@ const LockFormatVersion = 1
 
 // LockedPlugin pins one installed plugin to an exact release and digest.
 type LockedPlugin struct {
-	ID                string `yaml:"id" json:"id"`
-	Version           string `yaml:"version" json:"version"`
-	Digest            string `yaml:"digest" json:"digest"`
-	Source            string `yaml:"source" json:"source"`
-	Verified          bool   `yaml:"verified" json:"verified"`
-	VerifiedPublisher string `yaml:"verifiedPublisher,omitempty" json:"verifiedPublisher,omitempty"`
-	Protocol          int    `yaml:"protocol,omitempty" json:"protocol,omitempty"`
-	Compatibility     string `yaml:"compatibility,omitempty" json:"compatibility,omitempty"`
+	ID                string    `yaml:"id" json:"id"`
+	Version           string    `yaml:"version" json:"version"`
+	Digest            string    `yaml:"digest" json:"digest"`
+	Source            string    `yaml:"source" json:"source"`
+	Verified          bool      `yaml:"verified" json:"verified"`
+	Mode              TrustMode `yaml:"mode,omitempty" json:"mode,omitempty"`
+	Evidence          string    `yaml:"evidence,omitempty" json:"evidence,omitempty"`
+	VerifiedPublisher string    `yaml:"verifiedPublisher,omitempty" json:"verifiedPublisher,omitempty"`
+	Protocol          int       `yaml:"protocol,omitempty" json:"protocol,omitempty"`
+	Compatibility     string    `yaml:"compatibility,omitempty" json:"compatibility,omitempty"`
 }
 
 // LockFile is the local, machine-readable installation record.
