@@ -1,0 +1,182 @@
+@import "tailwindcss";
+
+/* Cloudpath 设计系统 — 苹果极简风
+ * 浅色：#f5f5f7 画布 + 白卡片 + #0071e3 强调
+ * 深色：纯黑画布 + #1c1c1e 卡片 + #0a84ff 强调
+ * 语义色沿用 iOS 系统色：绿 #34c759 / 橙 #ff9f0a / 红 #ff453a
+ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+
+  --color-canvas: #f5f5f7;
+  --color-surface: #ffffff;
+  --color-surface-2: #fbfbfd;
+  --color-ink: #1d1d1f;
+  --color-ink-2: #6e6e73;
+  --color-ink-3: #86868b;
+  --color-hairline: rgba(0, 0, 0, 0.08);
+  --color-accent: #0071e3;
+  --color-accent-ink: #ffffff;
+  --color-ok: #34c759;
+  --color-warn: #ff9f0a;
+  --color-bad: #ff453a;
+  --color-idle: #8e8e93;
+
+  --radius-card: 18px;
+  --radius-tile: 12px;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.04);
+  --shadow-lift: 0 2px 8px rgba(0, 0, 0, 0.06), 0 16px 40px rgba(0, 0, 0, 0.10);
+}
+
+.dark {
+  --color-canvas: #000000;
+  --color-surface: #1c1c1e;
+  --color-surface-2: #232325;
+  --color-ink: #f5f5f7;
+  --color-ink-2: #a1a1a6;
+  --color-ink-3: #8e8e93;
+  --color-hairline: rgba(255, 255, 255, 0.10);
+  --color-accent: #0a84ff;
+  --color-ok: #30d158;
+  --color-warn: #ff9f0a;
+  --color-bad: #ff453a;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lift: 0 2px 8px rgba(0, 0, 0, 0.5), 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  transition: background-color .3s ease, color .3s ease;
+}
+
+/* 数字等宽（时钟/漂移对齐不抖动） */
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+/* 卡片 */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow .25s ease, transform .25s ease, background-color .3s ease;
+}
+.card-lift:hover { box-shadow: var(--shadow-lift); transform: translateY(-2px); }
+
+/* 毛玻璃顶栏/侧栏 */
+.glass {
+  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+}
+
+/* 在线状态点：呼吸光环 */
+.dot-online { position: relative; }
+.dot-online::after {
+  content: ""; position: absolute; inset: -3px; border-radius: 999px;
+  background: var(--color-ok); opacity: .35; animation: pulse-ring 2s ease-out infinite;
+}
+@keyframes pulse-ring {
+  0% { transform: scale(.6); opacity: .5; }
+  70% { transform: scale(1.6); opacity: 0; }
+  100% { opacity: 0; }
+}
+
+/* 提醒中：轻微闪动 */
+@keyframes remind-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .55; }
+}
+.remind { animation: remind-glow 1.2s ease-in-out infinite; }
+
+/* 页面进入 */
+@keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.fade-up { animation: fade-up .35s cubic-bezier(.25,.1,.25,1) both; }
+
+/* 滚动条（WebKit）细而淡 */
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--color-ink-3) 40%, transparent); border-radius: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* 按钮基类 */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 500;
+  border: 1px solid transparent; cursor: pointer; user-select: none;
+  transition: all .18s ease;
+}
+.btn:active { transform: scale(.97); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-primary { background: var(--color-accent); color: var(--color-accent-ink); }
+.btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+.btn-ghost { background: transparent; color: var(--color-ink); border-color: var(--color-hairline); }
+.btn-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 6%, transparent); }
+
+/* 徽标 */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 500;
+}
+
+/* ---------- 细节层：加载态 / 可达性 / 动效偏好 ---------- */
+
+/* 骨架屏微光（首帧占位，避免布局跳动） */
+.skeleton {
+  position: relative; overflow: hidden;
+  background: color-mix(in srgb, var(--color-ink-3) 14%, transparent);
+}
+.skeleton::after {
+  content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent,
+    color-mix(in srgb, var(--color-surface) 60%, transparent), transparent);
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+
+/* 键盘焦点：细环，不破坏圆角视觉 */
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-accent) 70%, transparent);
+  outline-offset: 2px;
+}
+
+/* 文本选区跟随强调色 */
+::selection { background: color-mix(in srgb, var(--color-accent) 22%, transparent); }
+
+/* 内联链接 */
+.link { color: var(--color-accent); text-decoration: none; }
+.link:hover { text-decoration: underline; }
+
+/* 顶部提示条（实时连接断开等系统级状态） */
+.banner {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 16px; font-size: 12px; font-weight: 500;
+  background: color-mix(in srgb, var(--color-warn) 14%, transparent);
+  color: var(--color-warn);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-warn) 22%, transparent);
+}
+
+/* 表格化键值行（详情页/系统页） */
+.kv { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.kv dt { color: var(--color-ink-2); font-size: 13px; }
+.kv dd { margin: 0; font-size: 13px; font-weight: 500; text-align: right; }
+
+/* 尊重系统"减少动效"偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .card-lift:hover { transform: none; }
+}
