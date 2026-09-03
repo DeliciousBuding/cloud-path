@@ -35,8 +35,9 @@ export function DeviceCard({ d }: { d: DeviceView }) {
           {d.name || devId}
         </span>
         <span className="num truncate font-mono text-[11px] text-ink-3" title={d.id}>{devId}</span>
-        <span className="ml-auto shrink-0">
-          <Badge tone={d.online ? 'accent' : 'idle'}>{d.adapter || '未知适配器'}</Badge>
+        // 适配器名由后端注册，长度不可控：允许收缩并截断，避免 390px 撑宽卡片
+        <span className="ml-auto min-w-0 shrink">
+          <Badge tone={d.online ? 'accent' : 'idle'} className="max-w-full truncate">{d.adapter || '未知适配器'}</Badge>
         </span>
       </div>
 

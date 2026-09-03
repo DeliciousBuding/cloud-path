@@ -642,7 +642,9 @@ const MAX_GROUPS = 2
 const MAX_GROUP_ITEMS = 8
 const MAX_TEXT_LEN = 24
 
-function obsToSummary(e: DescriptorEntity, o: Observation, idx: CapabilityIndex, label?: string): SummaryValue {
+function obsToSummary(
+  e: DescriptorEntity, o: Observation, idx: CapabilityIndex, label?: string, toneOverride?: Tone,
+): SummaryValue {
   const p = presentationOf(o.capability, idx)
   const widget = widgetFor(o, idx)
   const text = widget === 'timestamp' ? formatTimestamp(o.value) : formatValue(o.value)
@@ -655,7 +657,7 @@ function obsToSummary(e: DescriptorEntity, o: Observation, idx: CapabilityIndex,
     label: label ?? entityTitle(e),
     text,
     unit: o.unit,
-    tone: toneFromHint(p) ?? qualityTone(o.quality),
+    tone: toneOverride ?? toneFromHint(p) ?? qualityTone(o.quality),
     title,
   }
 }
@@ -708,7 +710,9 @@ export function summarizeDescriptor(d: DeviceDescriptor, idx: CapabilityIndex = 
     for (const o of observationsOf(e)) {
       if (o === main) continue
       if (o.quality !== 'bad' && o.quality !== 'uncertain') continue
-      alerts.push(obsToSummary(e, o, idx, humanize(o.property)))
+      // 告警胶囊的语义色必须由 quality 决定：presentation.tone 是能力级 UI Hint，
+      // 若让它盖过 quality，就会出现「因 bad/uncertain 才上浮、却画成 ok 绿」的自相矛盾。
+      alerts.push(obsToSummary(e, o, idx, humanize(o.property), qualityTone(o.quality)))
     }
   }
   alerts.sort((a, b) => (ALERT_RANK[a.tone] ?? 9) - (ALERT_RANK[b.tone] ?? 9))

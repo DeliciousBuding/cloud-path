@@ -91,12 +91,12 @@ export default function DeviceDetail() {
       <header className="mb-7 flex flex-wrap items-center gap-3 fade-up">
         <StatusDot online={d.online} />
         <h1 className="min-w-0 truncate text-[26px] font-bold tracking-tight">{d.name || deviceId}</h1>
-        <Badge tone="accent">{d.adapter || '未知适配器'}</Badge>
+        <Badge tone="accent" className="max-w-full truncate">{d.adapter || '未知适配器'}</Badge>
         {descriptor
           ? <StatusBadge status={descriptor.status} />
           : <Badge tone={d.online ? 'ok' : 'idle'}>{d.online ? '在线' : '离线'}</Badge>}
-        {d.port && <Badge tone="idle"><Terminal size={11} />{d.port}</Badge>}
-        <Badge tone="idle"><RadioTower size={11} />{d.edge_id}</Badge>
+        {d.port && <Badge tone="idle" className="max-w-full truncate"><Terminal size={11} className="shrink-0" />{d.port}</Badge>}
+        <Badge tone="idle" className="max-w-full truncate"><RadioTower size={11} className="shrink-0" />{d.edge_id}</Badge>
         <Badge tone={source === 'none' ? 'idle' : 'accent'}>
           <Sparkles size={11} />{source === 'none' ? '通用视图' : 'Schema 驱动'}
         </Badge>
@@ -124,6 +124,7 @@ export default function DeviceDetail() {
           {seriesKeys.length > 1 && (
             <div className="mb-3 overflow-x-auto pb-1">
               <Segmented
+                label="数值序列"
                 options={seriesKeys.slice(0, 5).map((k) => ({ value: k, label: humanize(k) }))}
                 value={activeSeries}
                 onChange={setSeriesKey}
@@ -167,7 +168,9 @@ export default function DeviceDetail() {
               {descriptor && <KeyValue k="Descriptor 来源" v={source} mono />}
               {descriptor?.model && <KeyValue k="型号" v={descriptor.model} />}
             </dl>
-            <pre className={cn('num max-h-56 overflow-auto rounded-xl bg-surface-2 p-3 font-mono text-[11px] leading-relaxed text-ink-2')}
+            <pre
+              tabIndex={0} role="group" aria-label="状态原始 JSON"
+              className={cn('num max-h-56 overflow-auto rounded-xl bg-surface-2 p-3 font-mono text-[11px] leading-relaxed text-ink-2')}
               title="状态 JSON（诊断面：适配器上报的原始语义）">
               {JSON.stringify(d.state ?? {}, null, 2)}
             </pre>

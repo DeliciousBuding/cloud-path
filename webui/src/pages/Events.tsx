@@ -85,7 +85,7 @@ export default function Events() {
               title={t}
               className={cn(
                 'rounded-full px-3 py-1 text-[11px] font-medium transition-colors',
-                types.has(t) ? 'bg-accent text-white' : 'bg-ink-3/10 text-ink-2 hover:bg-ink-3/16',
+                types.has(t) ? 'bg-accent text-accent-ink' : 'bg-ink-3/10 text-ink-2 hover:bg-ink-3/16',
               )}
             >
               {eventLabel(t, index)}

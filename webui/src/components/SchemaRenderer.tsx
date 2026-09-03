@@ -80,7 +80,8 @@ export function SummaryGroups({ groups, className }: { groups: SummaryGroup[]; c
 export function QualityDot({ q }: { q?: ObservationQuality }) {
   if (!q || q === 'good') return null
   return (
-    <span className={cn('inline-block h-1.5 w-1.5 shrink-0 rounded-full', QUALITY_DOT[q])}
+    // role=img 才能让 aria-label 进入无障碍树（裸 span 的 label 会被忽略）
+    <span role="img" className={cn('inline-block h-1.5 w-1.5 shrink-0 rounded-full', QUALITY_DOT[q])}
       title={`观测质量：${QUALITY_LABEL[q]}`} aria-label={`观测质量 ${QUALITY_LABEL[q]}`} />
   )
 }
@@ -90,8 +91,8 @@ export function StatusBadge({ status }: { status?: DeviceStatus }) {
   return <Badge tone={meta.tone}>{meta.label}</Badge>
 }
 
-export function JsonBlock({ value, className, maxHeight = 'max-h-56' }: {
-  value: unknown; className?: string; maxHeight?: string
+export function JsonBlock({ value, className, maxHeight = 'max-h-56', label = '原始 JSON（通用回落视图）' }: {
+  value: unknown; className?: string; maxHeight?: string; label?: string
 }) {
   let text: string
   try {
@@ -100,8 +101,13 @@ export function JsonBlock({ value, className, maxHeight = 'max-h-56' }: {
     text = String(value)
   }
   return (
-    <pre className={cn('num overflow-auto rounded-xl bg-surface-2 p-3 font-mono text-[11px] leading-relaxed text-ink-2',
-      maxHeight, className)} title="通用 JSON 视图（未收录结构的回落）">{text}</pre>
+    // 可滚动区域必须键盘可达（WCAG 2.1.1）：tabIndex=0 + role=group + 可读名称
+    <pre
+      tabIndex={0} role="group" aria-label={label}
+      className={cn('num overflow-auto rounded-xl bg-surface-2 p-3 font-mono text-[11px] leading-relaxed text-ink-2',
+        maxHeight, className)}
+      title="通用 JSON 视图（未收录结构的回落）"
+    >{text}</pre>
   )
 }
 
@@ -122,14 +128,18 @@ function columnsOf(rows: Record<string, unknown>[]): string[] {
 }
 
 /** 通用表格：数组型观测（对象数组或标量数组）都能渲染，列名来自数据本身 */
-export function GenericTable({ value, className }: { value: unknown[]; className?: string }) {
+export function GenericTable({ value, className, label = '数据表（通用视图）' }: {
+  value: unknown[]; className?: string; label?: string
+}) {
   const rows = value.map((v) => (v && typeof v === 'object' && !Array.isArray(v)
     ? (v as Record<string, unknown>)
     : { value: v }))
   const cols = columnsOf(rows)
   if (!cols.length) return <p className="py-3 text-center text-xs text-ink-3">空集合</p>
   return (
-    <div className={cn('overflow-x-auto', className)}>
+    // 390px：表格只在自身容器内横向滚动（overflow-x-auto），不把横向溢出推给 body；
+    // 容器可聚焦并带名称，键盘/读屏用户才能进入这块滚动区。
+    <div tabIndex={0} role="group" aria-label={label} className={cn('overflow-x-auto', className)}>
       <table className="w-full border-collapse text-left text-xs">
         <thead>
           <tr className="text-[11px] text-ink-3">
@@ -223,7 +233,9 @@ export function ValueWidget({ obs, idx = EMPTY_INDEX, emphasis = false, classNam
   if (widget === 'list' && Array.isArray(value)) return <ScalarChips value={value} />
 
   if ((widget === 'table' || widget === 'json') && !isScalar(value)) {
-    if (Array.isArray(value)) return <GenericTable value={value} />
+    if (Array.isArray(value)) {
+      return <GenericTable value={value} label={`${humanize(obs.property)} 数据表`} />
+    }
     if (value && typeof value === 'object') {
       const entries = Object.entries(value as Record<string, unknown>)
       const flat = entries.length > 0 && entries.every(([, v]) => isScalar(v))
@@ -239,11 +251,13 @@ export function ValueWidget({ obs, idx = EMPTY_INDEX, emphasis = false, classNam
           </dl>
         )
       }
-      return <JsonBlock value={value} maxHeight="max-h-40" />
+      return <JsonBlock value={value} maxHeight="max-h-40" label={`${humanize(obs.property)} 原始 JSON`} />
     }
   }
 
-  if (widget === 'json') return <JsonBlock value={value} maxHeight="max-h-40" />
+  if (widget === 'json') {
+    return <JsonBlock value={value} maxHeight="max-h-40" label={`${humanize(obs.property)} 原始 JSON`} />
+  }
 
   if (widget === 'boolean' || widget === 'badge') {
     const tone: Tone = value === false
@@ -357,7 +371,10 @@ export function EntityPanel({ entity, idx = EMPTY_INDEX, className }: {
               </span>
             ))}
           </div>
-          {unknownObs.length > 0 && <JsonBlock value={unknownObs} maxHeight="max-h-40" />}
+          {unknownObs.length > 0 && (
+            <JsonBlock value={unknownObs} maxHeight="max-h-40"
+              label="未收录 Capability 的观测原始 JSON" />
+          )}
         </div>
       )}
 
@@ -454,8 +471,10 @@ export function RawView({ raw, title = '上报字段（通用视图）', classNa
         <div key={r.key} className="mt-4 border-t border-hairline pt-3 first:mt-0">
           <p className="mb-1.5 truncate text-[11px] text-ink-3" title={r.key}>{r.label}</p>
           {Array.isArray(r.value)
-            ? (r.value.every(isScalar) ? <ScalarChips value={r.value} /> : <GenericTable value={r.value} />)
-            : <JsonBlock value={r.value} maxHeight="max-h-40" />}
+            ? (r.value.every(isScalar)
+              ? <ScalarChips value={r.value} />
+              : <GenericTable value={r.value} label={`${r.label} 数据表`} />)
+            : <JsonBlock value={r.value} maxHeight="max-h-40" label={`${r.label} 原始 JSON`} />}
         </div>
       ))}
       <p className="mt-3 flex items-center gap-1 border-t border-hairline pt-2 text-[11px] text-ink-3">
