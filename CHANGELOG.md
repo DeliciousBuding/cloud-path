@@ -37,7 +37,7 @@ shasum -a 256 -c checksums.txt --ignore-missing      # macOS
 certutil -hashfile <文件> SHA256                      # Windows（逐项对照）
 ```
 
-## Unreleased
+## v0.1.0 — 2026-09-04
 
 ### 新增（发布工程）
 
@@ -75,5 +75,5 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 
 | 版本 | 状态 | 说明 |
 |---|---|---|
-| `v0.1.0` | 待发布 | 首个公开版本；打 tag 后由 release workflow 自动产出上述资产 |
+| `v0.1.0` | 已发布（2026-09-04） | 首个公开版本；release workflow 自动产出 18 二进制 + checksums.txt |
 | `dev` | 本地 | `task build` / `task build:matrix` 的未打标产物（`git describe` 兜底） |
