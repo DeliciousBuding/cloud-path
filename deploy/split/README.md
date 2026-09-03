@@ -139,7 +139,10 @@ go test ./... -count=1                                   # ok <plugin module>
 
 1. 用发布形态生成：`python deploy/split/split_app_plugin.py --force`（不带 `--core-path`）。
 2. 确认 core 仓已公开且 `v0.1.0` tag 存在（否则使用者无法解析依赖）。
-3. 在生成目录里 `git init -b main`、首次提交、`gh repo create` 建私有仓、push。
+3. 在生成目录里先 `go mod tidy` 生成 `go.sum`（生成器不产出 go.sum——它需要已发布的
+   core tag 经公共 proxy 解析；缺 go.sum 时独立仓 CI 必失败，2026-09-04 实测），
+   再 `git init -b main`、首次提交、`gh repo create`（发现型插件仓按仓库策略为公开仓；
+   仓库已存在时直接加 remote）、push。
 4. 给仓库打 Topic `cloudpath-plugin`（发现契约，见
    [docs/architecture/github-ecosystem.md](../../docs/architecture/github-ecosystem.md)）。
 5. 打 `v0.1.0` tag 触发 release workflow，产出 6 平台资产 + `checksums.txt`。

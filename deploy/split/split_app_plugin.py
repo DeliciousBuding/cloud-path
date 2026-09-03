@@ -825,8 +825,11 @@ def main(argv: list[str]) -> int:
     print(f"  cd {out_dir}")
     if core_path:
         print("  # first: drop the local replace line from go.mod and delete LOCAL_REPLACE.txt")
+    print("  # go.sum is NOT generated here (needs the published core tag): run tidy first,")
+    print("  # otherwise the standalone repo's CI fails with 'missing go.sum entry'.")
+    print("  go mod tidy")
     print("  git init -b main && git add -A && git commit -m 'feat: split standalone plugin repo'")
-    print(f"  gh repo create DeliciousBuding/{PLUGIN_REPO_SLUG} --private --source . --remote origin")
+    print(f"  gh repo create DeliciousBuding/{PLUGIN_REPO_SLUG} --public --source . --remote origin  # skip if the repo already exists")
     print("  git push -u origin main")
     print("  # first release: git tag v0.1.0 && git push origin v0.1.0 (triggers release.yml)")
     return 0
