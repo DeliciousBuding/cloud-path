@@ -11,6 +11,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/DeliciousBuding/cloud-path/internal/api"
+	"github.com/DeliciousBuding/cloud-path/internal/model"
 )
 
 const (
@@ -110,8 +111,12 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 	// 2) 注册连接（同 edge_id 重连挤掉旧连接：新连接优先）
 	ctx, cancel := context.WithCancel(context.WithoutCancel(r.Context()))
 	defer cancel()
+	tenant := hello.Tenant
+	if tenant == "" {
+		tenant = defaultTenantSlug
+	}
 	link := &edgeLink{
-		edgeID: hello.EdgeID, version: hello.Version,
+		edgeID: hello.EdgeID, version: hello.Version, tenant: tenant,
 		connectedAt: time.Now(), send: make(chan []byte, sendChanSize),
 		cancel: cancel,
 	}
@@ -125,13 +130,13 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 		old.cancel()
 	}
 	s.edges[hello.EdgeID] = link
-	metas := s.applyMeta(hello.EdgeID, hello.Devices)
+	metas := s.applyMeta(hello.EdgeID, tenant, hello.Devices)
 	s.mu.Unlock()
 	s.persistDevices(hello.EdgeID, metas) // 落库在锁外
 	slog.Info("edge connected", "edge", hello.EdgeID, "devices", link.devices, "version", hello.Version)
 
 	edgeData, _ := json.Marshal(api.EdgeUpData{EdgeID: hello.EdgeID, Devices: link.devices, Version: hello.Version})
-	s.broadcast(api.Envelope{V: api.Version, Type: api.MsgEdgeUp, Device: hello.EdgeID, Ts: time.Now().Unix(), Data: edgeData})
+	s.broadcastAs(api.Envelope{V: api.Version, Type: api.MsgEdgeUp, Device: hello.EdgeID, Ts: time.Now().Unix(), Data: edgeData}, link.tenant)
 
 	// 3) 断线清理：设备全部标离线并广播
 	defer func() {
@@ -144,7 +149,7 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 		if current { // 只有仍是注册连接时才标离线（被重连挤掉的旧连接不清新状态）
 			s.markEdgeOffline(link)
 		}
-		s.broadcast(api.Envelope{V: api.Version, Type: api.MsgEdgeDown, Device: hello.EdgeID, Ts: time.Now().Unix(), Data: edgeData})
+		s.broadcastAs(api.Envelope{V: api.Version, Type: api.MsgEdgeDown, Device: hello.EdgeID, Ts: time.Now().Unix(), Data: edgeData}, link.tenant)
 		slog.Info("edge disconnected", "edge", hello.EdgeID, "was_current", current)
 	}()
 
@@ -224,6 +229,22 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 			}
 			slog.Info("command ack", "device", msg.Device, "cmd_id", ack.CommandID, "status", ack.Status)
 			s.broadcast(msg)
+		case api.MsgDescriptor:
+			var desc model.Descriptor
+			if err := json.Unmarshal(msg.Data, &desc); err != nil {
+				slog.Warn("edge bad descriptor payload", "edge", hello.EdgeID, "err", err)
+				continue
+			}
+			if err := desc.Validate(); err != nil {
+				slog.Warn("edge invalid descriptor", "edge", hello.EdgeID, "device", msg.Device, "err", err)
+				continue
+			}
+			s.mu.Lock()
+			s.storeDescriptor(msg.Device, desc)
+			s.mu.Unlock()
+			data, _ := json.Marshal(desc)
+			s.broadcast(api.Envelope{V: api.Version, Type: api.MsgDescriptor, Device: msg.Device,
+				Ts: time.Now().Unix(), Data: data})
 		case api.MsgPong:
 			// 库层已处理，忽略
 		default:
@@ -264,16 +285,23 @@ func (s *Server) ownsDevice(link *edgeLink, key string) bool {
 // ---------- 浏览器接入 ----------
 
 // handleBrowserWS 浏览器实时订阅：连接即发全量快照，随后接收 fan-out。
+// 连接时解析身份租户并记录到 browserConn（账号模式=会话/令牌租户；L1 令牌=default；
+// 无账号开发模式=空，全局接收），后续 snapshot/fan-out 都按该租户过滤。
 func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
-	// 账号模式：会话 cookie 或服务令牌；否则沿用 P1 的 token 可选校验（查询参数，浏览器 WS 无法自定义 header）。
+	var tenant string
 	if s.accountMode() {
-		if s.currentPrincipal(r) == nil {
+		p := s.currentPrincipal(r)
+		if p == nil {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
 			return
 		}
-	} else if s.cfg.Token != "" && !s.tokenOK(r) {
-		http.Error(w, "invalid token", http.StatusUnauthorized)
-		return
+		tenant = p.TenantSlug
+	} else if s.cfg.Token != "" {
+		if !s.tokenOK(r) {
+			http.Error(w, "invalid token", http.StatusUnauthorized)
+			return
+		}
+		tenant = defaultTenantSlug
 	}
 	ws, err := websocket.Accept(w, r, s.acceptOptsPtr())
 	if err != nil {
@@ -286,11 +314,11 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(context.WithoutCancel(r.Context()))
 	defer cancel()
-	bc := &browserConn{send: make(chan []byte, sendChanSize), cancel: cancel}
+	bc := &browserConn{send: make(chan []byte, sendChanSize), cancel: cancel, tenant: tenant}
 
 	s.mu.Lock()
 	s.browsers[bc] = struct{}{}
-	snap := s.snapshot()
+	snap := s.snapshotFor(tenant)
 	s.mu.Unlock()
 
 	go writePump(ctx, ws, bc.send)
