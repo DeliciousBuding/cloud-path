@@ -44,8 +44,8 @@ func TestSchemaTenantMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Version() != 4 {
-		t.Fatalf("version = %d, want 4", s.Version())
+	if s.Version() != schemaVersion {
+		t.Fatalf("version = %d, want %d", s.Version(), schemaVersion)
 	}
 	var got int64
 	if err := s.db.QueryRow(`SELECT tenant_id FROM devices WHERE id='e1/d1'`).Scan(&got); err != nil || got != 1 {

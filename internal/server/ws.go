@@ -11,6 +11,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/DeliciousBuding/cloud-path/internal/api"
+	"github.com/DeliciousBuding/cloud-path/internal/auth"
 	"github.com/DeliciousBuding/cloud-path/internal/model"
 )
 
@@ -102,25 +103,49 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("edge rejected: invalid edge_id", "edge", hello.EdgeID, "remote", r.RemoteAddr)
 		return
 	}
-	if s.cfg.Token != "" && hello.Token != s.cfg.Token {
+	// 1.5) 鉴权：legacy -token（default 租户）或租户服务令牌（要求 edge scope，租户以令牌为准）。
+	tenant := hello.Tenant
+	if tenant == "" {
+		tenant = defaultTenantSlug
+	}
+	var tid int64
+	if auth.IsTenantToken(hello.Token) {
+		row, ok := s.validTenantToken(hello.Token, true)
+		if !ok {
+			ws.Close(websocket.StatusPolicyViolation, "invalid token")
+			slog.Warn("edge auth failed", "edge", hello.EdgeID, "remote", r.RemoteAddr)
+			return
+		}
+		tid = row.TenantID
+		if t, err := s.cfg.Store.GetTenantByID(row.TenantID); err == nil {
+			tenant = t.Slug
+		}
+	} else if s.cfg.Token != "" {
+		if hello.Token != s.cfg.Token {
+			ws.Close(websocket.StatusPolicyViolation, "invalid token")
+			slog.Warn("edge auth failed", "edge", hello.EdgeID, "remote", r.RemoteAddr)
+			return
+		}
+		tenant = defaultTenantSlug // legacy -token 绑定 default 租户
+	} else if s.accountMode() {
+		// 账号模式（已有 user / -require-auth）且未配 legacy token：edge 必须出示租户令牌。
 		ws.Close(websocket.StatusPolicyViolation, "invalid token")
 		slog.Warn("edge auth failed", "edge", hello.EdgeID, "remote", r.RemoteAddr)
 		return
+	}
+	if tid == 0 {
+		t, terr := s.tenantIDForSlug(tenant)
+		if terr != nil {
+			ws.Close(websocket.StatusPolicyViolation, "unknown tenant")
+			slog.Warn("edge rejected: unknown tenant", "edge", hello.EdgeID, "tenant", tenant, "err", terr)
+			return
+		}
+		tid = t
 	}
 
 	// 2) 注册连接（同 edge_id 重连挤掉旧连接：新连接优先）
 	ctx, cancel := context.WithCancel(context.WithoutCancel(r.Context()))
 	defer cancel()
-	tenant := hello.Tenant
-	if tenant == "" {
-		tenant = defaultTenantSlug
-	}
-	tid, terr := s.tenantIDForSlug(tenant)
-	if terr != nil {
-		ws.Close(websocket.StatusPolicyViolation, "unknown tenant")
-		slog.Warn("edge rejected: unknown tenant", "edge", hello.EdgeID, "tenant", tenant, "err", terr)
-		return
-	}
 	link := &edgeLink{
 		edgeID: hello.EdgeID, version: hello.Version, tenant: tenant,
 		connectedAt: time.Now(), send: make(chan []byte, sendChanSize),

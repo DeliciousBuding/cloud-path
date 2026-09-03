@@ -182,7 +182,7 @@ const (
 	RoleViewer   UserRole = "viewer"
 )
 
-// UserView 是鉴权相关端点的用户视图（/api/auth/login、/api/auth/me）。
+// UserView 是鉴权相关端点的用户视图（/api/auth/login、/api/auth/me、用户管理）。
 type UserView struct {
 	ID         int64  `json:"id"`
 	Username   string `json:"username"`
@@ -190,6 +190,7 @@ type UserView struct {
 	Role       string `json:"role"`
 	TenantID   int64  `json:"tenant_id"`
 	TenantSlug string `json:"tenant_slug"`
+	Disabled   bool   `json:"disabled,omitempty"`
 }
 
 // TenantView 是租户视图。
@@ -207,4 +208,17 @@ type SessionView struct {
 	CreatedAt  int64  `json:"created_at"`
 	ExpiresAt  int64  `json:"expires_at"`
 	LastSeenAt int64  `json:"last_seen_at"`
+}
+
+// TokenView 是租户服务令牌视图（docs/api.md §3.3）。明文只在创建响应中出现一次，
+// 由 handler 单独拼入 `token` 字段，本结构永不携带明文。
+type TokenView struct {
+	ID         int64    `json:"id"`
+	Name       string   `json:"name"`
+	Prefix     string   `json:"prefix"`
+	Scopes     []string `json:"scopes"`
+	CreatedAt  int64    `json:"created_at"`
+	ExpiresAt  *int64   `json:"expires_at,omitempty"`
+	LastUsedAt *int64   `json:"last_used_at,omitempty"`
+	RevokedAt  *int64   `json:"revoked_at,omitempty"`
 }

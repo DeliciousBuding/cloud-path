@@ -47,7 +47,9 @@ func TestMigrationReachesCurrentVersion(t *testing.T) {
 		"idx_commands_tenant_device", "idx_commands_tenant_status",
 		"idx_device_state_tenant", "idx_devices_tenant",
 		"idx_events_device_ts", "idx_events_tenant_device_ts", "idx_events_tenant_ts", "idx_events_ts",
-		"idx_sessions_expires", "idx_sessions_user", "idx_users_tenant",
+		"idx_sessions_expires", "idx_sessions_user",
+		"idx_tenant_tokens_hash", "idx_tenant_tokens_prefix", "idx_tenant_tokens_tenant",
+		"idx_users_tenant",
 	}
 	if len(names) != len(want) {
 		t.Fatalf("indexes = %v, want %v", names, want)
