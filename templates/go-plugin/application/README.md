@@ -16,9 +16,11 @@ The `plugin` package implements `application.ApplicationServer`:
 - `HandleRequest` (plugin HTTP subroute, scoped by Core)
 - `RunJob`
 
-`main.go` (in `cmd/cloudpath-app-template`) reads the launch identity from the
-environment, prints the CloudPath handshake line, then serves the protocol over
-a loopback TCP transport.
+`main.go` (in `cmd/cloudpath-app-template`) uses the shared
+`sdk/go/pluginmain` entrypoint: it reads and validates the launch identity from
+the environment, prints the single CloudPath handshake line, dials the host's
+loopback endpoint and serves the Application Protocol v1 over that
+authenticated transport.
 
 ## Layout
 

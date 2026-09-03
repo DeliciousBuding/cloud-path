@@ -15,9 +15,11 @@ The `plugin` package implements `driver.DriverServer`:
   `Observation` messages)
 - `Execute` (whitelisted `read` action, returns `SUCCEEDED`)
 
-`main.go` (in `cmd/cloudpath-driver-template`) reads the launch identity from
-the environment, prints the CloudPath handshake line, then serves the protocol
-over a loopback TCP transport.
+`main.go` (in `cmd/cloudpath-driver-template`) uses the shared
+`sdk/go/pluginmain` entrypoint: it reads and validates the launch identity from
+the environment, prints the single CloudPath handshake line, dials the host's
+loopback endpoint and serves the Driver Protocol v1 over that authenticated
+transport.
 
 ## Layout
 

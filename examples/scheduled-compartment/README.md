@@ -138,14 +138,19 @@ graceful shutdown.
 
 ## Run
 
-The Application Protocol is transport-agnostic. The A4 Plugin Host injects the
-real transport (named pipe, Unix socket or loopback TCP). Until that transport
-lands in the SDK, the entrypoint serves over an in-process transport so that it
-is a real, buildable, smoke-testable command:
+The entrypoint is an install-style Application plugin. The A4 Plugin Host
+injects the launch identity and loopback endpoint through the environment, and
+the shared `sdk/go/pluginmain` helper emits the single handshake line, dials
+the host and serves the Application Protocol v1 over that authenticated
+transport:
 
 ```bash
 go run ./cmd/cloud-path-app-scheduled-compartment
 ```
+
+Run outside a host it fails fast on the missing `CLOUDPATH_*` environment; it
+is meant to be launched by the Plugin Host or the process-host E2E tests
+(`go test ./testing/plugin-harness -run TestScheduledCompartmentBinaryHostE2E`).
 
 ## Repository Layout
 
