@@ -1,0 +1,271 @@
+package edge
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"os"
+	"sync"
+	"time"
+
+	"github.com/DeliciousBuding/cloudpath/internal/api"
+	"github.com/DeliciousBuding/cloudpath/internal/device"
+)
+
+// Edge 是边缘代理运行时：N 台设备监督协程 + 1 条 server 长连接。
+type Edge struct {
+	cfg    *Config
+	client *wsClient
+	sups   map[string]*supervisor // key: "<edge_id>/<device_id>"
+	ctx    context.Context        // 运行期根 ctx（命令执行据此取消）
+}
+
+// supervisor 监督单台设备：打开→采集→端口死→退避重开（热插拔自愈）。
+type supervisor struct {
+	edgeID  string
+	dcfg    DeviceCfg
+	adapter device.Adapter
+	report  func(key string, sup *supervisor, force bool) // 状态上报回调（注入避免环依赖）
+
+	mu       sync.Mutex
+	dev      device.Device
+	last     device.State // 最近一次快照（端口死时保留 Raw 只翻 Online）
+	lastSent string       // 上次上报的状态序列化（diff 抑制）
+	sentAt   time.Time
+}
+
+func (s *supervisor) setDev(d device.Device) {
+	s.mu.Lock()
+	s.dev = d
+	s.mu.Unlock()
+}
+
+func (s *supervisor) send(ctx context.Context, c device.Command) error {
+	s.mu.Lock()
+	dev := s.dev
+	s.mu.Unlock()
+	if dev == nil {
+		return fmt.Errorf("device offline")
+	}
+	return dev.Send(ctx, c)
+}
+
+// snapshot 取当前状态；端口死时返回 last（Online=false）。
+func (s *supervisor) snapshot() device.State {
+	s.mu.Lock()
+	dev, last := s.dev, s.last
+	s.mu.Unlock()
+	if dev == nil {
+		last.Online = false
+		if last.Raw == nil {
+			last.Raw = map[string]any{}
+		}
+		return last
+	}
+	st := dev.Snapshot()
+	s.mu.Lock()
+	s.last = st
+	s.mu.Unlock()
+	return st
+}
+
+// Run 启动 edge 并阻塞至 ctx 取消（信号停机由 main 负责）。
+func Run(ctx context.Context, cfg *Config, version string) error {
+	e := &Edge{cfg: cfg, sups: map[string]*supervisor{}, ctx: ctx}
+	metas := make([]api.DeviceMeta, 0, len(cfg.Devices))
+	for _, d := range cfg.Devices {
+		a, ok := device.Get(d.Adapter)
+		if !ok {
+			return fmt.Errorf("adapter %q 未注册（已注册: %v）", d.Adapter, device.Names())
+		}
+		key := api.DeviceKey(cfg.EdgeID, d.ID)
+		sup := &supervisor{edgeID: cfg.EdgeID, dcfg: d, adapter: a}
+		sup.report = e.reportState
+		e.sups[key] = sup
+		metas = append(metas, api.DeviceMeta{ID: d.ID, Adapter: d.Adapter, Name: d.Name, Port: d.Port})
+	}
+
+	e.client = newWSClient(cfg, version, metas, e.onCommand, e.onServerOnline)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		e.client.run(ctx)
+	}()
+	for key, sup := range e.sups {
+		wg.Add(2)
+		go func(key string, sup *supervisor) {
+			defer wg.Done()
+			e.supervise(ctx, key, sup)
+		}(key, sup)
+		go func(key string, sup *supervisor) {
+			defer wg.Done()
+			e.pollLoop(ctx, key, sup)
+		}(key, sup)
+	}
+
+	slog.Info("edge started", "edge", cfg.EdgeID, "devices", len(cfg.Devices),
+		"server", cfg.Server, "poll_s", cfg.PollIntervalS, "sync_s", cfg.SyncIntervalS, "pid", os.Getpid())
+	wg.Wait()
+	slog.Info("edge stopped", "edge", cfg.EdgeID)
+	return nil
+}
+
+// supervise 是设备连接生命周期循环。
+func (e *Edge) supervise(ctx context.Context, key string, sup *supervisor) {
+	backoff := time.Second
+	for ctx.Err() == nil {
+		dev, err := sup.adapter.Open(ctx, device.Config{
+			ID: sup.dcfg.ID, Name: sup.dcfg.Name,
+			Port: sup.dcfg.Port, Baud: sup.dcfg.Baud,
+		}, func(ev device.Event) { e.onDeviceEvent(key, ev) })
+		if err != nil {
+			slog.Warn("device open failed", "device", key, "port", sup.dcfg.Port,
+				"err", err, "retry_in", backoff.Round(time.Millisecond))
+			sup.setDev(nil)
+			e.reportState(key, sup, true)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(backoff):
+			}
+			backoff = min(backoff*2, 30*time.Second)
+			continue
+		}
+		backoff = time.Second
+		sup.setDev(dev)
+		slog.Info("device opened", "device", key, "port", sup.dcfg.Port)
+
+		// 上电即对时+转储：板子掉电后 RTC 会被重置，对时是刚需（protocol.md 板级限制）
+		go func() {
+			sctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			if err := dev.Send(sctx, device.Command{Cmd: "sync"}); err != nil {
+				slog.Warn("initial sync failed", "device", key, "err", err)
+			}
+			time.Sleep(300 * time.Millisecond)
+			_ = dev.Send(sctx, device.Command{Cmd: "dump"})
+			e.reportState(key, sup, true)
+		}()
+
+		select {
+		case <-dev.Done():
+			slog.Warn("device port died (unplugged?)", "device", key)
+		case <-ctx.Done():
+		}
+		_ = dev.Close()
+		sup.setDev(nil)
+		e.reportState(key, sup, true)
+		if ctx.Err() != nil {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(3 * time.Second): // 拔插防抖
+		}
+	}
+}
+
+// pollLoop 周期转储轮询 + 周期对时 + 状态上报（diff 抑制 + 心跳兜底）。
+func (e *Edge) pollLoop(ctx context.Context, key string, sup *supervisor) {
+	poll := time.NewTicker(time.Duration(e.cfg.PollIntervalS) * time.Second)
+	defer poll.Stop()
+	syncT := time.NewTicker(time.Duration(e.cfg.SyncIntervalS) * time.Second)
+	defer syncT.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-poll.C:
+			sctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			_ = sup.send(sctx, device.Command{Cmd: "dump"})
+			cancel()
+			// 转储回包 ~100ms 到达，稍候再快照上报
+			time.AfterFunc(500*time.Millisecond, func() { e.reportState(key, sup, false) })
+		case <-syncT.C:
+			sctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			if err := sup.send(sctx, device.Command{Cmd: "sync"}); err != nil {
+				slog.Debug("periodic sync skipped", "device", key, "err", err)
+			}
+			cancel()
+		}
+	}
+}
+
+// reportState 上报状态：变化即发，未变化按 ReportIntervalS 心跳兜底。force 无视 diff。
+func (e *Edge) reportState(key string, sup *supervisor, force bool) {
+	st := sup.snapshot()
+	data := mustJSON(api.StateData{Online: st.Online, Raw: st.Raw, UpdatedAt: st.UpdatedAt.Unix()})
+
+	sup.mu.Lock()
+	changed := string(data) != sup.lastSent
+	stale := time.Since(sup.sentAt) >= time.Duration(e.cfg.ReportIntervalS)*time.Second
+	sup.mu.Unlock()
+	if !force && !changed && !stale {
+		return
+	}
+
+	env := api.Envelope{V: api.Version, Type: api.MsgState, Device: key, Ts: time.Now().Unix(), Data: data}
+	if e.client.enqueue(env) || force {
+		sup.mu.Lock()
+		sup.lastSent = string(data)
+		sup.sentAt = time.Now()
+		sup.mu.Unlock()
+	}
+}
+
+func (e *Edge) onDeviceEvent(key string, ev device.Event) {
+	slog.Info("device event", "device", key, "type", ev.Type)
+	data := mustJSON(api.EventData{Type: ev.Type})
+	e.client.enqueue(api.Envelope{V: api.Version, Type: api.MsgEvent, Device: key, Ts: ev.At.Unix(), Data: data})
+	// 事件通常伴随状态机变化：延迟一拍补报状态（等固件落定）
+	time.AfterFunc(time.Second, func() {
+		if sup, ok := e.sups[key]; ok {
+			e.reportState(key, sup, false)
+		}
+	})
+}
+
+// onServerOnline 在（重）连上 server 后强制补报全部设备状态：
+// 断线期间状态消息是被丢弃的（幂等），重连后必须主动刷一遍，面板才不会停在旧值。
+func (e *Edge) onServerOnline() {
+	for key, sup := range e.sups {
+		e.reportState(key, sup, true)
+	}
+}
+
+// onCommand 执行 server 下行命令并回执 ack。
+func (e *Edge) onCommand(env api.Envelope) {
+	var cmd api.CommandData
+	if err := json.Unmarshal(env.Data, &cmd); err != nil {
+		slog.Warn("bad command payload", "err", err)
+		return
+	}
+	sup, ok := e.sups[env.Device]
+	ack := func(status, detail string) {
+		data := mustJSON(api.AckData{CommandID: cmd.CommandID, Status: status, Detail: detail})
+		e.client.enqueue(api.Envelope{V: api.Version, Type: api.MsgCommandAck,
+			Device: env.Device, Ts: time.Now().Unix(), Data: data})
+	}
+	if !ok {
+		ack("failed", "unknown device")
+		return
+	}
+	slog.Info("executing command", "device", env.Device, "cmd", cmd.Cmd, "cmd_id", cmd.CommandID)
+	base := e.ctx
+	if base == nil {
+		base = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(base, 15*time.Second)
+	defer cancel()
+	if err := sup.send(ctx, device.Command{ID: cmd.CommandID, Cmd: cmd.Cmd, Args: cmd.Args}); err != nil {
+		ack("failed", err.Error())
+		return
+	}
+	ack("ok", "")
+	// 命令多会改状态（sync 对时/dump 转储）：稍候强制补报一次
+	time.AfterFunc(1500*time.Millisecond, func() { e.reportState(env.Device, sup, true) })
+}
