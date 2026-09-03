@@ -3,8 +3,8 @@ package stcb
 import (
 	"fmt"
 
-	"github.com/DeliciousBuding/cloud-path/internal/device"
-	"github.com/DeliciousBuding/cloud-path/internal/model"
+	"github.com/DeliciousBuding/cloud-path/sdk/go/driverkit"
+	"github.com/DeliciousBuding/cloud-path/sdk/go/model"
 )
 
 // STC-B 使用的 Capability 引用（capability-model.md 的 cloudpath.dev 命名空间）。
@@ -69,7 +69,7 @@ func (a *Adapter) Capabilities() []model.Capability {
 
 // Descriptor 返回 STC-B 设备的静态 Descriptor（Entity/Capability 结构 + 身份）。
 // 观测值由 dev.Descriptor 在设备实例上填充；identity 由 edge/server 绑定到稳定键。
-func (a *Adapter) Descriptor(cfg device.Config) model.Descriptor {
+func (a *Adapter) Descriptor(cfg driverkit.Config) model.Descriptor {
 	return stcbDescriptor(cfg.ID)
 }
 

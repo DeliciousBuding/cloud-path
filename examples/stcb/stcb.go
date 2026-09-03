@@ -10,13 +10,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DeliciousBuding/cloud-path/internal/device"
+	"github.com/DeliciousBuding/cloud-path/sdk/go/driverkit"
 	"go.bug.st/serial"
 )
 
-func init() { device.Register(&Adapter{}) }
+func init() { driverkit.Register(&Adapter{}) }
 
-// Adapter 实现 device.Adapter。
+// Adapter 实现 driverkit.Adapter。
 type Adapter struct{}
 
 func (a *Adapter) Name() string { return "stcb" }
@@ -26,7 +26,7 @@ func (a *Adapter) SupportedCommands() []string {
 }
 
 // Open 打开串口并启动 RX 循环。拔线/端口错误通过 Device.Done() 通知上层。
-func (a *Adapter) Open(ctx context.Context, cfg device.Config, onEvent func(device.Event)) (device.Device, error) {
+func (a *Adapter) Open(ctx context.Context, cfg driverkit.Config, onEvent func(driverkit.Event)) (driverkit.Device, error) {
 	baud := cfg.Baud
 	if baud <= 0 {
 		baud = 9600
@@ -56,7 +56,7 @@ type dev struct {
 	name     string
 	portName string
 	port     serial.Port
-	onEvent  func(device.Event)
+	onEvent  func(driverkit.Event)
 
 	mu       sync.Mutex
 	dump     *Dump
@@ -127,7 +127,7 @@ func (d *dev) handleLine(line string) {
 	}
 	if ev, ok := ParseEvent(line); ok {
 		if d.onEvent != nil {
-			d.onEvent(device.Event{Type: ev, At: time.Now()})
+			d.onEvent(driverkit.Event{Type: ev, At: time.Now()})
 		}
 	}
 }
@@ -147,7 +147,7 @@ func (d *dev) Close() error {
 }
 
 // Send 执行命令（白名单内）。sync 逐字节慢发：固件命令缓冲仅 1 字节。
-func (d *dev) Send(ctx context.Context, c device.Command) error {
+func (d *dev) Send(ctx context.Context, c driverkit.Command) error {
 	d.mu.Lock()
 	dead := d.dead
 	d.mu.Unlock()
@@ -228,7 +228,7 @@ func validHHMM(s string) bool {
 }
 
 // Snapshot 输出统一状态：时钟、状态机、三槽、北京时间与漂移。
-func (d *dev) Snapshot() device.State {
+func (d *dev) Snapshot() driverkit.State {
 	now := time.Now()
 	bj := BeijingNow()
 	d.mu.Lock()
@@ -255,5 +255,5 @@ func (d *dev) Snapshot() device.State {
 		raw["drift_min"] = DriftMin(dump.Hour, dump.Min, bj)
 		raw["dump_raw"] = dump.Raw
 	}
-	return device.State{Online: online, Raw: raw, UpdatedAt: last}
+	return driverkit.State{Online: online, Raw: raw, UpdatedAt: last}
 }
