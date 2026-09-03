@@ -8,6 +8,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import * as ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 
 const SRC_DIR = fileURLToPath(new URL('..', import.meta.url))
@@ -48,6 +49,30 @@ function colorTokens(block: string): string[] {
   return [...block.matchAll(/--color-([a-z0-9-]+)\s*:/g)].map((m) => m[1] as string)
 }
 
+/**
+ * 找出「写在 JSX children 位置的 // 行注释」。
+ * 那不是注释：JSX 会把它当字面文本渲染到界面上（`<div>// foo<span/></div>` 编译后
+ * 就是 `createElement("div", null, "// foo", ...)`），用户在页面上能看见一串 //。
+ * 纯正则既会误伤 TS 代码里的正常注释，也会漏掉缩进不规整的写法，所以走 TS 自己的
+ * 解析器，只看 JsxText 节点：去空白后以 // 开头即为踩雷。
+ */
+function jsxLineCommentText(path: string, text: string): string[] {
+  const sf = ts.createSourceFile(path, text, ts.ScriptTarget.ESNext, true)
+  const out: string[] = []
+  const visit = (node: ts.Node): void => {
+    if (node.kind === ts.SyntaxKind.JsxText) {
+      const raw = node.getText(sf).trim()
+      if (raw.startsWith('//')) {
+        const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1
+        out.push(`${path}:${line}: ${raw.split('\n')[0].trim()}`)
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sf)
+  return out
+}
+
 describe('颜色只走 token', () => {
   it('扫描面非空（防止路径漂移导致守卫空转）', () => {
     expect(tsx.length).toBeGreaterThan(20)
@@ -71,6 +96,38 @@ describe('颜色只走 token', () => {
     expect(chart).toContain('var(--color-accent)')
     expect(chart).toContain('isAnimationActive={false}')
     expect(chart).not.toMatch(/#[0-9a-fA-F]{3,8}/)
+  })
+})
+
+describe('JSX children 不许写 // 行注释（会被当字面文本渲染）', () => {
+  it('全量 .tsx 的 JsxText 里没有以 // 开头的内容', () => {
+    const offenders = tsx.flatMap((f) => jsxLineCommentText(f.path, f.text))
+    expect(offenders).toEqual([])
+  })
+
+  it('守卫不是空转：历史三处踩雷文件都在扫描面里', () => {
+    for (const p of ['components/DeviceCard.tsx', 'pages/Edges.tsx', 'pages/Settings.tsx']) {
+      expect(tsx.some((f) => f.path === p), `扫描面缺少 ${p}`).toBe(true)
+    }
+  })
+
+  it('阳性对照：坏写法必抓，合法写法（{/* */}、正文里的 URL、表达式里的字符串）不误报', () => {
+    const bad = 'const A = () => (\n  <div>\n    // 会被渲染出来\n    <span>x</span>\n  </div>\n)\n'
+    expect(jsxLineCommentText('bad.tsx', bad)).toEqual(['bad.tsx:3: // 会被渲染出来'])
+
+    const good = [
+      'const A = () => (',
+      '  <div>',
+      '    {/* 合法 JSX 注释 */}',
+      '    <span>见 https://example.com 文档</span>',
+      '    <code>{"// 这是字符串不是注释"}</code>',
+      '  </div>',
+      ')',
+      '// 普通 TS 行注释',
+      'export default A',
+      '',
+    ].join('\n')
+    expect(jsxLineCommentText('good.tsx', good)).toEqual([])
   })
 })
 

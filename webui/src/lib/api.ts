@@ -3,7 +3,8 @@
 // + 可选 Bearer 服务令牌（localStorage）。登录态事实源 = GET /api/auth/me（200 已登录 / 401 未登录）。
 // 任何受保护端点返回 401 → markUnauthenticated() 全局收敛（store/auth.ts → 路由守卫跳 /login）。
 import type {
-  AdapterView, CommandView, DeviceView, EdgeView, EventView, HealthView, MeResponse, StatsView, UserView,
+  AdapterView, CommandView, CreateTokenInput, CreatedToken, CreateUserInput, DeviceView, EdgeView,
+  EventView, HealthView, MeResponse, StatsView, TokenView, UpdateUserInput, UserView,
 } from './types'
 import { markUnauthenticated } from '@/store/auth'
 
@@ -129,6 +130,20 @@ export const api = {
       `/api/devices/${encodeURIComponent(edgeId)}/${encodeURIComponent(devId)}/commands`,
       { method: 'POST', body: JSON.stringify({ cmd, args: args ?? '' }) },
     ),
+
+  // ---- 管理面（docs/api.md §3.2-3.3）：admin-only，凭据沿用同一层（会话 cookie + 可选 Bearer）----
+  // 401 走全局登出收敛；403/409/400 由调用方按 lib/admin.ts 的映射展示人话，不在前端复述业务规则。
+  users: () => req<{ users: UserView[] }>('/api/users'),
+  createUser: (input: CreateUserInput) =>
+    req<{ user: UserView }>('/api/users', { method: 'POST', body: JSON.stringify(input) }),
+  updateUser: (id: number, patch: UpdateUserInput) =>
+    req<{ user: UserView }>(`/api/users/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  tokens: () => req<{ tokens: TokenView[] }>('/api/tokens'),
+  /** 明文只在本次返回值里出现一次：调用方只能在组件内存中持有，禁止写 storage/URL/console/toast */
+  createToken: (input: CreateTokenInput) =>
+    req<CreatedToken>('/api/tokens', { method: 'POST', body: JSON.stringify(input) }),
+  revokeToken: (id: number) =>
+    req<void>(`/api/tokens/${id}`, { method: 'DELETE' }, { allowEmpty: true }),
 
   // ---- Wave2 Schema 面（返回 unknown，由 lib/descriptor.ts 宽容归一化）----
   /** 批量 Descriptor（列表页优先，避免每设备一次请求） */

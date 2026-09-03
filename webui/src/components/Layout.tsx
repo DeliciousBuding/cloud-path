@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
-  LayoutDashboard, Cpu, Activity, Network, Settings, Monitor, Sun, Moon, WifiOff,
+  LayoutDashboard, Cpu, Activity, Network, Settings, Monitor, ShieldCheck, Sun, Moon, WifiOff,
 } from 'lucide-react'
 import { Logo } from './Logo'
 import { StatusDot } from './ui'
@@ -11,6 +11,7 @@ import { api } from '@/lib/api'
 import { cn } from '@/lib/cn'
 import { useLive } from '@/store/ws'
 import { getTheme, setTheme, type ThemeMode } from '@/lib/theme'
+import { useIsAdmin } from '@/store/auth'
 
 const NAV = [
   { to: '/', label: '概览', icon: LayoutDashboard, end: true },
@@ -19,6 +20,9 @@ const NAV = [
   { to: '/edges', label: '边缘', icon: Network, end: false },
   { to: '/settings', label: '系统', icon: Settings, end: false },
 ]
+
+/** 管理入口只对 admin 出现（docs/api.md §3.1）：入口本身就是敏感信息，非 admin 连链接都不给 */
+const ADMIN_NAV = { to: '/admin', label: '管理', icon: ShieldCheck, end: false }
 
 function navCls(active: boolean): string {
   return cn(
@@ -105,6 +109,7 @@ function OfflineBanner() {
 }
 
 export default function Layout() {
+  const nav = useIsAdmin() ? [...NAV, ADMIN_NAV] : NAV
   return (
     <div className="min-h-screen">
       <a href="#main"
@@ -120,7 +125,7 @@ export default function Layout() {
           <Brand />
         </div>
         <nav className="mt-7 space-y-0.5" aria-label="主导航">
-          {NAV.map(({ to, label, icon: Icon, end }) => (
+          {nav.map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} title={label} className={({ isActive }) => navCls(isActive)}>
               <Icon size={16} strokeWidth={1.9} />
               {label}
@@ -137,7 +142,7 @@ export default function Layout() {
           <ConnPill />
         </div>
         <nav className="-mx-1 mt-3 flex gap-1 overflow-x-auto px-1 pb-0.5" aria-label="主导航">
-          {NAV.map(({ to, label, icon: Icon, end }) => (
+          {nav.map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} title={label} className={({ isActive }) => navCls(isActive)}>
               <Icon size={15} strokeWidth={1.9} />
               <span className="whitespace-nowrap">{label}</span>

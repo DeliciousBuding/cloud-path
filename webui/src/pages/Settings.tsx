@@ -96,7 +96,7 @@ export default function Settings() {
             <div className="space-y-4">
               {adapters.adapters.map((a) => (
                 <div key={a.name}>
-                  // 390px：适配器名来自后端注册，长名字必须可截断
+                  {/* 390px：适配器名来自后端注册，长名字必须可截断 */}
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="num min-w-0 truncate font-mono text-[13px] font-semibold" title={a.name}>{a.name}</span>
                     <Badge tone="idle" className="shrink-0">{a.commands.length} 条命令</Badge>
