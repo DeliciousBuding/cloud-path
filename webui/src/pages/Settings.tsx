@@ -96,15 +96,16 @@ export default function Settings() {
             <div className="space-y-4">
               {adapters.adapters.map((a) => (
                 <div key={a.name}>
-                  <div className="flex items-center gap-2">
-                    <span className="num font-mono text-[13px] font-semibold">{a.name}</span>
-                    <Badge tone="idle">{a.commands.length} 条命令</Badge>
+                  // 390px：适配器名来自后端注册，长名字必须可截断
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="num min-w-0 truncate font-mono text-[13px] font-semibold" title={a.name}>{a.name}</span>
+                    <Badge tone="idle" className="shrink-0">{a.commands.length} 条命令</Badge>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {a.commands.map((c) => (
-                      <span key={c} className="badge bg-ink-3/10 text-ink-2" title={`${c} → ${cmdMeta(c).hint || '—'}`}>
-                        {cmdMeta(c).label}
-                        <span className="num ml-1 font-mono text-[10px] text-ink-3">{c}</span>
+                      <span key={c} className="badge max-w-full bg-ink-3/10 text-ink-2" title={`${c} → ${cmdMeta(c).hint || '—'}`}>
+                        <span className="min-w-0 truncate">{cmdMeta(c).label}</span>
+                        <span className="num ml-1 min-w-0 truncate font-mono text-[10px] text-ink-3">{c}</span>
                       </span>
                     ))}
                   </div>

@@ -21,10 +21,13 @@ export default function Edges() {
         <div className="grid gap-4 md:grid-cols-2">
           {list.map((e) => (
             <Panel key={e.edge_id} className="fade-up">
-              <div className="flex items-center gap-2">
+              // 390px：edge_id 由后端给定，长度不可控 —— 必须可截断，否则撑出横向滚动
+              <div className="flex min-w-0 items-center gap-2">
                 <StatusDot online={e.online} />
-                <span className="num text-[15px] font-semibold tracking-tight">{e.edge_id}</span>
-                <span className="ml-auto">
+                <span className="num min-w-0 truncate text-[15px] font-semibold tracking-tight" title={e.edge_id}>
+                  {e.edge_id}
+                </span>
+                <span className="ml-auto shrink-0">
                   <Badge tone={e.online ? 'ok' : 'idle'}>{e.online ? '在线' : '离线'}</Badge>
                 </span>
               </div>
@@ -41,11 +44,12 @@ export default function Edges() {
                   {(e.devices ?? []).map((key) => {
                     const [eg, dev] = key.split('/')
                     return (
+                      // 设备键长度由后端决定：胶囊自身限宽，内部文本截断，图标不收缩
                       <Link key={key}
                         to={`/devices/${encodeURIComponent(eg ?? '')}/${encodeURIComponent(dev ?? '')}`}
-                        className="badge bg-ink-3/10 text-ink-2 transition-colors hover:bg-accent/10 hover:text-accent"
+                        className="badge max-w-full bg-ink-3/10 text-ink-2 transition-colors hover:bg-accent/10 hover:text-accent"
                         title={key}>
-                        {dev} <ArrowRight size={10} />
+                        <span className="min-w-0 truncate">{dev}</span> <ArrowRight size={10} className="shrink-0" />
                       </Link>
                     )
                   })}

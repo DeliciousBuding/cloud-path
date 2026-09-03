@@ -79,10 +79,15 @@ export function useDeviceDescriptor(
     [bulk.data],
   )
 
+  // 批量端点在飞时不要抢跑单设备探测：列表页每张卡都会挂一个本 hook，
+  // 抢跑等于「N 张卡 × 1 次单设备请求」全部打在批量结果落地之前（纯浪费）。
+  // skipBulk（详情页自行探测）或批量已结算（含 404 缺席）时才允许单设备探测。
+  const bulkSettled = Boolean(opts.skipBulk) || bulk.isSuccess || bulk.isError
+
   const single = useQuery({
     queryKey: ['descriptor', key],
     queryFn: () => api.deviceDescriptor(edgeId, devId),
-    enabled: !live && !bulkHit,
+    enabled: !live && !bulkHit && bulkSettled,
     staleTime: 5 * 60_000,
     refetchInterval: 120_000,
     retry: false,

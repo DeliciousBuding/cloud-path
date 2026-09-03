@@ -72,15 +72,16 @@ export function StatTile({ icon, label, value, unit, sub }: {
   icon?: ReactNode; label: string; value: ReactNode; unit?: string; sub?: ReactNode
 }) {
   return (
-    <div className="card p-5 fade-up">
-      <div className="flex items-center gap-1.5 text-xs font-medium text-ink-2">
-        {icon}{label}
+    // 390px：两列统计瓦片内宽仅约 8rem，长版本号等不可断字符串必须换行，否则撑出横向滚动
+    <div className="card min-w-0 p-5 fade-up">
+      <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-ink-2">
+        {icon}<span className="truncate">{label}</span>
       </div>
-      <div className="num mt-2 text-3xl font-semibold tracking-tight">
+      <div className="num mt-2 text-3xl font-semibold tracking-tight break-words">
         {value}
         {unit && <span className="ml-1 text-base font-normal text-ink-3">{unit}</span>}
       </div>
-      {sub && <div className="mt-1 text-xs text-ink-3">{sub}</div>}
+      {sub && <div className="mt-1 text-xs text-ink-3 break-words">{sub}</div>}
     </div>
   )
 }
@@ -97,17 +98,20 @@ export function EmptyState({ icon, title, hint }: { icon?: ReactNode; title: str
   )
 }
 
-export function Segmented<T extends string>({ options, value, onChange }: {
+export function Segmented<T extends string>({ options, value, onChange, label = '视图切换' }: {
   options: { value: T; label: string; icon?: ReactNode }[]
   value: T
   onChange: (v: T) => void
+  /** 分组可读名称（读屏用户需要知道这组按钮在切换什么） */
+  label?: string
 }) {
   return (
-    <div className="inline-flex rounded-full bg-ink-3/10 p-0.5">
+    <div className="inline-flex max-w-full rounded-full bg-ink-3/10 p-0.5" role="group" aria-label={label}>
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
+          aria-pressed={value === o.value}
           onClick={() => onChange(o.value)}
           className={cn(
             'inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-all',
@@ -164,7 +168,10 @@ export function TextField({ label, hint, error, className, ...rest }: {
   error?: string
 } & InputHTMLAttributes<HTMLInputElement>) {
   const id = useId()
-  const desc = error || hint ? `${id}-desc` : undefined
+  // error 为空串时视为「无错误」，必须回落到 hint：
+  // 旧写法 `error ?? hint` 会让空串吃掉提示文案（登录页的令牌说明因此既不显示也读不到）。
+  const message = error || hint
+  const desc = message ? `${id}-desc` : undefined
   return (
     <div className={className}>
       <label htmlFor={id} className="mb-1.5 block text-[13px] font-medium text-ink-2">{label}</label>
@@ -177,7 +184,7 @@ export function TextField({ label, hint, error, className, ...rest }: {
       />
       {desc && (
         <p id={desc} className={cn('mt-1.5 text-xs', error ? 'text-bad' : 'text-ink-3')}>
-          {error ?? hint}
+          {message}
         </p>
       )}
     </div>
