@@ -3,7 +3,7 @@
 // 适配器白名单回落的「带参数下发」入口，以及键盘可达性与无障碍名称。
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { ActionPanel } from '@/components/ActionPanel'
 import { commandActions, indexCapabilities, normalizeCapabilityDocs } from '@/lib/descriptor'
 import { useLive } from '@/store/ws'
@@ -89,20 +89,52 @@ describe('actions.inputSchema → 参数输入', () => {
 })
 
 describe('危险动作与回执', () => {
-  it('声明了 confirmation 的动作先弹确认：取消不下发，确认才下发', async () => {
+  it('声明了 confirmation 的动作先弹设计过的二次确认：取消不下发，确认才下发', async () => {
     const user = userEvent.setup()
     const http = okPost()
-    const confirm = vi.spyOn(window, 'confirm')
     render(<ActionPanel deviceId={KEY} set={declared} />)
 
-    confirm.mockReturnValue(false)
     await user.click(screen.getByRole('button', { name: '恢复出厂' }))
-    expect(confirm).toHaveBeenCalledWith('确认恢复出厂？设备侧配置将被清空。')
+    const dialog = screen.getByRole('dialog')
+    // 确认文案的事实源仍是 Capability 声明，必须逐字出现（不是前端自己编的话术）
+    expect(dialog).toHaveTextContent('确认恢复出厂？设备侧配置将被清空。')
+    expect(dialog).toHaveTextContent(KEY)
+    expect(dialog).toHaveTextContent('factory_reset')
     expect(http.calls).toHaveLength(0)
 
-    confirm.mockReturnValue(true)
-    await user.click(screen.getByRole('button', { name: '恢复出厂' }))
+    // 危险动作（variant=danger）必须显式勾选才允许执行
+    const go = within(dialog).getByRole('button', { name: '恢复出厂' })
+    expect(go).toBeDisabled()
+    await user.click(within(dialog).getByRole('checkbox'))
+    expect(go).toBeEnabled()
+    await user.click(go)
     expect((http.last()?.body as { cmd: string }).cmd).toBe('factory_reset')
+  })
+
+  it('二次确认可以取消或 Esc 关闭，两种路径都不下发命令', async () => {
+    const user = userEvent.setup()
+    const http = okPost()
+    render(<ActionPanel deviceId={KEY} set={declared} />)
+
+    await user.click(screen.getByRole('button', { name: '恢复出厂' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '取消' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(http.calls).toHaveLength(0)
+
+    await user.click(screen.getByRole('button', { name: '恢复出厂' }))
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(http.calls).toHaveLength(0)
+  })
+
+  it('非危险动作不要求勾选：确认键直接可点', async () => {
+    const user = userEvent.setup()
+    const http = okPost()
+    // pulse 有 inputSchema 但没有 destructive/confirmation → 不进对话框
+    render(<ActionPanel deviceId={KEY} set={declared} />)
+    await user.click(screen.getByRole('button', { name: '点动' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect((http.last()?.body as { cmd: string }).cmd).toBe('pulse')
   })
 
   it('下发后按钮进入 aria-busy，WS ack 到达后结算并给出可读提示', async () => {
@@ -126,7 +158,7 @@ describe('危险动作与回执', () => {
     render(<ActionPanel deviceId={KEY} set={declared} />)
     await user.click(screen.getByRole('button', { name: '断开' }))
     const items = useToasts.getState().items
-    expect(items[items.length - 1]).toMatchObject({ title: '断开下发失败', tone: 'bad' })
+    expect(items[items.length - 1]).toMatchObject({ title: '断开未下发', tone: 'bad' })
     expect(screen.getByRole('button', { name: '断开' })).toBeEnabled()
   })
 })

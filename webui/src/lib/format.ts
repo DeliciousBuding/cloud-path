@@ -3,6 +3,7 @@
 // 设备语义不在这里：事件/命令的展示文案由后端声明驱动（Capability spec.events / spec.actions），
 // 未声明时回落 humanize(机器名)。机器 ID、Capability ID、事件类型永不本地化
 // （docs/architecture/capability-model.md §9）。
+import { ApiError } from './api'
 import type { Tone } from '@/components/ui'
 import { eventDecl, humanize } from './descriptor'
 import type { CapabilityIndex, CommandAction } from './descriptor'
@@ -99,4 +100,35 @@ const ROLE_LABELS: Record<string, string> = {
 
 export function roleLabel(role: string): string {
   return ROLE_LABELS[role] ?? role
+}
+
+/**
+ * 下拉候选等窄容器里的标签截断。
+ * 原生 <option> 不受 CSS truncate 约束（下拉弹层宽度也不受父容器限制），
+ * 因此后端给的长标识符只能在文本层收敛，否则 390px 上选择器会被撑宽、弹层不可读。
+ */
+export function optionLabel(s: string, max = 32): string {
+  const v = String(s ?? '')
+  return v.length > max ? `${v.slice(0, max)}…` : v
+}
+
+/**
+ * 命令下发失败 → 人话。按 HTTP 状态判定，语义对齐 docs/design.md 的 REST 错误约定
+ * （400 参数/白名单、401 令牌、404 设备不存在、409 edge 离线、429 命令限流、
+ * 503 存储不可用或 edge 队列满）；不把服务端 message 当规则复述。
+ */
+export function commandErrorCopy(e: unknown): string {
+  if (e instanceof ApiError) {
+    switch (e.status) {
+      case 400: return '命令或参数不被接受：不在适配器白名单内，或参数超长 / 含控制字符'
+      case 401: return '登录已失效，请重新登录后再下发命令'
+      case 403: return '权限不足：当前角色不能下发命令（需要 operator 或 admin）'
+      case 404: return '设备不存在，或不属于当前租户'
+      case 409: return '目标设备所在的边缘节点离线，命令无法下发'
+      case 429: return e.retryAfter ? `下发过于频繁，请 ${e.retryAfter} 秒后重试` : '下发过于频繁，请稍后重试'
+      case 503: return '服务端存储不可用或边缘队列已满，请稍后重试'
+      default: return `下发失败（HTTP ${e.status}）`
+    }
+  }
+  return e instanceof Error && e.message ? e.message : '无法连接 server（服务未启动或网络不可达）'
 }

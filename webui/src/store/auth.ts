@@ -35,6 +35,20 @@ export function useIsAdmin(): boolean {
   return useAuth((s) => isAdmin(s.status, s.user))
 }
 
+/**
+ * 登录成功后的**唯一判据**：用 GET /api/auth/me 复核会话，并把用户写进 store。
+ *
+ * 为什么必须复核：/healthz 等公开端点可达**不代表**登录成功（那正是「假登录」的成因）。
+ * 账号模式下会话靠 Set-Cookie 落地，me 返回 200 才证明后续 /api/* 与 /ws 真的能鉴权通过。
+ * 复核失败会把状态收敛回未登录，调用方据此呈现错误而不是跳转首页。
+ */
+export async function confirmSession(fallback?: UserView | null): Promise<UserView | null> {
+  const me = await api.me()
+  const user = me?.user ?? fallback ?? null
+  useAuth.setState({ status: 'in', user })
+  return user
+}
+
 let refreshing = false
 
 /**

@@ -1,12 +1,14 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Activity, Boxes, Check, Cpu, Database, KeyRound, Network, Plug, Server, Wifi,
+  Activity, Boxes, Check, Cpu, Database, KeyRound, LogOut, Network, Plug, Server, UserRound, Wifi,
 } from 'lucide-react'
 import { PageHeader, Panel, StatTile, Badge, KeyValue } from '@/components/ui'
 import { api, getToken, setToken, wsUrl } from '@/lib/api'
-import { cmdMeta, fmtDateTime, fmtUptime } from '@/lib/format'
+import { cmdMeta, fmtDateTime, fmtUptime, roleLabel } from '@/lib/format'
 import { useLive, reconnectLive } from '@/store/ws'
+import { logout, useAuth } from '@/store/auth'
 import { toast } from '@/store/toast'
 
 export default function Settings() {
@@ -14,8 +16,18 @@ export default function Settings() {
   const { data: stats } = useQuery({ queryKey: ['stats'], queryFn: api.stats, refetchInterval: 15000 })
   const { data: adapters } = useQuery({ queryKey: ['adapters'], queryFn: api.adapters, staleTime: 5 * 60_000 })
   const status = useLive((s) => s.status)
+  const authStatus = useAuth((s) => s.status)
+  const user = useAuth((s) => s.user)
+  const navigate = useNavigate()
   const [tok, setTok] = useState(getToken)
   const [saved, setSaved] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
+
+  async function signOut() {
+    setSigningOut(true)
+    await logout()
+    navigate('/login', { replace: true })
+  }
 
   const saveToken = () => {
     setToken(tok.trim())
@@ -27,7 +39,7 @@ export default function Settings() {
 
   return (
     <>
-      <PageHeader title="系统" subtitle="服务状态、存储、适配器与接入令牌" />
+      <PageHeader title="系统" subtitle="服务状态、账号、存储、适配器与本机令牌" />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatTile icon={<Server size={13} />} label="服务版本" value={health?.version ?? '—'} />
@@ -46,7 +58,7 @@ export default function Settings() {
             <KeyValue k="WS 端点" v={wsUrl()} mono />
             <KeyValue k="服务健康" v={isFetching ? '检查中…' : health?.ok ? '正常' : '异常'} />
             <KeyValue k="自动重连" v="指数退避 1–15 秒" />
-            <KeyValue k="鉴权" v={stats?.auth_enabled ? '已启用令牌' : '未启用（本机模式）'} />
+            <KeyValue k="鉴权" v={stats?.auth_enabled ? '已启用账号鉴权' : '未启用（本机模式）'} />
           </dl>
           <button type="button" className="btn btn-ghost mt-4"
             onClick={() => { reconnectLive(); toast.info('正在重连…') }}>
@@ -54,10 +66,43 @@ export default function Settings() {
           </button>
         </Panel>
 
-        <Panel title={<span className="flex items-center gap-1.5"><KeyRound size={14} />接入令牌</span>}>
+        <Panel title={<span className="flex items-center gap-1.5"><UserRound size={14} />账号</span>}
+          right={authStatus === 'in'
+            ? <Badge tone="ok">已登录</Badge>
+            : authStatus === 'open'
+              ? <Badge tone="idle">开放访问</Badge>
+              : <Badge tone="warn">未登录</Badge>}>
+          {authStatus === 'in' && user ? (
+            <>
+              <dl className="space-y-2.5">
+                <KeyValue k="用户名" v={<span className="num min-w-0 truncate" title={user.username}>{user.username}</span>} />
+                <KeyValue k="姓名" v={<span className="min-w-0 truncate" title={user.name}>{user.name || '—'}</span>} />
+                <KeyValue k="角色" v={roleLabel(user.role)} />
+                <KeyValue k="租户" v={<span className="num min-w-0 truncate" title={user.tenant_slug}>{user.tenant_slug || '—'}</span>} />
+              </dl>
+              <p className="mt-3 border-t border-hairline pt-3 text-[11px] leading-relaxed text-ink-3">
+                登录态由会话 cookie 承载，REST 与实时通道都用它鉴权。共用机器请记得登出。
+              </p>
+              <button type="button" className="btn btn-danger-ghost mt-3" disabled={signingOut}
+                onClick={() => void signOut()}>
+                <LogOut size={13} /> {signingOut ? '登出中…' : '登出'}
+              </button>
+            </>
+          ) : (
+            <p className="text-xs leading-relaxed text-ink-2">
+              {authStatus === 'open'
+                ? '当前是开放访问（GET /api/auth/me 不可用），说明 server 还没启用账号鉴权或尚未初始化。启用后这里会显示登录账号。'
+                : '尚未登录。受保护的数据接口会返回 401，请先到登录页用账号密码登录。'}
+            </p>
+          )}
+        </Panel>
+
+        <Panel title={<span className="flex items-center gap-1.5"><KeyRound size={14} />本机令牌（可选）</span>}>
           <p className="mb-3 text-xs leading-relaxed text-ink-2">
-            server 启用 <code className="rounded bg-ink-3/10 px-1 font-mono">CLOUDPATH_TOKEN</code> 后，
-            命令下发与实时订阅都必须携带同一令牌。令牌只保存在本机浏览器 localStorage。
+            账号模式下浏览器靠<strong>会话 cookie</strong> 鉴权，这里通常<strong>不需要填任何东西</strong>。
+            仅两种情况需要本机令牌：server 以 legacy 共享令牌
+            （<code className="rounded bg-ink-3/10 px-1 font-mono">CLOUDPATH_TOKEN</code>）运行时，
+            或你在用服务令牌做 API / 机器客户端接入。令牌只保存在本机浏览器 localStorage。
           </p>
           <div className="flex gap-2">
             <label className="sr-only" htmlFor="token">接入令牌</label>
@@ -66,7 +111,7 @@ export default function Settings() {
               type="password"
               value={tok}
               onChange={(e) => setTok(e.target.value)}
-              placeholder="留空 = 无鉴权（本机模式）"
+              placeholder="留空 = 用会话 cookie（账号模式默认）"
               autoComplete="off"
               className="min-w-0 flex-1 rounded-full border border-hairline bg-surface-2 px-3.5 py-2 text-sm outline-none transition-colors focus:border-accent"
             />

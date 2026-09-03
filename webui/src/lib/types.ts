@@ -77,8 +77,10 @@ export interface StatsView {
 
 /** WS 消息信封（浏览器视角）。后端可能新增类型（如 descriptor），故消费侧对未知 type 宽容。 */
 export type WsType =
-  | 'snapshot' | 'state' | 'event' | 'command' | 'command_ack'
-  | 'edge_up' | 'edge_down' | 'ping' | 'pong'
+  | 'hello' | 'snapshot' | 'state' | 'event' | 'command' | 'command_ack'
+  | 'edge_up' | 'edge_down' | 'descriptor'
+  | 'plugin_status' | 'plugin_desired' | 'plugin_ack'
+  | 'ping' | 'pong'
 
 export interface Envelope<T = unknown> {
   v: number
@@ -105,6 +107,8 @@ export interface AckData {
 export interface SnapshotData {
   devices: DeviceView[]
   edges: EdgeView[]
+  /** 后端可随快照下发 Descriptor（宽容消费：形状由 lib/descriptor.ts 归一化） */
+  descriptors?: unknown[]
 }
 
 export interface EdgeUpData {
@@ -311,4 +315,295 @@ export interface DescriptorEnvelope {
   descriptors?: DeviceDescriptor[]
   capabilities?: CapabilityDoc[]
   [k: string]: unknown
+}
+/* ================================================================== *
+ * v0.1 收口：Overview 聚合读面 + 插件控制面（逐字镜像 internal/api/types.go）
+ *
+ * 映射约定：
+ *   - Go int/int64/uint64 → TS number（JSON 数字；revision 由 server 保证在安全整数范围内）
+ *   - Go `json:"x,omitempty"` → TS 可选字段 `x?`
+ *   - Go *T（指针，可空）→ TS `T | undefined`（可选）
+ *   - Go map[string]string → TS Record<string, string>
+ * 字段名一律取 JSON tag 的 snake_case，与 Go 侧逐字一致（见 lib/__tests__/contract.test.ts）。
+ * ================================================================== */
+
+/** GET /api/overview → api.OverviewView（一屏产品级概览的唯一数据源，禁止前端自算假数据） */
+export interface OverviewView {
+  devices_online: number
+  devices_total: number
+  edges_online: number
+  edges_total: number
+  plugins_active: number
+  plugins_desired: number
+  commands_failed: number
+  recent_events: EventView[]
+  offline_devices: DeviceView[]
+  failed_commands: CommandView[]
+  server_time: number
+}
+
+/* ------------------------------------------------------------------ *
+ * 插件控制面同步（docs/architecture/control-plane-sync.md）
+ * ------------------------------------------------------------------ */
+
+/** 插件公开权限声明：只有权限名，永不携带凭据值 */
+export interface PluginPermissionsData {
+  hardware?: string[]
+  network?: string[]
+  filesystem?: string[]
+  secrets?: string[]
+}
+
+export interface PluginDriverContributionData {
+  id: string
+  title?: string
+  discovery?: string
+}
+
+export interface PluginApplicationContributionData {
+  id: string
+  title?: string
+}
+
+export interface PluginConnectorContributionData {
+  id: string
+  title?: string
+  direction?: string
+  host?: string
+}
+
+export interface PluginContributionsData {
+  drivers?: PluginDriverContributionData[]
+  applications?: PluginApplicationContributionData[]
+  connectors?: PluginConnectorContributionData[]
+}
+
+/** Edge 上报的已安装插件公开事实（无本地路径 / 启动参数 / 环境变量 / secret 值） */
+export interface PluginInstallationStatusData {
+  plugin_id: string
+  version: string
+  kind: string
+  protocol: number
+  digest: string
+  trust_mode: string
+  verified: boolean
+  verified_publisher?: string
+  permissions: PluginPermissionsData
+  contributions: PluginContributionsData
+  capabilities?: string[]
+}
+
+/** Edge Plugin Host 的实际态。desired 字段不得混进本结构（不变量 5） */
+export interface PluginObservedInstanceData {
+  instance_id: string
+  plugin_id: string
+  version: string
+  host_online: boolean
+  state: string
+  health: string
+  detail?: string
+  restart_count: number
+  last_healthy?: number
+  message_rate?: number
+}
+
+/** Edge→Server 全量插件实际态快照 */
+export interface PluginStatusData {
+  boot_id: string
+  sequence: number
+  applied_revision: number
+  installations: PluginInstallationStatusData[]
+  instances: PluginObservedInstanceData[]
+}
+
+/** Server 权威期望态中的单个实例（config 值只含非敏感标量或 secret://<name> handle） */
+export interface PluginDesiredInstanceData {
+  instance_id: string
+  plugin_id: string
+  version: string
+  enabled: boolean
+  isolation: string
+  config?: Record<string, string>
+}
+
+/** Server→Edge 声明式全量期望态快照 */
+export interface PluginDesiredData {
+  revision: number
+  snapshot_digest: string
+  instances: PluginDesiredInstanceData[]
+}
+
+/** 单实例 reconcile 结果（detail 已由 server 限长并脱敏） */
+export interface PluginApplyResultData {
+  instance_id: string
+  status: string
+  detail?: string
+}
+
+/** plugin_ack 稳定状态值（api.PluginAckApplied / Rejected / Failed） */
+export const PLUGIN_ACK_APPLIED = 'applied'
+export const PLUGIN_ACK_REJECTED = 'rejected'
+export const PLUGIN_ACK_FAILED = 'failed'
+
+/** Edge→Server 的 revision 应用结果 */
+export interface PluginAckData {
+  revision: number
+  snapshot_digest: string
+  status: string
+  results?: PluginApplyResultData[]
+}
+
+/* ------------------------------------------------------------------ *
+ * 插件实例管理：读面视图 + 写面请求/响应
+ * ------------------------------------------------------------------ */
+
+/** 实例的**期望态**（Server 权威） */
+export interface PluginInstanceDesiredView {
+  instance_id: string
+  plugin_id: string
+  version: string
+  enabled: boolean
+  isolation: string
+  config?: Record<string, string>
+  /** 只含 secret handle 名（如 `db-password`），永不含明文 */
+  secret_refs?: string[]
+  revision: number
+  updated_at: number
+}
+
+/** 实例的**实际态**（Edge 上报投影）；缺席即「Edge 未上报」 */
+export interface PluginInstanceObservedView {
+  state: string
+  health: string
+  version?: string
+  detail?: string
+  restart_count: number
+  last_healthy?: number
+  reported_at?: number
+}
+
+/**
+ * 单个插件实例。desired 与 observed **永远分别渲染**（control-plane-sync.md 不变量 5）：
+ * `has_observed=false` → 必须显式呈现「Edge 未上报」，不得把 desired.enabled 当成运行中；
+ * `stale=true` / `drift=true` → 必须有清晰视觉状态。
+ */
+export interface PluginInstanceView {
+  id: string
+  tenant_id: number
+  edge_id: string
+  desired: PluginInstanceDesiredView
+  has_observed: boolean
+  observed?: PluginInstanceObservedView
+  edge_online: boolean
+  desired_revision: number
+  applied_revision: number
+  drift: boolean
+  stale: boolean
+  last_ack_at?: number
+}
+
+/** GET /api/plugin-instances */
+export interface PluginInstanceListResponse {
+  instances: PluginInstanceView[]
+}
+
+/** POST /api/plugin-instances */
+export interface PluginInstanceCreateRequest {
+  edge_id: string
+  instance_id: string
+  plugin_id: string
+  version: string
+  enabled?: boolean
+  isolation?: string
+  config?: Record<string, string>
+  secret_refs?: string[]
+  /** 权限扩大必须显式确认；未确认时 server 回 PluginErrPermissionConfirm */
+  confirm_permissions?: boolean
+}
+
+/** PATCH /api/plugin-instances/{id}：只带要改的字段 */
+export interface PluginInstanceUpdateRequest {
+  version?: string
+  enabled?: boolean
+  isolation?: string
+  config?: Record<string, string>
+  secret_refs?: string[]
+  confirm_permissions?: boolean
+}
+
+/** DELETE /api/plugin-instances/{id} */
+export interface PluginInstanceDeleteRequest {
+  purge?: boolean
+}
+
+/** 写操作统一响应 */
+export interface PluginInstanceWriteResponse {
+  id: string
+  revision: number
+  request_id: string
+  instance: PluginInstanceView
+}
+
+/** POST /api/plugin-instances/{id}/reconcile */
+export interface PluginInstanceActionRequest {
+  force?: boolean
+}
+
+/**
+ * 插件实例写操作的**稳定错误码**（api.PluginErr*）。
+ * 前端按码呈现文案，绝不解析错误文本 —— server 的 message 可能变，码不会。
+ */
+export const PluginErr = {
+  NotFound: 'plugin_instance_not_found',
+  Conflict: 'plugin_instance_conflict',
+  Quota: 'plugin_quota_exceeded',
+  PermissionConfirm: 'plugin_permission_confirmation_required',
+  EdgeOffline: 'plugin_edge_offline',
+  SecretForbidden: 'plugin_secret_forbidden',
+  InvalidConfig: 'plugin_invalid_config',
+} as const
+
+export type PluginErrCode = typeof PluginErr[keyof typeof PluginErr]
+
+/** 全部稳定错误码（用于把 server 的 error 文本回落到码：只匹配闭合枚举，不做自然语言解析） */
+export const PLUGIN_ERR_CODES: readonly string[] = Object.values(PluginErr)
+
+/* ------------------------------------------------------------------ *
+ * GET /api/plugins（插件目录）
+ * 注意：此视图镜像 internal/plugincatalog/model.go 的 PluginView，**不在**
+ * internal/api/types.go 冻结契约内；字段变动需由 Server lane 同步到这里。
+ * ------------------------------------------------------------------ */
+
+export interface PluginCatalogDriverView {
+  id: string
+  title?: string
+  descriptor?: string
+  configSchema?: string
+  discovery?: string
+  capabilityCatalog?: string
+}
+
+export interface PluginCatalogContributesView {
+  drivers?: PluginCatalogDriverView[]
+  applications?: PluginApplicationContributionData[]
+  connectors?: PluginConnectorContributionData[]
+}
+
+export interface PluginCatalogView {
+  id: string
+  kind: string
+  version: string
+  /** 安装来源标识：可能含本机路径，UI 不得直接呈现（安全边界） */
+  source: string
+  digest: string
+  verified: boolean
+  compatibility?: string
+  protocol: number
+  permissions: PluginPermissionsData
+  contributes: PluginCatalogContributesView
+}
+
+/** GET /api/plugins */
+export interface PluginCatalogListResponse {
+  plugins: PluginCatalogView[]
 }

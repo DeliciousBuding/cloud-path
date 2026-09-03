@@ -4,8 +4,12 @@
 // 任何受保护端点返回 401 → markUnauthenticated() 全局收敛（store/auth.ts → 路由守卫跳 /login）。
 import type {
   AdapterView, CommandView, CreateTokenInput, CreatedToken, CreateUserInput, DeviceView, EdgeView,
-  EventView, HealthView, MeResponse, StatsView, TokenView, UpdateUserInput, UserView,
+  EventView, HealthView, MeResponse, OverviewView, PluginCatalogListResponse, PluginCatalogView,
+  PluginInstanceActionRequest, PluginInstanceCreateRequest, PluginInstanceDeleteRequest,
+  PluginInstanceListResponse, PluginInstanceUpdateRequest, PluginInstanceView,
+  PluginInstanceWriteResponse, StatsView, TokenView, UpdateUserInput, UserView,
 } from './types'
+import { PLUGIN_ERR_CODES } from './types'
 import { markUnauthenticated } from '@/store/auth'
 
 const TOKEN_KEY = 'cloudpath.token'
@@ -29,12 +33,28 @@ export function setToken(v: string) {
 export class ApiError extends Error {
   readonly status: number
   readonly retryAfter?: number
-  constructor(status: number, message: string, retryAfter?: number) {
+  /**
+   * 服务端给的**稳定错误码**（如 api.PluginErr*）。UI 按码呈现文案，不解析 message 文本。
+   * 取值顺序：响应体 `code` 字段 → `error` 字段恰好等于某个已知稳定码 → undefined。
+   * 只对闭合枚举做精确匹配，因此不构成「解析错误文本」。
+   */
+  readonly code?: string
+  constructor(status: number, message: string, retryAfter?: number, code?: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.retryAfter = retryAfter
+    this.code = code
   }
+}
+
+/** 从错误响应体提取稳定码（闭合枚举精确匹配，不做自然语言解析） */
+function extractErrorCode(body: unknown): string | undefined {
+  if (!body || typeof body !== 'object') return undefined
+  const o = body as Record<string, unknown>
+  if (typeof o.code === 'string' && o.code) return o.code
+  if (typeof o.error === 'string' && PLUGIN_ERR_CODES.includes(o.error)) return o.error
+  return undefined
 }
 
 interface ReqOptions {
@@ -65,12 +85,14 @@ async function req<T>(path: string, init?: RequestInit, opts?: ReqOptions): Prom
   }
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`
+    let code: string | undefined
     try {
       const j = await res.json()
       if (j?.error) msg = j.error
+      code = extractErrorCode(j)
     } catch { /* 保持状态码信息 */ }
     if (res.status === 401 && !opts?.public) markUnauthenticated()
-    throw new ApiError(res.status, msg, parseRetryAfter(res))
+    throw new ApiError(res.status, msg, parseRetryAfter(res), code)
   }
   if (opts?.allowEmpty || res.status === 204) return undefined as T
   return res.json() as Promise<T>
@@ -144,6 +166,32 @@ export const api = {
     req<CreatedToken>('/api/tokens', { method: 'POST', body: JSON.stringify(input) }),
   revokeToken: (id: number) =>
     req<void>(`/api/tokens/${id}`, { method: 'DELETE' }, { allowEmpty: true }),
+
+  // ---- Overview 聚合读面（GET /api/overview → api.OverviewView）----
+  /** 概览页唯一数据源：计数/离线设备/失败命令/近期事件全部由 server 聚合，前端不自算 */
+  overview: () => req<OverviewView>('/api/overview'),
+
+  // ---- 插件目录（GET /api/plugins）----
+  plugins: () => req<PluginCatalogListResponse>('/api/plugins'),
+  plugin: (pluginId: string) =>
+    req<PluginCatalogView>(`/api/plugins/${encodeURIComponent(pluginId)}`),
+
+  // ---- 插件实例管理（冻结端点，路径不得改；错误按 PluginErr* 稳定码呈现）----
+  pluginInstances: () => req<PluginInstanceListResponse>('/api/plugin-instances'),
+  pluginInstance: (id: string) =>
+    req<PluginInstanceView>(`/api/plugin-instances/${encodeURIComponent(id)}`),
+  createPluginInstance: (body: PluginInstanceCreateRequest) =>
+    req<PluginInstanceWriteResponse>('/api/plugin-instances',
+      { method: 'POST', body: JSON.stringify(body) }),
+  updatePluginInstance: (id: string, body: PluginInstanceUpdateRequest) =>
+    req<PluginInstanceWriteResponse>(`/api/plugin-instances/${encodeURIComponent(id)}`,
+      { method: 'PATCH', body: JSON.stringify(body) }),
+  deletePluginInstance: (id: string, body?: PluginInstanceDeleteRequest) =>
+    req<PluginInstanceWriteResponse>(`/api/plugin-instances/${encodeURIComponent(id)}`,
+      { method: 'DELETE', body: JSON.stringify(body ?? {}) }),
+  reconcilePluginInstance: (id: string, body?: PluginInstanceActionRequest) =>
+    req<PluginInstanceWriteResponse>(`/api/plugin-instances/${encodeURIComponent(id)}/reconcile`,
+      { method: 'POST', body: JSON.stringify(body ?? {}) }),
 
   // ---- Wave2 Schema 面（返回 unknown，由 lib/descriptor.ts 宽容归一化）----
   /** 批量 Descriptor（列表页优先，避免每设备一次请求） */

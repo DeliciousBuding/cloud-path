@@ -6,7 +6,7 @@ import { PageSkeleton } from '@/components/Skeleton'
 import { refreshAuth, useAuth } from '@/store/auth'
 import { connectLive, disconnectLive } from '@/store/ws'
 import { applyTheme, watchSystemTheme } from '@/lib/theme'
-import Dashboard from '@/pages/Dashboard'
+import Overview from '@/pages/Overview'
 import Devices from '@/pages/Devices'
 
 // 认证页（FE-DESIGN 提供的全屏壳，不套 Layout 侧栏）：懒加载
@@ -15,8 +15,11 @@ const Setup = lazy(() => import('@/pages/Setup'))
 
 // 重路由按需加载：图表（recharts）只在设备详情用到，不拖慢首屏
 const DeviceDetail = lazy(() => import('@/pages/DeviceDetail'))
-const Events = lazy(() => import('@/pages/Events'))
+const Activity = lazy(() => import('@/pages/Activity'))
+const Plugins = lazy(() => import('@/pages/Plugins'))
+const PluginInstanceDetail = lazy(() => import('@/pages/PluginInstanceDetail'))
 const Edges = lazy(() => import('@/pages/Edges'))
+const EdgeDetail = lazy(() => import('@/pages/EdgeDetail'))
 const Settings = lazy(() => import('@/pages/Settings'))
 // 管理页（用户/服务令牌）：页面自身按 me.role 收口，非 admin 只看到「需要管理员权限」空态
 const Admin = lazy(() => import('@/pages/Admin'))
@@ -79,11 +82,16 @@ export default function App() {
           <Route path="/setup" element={<Setup />} />
           <Route element={<Layout />}>
             <Route element={<RequireAuth />}>
-              <Route index element={<Dashboard />} />
+              <Route index element={<Overview />} />
               <Route path="devices" element={<Devices />} />
               <Route path="devices/:edgeId/:deviceId" element={<DeviceDetail />} />
-              <Route path="events" element={<Events />} />
+              {/* 活动（事件 + 命令历史）；/events 是旧路径，保留重定向不断链 */}
+              <Route path="activity" element={<Activity />} />
+              <Route path="events" element={<Navigate to="/activity" replace />} />
+              <Route path="plugins" element={<Plugins />} />
+              <Route path="plugins/:id" element={<PluginInstanceDetail />} />
               <Route path="edges" element={<Edges />} />
+              <Route path="edges/:edgeId" element={<EdgeDetail />} />
               <Route path="settings" element={<Settings />} />
               <Route path="admin" element={<Admin />} />
               <Route path="*" element={<NotFound />} />

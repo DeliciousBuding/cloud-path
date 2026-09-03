@@ -3,7 +3,7 @@
 // 颜色一律走 index.css token（Tailwind 主题类或 .btn/.input/.card 基类），组件内禁止裸色值。
 import { useId, useState } from 'react'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react'
-import { Moon, Sun } from 'lucide-react'
+import { Moon, RefreshCw, Sun } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { setTheme } from '@/lib/theme'
 import type { ThemeMode } from '@/lib/theme'
@@ -98,6 +98,48 @@ export function EmptyState({ icon, title, hint }: { icon?: ReactNode; title: str
   )
 }
 
+/**
+ * 错误态：说清「拿不到什么」+ 一键重试。
+ * 不复述服务端技术细节，也不把错误渲染成空白（空白 = 用户以为没数据）。
+ */
+export function ErrorState({ icon, title, hint, onRetry, retrying, compact }: {
+  icon?: ReactNode; title: string; hint?: ReactNode
+  onRetry?: () => void; retrying?: boolean; compact?: boolean
+}) {
+  return (
+    <div
+      role="alert"
+      className={cn('card flex flex-col items-center justify-center px-6 text-center fade-up',
+        compact ? 'py-9' : 'py-14')}
+    >
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-bad/10 text-bad">
+        {icon ?? <RefreshCw size={20} />}
+      </div>
+      <p className="mt-3.5 text-[15px] font-semibold">{title}</p>
+      {hint && <p className="mt-1 max-w-md text-sm break-words text-ink-2">{hint}</p>}
+      {onRetry && (
+        <button type="button" className="btn btn-ghost mt-5" onClick={onRetry} disabled={retrying}>
+          {retrying ? <Spinner size={13} /> : <RefreshCw size={13} />} 重试
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** 页内分区标题（比 Panel title 更轻，用于把一组卡片归到一个语义段落下） */
+export function SectionTitle({ icon, children, right }: {
+  icon?: ReactNode; children: ReactNode; right?: ReactNode
+}) {
+  return (
+    <div className="mb-3 flex min-w-0 items-center justify-between gap-3 px-1">
+      <h2 className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold tracking-tight">
+        {icon}<span className="truncate">{children}</span>
+      </h2>
+      {right}
+    </div>
+  )
+}
+
 export function Segmented<T extends string>({ options, value, onChange, label = '视图切换' }: {
   options: { value: T; label: string; icon?: ReactNode }[]
   value: T
@@ -123,6 +165,97 @@ export function Segmented<T extends string>({ options, value, onChange, label = 
           {o.icon}{o.label}
         </button>
       ))}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ *
+ * Tabs：详情页的分区切换（真实 tablist 语义 + roving tabindex + 方向键）
+ * 与 Segmented 的区别：Segmented 是同一批数据的视图切换，Tabs 是不同内容分区。
+ * ------------------------------------------------------------------ */
+
+export interface TabItem<T extends string> {
+  value: T
+  label: string
+  icon?: ReactNode
+  /** 可选计数（事件数 / 能力数）；0 也显示，因为「0 条」本身是事实 */
+  count?: number
+}
+
+export function TabBar<T extends string>({ items, value, onChange, label = '分页切换' }: {
+  items: TabItem<T>[]
+  value: T
+  onChange: (v: T) => void
+  label?: string
+}) {
+  const idx = Math.max(0, items.findIndex((i) => i.value === value))
+
+  const move = (delta: number) => {
+    if (items.length === 0) return
+    const next = (idx + delta + items.length) % items.length
+    const item = items[next]
+    if (item) onChange(item.value)
+  }
+
+  return (
+    // 390px：标签条在自身容器内横向滚动，不把溢出推给 body（与移动端主导航同一手法）
+    <div className="-mx-1 overflow-x-auto px-1 pb-1">
+      <div
+        role="tablist" aria-label={label}
+        className="flex min-w-max gap-1 rounded-full bg-ink-3/10 p-1"
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowRight') { e.preventDefault(); move(1) }
+          else if (e.key === 'ArrowLeft') { e.preventDefault(); move(-1) }
+          else if (e.key === 'Home') { e.preventDefault(); if (items[0]) onChange(items[0].value) }
+          else if (e.key === 'End') {
+            e.preventDefault()
+            const last = items[items.length - 1]
+            if (last) onChange(last.value)
+          }
+        }}
+      >
+        {items.map((it) => {
+          const selected = it.value === value
+          return (
+            <button
+              key={it.value}
+              type="button" role="tab"
+              id={`tab-${it.value}`}
+              aria-selected={selected}
+              aria-controls={`tabpanel-${it.value}`}
+              tabIndex={selected ? 0 : -1}
+              onClick={() => onChange(it.value)}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-medium whitespace-nowrap transition-all',
+                selected ? 'bg-surface text-ink shadow-sm' : 'text-ink-2 hover:text-ink',
+              )}
+            >
+              {it.icon}
+              {it.label}
+              {typeof it.count === 'number' && (
+                <span className={cn('num text-[11px]', selected ? 'text-ink-3' : 'text-ink-3')}>
+                  {it.count}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/** 与 TabBar 配对的tabpanel 外壳（id/aria-labelledby 必须成对，否则读屏找不到归属） */
+export function TabPanel<T extends string>({ value, children, className }: {
+  value: T; children: ReactNode; className?: string
+}) {
+  return (
+    <div
+      role="tabpanel" id={`tabpanel-${value}`} aria-labelledby={`tab-${value}`}
+      tabIndex={0}
+      className={cn('min-w-0 outline-none fade-up', className)}
+    >
+      {children}
     </div>
   )
 }
@@ -161,11 +294,13 @@ export function Button({ variant = 'primary', lg, className, ...rest }: {
   )
 }
 
-/** 带标签/提示/错误的表单输入行（error 优先于 hint 展示） */
-export function TextField({ label, hint, error, className, ...rest }: {
+/** 带标签/提示/错误的表单输入行（error 优先于 hint 展示）。
+ *  `suffix` 挂在输入框右侧（如密码显示/隐藏切换）：输入框自动留出右内边距，不与文字重叠。 */
+export function TextField({ label, hint, error, className, suffix, ...rest }: {
   label: string
   hint?: string
   error?: string
+  suffix?: ReactNode
 } & InputHTMLAttributes<HTMLInputElement>) {
   const id = useId()
   // error 为空串时视为「无错误」，必须回落到 hint：
@@ -175,13 +310,16 @@ export function TextField({ label, hint, error, className, ...rest }: {
   return (
     <div className={className}>
       <label htmlFor={id} className="mb-1.5 block text-[13px] font-medium text-ink-2">{label}</label>
+      <div className="relative">
       <input
         id={id}
         aria-invalid={error ? true : undefined}
         aria-describedby={desc}
-        className={cn('input', error && 'input-error')}
+        className={cn('input', error ? 'input-error' : undefined, suffix ? 'pr-11' : undefined)}
         {...rest}
       />
+      {suffix && <div className="absolute inset-y-0 right-1.5 flex items-center">{suffix}</div>}
+      </div>
       {desc && (
         <p id={desc} className={cn('mt-1.5 text-xs', error ? 'text-bad' : 'text-ink-3')}>
           {message}

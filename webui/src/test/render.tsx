@@ -28,7 +28,7 @@ export function renderWithProviders(ui: ReactElement, route = '/') {
 export function resetStores(): void {
   useAuth.setState({ status: 'loading', user: null })
   useLive.setState({
-    status: 'closed', devices: {}, edges: {}, events: [], series: {}, descriptors: {}, acks: {},
+    status: 'closed', failures: 0, devices: {}, edges: {}, events: [], series: {}, descriptors: {}, acks: {},
   })
   useToasts.setState({ items: [] })
   document.documentElement.classList.remove('dark')

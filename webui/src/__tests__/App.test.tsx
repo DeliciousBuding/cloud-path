@@ -6,6 +6,7 @@
 //   ⑤ Schema 端点全 404 → 设备详情页走通用回落视图（不白屏、不报错刷屏）
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '@/App'
@@ -98,17 +99,30 @@ describe('Schema 端点缺席时的设备详情页', () => {
     })
     renderApp('/devices/edge-1/dev-9')
 
+    // 详情页改成六个分区（概览/实时状态/控制/事件/能力/诊断），头部徽标仍先落地
     expect(await screen.findByText('通用视图')).toBeInTheDocument()
-    expect(screen.getByText('该设备尚未提供 Descriptor，此处按上报字段通用渲染')).toBeInTheDocument()
+    const user = userEvent.setup()
+    for (const name of ['概览', '实时状态', '控制', '事件', '能力', '诊断']) {
+      expect(screen.getByRole('tab', { name: new RegExp(name) })).toBeInTheDocument()
+    }
+
+    // 实时状态分区：通用回落视图，上报字段按类型渲染（标量成键值行，对象数组成表格，嵌套对象成 JSON）
+    await user.click(screen.getByRole('tab', { name: /实时状态/ }))
+    expect(await screen.findByText('该设备尚未提供 Descriptor，此处按上报字段通用渲染')).toBeInTheDocument()
     expect(screen.getByText('上报字段（通用视图）')).toBeInTheDocument()
-    // 命令面板回落到后端白名单，而不是前端自己编一张命令表
-    expect(screen.getByText('适配器白名单')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Raw' })).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: '选择命令' })).toBeInTheDocument()
-    // 上报字段按类型渲染：标量成键值行，对象数组成表格，嵌套对象成 JSON
     expect(screen.getByText('Mode')).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Slots 数据表' })).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Diag 原始 JSON' })).toBeInTheDocument()
+
+    // 控制分区：命令面板回落到后端白名单，而不是前端自己编一张命令表
+    await user.click(screen.getByRole('tab', { name: /控制/ }))
+    expect(await screen.findByText('适配器白名单')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Raw' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: '选择命令' })).toBeInTheDocument()
+
+    // 能力分区：没有 Descriptor 就明说，不猜能力
+    await user.click(screen.getByRole('tab', { name: /能力/ }))
+    expect(await screen.findByText('该设备还没有提供 Descriptor')).toBeInTheDocument()
   })
 
   it('设备不存在 → 明确空态而不是崩溃', async () => {

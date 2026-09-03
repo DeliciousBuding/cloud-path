@@ -4,6 +4,8 @@ import { api } from '@/lib/api'
 import { useLive } from '@/store/ws'
 import { toast } from '@/store/toast'
 import { cn } from '@/lib/cn'
+import { ConfirmDialog } from './ConfirmDialog'
+import { commandErrorCopy } from '@/lib/format'
 import type { CommandAction } from '@/lib/descriptor'
 
 const ACK_TIMEOUT_MS = 15000
@@ -18,6 +20,9 @@ export function sanitizeArgs(s: string, max = 64): string {
  *
  * 文案、危险确认、是否需要参数全部来自 `action`（由 lib/descriptor.ts 从 Capability actions /
  * Descriptor commands / 适配器白名单推导）。本组件不认识任何具体命令名。
+ *
+ * 危险命令的二次确认走设计系统里的 ConfirmDialog（不用 window.confirm 这类默认浏览器样式）：
+ * 确认文案逐字取自声明的 `confirmation`，`variant==='danger'` 时还必须显式勾选才允许执行。
  */
 export function CommandButton({ deviceId, action, args, className }: {
   /** "<edge>/<dev>" */
@@ -29,6 +34,7 @@ export function CommandButton({ deviceId, action, args, className }: {
 }) {
   const acks = useLive((s) => s.acks)
   const [busy, setBusy] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const [pendingId, setPendingId] = useState<number | null>(null)
   const settled = useRef<Set<number>>(new Set())
   const label = action.label
@@ -59,9 +65,15 @@ export function CommandButton({ deviceId, action, args, className }: {
     return () => clearTimeout(t)
   }, [pendingId, label])
 
-  const onClick = async () => {
+  /** 点击入口：声明了确认文案的先开对话框，其余直接下发 */
+  const onClick = () => {
     if (busy) return
-    if (action.confirmText && !window.confirm(action.confirmText)) return
+    if (action.confirmText) { setConfirming(true); return }
+    void send()
+  }
+
+  const send = async () => {
+    if (busy) return
     const [edgeId, devId] = deviceId.split('/')
     setBusy(true)
     try {
@@ -72,7 +84,8 @@ export function CommandButton({ deviceId, action, args, className }: {
       setPendingId(cv.id)
     } catch (e) {
       setBusy(false)
-      toast.bad(`${label}下发失败`, e instanceof Error ? e.message : String(e))
+      // 按 HTTP 状态说人话（权限不足 / 节点离线 / 限流 …），不把服务端原文甩给用户
+      toast.bad(`${label}未下发`, commandErrorCopy(e))
     }
   }
 
@@ -84,6 +97,7 @@ export function CommandButton({ deviceId, action, args, className }: {
   ].filter(Boolean).join(' · ')
 
   return (
+    <>
     <button
       type="button"
       onClick={onClick}
@@ -100,5 +114,27 @@ export function CommandButton({ deviceId, action, args, className }: {
       {busy && <Loader2 size={14} className="shrink-0 animate-spin" />}
       <span className="truncate">{label}</span>
     </button>
+    <ConfirmDialog
+      open={confirming}
+      tone={action.variant === 'danger' ? 'danger' : 'warn'}
+      title={`确认执行「${label}」？`}
+      body={
+        <>
+          <p>{action.confirmText}</p>
+          <p className="num mt-2 text-xs text-ink-3">
+            目标设备 <span className="break-all">{deviceId}</span> · 命令 <span className="font-mono">{action.cmd}</span>
+            {args ? <> · 参数 <span className="font-mono break-all">{args}</span></> : null}
+          </p>
+        </>
+      }
+      confirmLabel={label}
+      busy={busy}
+      requireAck={action.variant === 'danger'
+        ? '我已确认该操作会作用于真实设备，且可能无法撤销。'
+        : undefined}
+      onCancel={() => setConfirming(false)}
+      onConfirm={() => { setConfirming(false); void send() }}
+    />
+    </>
   )
 }
