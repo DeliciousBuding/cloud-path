@@ -10,10 +10,12 @@ import { eventLabel, eventTone, fmtDateTime, fmtTime, payloadLabel } from '@/lib
  * 其次 Capability 声明的 title，最后 humanize(类型名)——前端不维护事件枚举。
  * 首行带进入动画；时间显示时刻，悬停显示完整日期时间。
  */
-export function EventFeed({ events, showDevice = true, limit = 30 }: {
+export function EventFeed({ events, showDevice = true, limit = 30, fullTime = false }: {
   events: EventView[]
   showDevice?: boolean
   limit?: number
+  /** true = 显示完整绝对日期时间（活动页跨天历史用）；false = 只显示时刻（详情页/概览紧凑列表） */
+  fullTime?: boolean
 }) {
   const index = useCapabilityIndex()
 
@@ -40,7 +42,7 @@ export function EventFeed({ events, showDevice = true, limit = 30 }: {
                 </Link>
               )}
               <span className="num ml-auto shrink-0 text-[11px] text-ink-3" title={`${fmtDateTime(e.ts)} · ${e.type}`}>
-                {fmtTime(e.ts)}
+                {fullTime ? fmtDateTime(e.ts) : fmtTime(e.ts)}
               </span>
             </div>
           </li>

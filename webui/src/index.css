@@ -25,6 +25,8 @@
   --color-ok: #34c759;
   --color-warn: #ff9f0a;
   --color-bad: #ff453a;
+  /* 饱和危险色按钮上的文字（与 accent-ink 同理，深色主题下不反转） */
+  --color-bad-ink: #ffffff;
   --color-idle: #8e8e93;
 
   --radius-card: 18px;
@@ -121,6 +123,19 @@ body {
 .btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
 .btn-ghost { background: transparent; color: var(--color-ink); border-color: var(--color-hairline); }
 .btn-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 6%, transparent); }
+/* 危险操作（删除实例 / 不可逆命令）：只有在二次确认对话框里才用 */
+.btn-danger { background: var(--color-bad); color: var(--color-bad-ink); }
+.btn-danger:hover:not(:disabled) { filter: brightness(1.08); }
+/* 轻量危险操作（列表行内的删除入口）：不填满，只用语义色描边 */
+.btn-danger-ghost {
+  background: transparent; border-color: color-mix(in srgb, var(--color-bad) 40%, transparent);
+  color: var(--color-bad);
+}
+.btn-danger-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--color-bad) 10%, transparent); }
+
+/* 模态对话框：抬到最高阴影层级 */
+.dialog { box-shadow: var(--shadow-lift); }
+.dialog-backdrop { background: color-mix(in srgb, var(--color-ink) 42%, transparent); }
 
 /* 徽标 */
 .badge {
