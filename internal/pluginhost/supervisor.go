@@ -11,34 +11,43 @@ import (
 	"log/slog"
 	randv2 "math/rand/v2"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/DeliciousBuding/cloud-path/sdk/go/pluginruntime"
 )
 
 // Defaults applied when a Config field is left zero.
 const (
-	defaultHandshakeTimeout = 5 * time.Second
-	defaultShutdownTimeout  = 5 * time.Second
-	defaultBaseBackoff      = 100 * time.Millisecond
-	defaultMaxBackoff       = 5 * time.Second
-	defaultLogBufferSize    = 256
+	defaultHandshakeTimeout   = 5 * time.Second
+	defaultShutdownTimeout    = 5 * time.Second
+	defaultBaseBackoff        = 100 * time.Millisecond
+	defaultMaxBackoff         = 5 * time.Second
+	defaultLogBufferSize      = 256
+	defaultHealthProbeTimeout = 2 * time.Second
 )
 
 // Config configures one supervised plugin process.
 type Config struct {
 	PluginID        string
+	Kind            Kind
 	Protocol        string
 	ProtocolVersion uint32
 	Command         CommandSpec
 
-	// HandshakeTimeout is how long the host waits for the unique handshake
-	// line before killing the process and counting a crash.
+	// HandshakeTimeout is how long the host waits for the unique stdout
+	// handshake line and the socket authentication frame before killing the
+	// process and counting a crash.
 	HandshakeTimeout time.Duration
 	// ShutdownTimeout is the graceful shutdown deadline; after it the process
 	// is killed.
 	ShutdownTimeout time.Duration
+	// HealthCheckInterval is how often the established RPC client is probed.
+	HealthCheckInterval time.Duration
 	// MaxRestarts is the crash-loop budget: at most this many re-launches are
 	// attempted before the plugin is disabled. Zero disables restarts.
 	MaxRestarts int
@@ -55,8 +64,17 @@ func (c Config) normalized() (Config, error) {
 	if c.PluginID == "" {
 		return c, fmt.Errorf("pluginhost: PluginID is required")
 	}
+	if c.Kind == 0 {
+		c.Kind = kindFromProtocol(c.Protocol)
+	}
 	if c.Protocol == "" {
-		return c, fmt.Errorf("pluginhost: Protocol is required")
+		c.Protocol = c.Kind.Protocol()
+	}
+	if c.Kind == KindConnector {
+		return c, ErrConnectorUnsupported
+	}
+	if c.Protocol != c.Kind.Protocol() {
+		return c, fmt.Errorf("pluginhost: protocol %q does not match plugin kind %s", c.Protocol, c.Kind)
 	}
 	if c.ProtocolVersion == 0 {
 		return c, fmt.Errorf("pluginhost: ProtocolVersion is required")
@@ -69,6 +87,9 @@ func (c Config) normalized() (Config, error) {
 	}
 	if c.ShutdownTimeout <= 0 {
 		c.ShutdownTimeout = defaultShutdownTimeout
+	}
+	if c.HealthCheckInterval <= 0 {
+		c.HealthCheckInterval = defaultHealthCheckInterval
 	}
 	if c.BaseBackoff <= 0 {
 		c.BaseBackoff = defaultBaseBackoff
@@ -110,6 +131,14 @@ type Snapshot struct {
 	Launches           int
 	HandshakeCompleted bool
 	Backoffs           []time.Duration
+	// Kind is the protocol kind the supervisor was configured for.
+	Kind Kind
+	// Endpoint is the most recent launch endpoint (loopback TCP or Unix
+	// socket path). It is a local-only address and safe to surface.
+	Endpoint string
+	// RPCConnections is the number of authenticated RPC connections the host
+	// has accepted across the current launch. Rejected proofs never count.
+	RPCConnections int
 }
 
 // Supervisor owns the lifecycle of one plugin process.
@@ -126,13 +155,15 @@ type Supervisor struct {
 	restartCh chan struct{}
 	collector *logCollector
 
-	launchID   string
-	proof      string
-	launches   int
-	crashes    int
-	restarts   int
-	handshaked bool
-	backoffs   []time.Duration
+	launchID     string
+	proof        string
+	lastEndpoint string
+	rpcConns     int
+	launches     int
+	crashes      int
+	restarts     int
+	handshaked   bool
+	backoffs     []time.Duration
 }
 
 // NewSupervisor builds a Supervisor. A nil runner uses the production
@@ -160,8 +191,9 @@ func NewSupervisor(cfg Config, runner Runner, logger *slog.Logger) *Supervisor {
 }
 
 // Run supervises the plugin until ctx is canceled. On cancellation it performs
-// a graceful shutdown (signal, then kill after ShutdownTimeout). Run returns
-// nil after a graceful stop and ctx.Err() when it was already shutting down.
+// a graceful shutdown (RPC Shutdown, then signal, then kill after
+// ShutdownTimeout). Run returns nil after a graceful stop and ctx.Err() when
+// it was already shutting down.
 func (s *Supervisor) Run(ctx context.Context) error {
 	cfg, err := s.cfg.normalized()
 	if err != nil {
@@ -304,24 +336,108 @@ const (
 	runShutdown
 )
 
-// runOnce starts one process, waits for its unique handshake, monitors it
-// until it exits, is disabled, or the context is canceled, and always returns
-// with the process dead (no orphans).
+// launch is the per-launch state owned by one runOnce pass: the listener, its
+// credentials and the endpoint handed to the plugin process.
+type launch struct {
+	listener *pluginruntime.Listener
+	endpoint pluginruntime.Endpoint
+	cleanup  func()
+}
+
+// runOnce starts one process on a fresh local endpoint, waits for both the
+// stdout handshake and the socket authentication frame, monitors the plugin
+// with periodic RPC health, and always returns with the process dead and the
+// endpoint cleaned up.
 func (s *Supervisor) runOnce(ctx context.Context) runOutcome {
 	s.setState(StateStarting)
 
-	proc, err := s.start()
+	// 1. Create a per-launch endpoint and credentials. Endpoint creation never
+	// reuses the previous launch's proof.
+	launchID := newLaunchID()
+	proof := newProof()
+	creds := pluginruntime.Credentials{LaunchID: launchID, Proof: proof}
+
+	endpointRaw, cleanup, err := launchEndpoint()
+	if err != nil {
+		s.logger.Error("plugin endpoint create failed", "plugin_id", s.cfg.PluginID, "error", err)
+		s.setState(StateCrashed)
+		return runCrashed
+	}
+	listener, err := pluginruntime.Listen(context.Background(), endpointRaw, creds, pluginruntime.DefaultConfig())
+	if err != nil {
+		cleanup()
+		s.logger.Error("plugin listener create failed", "plugin_id", s.cfg.PluginID, "error", err)
+		s.setState(StateCrashed)
+		return runCrashed
+	}
+
+	s.mu.Lock()
+	s.launchID = launchID
+	s.proof = proof
+	s.lastEndpoint = listener.Endpoint().String()
+	s.rpcConns = 0
+	s.launches++
+	s.mu.Unlock()
+
+	launch := &launch{listener: listener, endpoint: listener.Endpoint(), cleanup: cleanup}
+
+	// 2. Start serving the endpoint before the process can dial it. The serve
+	// context is independent of the Run context: on a graceful shutdown the
+	// supervisor must keep the connection open until the RPC Shutdown has been
+	// delivered, so the listener is torn down only by the runOnce cleanup.
+	serveCtx, serveCancel := context.WithCancel(context.Background())
+	sess := newRuntimeSession(s.cfg.Kind)
+	serveDone := make(chan error, 1)
+	go func() {
+		serveDone <- listener.Serve(serveCtx, sess.handler(func() {
+			s.mu.Lock()
+			s.rpcConns++
+			s.mu.Unlock()
+		}))
+	}()
+
+	// Endpoint/listener/socket/temp dir/session are cleaned on every return
+	// path, regardless of which phase failed.
+	defer func() {
+		serveCancel()
+		_ = listener.Close()
+		cleanup()
+		_ = sess.close()
+	}()
+
+	// 3. Inject endpoint/identity into the process environment and launch it.
+	spec := s.cfg.Command
+	spec.Env = append(append([]string{}, spec.Env...),
+		EnvPluginID+"="+s.cfg.PluginID,
+		EnvProtocol+"="+s.cfg.Protocol,
+		EnvProtocolVersion+"="+strconv.FormatUint(uint64(s.cfg.ProtocolVersion), 10),
+		EnvLaunchID+"="+launchID,
+		EnvProof+"="+proof,
+		EnvHandshakeCookie+"="+proof,
+		EnvPluginEndpoint+"="+listener.Endpoint().String(),
+	)
+	s.logger.Debug("launching plugin", "plugin_id", s.cfg.PluginID, "launch_id", launchID)
+
+	proc, err := s.runner.Start(spec)
 	if err != nil {
 		s.logger.Error("plugin start failed", "plugin_id", s.cfg.PluginID, "error", err)
 		s.setState(StateCrashed)
 		return runCrashed
 	}
+	if proc == nil {
+		s.logger.Error("plugin start failed", "plugin_id", s.cfg.PluginID, "error", "runner returned a nil process")
+		s.setState(StateCrashed)
+		return runCrashed
+	}
 	h := newProcHandle(proc, s.collector)
 
+	// 4. Wait for both the stdout handshake and the socket authentication.
 	hsTimer := time.NewTimer(s.cfg.HandshakeTimeout)
 	defer hsTimer.Stop()
 
-	for {
+	var hs *Handshake
+	var sessReady bool
+	for hs == nil || !sessReady {
 		select {
 		case res := <-h.hsCh:
 			if res.err != nil {
@@ -330,16 +446,15 @@ func (s *Supervisor) runOnce(ctx context.Context) runOutcome {
 				s.setState(StateCrashed)
 				return runCrashed
 			}
-			if err := s.validateHandshake(res.hs); err != nil {
+			if err := s.validateHandshake(launch, res.hs); err != nil {
 				s.logger.Error("handshake rejected", "plugin_id", s.cfg.PluginID, "error", err)
 				h.kill()
 				s.setState(StateCrashed)
 				return runCrashed
 			}
-			s.mu.Lock()
-			s.handshaked = true
-			s.mu.Unlock()
-			return s.monitor(ctx, h, res.hs.Endpoint)
+			hs = &res.hs
+		case <-sess.established:
+			sessReady = true
 		case <-hsTimer.C:
 			s.logger.Error("handshake timeout", "plugin_id", s.cfg.PluginID, "timeout", s.cfg.HandshakeTimeout)
 			h.kill()
@@ -347,6 +462,14 @@ func (s *Supervisor) runOnce(ctx context.Context) runOutcome {
 			return runCrashed
 		case err := <-h.exitCh:
 			s.logger.Error("plugin exited before handshake", "plugin_id", s.cfg.PluginID, "error", err)
+			s.setState(StateCrashed)
+			return runCrashed
+		case err := <-serveDone:
+			if err == nil || errors.Is(err, context.Canceled) {
+				err = errors.New("listener stopped before session established")
+			}
+			s.logger.Error("socket serve stopped before handshake", "plugin_id", s.cfg.PluginID, "error", err)
+			h.kill()
 			s.setState(StateCrashed)
 			return runCrashed
 		case <-s.wake:
@@ -360,16 +483,29 @@ func (s *Supervisor) runOnce(ctx context.Context) runOutcome {
 			// Drop a health-restart request that races the handshake; it will
 			// be re-issued by the Manager health loop if still needed.
 		case <-ctx.Done():
-			return s.shutdown(h)
+			return s.shutdown(h, sess)
 		}
 	}
+
+	s.mu.Lock()
+	s.handshaked = true
+	s.mu.Unlock()
+	return s.monitor(ctx, h, sess, launch)
 }
 
 // monitor watches a healthy/degraded process until it exits, degrades, is
-// disabled, or the context is canceled.
-func (s *Supervisor) monitor(ctx context.Context, h *procHandle, endpoint string) runOutcome {
+// disabled, or the context is canceled. It probes the plugin over the RPC
+// session on a fixed cadence and reflects the result in the process state.
+func (s *Supervisor) monitor(ctx context.Context, h *procHandle, sess *runtimeSession, launch *launch) runOutcome {
 	s.setState(StateHealthy)
-	s.logger.Info("plugin healthy", "plugin_id", s.cfg.PluginID, "endpoint", endpoint)
+	s.logger.Info("plugin healthy", "plugin_id", s.cfg.PluginID, "endpoint", launch.endpoint.String())
+
+	interval := s.cfg.HealthCheckInterval
+	if interval <= 0 {
+		interval = defaultHealthCheckInterval
+	}
+	healthTicker := time.NewTicker(interval)
+	defer healthTicker.Stop()
 
 	for {
 		select {
@@ -380,7 +516,16 @@ func (s *Supervisor) monitor(ctx context.Context, h *procHandle, endpoint string
 		case <-h.dupCh:
 			s.logger.Error("duplicate handshake rejected; degrading plugin", "plugin_id", s.cfg.PluginID)
 			s.setState(StateDegraded)
-			continue
+		case <-healthTicker.C:
+			probeCtx, cancel := context.WithTimeout(ctx, defaultHealthProbeTimeout)
+			err := sess.health(probeCtx)
+			cancel()
+			if err != nil {
+				s.logger.Warn("plugin health degraded", "plugin_id", s.cfg.PluginID, "error", err)
+				s.setState(StateDegraded)
+			} else {
+				s.setState(StateHealthy)
+			}
 		case <-s.restartCh:
 			s.logger.Info("health restart requested", "plugin_id", s.cfg.PluginID)
 			h.kill()
@@ -398,15 +543,35 @@ func (s *Supervisor) monitor(ctx context.Context, h *procHandle, endpoint string
 				return runDisabled
 			}
 		case <-ctx.Done():
-			return s.shutdown(h)
+			return s.shutdown(h, sess)
 		}
 	}
 }
 
-// shutdown performs a graceful stop: signal, wait up to ShutdownTimeout, then
-// kill. It returns runShutdown after the process is confirmed dead.
-func (s *Supervisor) shutdown(h *procHandle) runOutcome {
+// shutdown stops the plugin: first it sends the protocol Shutdown RPC with a
+// deadline, then it signals the process and finally force-kills the process
+// tree if it is still alive.
+func (s *Supervisor) shutdown(h *procHandle, sess *runtimeSession) runOutcome {
 	s.logger.Info("graceful shutdown", "plugin_id", s.cfg.PluginID, "timeout", s.cfg.ShutdownTimeout)
+
+	if sess != nil {
+		rpcCtx, cancel := context.WithTimeout(context.Background(), s.cfg.ShutdownTimeout)
+		err := sess.shutdown(rpcCtx)
+		cancel()
+		if err != nil {
+			s.logger.Debug("RPC shutdown failed; falling back to process signal",
+				"plugin_id", s.cfg.PluginID, "error", err)
+		}
+		// If the plugin exited in response to the RPC, no signal or kill is
+		// needed.
+		select {
+		case <-h.exitCh:
+			s.setState(StateStopped)
+			return runShutdown
+		case <-time.After(s.cfg.ShutdownTimeout):
+		}
+	}
+
 	_ = h.proc.Signal(os.Interrupt)
 
 	t := time.NewTimer(s.cfg.ShutdownTimeout)
@@ -429,40 +594,23 @@ func (s *Supervisor) shutdown(h *procHandle) runOutcome {
 	}
 }
 
-// start generates a fresh launch identity, injects it through the environment
-// and launches the process.
-func (s *Supervisor) start() (Process, error) {
-	launchID := newLaunchID()
-	proof := newProof()
-
-	s.mu.Lock()
-	s.launchID = launchID
-	s.proof = proof
-	s.launches++
-	s.mu.Unlock()
-
-	spec := s.cfg.Command
-	spec.Env = append(append([]string{}, spec.Env...),
-		EnvPluginID+"="+s.cfg.PluginID,
-		EnvProtocol+"="+s.cfg.Protocol,
-		EnvProtocolVersion+"="+strconv.FormatUint(uint64(s.cfg.ProtocolVersion), 10),
-		EnvLaunchID+"="+launchID,
-		EnvHandshakeCookie+"="+proof,
-	)
-
-	s.logger.Debug("launching plugin", "plugin_id", s.cfg.PluginID, "launch_id", launchID)
-	proc, err := s.runner.Start(spec)
+// launchEndpoint chooses the per-launch transport endpoint. Windows uses
+// loopback TCP on an OS-assigned port; other platforms use a Unix socket in a
+// private temporary directory that cleanup removes.
+func launchEndpoint() (endpoint string, cleanup func(), _ error) {
+	if runtime.GOOS == "windows" {
+		return "tcp://127.0.0.1:0", func() {}, nil
+	}
+	dir, err := os.MkdirTemp("", "cloudpath-plugin-*")
 	if err != nil {
-		return nil, err
+		return "", nil, fmt.Errorf("pluginhost: create unix socket dir: %w", err)
 	}
-	if proc == nil {
-		return nil, fmt.Errorf("pluginhost: runner returned a nil process")
-	}
-	return proc, nil
+	return "unix://" + filepath.Join(dir, "plugin.sock"), func() { _ = os.RemoveAll(dir) }, nil
 }
 
-// validateHandshake checks the handshake against the current launch identity.
-func (s *Supervisor) validateHandshake(h Handshake) error {
+// validateHandshake checks the handshake against the current launch identity
+// and the endpoint that was handed to the process.
+func (s *Supervisor) validateHandshake(launch *launch, h Handshake) error {
 	s.mu.Lock()
 	launchID, proof := s.launchID, s.proof
 	s.mu.Unlock()
@@ -481,6 +629,14 @@ func (s *Supervisor) validateHandshake(h Handshake) error {
 	}
 	if h.Proof != proof {
 		return errors.New("handshake proof mismatch")
+	}
+	if launch != nil {
+		if h.Transport != launch.endpoint.Scheme {
+			return fmt.Errorf("handshake transport %q, want %q", h.Transport, launch.endpoint.Scheme)
+		}
+		if h.Endpoint != launch.endpoint.Addr {
+			return fmt.Errorf("handshake endpoint %q, want %q", h.Endpoint, launch.endpoint.Addr)
+		}
 	}
 	return nil
 }
@@ -503,6 +659,9 @@ func (s *Supervisor) Snapshot() Snapshot {
 		Launches:           s.launches,
 		HandshakeCompleted: s.handshaked,
 		Backoffs:           append([]time.Duration(nil), s.backoffs...),
+		Kind:               s.cfg.Kind,
+		Endpoint:           s.lastEndpoint,
+		RPCConnections:     s.rpcConns,
 	}
 }
 

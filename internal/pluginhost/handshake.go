@@ -18,6 +18,12 @@ const (
 	EnvProtocol        = "CLOUDPATH_PROTOCOL"
 	EnvProtocolVersion = "CLOUDPATH_PROTOCOL_VERSION"
 	EnvLaunchID        = "CLOUDPATH_LAUNCH_ID"
+	EnvProof           = "CLOUDPATH_PROOF"
+	EnvPluginEndpoint  = "CLOUDPATH_PLUGIN_ENDPOINT"
+
+	// EnvHandshakeCookie is kept as an alias for EnvProof so earlier launch
+	// identity readers and the existing test harness keep working during the
+	// migration. New code should use EnvProof.
 	EnvHandshakeCookie = "CLOUDPATH_HANDSHAKE_COOKIE"
 )
 

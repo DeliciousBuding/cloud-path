@@ -293,8 +293,9 @@ func TestHealthDegradedAndRecovery(t *testing.T) {
 func TestHealthFailurePolicy(t *testing.T) {
 	t.Run("disable", func(t *testing.T) {
 		runner := pluginharness.NewFakeRunner()
+		checker := &toggleChecker{degraded: false}
 		m := newManager(runner, func(o *pluginhost.ManagerOptions) {
-			o.HealthChecker = degradedChecker{}
+			o.HealthChecker = checker
 			o.HealthFailureThreshold = 2
 			o.HealthFailurePolicy = pluginhost.HealthPolicyDisable
 		})
@@ -305,6 +306,7 @@ func TestHealthFailurePolicy(t *testing.T) {
 		mustStart(t, m, "tenant-a", "x")
 		waitInstanceState(t, m, "tenant-a", "x", pluginhost.StateHealthy)
 
+		checker.setDegraded(true)
 		waitInstanceState(t, m, "tenant-a", "x", pluginhost.StateDisabled)
 		snap, err := m.Snapshot("tenant-a", "x")
 		if err != nil {
@@ -320,8 +322,9 @@ func TestHealthFailurePolicy(t *testing.T) {
 
 	t.Run("restart", func(t *testing.T) {
 		runner := pluginharness.NewFakeRunner()
+		checker := &toggleChecker{degraded: false}
 		m := newManager(runner, func(o *pluginhost.ManagerOptions) {
-			o.HealthChecker = degradedChecker{}
+			o.HealthChecker = checker
 			o.HealthFailureThreshold = 2
 			o.HealthFailurePolicy = pluginhost.HealthPolicyRestart
 		})
@@ -332,6 +335,7 @@ func TestHealthFailurePolicy(t *testing.T) {
 		mustStart(t, m, "tenant-a", "x")
 		waitInstanceState(t, m, "tenant-a", "x", pluginhost.StateHealthy)
 
+		checker.setDegraded(true)
 		deadline := time.Now().Add(5 * time.Second)
 		for time.Now().Before(deadline) {
 			if runner.StartedCount() >= 2 {
