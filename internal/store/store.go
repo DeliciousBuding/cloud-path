@@ -28,6 +28,9 @@ var schemaV4 string
 //go:embed schema_v5.sql
 var schemaV5 string
 
+//go:embed schema_v6.sql
+var schemaV6 string
+
 // migration 是一次 schema 迁移：ddl 走单事务；custom 用于需要 PRAGMA foreign_keys
 // 开关的表重建（如 v5 users 重建），由实现自行管理连接与事务。
 type migration struct {
@@ -43,6 +46,7 @@ var migrations = []migration{
 	{version: 3, ddl: schemaV3},
 	{version: 4, ddl: schemaV4},
 	{version: 5, custom: migrateV5},
+	{version: 6, ddl: schemaV6},
 }
 
 // schemaVersion 是当前 schema 版本（迁移表最后一项）。

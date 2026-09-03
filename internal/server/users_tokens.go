@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/DeliciousBuding/cloud-path/internal/api"
+	"github.com/DeliciousBuding/cloud-path/internal/audit"
 	"github.com/DeliciousBuding/cloud-path/internal/auth"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
 )
@@ -201,6 +202,13 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	u, err := s.cfg.Store.CreateUser(p.TenantID, username, name, role, hash)
 	if errors.Is(err, store.ErrUsernameTaken) {
+		at, aid, an := auditActor(p)
+		s.audit(r, audit.Event{
+			TenantID: p.TenantID, ActorType: at, ActorID: aid, ActorName: an,
+			Action: audit.ActionUserCreate, TargetType: audit.TargetUser, TargetID: "",
+			Outcome:  audit.OutcomeFailure,
+			Metadata: audit.NewMetadata().String("target_username", username).Map(),
+		})
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "username 已存在"})
 		return
 	}
@@ -212,6 +220,13 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	at, aid, an := auditActor(p)
+	s.audit(r, audit.Event{
+		TenantID: p.TenantID, ActorType: at, ActorID: aid, ActorName: an,
+		Action: audit.ActionUserCreate, TargetType: audit.TargetUser,
+		TargetID: strconv.FormatInt(u.ID, 10), Outcome: audit.OutcomeSuccess,
+		Metadata: audit.NewMetadata().String("target_username", u.Username).Map(),
+	})
 	writeJSON(w, http.StatusOK, map[string]any{"user": userView(u)})
 }
 
@@ -285,6 +300,22 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	action := audit.ActionUserUpdate
+	if patch.Password != nil {
+		action = audit.ActionUserPasswordReset
+	} else if patch.Disabled != nil {
+		if *patch.Disabled {
+			action = audit.ActionUserDisable
+		} else {
+			action = audit.ActionUserEnable
+		}
+	}
+	at, aid, an := auditActor(p)
+	s.audit(r, audit.Event{
+		TenantID: p.TenantID, ActorType: at, ActorID: aid, ActorName: an,
+		Action: action, TargetType: audit.TargetUser,
+		TargetID: strconv.FormatInt(u.ID, 10), Outcome: audit.OutcomeSuccess,
+	})
 	writeJSON(w, http.StatusOK, map[string]any{"user": userView(u)})
 }
 
@@ -349,6 +380,15 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := tokenView(row)
+	at, aid, an := auditActor(p)
+	s.audit(r, audit.Event{
+		TenantID: p.TenantID, ActorType: at, ActorID: aid, ActorName: an,
+		Action: audit.ActionTokenCreate, TargetType: audit.TargetToken,
+		TargetID: strconv.FormatInt(row.ID, 10), Outcome: audit.OutcomeSuccess,
+		Metadata: audit.NewMetadata().
+			String("name", row.Name).
+			String("scopes", strings.Join(scopes, ",")).Map(),
+	})
 	writeJSON(w, http.StatusOK, map[string]any{
 		"token": plain, "id": view.ID, "name": view.Name, "prefix": view.Prefix,
 		"scopes": view.Scopes, "created_at": view.CreatedAt, "expires_at": view.ExpiresAt,
@@ -381,6 +421,12 @@ func (s *Server) handleDeleteToken(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "token not found"})
 		return
 	}
+	at, aid, an := auditActor(p)
+	s.audit(r, audit.Event{
+		TenantID: p.TenantID, ActorType: at, ActorID: aid, ActorName: an,
+		Action: audit.ActionTokenRevoke, TargetType: audit.TargetToken,
+		TargetID: strconv.FormatInt(id, 10), Outcome: audit.OutcomeSuccess,
+	})
 	w.WriteHeader(http.StatusNoContent)
 }
 

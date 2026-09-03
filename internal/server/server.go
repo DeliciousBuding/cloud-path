@@ -29,6 +29,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/DeliciousBuding/cloud-path/internal/api"
+	"github.com/DeliciousBuding/cloud-path/internal/audit"
 	"github.com/DeliciousBuding/cloud-path/internal/auth"
 	"github.com/DeliciousBuding/cloud-path/internal/device"
 	"github.com/DeliciousBuding/cloud-path/internal/model"
@@ -111,6 +112,7 @@ type Server struct {
 
 	loginLimiter *auth.RateLimiter // 登录限流：次/分/IP
 	authForced   atomic.Bool       // 账号模式：已有用户或 -require-auth
+	auditWrite   auditWriteFunc    // 审计落库（默认写 store；测试可注入）
 }
 
 type edgeLink struct {
@@ -142,6 +144,7 @@ func New(cfg Config) *Server {
 		deviceTenants: map[string]string{},
 		loginLimiter:  auth.NewRateLimiter(cfg.loginRatePerMin()),
 	}
+	s.auditWrite = s.defaultAuditWrite()
 	s.hydrate()
 	return s
 }
@@ -590,7 +593,7 @@ func (s *Server) descriptorViewsFor(tenant string) []model.Descriptor {
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.RequestID)
+	r.Use(s.requestID)
 	r.Use(middleware.Compress(5, "application/json", "text/html", "text/css",
 		"application/javascript", "image/svg+xml"))
 	r.Use(securityHeaders)
@@ -624,6 +627,7 @@ func (s *Server) Routes() http.Handler {
 	// 用户/令牌管理：始终要求 admin 身份（legacy token 亦可用；非账号模式未认证 401）。
 	r.Group(func(r chi.Router) {
 		r.Use(s.requireAdmin)
+		r.Get("/api/audit", s.handleListAudit)
 		r.Get("/api/users", s.handleListUsers)
 		r.Post("/api/users", s.handleCreateUser)
 		r.Patch("/api/users/{id}", s.handleUpdateUser)
@@ -992,18 +996,29 @@ func (s *Server) handlePostCommand(w http.ResponseWriter, r *http.Request) {
 		Cmd  string `json:"cmd"`
 		Args string `json:"args"`
 	}
+	p := auth.FromContext(r.Context())
+	reject := func(reason string) {
+		at, aid, an := auditActor(p)
+		s.audit(r, audit.Event{
+			TenantID: s.auditTenantID(p), ActorType: at, ActorID: aid, ActorName: an,
+			Action: audit.ActionCommandRejected, TargetType: audit.TargetDevice, TargetID: key,
+			Outcome:  audit.OutcomeFailure,
+			Metadata: audit.NewMetadata().String("reason", reason).String("cmd", body.Cmd).Map(),
+		})
+	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil || body.Cmd == "" {
+		reject("bad_request")
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "body 需为 {\"cmd\":\"...\",\"args\":\"...\"}"})
 		return
 	}
 	body.Cmd = strings.TrimSpace(body.Cmd)
 	if len(body.Args) > maxCommandArgsLen || strings.ContainsAny(body.Args, "\r\n\x00") {
+		reject("invalid_args")
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error": fmt.Sprintf("args 非法：长度需 <=%d 且不含换行/NUL", maxCommandArgsLen)})
 		return
 	}
 
-	p := auth.FromContext(r.Context())
 	s.mu.RLock()
 	v, devOK := s.devices[key]
 	tenantOK := s.allowedDescriptor(r, key)
@@ -1015,10 +1030,12 @@ func (s *Server) handlePostCommand(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.RUnlock()
 	if !devOK || !tenantOK {
+		reject("device_not_found")
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "device not found"})
 		return
 	}
 	if link == nil {
+		reject("edge_offline")
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "edge offline"})
 		return
 	}
@@ -1032,12 +1049,14 @@ func (s *Server) handlePostCommand(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !allowed {
+			reject("unsupported_command")
 			writeJSON(w, http.StatusBadRequest, map[string]string{
 				"error": fmt.Sprintf("adapter %q 不支持命令 %q", adapter, body.Cmd)})
 			return
 		}
 	}
 	if !s.allowCommand(key) {
+		reject("rate_limited")
 		writeJSON(w, http.StatusTooManyRequests, map[string]string{
 			"error": fmt.Sprintf("命令过于频繁（上限 %d 次/分钟/设备）", s.cfg.cmdRatePerMin())})
 		return
@@ -1080,12 +1099,20 @@ func (s *Server) handlePostCommand(w http.ResponseWriter, r *http.Request) {
 		if err := markSent(); err != nil {
 			slog.Warn("mark command sent", "err", err, "cmd_id", id)
 		}
+		at, aid, an := auditActor(p)
+		s.audit(r, audit.Event{
+			TenantID: s.auditTenantID(p), ActorType: at, ActorID: aid, ActorName: an,
+			Action: audit.ActionCommandAccepted, TargetType: audit.TargetDevice, TargetID: key,
+			Outcome:  audit.OutcomeSuccess,
+			Metadata: audit.NewMetadata().String("cmd", body.Cmd).Map(),
+		})
 		writeJSON(w, http.StatusOK, api.CommandView{ID: id, DeviceID: key, Cmd: body.Cmd, Args: body.Args,
 			Status: "sent", CreatedAt: time.Now().Unix()})
 	default:
 		if err := markFailed(); err != nil {
 			slog.Warn("mark command failed", "err", err, "cmd_id", id)
 		}
+		reject("edge_busy")
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "edge busy"})
 	}
 }

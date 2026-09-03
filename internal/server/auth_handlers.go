@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/DeliciousBuding/cloud-path/internal/api"
+	"github.com/DeliciousBuding/cloud-path/internal/audit"
 	"github.com/DeliciousBuding/cloud-path/internal/auth"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
 )
@@ -66,10 +67,20 @@ func (s *Server) handleAuthSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !created {
+		s.audit(r, audit.Event{
+			TenantID: s.auditTenantID(nil), ActorType: audit.ActorSystem, ActorName: "system",
+			Action: audit.ActionSetup, TargetType: audit.TargetTenant, TargetID: defaultTenantSlug,
+			Outcome: audit.OutcomeFailure,
+		})
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "already set up"})
 		return
 	}
 	s.authForced.Store(true) // 首个用户落库后立即进入账号模式（全鉴权）
+	s.audit(r, audit.Event{
+		TenantID: u.TenantID, ActorType: audit.ActorSystem, ActorName: "system",
+		Action: audit.ActionSetup, TargetType: audit.TargetTenant, TargetID: u.TenantSlug,
+		Outcome: audit.OutcomeSuccess,
+	})
 	writeJSON(w, http.StatusOK, map[string]any{"user": userView(u)})
 }
 
@@ -95,11 +106,25 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	username := strings.TrimSpace(body.Username)
 	u, err := s.cfg.Store.GetUserByUsername(username)
+	known := err == nil
 	badCreds := errors.Is(err, sql.ErrNoRows)
-	if err == nil {
+	if known {
 		badCreds = u.Disabled || !auth.VerifyPassword(u.PasswordHash, body.Password)
 	}
 	if badCreds {
+		tenantID := s.auditTenantID(nil)
+		actorID := int64(0)
+		targetSlug := defaultTenantSlug
+		if known {
+			tenantID = u.TenantID
+			actorID = u.ID
+			targetSlug = u.TenantSlug
+		}
+		s.audit(r, audit.Event{
+			TenantID: tenantID, ActorType: audit.ActorUser, ActorID: actorID, ActorName: username,
+			Action: audit.ActionLogin, TargetType: audit.TargetTenant, TargetID: targetSlug,
+			Outcome: audit.OutcomeFailure,
+		})
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "用户名或密码错误"})
 		return
 	}
@@ -118,6 +143,11 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	auth.SetSessionCookie(w, r, sid, int(ttl.Seconds()))
+	s.audit(r, audit.Event{
+		TenantID: u.TenantID, ActorType: audit.ActorUser, ActorID: u.ID, ActorName: u.Username,
+		Action: audit.ActionLogin, TargetType: audit.TargetTenant, TargetID: u.TenantSlug,
+		Outcome: audit.OutcomeSuccess,
+	})
 	writeJSON(w, http.StatusOK, map[string]any{"user": userView(u)})
 }
 
@@ -129,6 +159,13 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.cfg.Store != nil {
+		if u, uerr := s.cfg.Store.UserBySession(cookie.Value, time.Now().Unix()); uerr == nil {
+			s.audit(r, audit.Event{
+				TenantID: u.TenantID, ActorType: audit.ActorUser, ActorID: u.ID, ActorName: u.Username,
+				Action: audit.ActionLogout, TargetType: audit.TargetTenant, TargetID: u.TenantSlug,
+				Outcome: audit.OutcomeSuccess,
+			})
+		}
 		if err := s.cfg.Store.DeleteSession(cookie.Value); err != nil {
 			slog.Warn("logout: delete session", "err", err)
 		}
