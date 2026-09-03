@@ -187,3 +187,78 @@ func TestHostLoadIgnoresMissingState(t *testing.T) {
 		t.Fatalf("no state should start no process: %v", started)
 	}
 }
+
+func TestHostLoadTenantScopesInstances(t *testing.T) {
+	root := t.TempDir()
+	pluginsDir := filepath.Join(root, "plugins.d")
+	lockPath := filepath.Join(root, "plugins.lock")
+	store := plugincontrol.NewStore(filepath.Join(root, "state"))
+	writeTestPlugin(t, pluginsDir, lockPath, "0.1.0", nil, nil)
+
+	for _, tc := range []struct{ tenant, id string }{
+		{"tenant-a", "i-a"},
+		{"tenant-b", "i-b"},
+	} {
+		if err := store.Save(plugincontrol.InstanceState{
+			Tenant: tc.tenant, InstanceID: tc.id, PluginID: testPluginID,
+			Version: "0.1.0", Enabled: true, Isolation: plugincontrol.IsolationShared,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	manager := &fakeHostManager{}
+	host, err := plugincontrol.NewHost(plugincontrol.HostOptions{
+		Manager: manager, Store: store, PluginsDir: pluginsDir, LockPath: lockPath,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := host.LoadTenant(context.Background(), "tenant-a")
+	if err != nil {
+		t.Fatalf("LoadTenant: %v", err)
+	}
+	if res.Instances != 1 || res.Started != 1 {
+		t.Fatalf("LoadTenant result = %+v, want exactly one tenant-a instance", res)
+	}
+	_, _, started, _ := manager.snapshot()
+	if len(started) != 1 || started[0] != "tenant-a/i-a" {
+		t.Fatalf("started = %v, want [tenant-a/i-a] only", started)
+	}
+}
+
+func TestHostLoadTenantEmptyDefaultsToDefault(t *testing.T) {
+	root := t.TempDir()
+	pluginsDir := filepath.Join(root, "plugins.d")
+	lockPath := filepath.Join(root, "plugins.lock")
+	store := plugincontrol.NewStore(filepath.Join(root, "state"))
+	writeTestPlugin(t, pluginsDir, lockPath, "0.1.0", nil, nil)
+
+	if err := store.Save(plugincontrol.InstanceState{
+		Tenant: "default", InstanceID: "i-default", PluginID: testPluginID,
+		Version: "0.1.0", Enabled: true, Isolation: plugincontrol.IsolationShared,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(plugincontrol.InstanceState{
+		Tenant: "tenant-a", InstanceID: "i-a", PluginID: testPluginID,
+		Version: "0.1.0", Enabled: true, Isolation: plugincontrol.IsolationShared,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := &fakeHostManager{}
+	host, err := plugincontrol.NewHost(plugincontrol.HostOptions{
+		Manager: manager, Store: store, PluginsDir: pluginsDir, LockPath: lockPath,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := host.LoadTenant(context.Background(), ""); err != nil {
+		t.Fatalf("LoadTenant(empty): %v", err)
+	}
+	_, _, started, _ := manager.snapshot()
+	if len(started) != 1 || started[0] != "default/i-default" {
+		t.Fatalf("空 tenant 应按 default，started = %v, want [default/i-default]", started)
+	}
+}

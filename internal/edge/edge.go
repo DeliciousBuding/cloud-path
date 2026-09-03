@@ -11,6 +11,7 @@ import (
 
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/device"
+	"github.com/DeliciousBuding/cloud-path/internal/edgedriverhost"
 	"github.com/DeliciousBuding/cloud-path/internal/model"
 )
 
@@ -72,8 +73,35 @@ func (s *supervisor) snapshot() device.State {
 	return st
 }
 
+// PluginHost 是进程内外部 Driver Plugin Host 的生命周期接口。
+// 由 edgedriverhost.Host 实现；测试注入 fake，不启动真实第三方插件。
+type PluginHost interface {
+	Start(ctx context.Context) error
+	Run(ctx context.Context) error
+	DriverIDs() ([]string, error)
+}
+
+// RunOption 调整 Run 行为（上层注入外部 Driver Plugin Host）。
+type RunOption func(*runOptions)
+
+type runOptions struct {
+	host PluginHost
+}
+
+// WithPluginHost 注入外部 Driver Plugin Host；nil 等价于未启用。
+func WithPluginHost(h PluginHost) RunOption {
+	return func(o *runOptions) { o.host = h }
+}
+
 // Run 启动 edge 并阻塞至 ctx 取消（信号停机由 main 负责）。
-func Run(ctx context.Context, cfg *Config, version string) error {
+// 启用外部 Driver Plugin Host 时：先装载/启动 host，再运行内置 device supervisor；
+// ctx 取消时两者都收敛，host 在 CloseTimeout 内优雅关闭（不留孤儿）。
+func Run(ctx context.Context, cfg *Config, version string, opts ...RunOption) error {
+	ro := runOptions{}
+	for _, o := range opts {
+		o(&ro)
+	}
+
 	e := &Edge{cfg: cfg, sups: map[string]*supervisor{}, ctx: ctx}
 	metas := make([]api.DeviceMeta, 0, len(cfg.Devices))
 	for _, d := range cfg.Devices {
@@ -88,6 +116,34 @@ func Run(ctx context.Context, cfg *Config, version string) error {
 		metas = append(metas, api.DeviceMeta{ID: d.ID, Adapter: d.Adapter, Name: d.Name, Port: d.Port})
 	}
 
+	host := ro.host
+	if host == nil && cfg.PluginHost.Enabled {
+		return fmt.Errorf("plugin_host.enabled 但未提供外部 Driver Plugin Host（接线错误）")
+	}
+	hostRunning := false
+	if host != nil {
+		var hostErr error
+		ids, err := host.DriverIDs()
+		if err != nil {
+			hostErr = err
+		} else if err := edgedriverhost.CheckConflicts(device.Names(), ids); err != nil {
+			return err // 内置 adapter 与外部 driver ID 冲突：显式拒绝，绝不静默覆盖
+		} else if err := host.Start(ctx); err != nil {
+			hostErr = err
+		} else {
+			hostRunning = true
+			e.reportHostOnlyDrivers(ids)
+			slog.Info("external driver host started", "drivers", ids, "tenant", cfg.PluginHost.Tenant)
+		}
+		if hostErr != nil {
+			if cfg.PluginHost.Required {
+				return fmt.Errorf("external driver host: %w", hostErr)
+			}
+			slog.Warn("external driver host unavailable; builtin devices continue", "err", hostErr, "status", "DEGRADED")
+			host = nil
+		}
+	}
+
 	e.client = newWSClient(cfg, version, metas, e.onCommand, e.onServerOnline)
 
 	var wg sync.WaitGroup
@@ -96,6 +152,15 @@ func Run(ctx context.Context, cfg *Config, version string) error {
 		defer wg.Done()
 		e.client.run(ctx)
 	}()
+	if hostRunning {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := host.Run(ctx); err != nil {
+				slog.Warn("external driver host stop", "err", err)
+			}
+		}()
+	}
 	for key, sup := range e.sups {
 		wg.Add(2)
 		go func(key string, sup *supervisor) {
@@ -113,6 +178,14 @@ func Run(ctx context.Context, cfg *Config, version string) error {
 	wg.Wait()
 	slog.Info("edge stopped", "edge", cfg.EdgeID)
 	return nil
+}
+
+// reportHostOnlyDrivers 明确报告外部 driver 尚未桥接进数据流：
+// 只记 unsupported 日志，绝不生成 fake 设备或伪装在线。
+func (e *Edge) reportHostOnlyDrivers(ids []string) {
+	for _, id := range ids {
+		slog.Warn("external driver host-only: data flow not bridged", "driver", id, "status", "unsupported")
+	}
 }
 
 // supervise 是设备连接生命周期循环。
