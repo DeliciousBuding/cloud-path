@@ -3,6 +3,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	_ "embed"
 	"fmt"
@@ -31,12 +32,13 @@ var schemaV5 string
 //go:embed schema_v6.sql
 var schemaV6 string
 
-// migration 是一次 schema 迁移：ddl 走单事务；custom 用于需要 PRAGMA foreign_keys
-// 开关的表重建（如 v5 users 重建），由实现自行管理连接与事务。
+// migration 是一次 schema 迁移：ddl 与 PRAGMA user_version 在同一写事务内原子提交；
+// custom 用于需要 PRAGMA foreign_keys 开关的表重建（v4 条件补列、v5 users 重建），
+// 由实现自行在同一专用连接上管理事务与版本标记。
 type migration struct {
 	version int
 	ddl     string
-	custom  func(*sql.DB) error
+	custom  func(context.Context, *sql.Conn) error
 }
 
 // migrations 是有序迁移表：新增版本追加一项，永不修改已发布项。
@@ -44,7 +46,7 @@ var migrations = []migration{
 	{version: 1, ddl: schemaV1},
 	{version: 2, ddl: schemaV2},
 	{version: 3, ddl: schemaV3},
-	{version: 4, ddl: schemaV4},
+	{version: 4, custom: migrateV4},
 	{version: 5, custom: migrateV5},
 	{version: 6, ddl: schemaV6},
 }
@@ -71,7 +73,7 @@ func Open(path string) (*Store, error) {
 	switch {
 	case path == ":memory:":
 		// 多连接共享同一内存库（裸 :memory: 每连接一库，测试会踩坑）
-		dsn = "file:cloudpath_mem?mode=memory&cache=shared&_pragma=busy_timeout(5000)"
+		dsn = "file:cloudpath_mem?mode=memory&cache=shared&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)"
 	default:
 		dsn = "file:" + filepath.ToSlash(path) + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)"
 	}
@@ -92,37 +94,7 @@ func Open(path string) (*Store, error) {
 }
 
 func (s *Store) migrate() error {
-	var version int
-	if err := s.db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
-		return fmt.Errorf("store: read user_version: %w", err)
-	}
-	for _, m := range migrations {
-		if version >= m.version {
-			continue
-		}
-		if m.custom != nil {
-			if err := m.custom(s.db); err != nil {
-				return fmt.Errorf("store: schema v%d: %w", m.version, err)
-			}
-		} else {
-			// 每个版本一个事务：DDL 与数据回填同批原子提交，失败不留半迁移。
-			tx, err := s.db.Begin()
-			if err != nil {
-				return fmt.Errorf("store: begin schema v%d: %w", m.version, err)
-			}
-			if _, err := tx.Exec(m.ddl); err != nil {
-				_ = tx.Rollback()
-				return fmt.Errorf("store: schema v%d: %w", m.version, err)
-			}
-			if err := tx.Commit(); err != nil {
-				return fmt.Errorf("store: commit schema v%d: %w", m.version, err)
-			}
-		}
-		if _, err := s.db.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, m.version)); err != nil {
-			return fmt.Errorf("store: set user_version=%d: %w", m.version, err)
-		}
-	}
-	return nil
+	return migrateStore(s.db)
 }
 
 // Version 返回当前 schema 版本（迁移后）。

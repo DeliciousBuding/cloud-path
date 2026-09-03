@@ -1,11 +1,6 @@
 -- Cloudpath SQLite schema v4（P2 租户数据隔离：devices/state/events/commands 归属 tenant）
--- 在 v3 的 tenant/users/sessions 之上补齐业务表 tenant_id 列，并把既有行原子回填到 default 租户。
--- SQLite 无法在 ALTER 上加约束，采用 DEFAULT 0 + 回填；tenant_id 恒指向 tenant(id)。
-
-ALTER TABLE devices ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE device_state ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE events ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE commands ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 0;
+-- ALTER ADD COLUMN 由 migrate_v4.go 按列探测后执行（SQLite 无 ADD COLUMN IF NOT EXISTS）。
+-- 本文件只保留幂等部分：default 租户兜底 + 既有行回填 + 隔离查询索引。
 
 -- 确保 default 租户存在（v3 已建，但幂等保护迁移顺序/手工库）。
 INSERT OR IGNORE INTO tenant(slug, name, created_at) VALUES('default', 'default', strftime('%s','now'));
