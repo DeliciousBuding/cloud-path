@@ -15,7 +15,9 @@ const Setup = lazy(() => import('@/pages/Setup'))
 
 // 重路由按需加载：图表（recharts）只在设备详情用到，不拖慢首屏
 const DeviceDetail = lazy(() => import('@/pages/DeviceDetail'))
-const Events = lazy(() => import('@/pages/Events'))
+const Activity = lazy(() => import('@/pages/Activity'))
+const Plugins = lazy(() => import('@/pages/Plugins'))
+const PluginInstanceDetail = lazy(() => import('@/pages/PluginInstanceDetail'))
 const Edges = lazy(() => import('@/pages/Edges'))
 const EdgeDetail = lazy(() => import('@/pages/EdgeDetail'))
 const Settings = lazy(() => import('@/pages/Settings'))
@@ -83,7 +85,11 @@ export default function App() {
               <Route index element={<Overview />} />
               <Route path="devices" element={<Devices />} />
               <Route path="devices/:edgeId/:deviceId" element={<DeviceDetail />} />
-              <Route path="events" element={<Events />} />
+              {/* 活动（事件 + 命令历史）；/events 是旧路径，保留重定向不断链 */}
+              <Route path="activity" element={<Activity />} />
+              <Route path="events" element={<Navigate to="/activity" replace />} />
+              <Route path="plugins" element={<Plugins />} />
+              <Route path="plugins/:id" element={<PluginInstanceDetail />} />
               <Route path="edges" element={<Edges />} />
               <Route path="edges/:edgeId" element={<EdgeDetail />} />
               <Route path="settings" element={<Settings />} />

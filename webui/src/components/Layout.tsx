@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
-  LayoutDashboard, Cpu, Activity, Network, Settings, Monitor, ShieldCheck, Sun, Moon, WifiOff,
+  LayoutDashboard, Cpu, Activity, Network, Settings, Monitor, Puzzle, ShieldCheck, Sun, Moon, WifiOff,
 } from 'lucide-react'
 import { Logo } from './Logo'
 import { StatusDot } from './ui'
@@ -13,16 +13,23 @@ import { useLive } from '@/store/ws'
 import { getTheme, setTheme, type ThemeMode } from '@/lib/theme'
 import { useIsAdmin } from '@/store/auth'
 
+/**
+ * 产品级信息架构（固定顺序）：
+ *   Overview / Edges / Devices / Plugins / Activity / Administration / Settings
+ * Administration 排在 Settings 之前，且只对 admin 出现（docs/api.md §3.1）：
+ * 入口本身就是敏感信息，非 admin 连链接都不给（Admin 页自身另有门禁与空态）。
+ */
 const NAV = [
   { to: '/', label: '概览', icon: LayoutDashboard, end: true },
+  { to: '/edges', label: '边缘节点', icon: Network, end: false },
   { to: '/devices', label: '设备', icon: Cpu, end: false },
-  { to: '/events', label: '事件', icon: Activity, end: false },
-  { to: '/edges', label: '边缘', icon: Network, end: false },
-  { to: '/settings', label: '系统', icon: Settings, end: false },
+  { to: '/plugins', label: '插件', icon: Puzzle, end: false },
+  { to: '/activity', label: '活动', icon: Activity, end: false },
 ]
 
-/** 管理入口只对 admin 出现（docs/api.md §3.1）：入口本身就是敏感信息，非 admin 连链接都不给 */
 const ADMIN_NAV = { to: '/admin', label: '管理', icon: ShieldCheck, end: false }
+
+const TAIL_NAV = [{ to: '/settings', label: '系统', icon: Settings, end: false }]
 
 function navCls(active: boolean): string {
   return cn(
@@ -119,7 +126,7 @@ function OfflineBanner() {
 }
 
 export default function Layout() {
-  const nav = useIsAdmin() ? [...NAV, ADMIN_NAV] : NAV
+  const nav = useIsAdmin() ? [...NAV, ADMIN_NAV, ...TAIL_NAV] : [...NAV, ...TAIL_NAV]
   return (
     <div className="min-h-screen">
       <a href="#main"

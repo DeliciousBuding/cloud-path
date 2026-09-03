@@ -9,7 +9,7 @@ import { ApiError } from './api'
 import type { Tone } from '@/components/ui'
 import { PluginErr } from './types'
 import type {
-  PluginErrCode, PluginInstanceView, PluginPermissionsData,
+  PluginCatalogView, PluginErrCode, PluginInstanceView, PluginPermissionsData,
 } from './types'
 
 /* ------------------------------------------------------------------ *
@@ -274,4 +274,118 @@ export function safeConfigEntries(
       const isSecret = typeof value === 'string' && value.startsWith('secret://')
       return { key, value: isSecret ? secretHandleName(value) : String(value ?? ''), isSecret }
     })
+}
+/* ------------------------------------------------------------------ *
+ * ④ 列表载荷的宽容归一化（防白屏）
+ * ------------------------------------------------------------------ */
+
+function str(v: unknown): string {
+  return typeof v === 'string' ? v : ''
+}
+
+function bool(v: unknown): boolean {
+  return v === true
+}
+
+/**
+ * 归一化单个实例视图：形状不合法（缺 id / 缺 desired）返回 null 由调用方丢弃，
+ * 其余字段一律给安全默认值。**不补任何看起来合理的值**（例如不会把 has_observed
+ * 猜成 true），因为这正是「把期望当实际」的来源。
+ */
+export function normalizeInstance(raw: unknown): PluginInstanceView | null {
+  if (!raw || typeof raw !== 'object') return null
+  const o = raw as Record<string, unknown>
+  const d = (o.desired && typeof o.desired === 'object' ? o.desired : {}) as Record<string, unknown>
+  const id = str(o.id)
+  if (!id) return null
+  const obs = o.observed && typeof o.observed === 'object'
+    ? o.observed as Record<string, unknown> : null
+  const hasObserved = bool(o.has_observed)
+  return {
+    id,
+    tenant_id: typeof o.tenant_id === 'number' ? o.tenant_id : 0,
+    edge_id: str(o.edge_id),
+    desired: {
+      instance_id: str(d.instance_id) || id,
+      plugin_id: str(d.plugin_id),
+      version: str(d.version),
+      enabled: bool(d.enabled),
+      isolation: str(d.isolation),
+      config: (d.config && typeof d.config === 'object' ? d.config : undefined) as
+        Record<string, string> | undefined,
+      secret_refs: Array.isArray(d.secret_refs) ? d.secret_refs.map(str).filter(Boolean) : undefined,
+      revision: typeof d.revision === 'number' ? d.revision : 0,
+      updated_at: typeof d.updated_at === 'number' ? d.updated_at : 0,
+    },
+    // has_observed=false 时即使服务端多给了 observed 也不采纳：以服务端判据为准
+    has_observed: hasObserved,
+    observed: hasObserved && obs ? {
+      state: str(obs.state),
+      health: str(obs.health),
+      version: typeof obs.version === 'string' && obs.version ? obs.version : undefined,
+      detail: typeof obs.detail === 'string' && obs.detail ? obs.detail : undefined,
+      restart_count: typeof obs.restart_count === 'number' ? obs.restart_count : 0,
+      last_healthy: typeof obs.last_healthy === 'number' ? obs.last_healthy : undefined,
+      reported_at: typeof obs.reported_at === 'number' ? obs.reported_at : undefined,
+    } : undefined,
+    edge_online: bool(o.edge_online),
+    desired_revision: typeof o.desired_revision === 'number' ? o.desired_revision : 0,
+    applied_revision: typeof o.applied_revision === 'number' ? o.applied_revision : 0,
+    drift: bool(o.drift),
+    stale: bool(o.stale),
+    last_ack_at: typeof o.last_ack_at === 'number' && o.last_ack_at ? o.last_ack_at : undefined,
+  }
+}
+
+/** GET /api/plugin-instances 的宽容归一化：非数组/缺席一律空列表 */
+export function normalizeInstances(raw: unknown): PluginInstanceView[] {
+  const list = Array.isArray(raw)
+    ? raw
+    : (raw && typeof raw === 'object' ? (raw as Record<string, unknown>).instances : undefined)
+  if (!Array.isArray(list)) return []
+  const out: PluginInstanceView[] = []
+  for (const item of list) {
+    const v = normalizeInstance(item)
+    if (v) out.push(v)
+  }
+  return out.sort((a, b) => a.id.localeCompare(b.id))
+}
+
+/** GET /api/plugins 的宽容归一化 */
+export function normalizeCatalog(raw: unknown): PluginCatalogView[] {
+  const list = Array.isArray(raw)
+    ? raw
+    : (raw && typeof raw === 'object' ? (raw as Record<string, unknown>).plugins : undefined)
+  if (!Array.isArray(list)) return []
+  const out: PluginCatalogView[] = []
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue
+    const o = item as Record<string, unknown>
+    if (!str(o.id)) continue
+    out.push(o as unknown as PluginCatalogView)
+  }
+  return out.sort((a, b) => a.id.localeCompare(b.id))
+}
+
+/** 按 plugin_id 建目录索引（实例详情用它取 Trust / Permissions 这些声明事实） */
+export function indexCatalog(list: PluginCatalogView[]): Map<string, PluginCatalogView> {
+  return new Map(list.map((p) => [p.id, p]))
+}
+
+/** 摘要用短 digest（全长放进 title，不在界面上铺一长串十六进制） */
+export function shortDigest(digest: string | undefined): string {
+  if (!digest) return '—'
+  const hex = digest.replace(/^[a-z0-9-]+:/i, '')
+  return hex.length > 12 ? `${hex.slice(0, 12)}…` : hex
+}
+
+/** 按 Edge 归组实例（「已安装」分区用：哪台 Edge 上跑着什么） */
+export function groupByEdge(instances: PluginInstanceView[]): Map<string, PluginInstanceView[]> {
+  const out = new Map<string, PluginInstanceView[]>()
+  for (const v of instances) {
+    const arr = out.get(v.edge_id)
+    if (arr) arr.push(v)
+    else out.set(v.edge_id, [v])
+  }
+  return out
 }
