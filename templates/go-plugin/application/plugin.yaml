@@ -25,3 +25,9 @@ requirements:
     capability: cloudpath.dev/capability/drivertemplate@1
     cardinality: one
     min_items: 1
+contributes:
+  # An Application plugin contributes application ids. The contribution id is
+  # distinct from the plugin id.
+  applications:
+    - id: template-app
+      title: Template Application

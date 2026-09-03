@@ -2,28 +2,18 @@ package edgedriverhost
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/DeliciousBuding/cloud-path/internal/registry"
-	"gopkg.in/yaml.v3"
 )
 
-// driverContributions 是 plugin.yaml 的 `contributes.drivers` 片段。
-// 在 internal/registry 尚未建模 contributions 之前，本包就地解析原始 manifest，
-// 与 docs/architecture/plugin-system.md §2 的 Manifest 结构保持一致。
-type driverContributions struct {
-	Contributes struct {
-		Drivers []struct {
-			ID string `yaml:"id"`
-		} `yaml:"drivers"`
-	} `yaml:"contributes"`
-}
-
 // DriverIDs 返回 lockfile 中每个已安装插件贡献的 driver ID（去重、排序）。
-// 没有 `contributes.drivers` 块的 manifest（如 Application/Connector 或旧版
+// 贡献来自 registry.Manifest.Contributes 的 typed model——本包不再就地解析
+// plugin.yaml，消除与 internal/registry 的二次解析漂移。
+//
+// 没有 `contributes.drivers` 块的 manifest（如 Application/Connector，或旧版
 // Driver）贡献零个 ID；lock 条目对应的 manifest 无法读取/解析时 fail-closed。
 func DriverIDs(root, lockPath string) ([]string, error) {
 	lock, err := registry.LoadLockFile(lockPath)
@@ -34,15 +24,14 @@ func DriverIDs(root, lockPath string) ([]string, error) {
 	var ids []string
 	for _, locked := range lock.Plugins {
 		manifestPath := filepath.Join(root, registry.SafePluginID(locked.ID), "plugin.yaml")
-		data, err := os.ReadFile(manifestPath)
+		manifest, err := registry.ReadManifest(manifestPath)
 		if err != nil {
 			return nil, fmt.Errorf("read manifest for %s: %w", locked.ID, err)
 		}
-		var contributes driverContributions
-		if err := yaml.Unmarshal(data, &contributes); err != nil {
-			return nil, fmt.Errorf("parse manifest for %s: %w", locked.ID, err)
+		if manifest.Contributes == nil {
+			continue
 		}
-		for _, d := range contributes.Contributes.Drivers {
+		for _, d := range manifest.Contributes.Drivers {
 			id := strings.TrimSpace(d.ID)
 			if id == "" || seen[id] {
 				continue

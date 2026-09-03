@@ -103,3 +103,49 @@ func TestDriverIDsEmptyLockfile(t *testing.T) {
 		t.Fatalf("空 lockfile 应无 driver ID，got %v", ids)
 	}
 }
+
+func TestEdgeUsesRegistryContributions(t *testing.T) {
+	root := t.TempDir()
+	driverManifest := `apiVersion: plugins.cloudpath.dev/v1alpha1
+kind: Driver
+id: io.github.example.driver-stcb
+version: 0.1.0
+protocol: 1
+entrypoint: ./driver
+compatibility:
+  core: ">=0.1.0 <0.2.0"
+contributes:
+  drivers:
+    - id: stcb
+    - id: modbus
+`
+	writeManifest(t, root, "io.github.example.driver-stcb", driverManifest)
+
+	lock := registry.NewLockFile()
+	lock.Plugins = []registry.LockedPlugin{
+		{ID: "io.github.example.driver-stcb", Version: "0.1.0", Digest: "d1"},
+	}
+	lockPath := filepath.Join(root, "plugins.lock")
+	if err := registry.WriteLockFile(lockPath, lock); err != nil {
+		t.Fatal(err)
+	}
+
+	ids, err := DriverIDs(root, lockPath)
+	if err != nil {
+		t.Fatalf("DriverIDs: %v", err)
+	}
+	want := []string{"modbus", "stcb"}
+	if len(ids) != len(want) {
+		t.Fatalf("ids = %v, want %v", ids, want)
+	}
+	for i := range want {
+		if ids[i] != want[i] {
+			t.Fatalf("ids[%d] = %q, want %q", i, ids[i], want[i])
+		}
+	}
+
+	// Conflict detection consumes the registry-derived driver ids.
+	if err := CheckConflicts([]string{"stcb"}, ids); err == nil {
+		t.Fatal("expected a builtin conflict with registry-derived id stcb")
+	}
+}
