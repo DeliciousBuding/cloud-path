@@ -1,0 +1,24 @@
+# CloudPath Driver Plugin manifest (v1alpha1).
+# Shape follows spec/plugin-manifest.schema.json. Values below are the
+# template defaults; run scripts/rename.py to produce a real plugin manifest.
+apiVersion: plugins.cloudpath.dev/v1alpha1
+kind: Driver
+id: io.github.deliciousbuding.cloud-path-driver-template
+version: 0.1.0
+protocol: 1
+entrypoint: cloudpath-driver-template
+compatibility:
+  # Core product compatibility range. Bump the upper bound carefully; a new Core
+  # minor must not silently break a published plugin.
+  core: ">=0.2.0 <0.4.0"
+permissions:
+  # This template driver is fully simulated: it requests no hardware. A real
+  # driver would list serial/usb/gpio here and must keep the set identical with
+  # what Describe actually uses.
+  hardware: []
+  network: []
+  filesystem:
+    - plugin-data
+  secrets: []
+capabilities:
+  - cloudpath.dev/capability/drivertemplate@1

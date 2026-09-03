@@ -1,0 +1,6 @@
+# Build outputs produced by the release workflow.
+/bin/
+/dist/
+
+# Local tooling caches.
+*.exe
