@@ -132,6 +132,31 @@ func (s *Store) SetTenantPolicy(tenantID int64, p TenantPolicyRow) error {
 	if err != nil {
 		return err
 	}
+	// 负值不是「继承默认」而是非法输入：显式拒绝，避免 nullInt 把 -1 静默当成 NULL。
+	// 用有序切片而非 map，保证错误文本确定（测试可断言）。
+	for _, f := range []struct {
+		name string
+		v    int
+	}{
+		{"retention_events_days", p.RetentionEventsDays},
+		{"retention_commands_days", p.RetentionCommandsDays},
+		{"retention_audit_days", p.RetentionAuditDays},
+		{"retention_revoked_tokens_days", p.RetentionRevokedTokensDays},
+		{"retention_plugin_observed_days", p.RetentionPluginObservedDays},
+		{"quota_devices", p.QuotaDevices},
+		{"quota_edges", p.QuotaEdges},
+		{"quota_browser_ws", p.QuotaBrowserWS},
+		{"quota_tokens", p.QuotaTokens},
+		{"quota_users", p.QuotaUsers},
+		{"quota_events_per_min", p.QuotaEventsPerMinute},
+		{"quota_plugin_instances", p.QuotaPluginInstances},
+	} {
+		if f.v < 0 {
+			return fmt.Errorf("store: set tenant policy: %w: %s=%d 不可为负（0 才表示继承默认）",
+				tenantpolicy.ErrInvalidPolicy, f.name, f.v)
+		}
+	}
+	// 范围校验复用 tenantpolicy 的冻结规则（单一校验来源，store 不另写一份范围表）。
 	resolved := p.Resolve()
 	if err := resolved.Validate(); err != nil {
 		return fmt.Errorf("store: set tenant policy: %w", err)
