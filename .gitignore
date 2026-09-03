@@ -1,20 +1,33 @@
-# 私有层：构想/设备清单/部署/待办，不入库
+# ---- 私有层：构想 / 待办 / 设备清单 / 验证证据，一律不入库 ----
 .local/
 
-# 构建产物与依赖
-/bin/
-/dist/
-*.exe
-*.test
-*.out
-
-# IDE / OS
-.idea/
-.vscode/
-.DS_Store
-Thumbs.db
-
-# 本地环境与凭据
+# ---- 本地配置与凭据 ----
+edge.yaml
 .env
 .env.*
 *.local.json
+
+# ---- Go 构建产物与运行数据 ----
+bin/
+dist/
+data/
+*.exe
+*.test
+*.out
+*.db
+*.db-shm
+*.db-wal
+
+# ---- 前端 ----
+node_modules/
+webui/dist/
+
+# ---- 日志 ----
+*.log
+
+# ---- 编辑器 / 操作系统 ----
+.idea/
+.vscode/
+*.code-workspace
+.DS_Store
+Thumbs.db

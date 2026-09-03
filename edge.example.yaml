@@ -1,0 +1,21 @@
+# Cloudpath edge 配置示例 —— 复制为 edge.yaml 后按实际设备填写（edge.yaml 不入库）
+# token 支持环境变量展开：${CLOUDPATH_TOKEN}（凭据不落盘）
+
+server: ws://127.0.0.1:8080/ws/edge   # server 的 edge 接入端点
+token: ${CLOUDPATH_TOKEN}              # server 启用鉴权时必填
+edge_id: lab-1                         # 边缘节点唯一 ID（小写字母/数字/-/_；缺省用主机名）
+
+poll_interval_s: 5                     # 状态转储轮询周期（秒）
+sync_interval_s: 600                   # 周期对时（秒）；设备钟漂移大就调小
+report_interval_s: 30                  # 状态心跳兜底周期（秒）；diff 抑制下无变化也定期上报
+
+devices:
+  - id: demo-1                         # 设备 ID（edge 内唯一；全局键 = <edge_id>/<id>）
+    adapter: stcb                      # 适配器名（见 GET /api/adapters）
+    name: 参考板                        # 展示名（可选）
+    port: COM3                         # Windows: COM3；Linux: /dev/ttyUSB0；macOS: /dev/cu.usbserial
+    baud: 9600
+  # - id: demo-2                       # 一个 edge 可带多台设备（各自独立监督协程）
+  #   adapter: stcb
+  #   port: COM4
+  #   baud: 9600

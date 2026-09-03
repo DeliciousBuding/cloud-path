@@ -1,0 +1,94 @@
+# https://taskfile.dev —— 一键 setup/dev/build/test/lint
+# 安装: go install github.com/go-task/task/v3/cmd/task@latest
+version: '3'
+
+vars:
+  VERSION:
+    sh: '{{if eq OS "windows"}}git describe --tags --always --dirty 2>NUL || echo dev{{else}}git describe --tags --always --dirty 2>/dev/null || echo dev{{end}}'
+  LDFLAGS: -X main.version={{.VERSION}}
+  BIN: bin
+  # gofmt 门禁用 Python（stdlib only），避免 Windows/Unix shell 差异
+  PY: '{{if eq OS "windows"}}python{{else}}python3{{end}}'
+
+tasks:
+  default:
+    desc: 构建全部（前端 + 双二进制单文件）
+    cmds:
+      - task: build
+
+  setup:
+    desc: 首次拉取后安装依赖
+    cmds:
+      - go mod download
+      - cd webui && pnpm install
+
+  build:
+    desc: 前端构建 → 内嵌 → server/edge 二进制（bin/）
+    cmds:
+      - task: webui:build
+      - go build -tags embed_ui -trimpath -ldflags "{{.LDFLAGS}}" -o {{.BIN}}/ ./cmd/cloudpath-server
+      - go build -trimpath -ldflags "{{.LDFLAGS}}" -o {{.BIN}}/ ./cmd/cloudpath-edge
+
+  webui:build:
+    desc: 仅构建前端
+    dir: webui
+    cmds:
+      - pnpm install --prefer-offline
+      - pnpm build
+
+  dev:server:
+    desc: 开发：server（前端走 Vite dev 代理，无需内嵌）
+    cmds:
+      - go run ./cmd/cloudpath-server -log-level debug
+
+  dev:edge:
+    desc: 开发：edge（读 ./edge.yaml）
+    cmds:
+      - go run ./cmd/cloudpath-edge -log-level debug
+
+  dev:web:
+    desc: 开发：前端热更新（:5173，代理到 :8080）
+    dir: webui
+    cmds:
+      - pnpm dev
+
+  test:
+    desc: 全部测试（Go 单测 + 前端类型检查）
+    cmds:
+      - go test ./... -count=1
+      - cd webui && pnpm exec tsc --noEmit
+
+  test:race:
+    desc: 带竞态检测的 Go 测试（需 cgo；Windows 上通常不可用，Linux/CI 用）
+    cmds:
+      - go test ./... -race -count=1
+
+  vet:
+    desc: go vet + gofmt 门禁
+    cmds:
+      - go vet ./...
+      - '{{.PY}} scripts/fmtcheck.py'
+
+  lint:
+    desc: 全量静态检查（vet + gofmt + 前端类型）
+    cmds:
+      - task: vet
+      - cd webui && pnpm exec tsc --noEmit
+
+  run:
+    desc: 生产模式本地起 server（:8080，内嵌前端）
+    deps: [build]
+    cmds:
+      - '{{.BIN}}{{if eq OS "windows"}}\cloudpath-server.exe{{else}}/cloudpath-server{{end}}'
+
+  run:edge:
+    desc: 生产模式本地起 edge（读 ./edge.yaml）
+    deps: [build]
+    cmds:
+      - '{{.BIN}}{{if eq OS "windows"}}\cloudpath-edge.exe{{else}}/cloudpath-edge{{end}}'
+
+  clean:
+    desc: 清理构建产物与本地运行数据（bin/ dist/ data/）
+    cmds:
+      - go clean
+      - '{{.PY}} scripts/clean.py'
