@@ -58,8 +58,40 @@
 
 ## 3. 多租户演进（P2 落地 / P3 扩展）
 
-- P2（本契约）：租户列 + 隔离查询 + 默认租户；edge hello 可带 `tenant`（缺省 default）；服务令牌绑定 default 租户。
-- P3：`tokens` 表（每租户多服务令牌、scope、吊销）、用户管理 API、租户切换 UI、按租户保留期。
+- P2：租户列 + 隔离查询 + 默认租户；edge hello 可带 `tenant`（缺省 default）；旧 `-token` 绑定 default 租户。
+- P3：每租户多服务令牌、用户/RBAC 管理、租户切换 UI、按租户保留期。
+
+### 3.1 RBAC
+
+| 角色 | 权限 |
+|---|---|
+| `viewer` | 读取本租户设备、状态、事件、命令历史和插件状态 |
+| `operator` | viewer + 下发设备命令、操作已授权 Plugin/Application Instance |
+| `admin` | operator + 管理本租户用户、服务令牌、插件安装/权限与租户设置 |
+
+跨租户资源统一返回 `404`；已认证但角色不足返回 `403`。禁用用户或重置密码后撤销其全部会话。
+最后一个可用 admin 不允许被禁用或降级，返回 `409`。
+
+### 3.2 用户管理端点
+
+| 方法 路径 | 权限 | 说明 |
+|---|---|---|
+| `GET /api/users` | admin | 本租户用户列表；永不返回 password hash |
+| `POST /api/users` | admin | `{username,name,role,password}`；username 在租户内唯一 |
+| `PATCH /api/users/{id}` | admin | 修改 `name/role/disabled`；可选重置 `password` |
+
+### 3.3 租户服务令牌
+
+令牌格式为 `cp_` + 至少 32 字节随机数据。数据库只存 SHA-256 hash 与短 prefix，明文只在创建响应中返回一次；
+比较使用常量时间，不得写日志。scope 为 `read|write|admin|edge` 的非空集合，权限取 scope 与角色模型的交集。
+
+| 方法 路径 | 权限 | 说明 |
+|---|---|---|
+| `GET /api/tokens` | admin | 列出 id/name/prefix/scopes/created_at/last_used_at/revoked_at |
+| `POST /api/tokens` | admin | `{name,scopes,expires_at?}` → `{token,...metadata}`；明文仅本次响应 |
+| `DELETE /api/tokens/{id}` | admin | 吊销令牌，幂等返回 `204` |
+
+兼容：旧 `-token` / `CLOUDPATH_TOKEN` 仍等价 default 租户 admin，但标记为 legacy；新部署优先使用租户 token。
 
 ## 4. 版本与兼容
 
