@@ -17,3 +17,9 @@ requirements:
   - id: local-display
     capability: cloudpath.dev/capability/display-text@1
     cardinality: zero-or-one
+contributes:
+  # The application id is the stable, semantic contribution id; it is distinct
+  # from the plugin id at the top of this file.
+  applications:
+    - id: scheduled-compartment
+      title: Scheduled Compartment

@@ -4,9 +4,9 @@
 This is a deliberate, stdlib-only parser for the *current* plugin.yaml shape.
 It does not implement general YAML. The known-good manifest is a flat set of
 top-level keys; the required fields are plain scalars and the optional fields
-(compatibility/permissions/capabilities/requirements) hold indented mappings or
-sequences. The parser enforces a safe closure on that shape and rejects, rather
-than mis-parses, anything it does not understand.
+(compatibility/permissions/capabilities/requirements/contributes) hold indented
+mappings or sequences. The parser enforces a safe closure on that shape and
+rejects, rather than mis-parses, anything it does not understand.
 
 Checks:
   1. Only the six required top-level scalars are validated for value; a nested
@@ -16,7 +16,12 @@ Checks:
      lines.
   3. Validates basic values: apiVersion, kind, protocol (and a light check on
      id/version/entrypoint).
-  4. Fails if any Go file under --dir imports
+  4. Recognises and validates the `contributes` subtree: each item in
+     drivers/applications/connectors must carry a non-empty, filesystem-safe id,
+     ids are unique across the plugin, and the plugin kind must match the
+     contribution category. Unknown nested keys are preserved (ignored) per the
+     current compatibility policy.
+  5. Fails if any Go file under --dir imports
      github.com/DeliciousBuding/cloud-path/internal/*.
 
 The authoritative JSON Schema remains spec/plugin-manifest.schema.json in the
@@ -36,6 +41,7 @@ import tempfile
 REQUIRED = ("apiVersion", "kind", "id", "version", "protocol", "entrypoint")
 VALID_API = ("plugins.cloudpath.dev/v1alpha1",)
 VALID_KINDS = ("Driver", "Application", "Connector")
+CONTRIB_CATEGORIES = ("drivers", "applications", "connectors")
 INTERNAL_PREFIX = "github.com/DeliciousBuding/cloud-path/internal/"
 
 TAB = "\t"
@@ -79,30 +85,145 @@ def check_scalar(key, value, line, errors):
             errors.append("line %d: invalid entrypoint %r" % (line, value))
 
 
-def validate_manifest_text(text):
-    """Return a list of validation errors (empty means OK)."""
+def check_contribution_id(value, line, seen_ids):
     errors = []
-    seen = {}  # top-level key -> line number
-    for line_no, raw in enumerate(text.split("\n"), start=1):
-        if TAB in raw:
-            errors.append("line %d: tabs are not allowed in manifest" % line_no)
-            continue
+    v = value.strip()
+    if not v:
+        errors.append("line %d: contribution id is empty" % line)
+        return errors
+    if " " in v:
+        errors.append("line %d: contribution id must not contain whitespace: %r" % (line, v))
+    if ".." in v:
+        errors.append("line %d: contribution id must not contain '..': %r" % (line, v))
+    if "/" in v or "\\" in v:
+        errors.append("line %d: contribution id must not contain a path separator: %r" % (line, v))
+    for ch in v:
+        if ord(ch) < 0x20 or ord(ch) == 0x7F:
+            errors.append("line %d: contribution id contains a control character: %r" % (line, v))
+            break
+    if v in seen_ids:
+        errors.append("line %d: duplicate contribution id %r" % (line, v))
+    seen_ids.add(v)
+    return errors
+
+
+def validate_contributes_block(lines, start_line):
+    """Validate the indented subtree that follows a `contributes:` key.
+
+    Closed subset we understand:
+        contributes:
+          <category>:
+            - id: <value>
+              <any-other-key>: <ignored>
+
+    Every item must carry a non-empty, filesystem-safe id; ids are unique across
+    the whole block. Unknown keys and categories are preserved (ignored). A
+    plugin kind / contribution-category mismatch is rejected.
+    """
+    errors = []
+    seen_ids = set()
+    category = None
+    cat_indent = None
+    item_indent = None
+    item = None  # {"id": str|None, "has_id": bool}
+
+    def finish_item():
+        if item is not None and not item["has_id"]:
+            errors.append("line %d: contribution item missing id" % (start_line + len(lines)))
+
+    for idx, raw in enumerate(lines):
+        line_no = start_line + idx
         stripped = raw.strip()
         if not stripped or stripped.startswith("#"):
             continue
+        indent = len(raw) - len(raw.lstrip(" "))
+
+        if stripped.startswith("- "):
+            finish_item()
+            item_indent = indent
+            item = {"id": None, "has_id": False}
+            body = stripped[2:].strip()
+            dm = re.match(r"^([A-Za-z0-9_./-]+):(.*)$", body)
+            if dm and dm.group(1) == "id":
+                val = unquote(strip_inline_comment(dm.group(2)))
+                item["id"] = val
+                item["has_id"] = True
+                errors.extend(check_contribution_id(val, line_no, seen_ids))
+            continue
+
+        m = TOP_KEY_RE.match(stripped)
+        if not m:
+            # Malformed line inside contributes: preserve but do not mis-parse.
+            continue
+        key, val = m.group(1), m.group(2)
+
+        # A sub-field of the current item.
+        if item is not None and item_indent is not None and indent > item_indent:
+            if key == "id":
+                v = unquote(strip_inline_comment(val))
+                if item["has_id"]:
+                    errors.append("line %d: duplicate id in contribution item" % line_no)
+                item["id"] = v
+                item["has_id"] = True
+                errors.extend(check_contribution_id(v, line_no, seen_ids))
+            # else: unknown sub-field -> preserve (ignore)
+            continue
+
+        # Category key under contributes.
+        if key in CONTRIB_CATEGORIES and (cat_indent is None or indent == cat_indent):
+            finish_item()
+            category = key
+            cat_indent = indent
+            item = None
+            item_indent = None
+            continue
+
+        # Unknown nested key -> preserve (ignore) per compatibility policy.
+        continue
+
+    finish_item()
+    return errors
+
+
+def validate_manifest_text(text):
+    """Return a list of validation errors (empty means OK)."""
+    errors = []
+    seen = {}
+    lines = text.split("\n")
+    total = len(lines)
+    i = 0
+    while i < total:
+        raw = lines[i]
+        line_no = i + 1
+        if TAB in raw:
+            errors.append("line %d: tabs are not allowed in manifest" % line_no)
+            i += 1
+            continue
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            i += 1
+            continue
         if DOC_RE.match(stripped):
             errors.append("line %d: YAML document markers are not allowed" % line_no)
+            i += 1
             continue
         if stripped.startswith("%"):
             errors.append("line %d: YAML directives are not allowed" % line_no)
+            i += 1
             continue
         if any(ch in stripped for ch in ("&", "*")) or stripped.startswith(("!", "!!")):
             errors.append("line %d: YAML anchors/aliases/tags are not allowed" % line_no)
+            i += 1
+            continue
+        if raw[0].isspace():
+            # Indented body of an unspecial top-level key (compatibility/permissions
+            # /capabilities/requirements): ignored, as before.
+            i += 1
             continue
         m = TOP_KEY_RE.match(raw)
         if not m:
-            if raw and not raw[0].isspace():
-                errors.append("line %d: malformed top-level line: %r" % (line_no, raw))
+            errors.append("line %d: malformed top-level line: %r" % (line_no, raw))
+            i += 1
             continue
         key, value = m.group(1), m.group(2)
         if key in seen:
@@ -114,6 +235,25 @@ def validate_manifest_text(text):
                 errors.append("line %d: required field %r is empty" % (line_no, key))
             else:
                 check_scalar(key, v, line_no, errors)
+
+        if key == "contributes":
+            j = i + 1
+            block = []
+            while j < total:
+                r = lines[j]
+                if not r.strip() or r.strip().startswith("#"):
+                    block.append(r)
+                    j += 1
+                    continue
+                if r[0].isspace():
+                    block.append(r)
+                    j += 1
+                    continue
+                break
+            errors.extend(validate_contributes_block(block, start_line=i + 2))
+            i = j
+            continue
+        i += 1
 
     for k in REQUIRED:
         if k not in seen:
@@ -149,11 +289,22 @@ def valid_manifest_text():
         "  hardware: []\n"
         "capabilities:\n"
         "  - cloudpath.dev/capability/demodriver@1\n"
+        "contributes:\n"
+        "  drivers:\n"
+        "    - id: demodriver\n"
+        "      title: Demo Driver\n"
     )
 
 
 def self_test():
     base = valid_manifest_text()
+    contributes_lines = (
+        "contributes:\n"
+        "  drivers:\n"
+        "    - id: demodriver\n"
+        "      title: Demo Driver\n"
+    )
+    meta = base.split("contributes:\n")[0]  # everything before contributes
     cases = [
         ("valid", base, 0),
         ("missing kind", base.replace("kind: Driver\n", ""), 1),
@@ -164,6 +315,10 @@ def self_test():
         ("multi-document", "---\n" + base + "---\n", 1),
         ("anchor", base.replace("kind: Driver", "kind: Driver &a"), 1),
         ("invalid protocol", base.replace("protocol: 1", "protocol: abc"), 1),
+        ("contributes empty id", meta + contributes_lines.replace("id: demodriver", "id: \"\"") + "  applications:\n    - id: app\n", 1),
+        ("contributes duplicate id", meta + "contributes:\n  drivers:\n    - id: demodriver\n    - id: demodriver\n", 1),
+        ("contributes path id", meta + contributes_lines.replace("id: demodriver", "id: bad/id"), 1),
+        ("contributes missing id", meta + "contributes:\n  drivers:\n    - title: No ID\n", 1),
     ]
     errors = []
     for name, text, want in cases:

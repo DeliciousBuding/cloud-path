@@ -23,6 +23,52 @@
       }
     },
     "capabilities": {"type": "array", "items": {"type": "string"}},
-    "requirements": {"type": "array", "items": {"type": "object"}}
+    "requirements": {"type": "array", "items": {"type": "object"}},
+    "contributes": {
+      "type": "object",
+      "description": "Typed contributions declared by the plugin; ids are stable and distinct from the plugin id. Unknown properties are ignored (current compatibility policy).",
+      "properties": {
+        "drivers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": {"type": "string", "description": "Stable driver contribution id (distinct from the plugin id)."},
+              "title": {"type": "string"},
+              "descriptor": {"type": "string"},
+              "configSchema": {"type": "string"},
+              "discovery": {"type": "string"},
+              "capabilityCatalog": {"type": "string"}
+            }
+          }
+        },
+        "applications": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": {"type": "string", "description": "Stable application contribution id (distinct from the plugin id)."},
+              "title": {"type": "string"},
+              "requirements": {"type": "array", "items": {"type": "object"}}
+            }
+          }
+        },
+        "connectors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": {"type": "string", "description": "Stable connector contribution id (distinct from the plugin id)."},
+              "title": {"type": "string"},
+              "direction": {"type": "string"},
+              "host": {"type": "string"}
+            }
+          }
+        }
+      }
+    }
   }
 }

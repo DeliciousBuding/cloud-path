@@ -22,3 +22,9 @@ permissions:
   secrets: []
 capabilities:
   - cloudpath.dev/capability/drivertemplate@1
+contributes:
+  # A Driver plugin contributes one or more driver ids. The contribution id
+  # is distinct from the plugin id; a single plugin may manage many drivers.
+  drivers:
+    - id: template-driver
+      title: Template Driver
