@@ -3,8 +3,8 @@ package stcb
 import (
 	"testing"
 
-	"github.com/DeliciousBuding/cloud-path/internal/device"
-	"github.com/DeliciousBuding/cloud-path/internal/model"
+	"github.com/DeliciousBuding/cloud-path/sdk/go/driverkit"
+	"github.com/DeliciousBuding/cloud-path/sdk/go/model"
 )
 
 // TestSTCBDescriptorValid 锁定 STC-B Descriptor/Capability catalog 的契约合法性：
@@ -13,7 +13,7 @@ import (
 func TestSTCBDescriptorValid(t *testing.T) {
 	a := &Adapter{}
 
-	desc := a.Descriptor(device.Config{ID: "d1", Name: "节点1", Port: "COM9"})
+	desc := a.Descriptor(driverkit.Config{ID: "d1", Name: "节点1", Port: "COM9"})
 	if err := desc.Validate(); err != nil {
 		t.Fatalf("descriptor.Validate: %v", err)
 	}
