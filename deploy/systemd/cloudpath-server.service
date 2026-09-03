@@ -1,0 +1,101 @@
+# CloudPath Server — systemd unit (native binary, no container).
+#
+# Install:
+#   sudo install -D -m 0644 deploy/systemd/cloudpath-server.service \
+#        /etc/systemd/system/cloudpath-server.service
+#   sudo install -D -m 0600 -o root -g root <your-filled-env> /etc/cloudpath/cloudpath-server.env
+#   sudo systemctl daemon-reload && sudo systemctl enable --now cloudpath-server.service
+#
+# Non-secret defaults live in this unit (Environment=); secrets and site-specific
+# values live in the 0600 EnvironmentFile below (template:
+# deploy/systemd/cloudpath-server.env.example — variable names only, no values).
+# Step-by-step SOP: deploy/README.md
+
+[Unit]
+Description=CloudPath Server (REST + WebSocket control plane, embedded WebUI)
+Documentation=https://github.com/DeliciousBuding/cloud-path
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Dedicated non-root system account (create it first, see deploy/README.md).
+User=cloudpath
+Group=cloudpath
+
+# Binary location. Replace only if you install elsewhere.
+ExecStart=/opt/cloudpath/bin/cloudpath-server
+WorkingDirectory=/var/lib/cloudpath
+
+# ---- non-secret runtime configuration -------------------------------------
+# Bind to loopback only: the public edge is the reverse proxy (443), never the
+# application port. SQLite lives in the persistent data directory below.
+Environment=CLOUDPATH_ADDR=127.0.0.1:8080
+Environment=CLOUDPATH_DB=/var/lib/cloudpath/cloudpath.db
+Environment=CLOUDPATH_LOG=info
+Environment=CLOUDPATH_LOG_FORMAT=json
+
+# ---- secrets / site-specific overrides (0600, root-owned) -----------------
+# The leading "-" means "do not fail if the file is absent"; the file is still
+# required for any public (L2) deployment because it carries the shared token,
+# allowed origins and trusted proxies.
+EnvironmentFile=-/etc/cloudpath/cloudpath-server.env
+
+# ---- supervision ----------------------------------------------------------
+Restart=always
+RestartSec=3
+# Give long-lived WebSocket connections a chance to drain on stop.
+TimeoutStopSec=20
+KillSignal=SIGTERM
+# journald is the log sink; structured JSON lines are set above.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cloudpath-server
+
+# ---- resource limits ------------------------------------------------------
+MemoryMax=1G
+MemoryHigh=768M
+TasksMax=256
+LimitNOFILE=65536
+CPUWeight=100
+
+# ---- sandboxing / hardening ----------------------------------------------
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+DevicePolicy=closed
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# Native architecture only: a foreign-arch binary can never be exec'd by this
+# unit. Complements the pre-upload arch assertion (scripts/assert_arch.py).
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+UMask=0027
+
+# Everything the process may write: the SQLite database (+ -wal/-shm) directory.
+# ProtectSystem=strict makes the rest of the filesystem read-only.
+ReadWritePaths=/var/lib/cloudpath
+
+# Optional extra hardening, deliberately NOT enabled by default:
+#   MemoryDenyWriteExecute=true
+# The Go runtime and the cgo-free SQLite driver do not need writable+executable
+# memory, so this is normally safe — but enable it only after you have confirmed
+# the service still starts on your host, since a seccomp denial here shows up as
+# an opaque startup crash.
+
+[Install]
+WantedBy=multi-user.target

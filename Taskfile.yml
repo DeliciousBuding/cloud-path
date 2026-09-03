@@ -53,12 +53,15 @@ tasks:
       - '{{.PY}} scripts/build_matrix.py --verify-only --out dist'
 
   release:artifacts:
-    desc: 发布物料一条龙：矩阵构建 → 架构断言 → 公开边界审计 → 链接检查
+    desc: 发布物料一条龙：矩阵构建 → 架构断言 → 公开边界审计 → 链接/workflow 检查
     cmds:
       - task: build:matrix
       - task: verify:arch
       - task: audit:public
       - task: check:links
+      - task: check:workflows
+      - task: check:workflows
+      - task: selftest:scripts
 
   webui:build:
     desc: 仅构建前端
@@ -138,6 +141,12 @@ tasks:
       - '{{.PY}} scripts/assert_arch.py --self-test'
       - '{{.PY}} scripts/build_matrix.py --self-test'
 
+  check:workflows:
+    desc: GitHub Actions workflow 结构门禁（stdlib-only；本机有 PyYAML 时做真解析）
+    cmds:
+      - '{{.PY}} scripts/check_workflows.py --self-test'
+      - '{{.PY}} scripts/check_workflows.py'
+
   check:links:
     desc: Markdown 相对链接检查（stdlib-only，含自测）
     cmds:
@@ -165,7 +174,7 @@ tasks:
       - pnpm build
 
   verify:
-    desc: 聚合门禁（vet/test/web/template/audit/links），不递归调用自己
+    desc: 聚合门禁（vet/test/web/template/audit/links/workflow/脚本自测），不递归调用自己
     cmds:
       - task: vet
       - cmd: go test ./... -count=1

@@ -25,6 +25,10 @@ webui/dist/
 # ---- 日志 ----
 *.log
 
+# ---- Python 字节码缓存 ----
+__pycache__/
+*.py[cod]
+
 # ---- 编辑器 / 操作系统 ----
 .idea/
 .vscode/
@@ -34,3 +38,6 @@ Thumbs.db
 
 # ---- git worktree 隔离 checkout ----
 .worktrees/
+
+# ---- 拆仓脚本输出（生成物，不入库）----
+# dist/ 已覆盖 dist/split/；显式写出以免误加
