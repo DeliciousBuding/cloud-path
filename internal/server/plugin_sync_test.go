@@ -401,22 +401,30 @@ func TestPluginStatusRejectedFromEvictedLink(t *testing.T) {
 		Data: rawData(t, api.PluginStatusData{BootID: "boot-new", Sequence: 1,
 			ObservedInstances: []api.PluginObservedInstanceData{{
 				InstanceID: "box1", PluginID: "p1", Version: "1.0.0", State: "HEALTHY", Health: "HEALTHY"}}})})
-	time.Sleep(400 * time.Millisecond)
-	srv.plugin.mu.Lock()
-	tp := srv.plugin.tenants[a]
+	// 条件等待（-race/满载下固定 sleep 会被慢处理击穿：正断言必须轮询到终态）。
 	var state, boot string
 	var seq uint64
-	if tp != nil {
-		if ep, ok := tp.edges["e1"]; ok {
-			boot, seq = ep.bootID, ep.lastSequence
-			if o, ok := ep.observed["box1"]; ok {
-				state = o.State
+	deadline = time.Now().Add(30 * time.Second)
+	for {
+		srv.plugin.mu.Lock()
+		tp := srv.plugin.tenants[a]
+		state, boot, seq = "", "", 0
+		if tp != nil {
+			if ep, ok := tp.edges["e1"]; ok {
+				boot, seq = ep.bootID, ep.lastSequence
+				if o, ok := ep.observed["box1"]; ok {
+					state = o.State
+				}
 			}
 		}
-	}
-	srv.plugin.mu.Unlock()
-	if state != "HEALTHY" || boot != "boot-new" || seq != 1 {
-		t.Fatalf("旧连接迟到消息污染了投影: state=%q boot=%q seq=%d", state, boot, seq)
+		srv.plugin.mu.Unlock()
+		if state == "HEALTHY" && boot == "boot-new" && seq == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("旧连接迟到消息污染了投影: state=%q boot=%q seq=%d", state, boot, seq)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 	old.CloseNow()
 }
@@ -466,31 +474,35 @@ func TestPluginStatusCrossTenantFailClosed(t *testing.T) {
 		Data: rawData(t, api.PluginStatusData{BootID: "boot-b", Sequence: 1,
 			ObservedInstances: []api.PluginObservedInstanceData{{
 				InstanceID: "boxA", PluginID: "evil", Version: "6.6.6", State: "CRASHED", Health: "UNKNOWN"}}})})
-	time.Sleep(400 * time.Millisecond)
-
-	srv.plugin.mu.Lock()
-	ta, tb := srv.plugin.tenants[a], srv.plugin.tenants[b]
+	// 条件等待：双租户投影各自落位的终态（-race 下固定 sleep 会假阳性）。
 	var aState, bState string
-	if ta != nil {
-		if ep, ok := ta.edges["ea"]; ok {
-			if o, ok := ep.observed["boxA"]; ok {
-				aState = o.State
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		srv.plugin.mu.Lock()
+		ta, tb := srv.plugin.tenants[a], srv.plugin.tenants[b]
+		aState, bState = "", ""
+		if ta != nil {
+			if ep, ok := ta.edges["ea"]; ok {
+				if o, ok := ep.observed["boxA"]; ok {
+					aState = o.State
+				}
 			}
 		}
-	}
-	if tb != nil {
-		if ep, ok := tb.edges["eb"]; ok {
-			if o, ok := ep.observed["boxA"]; ok {
-				bState = o.State + "/" + o.PluginID
+		if tb != nil {
+			if ep, ok := tb.edges["eb"]; ok {
+				if o, ok := ep.observed["boxA"]; ok {
+					bState = o.State + "/" + o.PluginID
+				}
 			}
 		}
-	}
-	srv.plugin.mu.Unlock()
-	if aState != "HEALTHY" {
-		t.Fatalf("tenant-a 投影被 tenant-b 改写: %q", aState)
-	}
-	if bState != "CRASHED/evil" {
-		t.Fatalf("tenant-b 投影未落在自己作用域: %q", bState)
+		srv.plugin.mu.Unlock()
+		if aState == "HEALTHY" && bState == "CRASHED/evil" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("跨租户投影未收敛: aState=%q(want HEALTHY) bState=%q(want CRASHED/evil)", aState, bState)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 	// b 的读面看不到 a 的实例，a 的读面看不到 b 的上报。
 	resp := pluginREST(t, ts, issueTenantToken(t, st, b, `["admin"]`), http.MethodGet, "/api/plugin-instances", "")
@@ -547,30 +559,45 @@ func TestPluginAckAdvancesOnlyOnApplied(t *testing.T) {
 		t.Fatalf("applied_revision = %d, want %d", appliedRev(), want)
 	}
 
+	// waitAudit 轮询审计落库：-race/满载下 ack 处理与审计写会晚于固定 sleep，
+	// 正断言必须条件等待（CI race job 实测击穿 400ms）。
+	waitAudit := func(actionOutcome string, want int) {
+		t.Helper()
+		deadline := time.Now().Add(30 * time.Second)
+		var actions []string
+		for time.Now().Before(deadline) {
+			actions = auditActions(t, st, a)
+			n := 0
+			for _, x := range actions {
+				if x == actionOutcome {
+					n++
+				}
+			}
+			if n >= want {
+				return
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		t.Fatalf("审计 %s 未达 %d 条: %v", actionOutcome, want, actions)
+	}
+
 	// 1) rejected：不推进 applied_revision，记失败审计与逐实例结果。
 	ack(1, api.PluginAckRejected, desired.SnapshotDigest, []api.PluginApplyResultData{
 		{InstanceID: "box1", Status: "failed", Detail: "manifest missing"},
 	})
-	time.Sleep(400 * time.Millisecond)
+	waitAudit(actionPluginRejected+":failure", 1)
 	if got := appliedRev(); got != 0 {
 		t.Fatalf("rejected 却推进了 applied_revision = %d", got)
 	}
-	actions := auditActions(t, st, a)
-	if !hasAudit(actions, actionPluginRejected+":failure") {
-		t.Fatalf("rejected 未记失败审计: %v", actions)
-	}
 	// 2) 同 revision 不同摘要：协议异常，拒绝推进并审计。
 	ack(1, api.PluginAckApplied, "sha256:"+strings.Repeat("f", 64), nil)
-	time.Sleep(400 * time.Millisecond)
+	waitAudit(actionPluginProtocol+":failure", 1)
 	if got := appliedRev(); got != 0 {
 		t.Fatalf("摘要不匹配却推进了 applied_revision = %d", got)
 	}
-	if !hasAudit(auditActions(t, st, a), actionPluginProtocol+":failure") {
-		t.Fatalf("摘要不匹配未记协议异常审计: %v", auditActions(t, st, a))
-	}
 	// 3) 未知 revision（大于 desired）：忽略并审计协议异常。
 	ack(99, api.PluginAckApplied, desired.SnapshotDigest, nil)
-	time.Sleep(300 * time.Millisecond)
+	waitAudit(actionPluginProtocol+":failure", 2)
 	if got := appliedRev(); got != 0 {
 		t.Fatalf("未知 revision 却推进 = %d", got)
 	}
@@ -579,9 +606,7 @@ func TestPluginAckAdvancesOnlyOnApplied(t *testing.T) {
 		{InstanceID: "box1", Status: "applied"},
 	})
 	waitApplied(1)
-	if !hasAudit(auditActions(t, st, a), actionPluginApplied+":success") {
-		t.Fatalf("applied 未记成功审计: %v", auditActions(t, st, a))
-	}
+	waitAudit(actionPluginApplied+":success", 1)
 	resp := pluginREST(t, ts, admin, http.MethodGet, "/api/plugin-instances/box1", "")
 	raw := readBody(t, resp)
 	var view api.PluginInstanceView
