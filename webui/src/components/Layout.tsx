@@ -96,14 +96,24 @@ function SidebarFooter() {
   )
 }
 
-/** 实时通道断开时的系统级提示条（重连由 store 自动进行） */
+/** 实时通道断开时的系统级提示条（重连由 store 自动进行）。
+ *  连续失败要如实说出来：账号模式下 /ws 靠会话 cookie 鉴权，会话失效时页面若照常渲染
+ *  就会变成「看着正常但没有实时数据」的假数据，因此这里给出失败次数并说明正在复核登录态。 */
 function OfflineBanner() {
   const status = useLive((s) => s.status)
+  const failures = useLive((s) => s.failures)
   if (status === 'open') return null
   return (
     <div className="banner sticky top-0 z-30 lg:pl-64" role="status">
-      <WifiOff size={13} />
-      {status === 'connecting' ? '正在连接实时通道…' : '实时通道已断开，正在自动重连（页面数据仍会定时刷新）'}
+      <WifiOff size={13} className="shrink-0" />
+      <span className="min-w-0 break-words">
+        {status === 'connecting' ? '正在连接实时通道…' : '实时通道已断开，正在自动重连（页面数据仍会定时刷新）'}
+      </span>
+      {failures >= 3 && (
+        <span className="num ml-auto shrink-0">
+          已连续失败 {failures} 次{failures >= 5 ? ' · 正在复核登录态' : ''}
+        </span>
+      )}
     </div>
   )
 }

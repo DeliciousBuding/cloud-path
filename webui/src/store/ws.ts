@@ -6,7 +6,7 @@
 import { create } from 'zustand'
 import { wsUrl } from '@/lib/api'
 import { normalizeDescriptor, readInlineDescriptor } from '@/lib/descriptor'
-import { authReady, useAuth } from './auth'
+import { authReady, refreshAuth, useAuth } from './auth'
 import type {
   AckData, DeviceDescriptor, DeviceRaw, DeviceView, EdgeUpData, EdgeView, Envelope,
   EventData, EventView, SnapshotData, StateData,
@@ -22,8 +22,13 @@ const MAX_SERIES_KEYS = 6
 /** 每条序列最多保留点数 */
 const MAX_SERIES_POINTS = 240
 
+/** 连续握手失败多少次后重新校验一次登录态（账号模式下 /ws 需要会话 cookie） */
+const REAUTH_EVERY_FAILURES = 5
+
 interface LiveState {
   status: WsStatus
+  /** 连续「未成功 open 就关闭」的次数；open 成功即归零。UI 用它说实话，不假装实时数据正常 */
+  failures: number
   devices: Record<string, DeviceView>
   edges: Record<string, EdgeView>
   /** WS 实时事件（新→旧，本地负 id，与 REST 历史正 id 不冲突） */
@@ -38,6 +43,7 @@ interface LiveState {
 
 export const useLive = create<LiveState>(() => ({
   status: 'closed',
+  failures: 0,
   devices: {},
   edges: {},
   events: [],
@@ -85,6 +91,9 @@ export function connectLive() {
 export function disconnectLive() {
   enabled = false
   retry = 0
+  // 必须复位 started：否则「登出 → 再登录」时 connectLive() 会因为 started 仍为 true 直接返回，
+  // 实时通道再也拨不出去（页面看着正常却收不到实时数据 = 假数据）。
+  started = false
   if (!ws) {
     if (useLive.getState().status !== 'closed') useLive.setState({ status: 'closed' })
     return
@@ -93,7 +102,7 @@ export function disconnectLive() {
   ws = null
   old.onclose = null
   old.close()
-  useLive.setState({ status: 'closed' })
+  useLive.setState({ status: 'closed', failures: 0 })
 }
 
 function dial() {
@@ -106,13 +115,21 @@ function dial() {
     scheduleRetry()
     return
   }
+  // 本次握手有没有真的 open 过：只有「没 open 就关闭」才算失败（正常关闭不计入）
+  let opened = false
   ws.onopen = () => {
+    opened = true
     retry = 0
-    useLive.setState({ status: 'open' })
+    useLive.setState({ status: 'open', failures: 0 })
   }
   ws.onclose = () => {
     ws = null
-    useLive.setState({ status: 'closed' })
+    const failures = opened ? 0 : useLive.getState().failures + 1
+    useLive.setState({ status: 'closed', failures })
+    // 连续握手失败在账号模式下多半是会话已失效（/ws 靠会话 cookie 鉴权，浏览器无法给它加 header）。
+    // 定期用 me 复核：会话真失效就把登录态收敛成 out，由路由守卫送回 /login，
+    // 而不是让页面停在「已登录但没有实时数据」的假正常状态。
+    if (!opened && failures % REAUTH_EVERY_FAILURES === 0) void refreshAuth()
     scheduleRetry()
   }
   ws.onerror = () => { /* onclose 会跟上，统一在那里重连 */ }

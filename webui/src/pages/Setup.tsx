@@ -1,26 +1,42 @@
-// Setup：首次运行向导 —— ① 连通 server ② 管理令牌（可选） ③ 完成。
-// 只调用现有只读端点 /healthz 与 lib/api.ts 的令牌契约，不假设新的后端接口。
-// 路由约定：/setup（App.tsx 由 FE-UX lane 接线，default export 名固定为 Setup）。
+// Setup：首次运行向导 —— ① 连通 server ② 创建首个管理员账号 ③ 完成。
+//
+// 真实后端语义（docs/api.md §2、internal/server/auth_handlers.go）：
+//   POST /api/auth/setup {username,password} → 200 {user}；
+//   真实 TCP 回环永远放行，非回环需一次性 X-Cloudpath-Setup-Token；
+//   **首个用户落库后立即进入全鉴权账号模式**。因此公网访问这里基本会 403，
+//   已初始化过则 409 —— 两种都必须说成人话并把用户导流到登录页，不能白屏或甩原始错误。
+// 路由约定：/setup（default export 名固定为 Setup）。
 import { useCallback, useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { ArrowLeft, ArrowRight, Check, PartyPopper, RefreshCw } from 'lucide-react'
+import {
+  ArrowLeft, ArrowRight, Check, Eye, EyeOff, LogIn, PartyPopper, RefreshCw, ShieldAlert,
+} from 'lucide-react'
 import { AuthCard, Button, Spinner, TextField } from '@/components/ui'
-import { api, setToken } from '@/lib/api'
+import { api } from '@/lib/api'
+import { setupErrorCopy } from '@/lib/authErrors'
+import { confirmSession } from '@/store/auth'
 import { cn } from '@/lib/cn'
 import type { HealthView } from '@/lib/types'
 
 type Phase = 'checking' | 'ok' | 'fail'
 
-const STEPS = ['连接 server', '管理令牌', '完成']
+const STEPS = ['连接 server', '创建管理员账号', '完成']
+
+/** 与服务端一致的上限（本地先拦一次，省一个来回；最终判定仍在服务端） */
+const MAX_USERNAME = 64
+const MAX_PASSWORD = 256
 
 export default function Setup() {
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
 
-  // 步骤 1：连通性探测
+  // ---- 步骤 1：连通性探测 ----
   const [phase, setPhase] = useState<Phase>('checking')
   const [health, setHealth] = useState<HealthView | null>(null)
   const [probeError, setProbeError] = useState('')
+  /** me→200 说明已经登录过了，没必要再走初始化 */
+  const [alreadyIn, setAlreadyIn] = useState(false)
 
   const probe = useCallback(async () => {
     setPhase('checking')
@@ -32,18 +48,56 @@ export default function Setup() {
     } catch (err) {
       setProbeError(err instanceof Error ? err.message : '无法连接 server')
       setPhase('fail')
+      return
+    }
+    // 顺带看一眼是否已登录（失败无所谓，只是省掉一次注定 409 的提交）
+    try {
+      await api.me()
+      setAlreadyIn(true)
+    } catch {
+      setAlreadyIn(false)
     }
   }, [])
 
   useEffect(() => { void probe() }, [probe])
 
-  // 步骤 2：管理令牌（可选，可跳过）
-  const [token, setTokenInput] = useState('')
+  // ---- 步骤 2：创建首个管理员账号 ----
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [reveal, setReveal] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [fieldError, setFieldError] = useState<{ user?: string; pass?: string; confirm?: string }>({})
+  const [formError, setFormError] = useState('')
+  /** 403/409：本实例不该再走 setup，UI 改成导流到登录页 */
+  const [redirectToLogin, setRedirectToLogin] = useState(false)
+  const [createdUser, setCreatedUser] = useState('')
 
-  function saveTokenAndFinish() {
-    const v = token.trim()
-    if (v) setToken(v)
-    setStep(2)
+  async function onCreate(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const u = username.trim()
+    const next: typeof fieldError = {}
+    if (!u) next.user = '请输入用户名'
+    else if (u.length > MAX_USERNAME) next.user = `用户名不超过 ${MAX_USERNAME} 个字符`
+    if (!password) next.pass = '请输入密码'
+    else if (password.length > MAX_PASSWORD) next.pass = `密码不超过 ${MAX_PASSWORD} 个字符`
+    if (password !== confirm) next.confirm = '两次输入的密码不一致'
+    setFieldError(next)
+    if (next.user || next.pass || next.confirm) return
+
+    setBusy(true)
+    setFormError('')
+    try {
+      const r = await api.setup(u, password)
+      const user = await confirmSession(r?.user ?? null)
+      setCreatedUser(user?.username || u)
+      setStep(2)
+    } catch (err) {
+      const copy = setupErrorCopy(err)
+      setFormError(copy.message)
+      if (copy.alreadySetup) setRedirectToLogin(true)
+      setBusy(false)
+    }
   }
 
   return (
@@ -52,8 +106,8 @@ export default function Setup() {
       subtitle="三步完成首次配置"
       footer={
         step === 2
-          ? <Link to="/login" className="link">重新配置令牌？去登录页</Link>
-          : <Link to="/login" className="link">跳过向导，直接登录</Link>
+          ? <Link to="/login" className="link">换个账号？去登录页</Link>
+          : <Link to="/login" className="link">已有账号？直接登录</Link>
       }
     >
       {/* 步骤指示器：移动端只留圆点，避免 390px 溢出 */}
@@ -66,7 +120,7 @@ export default function Setup() {
                 'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold',
                 i < step ? 'bg-accent text-accent-ink'
                   : i === step ? 'bg-accent/15 text-accent'
-                  : 'bg-ink-3/12 text-ink-3',
+                    : 'bg-ink-3/12 text-ink-3',
               )}
             >
               {i < step ? <Check size={13} strokeWidth={2.5} /> : i + 1}
@@ -96,7 +150,12 @@ export default function Setup() {
               <p className="flex items-center gap-2 text-sm font-medium text-ok">
                 <Check size={15} strokeWidth={2.5} /> server 已连接
               </p>
-              <p className="num mt-1 text-xs text-ink-2">版本 {health.version}</p>
+              <p className="num mt-1 text-xs break-words text-ink-2">版本 {health.version}</p>
+              {alreadyIn && (
+                <p className="mt-2 text-xs leading-relaxed text-ink-2">
+                  你已经登录了，无需再初始化。
+                </p>
+              )}
             </div>
           )}
           {phase === 'fail' && (
@@ -110,34 +169,105 @@ export default function Setup() {
             <Button variant="ghost" lg disabled={phase === 'checking'} onClick={() => void probe()} className="shrink-0">
               <RefreshCw size={14} /> 重试
             </Button>
-            <Button lg disabled={phase !== 'ok'} onClick={() => setStep(1)} className="min-w-0 flex-1">
-              下一步 <ArrowRight size={14} />
-            </Button>
+            {alreadyIn ? (
+              <Button lg onClick={() => navigate('/', { replace: true })} className="min-w-0 flex-1">
+                进入管理台 <ArrowRight size={14} />
+              </Button>
+            ) : (
+              <Button lg disabled={phase !== 'ok'} onClick={() => setStep(1)} className="min-w-0 flex-1">
+                下一步 <ArrowRight size={14} />
+              </Button>
+            )}
           </div>
         </div>
       )}
 
       {step === 1 && (
-        <div className="space-y-4">
+        <form onSubmit={onCreate} noValidate className="space-y-4">
+          <div className="rounded-xl bg-surface-2 p-3.5">
+            <p className="flex items-start gap-2 text-[12px] leading-relaxed text-ink-2">
+              <ShieldAlert size={14} className="mt-0.5 shrink-0 text-warn" />
+              <span>
+                这里创建的是**首个管理员账号**，创建成功后实例立即进入全鉴权模式，其他账号需由管理员在
+                「管理 → 用户」中创建。首次设置只允许从服务器本机（回环地址）进行，或携带一次性 setup token。
+              </span>
+            </p>
+          </div>
+
           <TextField
-            label="管理令牌"
-            type="password"
-            placeholder="可选：粘贴 server 管理令牌"
-            autoComplete="off"
+            label="用户名"
+            name="username"
+            type="text"
+            placeholder="例如 admin"
+            autoComplete="username"
+            autoCapitalize="none"
             spellCheck={false}
-            hint="令牌用于 API 与实时通道鉴权，可跳过并在登录页填写"
-            value={token}
-            onChange={(e) => setTokenInput(e.target.value)}
+            maxLength={MAX_USERNAME}
+            value={username}
+            error={fieldError.user}
+            disabled={busy}
+            onChange={(e) => { setUsername(e.target.value); setFieldError((f) => ({ ...f, user: undefined })) }}
           />
+          <TextField
+            label="密码"
+            name="password"
+            type={reveal ? 'text' : 'password'}
+            placeholder="给这个账号设一个密码"
+            autoComplete="new-password"
+            maxLength={MAX_PASSWORD}
+            value={password}
+            error={fieldError.pass}
+            disabled={busy}
+            onChange={(e) => { setPassword(e.target.value); setFieldError((f) => ({ ...f, pass: undefined })) }}
+            suffix={
+              <button
+                type="button"
+                onClick={() => setReveal(!reveal)}
+                aria-label={reveal ? '隐藏密码' : '显示密码'}
+                title={reveal ? '隐藏密码' : '显示密码'}
+                aria-pressed={reveal}
+                className="flex h-7 w-7 items-center justify-center rounded-full text-ink-3 transition-colors hover:text-ink"
+              >
+                {reveal ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            }
+          />
+          <TextField
+            label="确认密码"
+            name="confirm-password"
+            type={reveal ? 'text' : 'password'}
+            placeholder="再输一次"
+            autoComplete="new-password"
+            maxLength={MAX_PASSWORD}
+            value={confirm}
+            error={fieldError.confirm}
+            disabled={busy}
+            onChange={(e) => { setConfirm(e.target.value); setFieldError((f) => ({ ...f, confirm: undefined })) }}
+          />
+
+          {formError && (
+            <div role="alert"
+              className={cn('rounded-xl p-3.5 text-[13px] leading-relaxed break-words',
+                redirectToLogin ? 'bg-warn/12 text-warn' : 'bg-bad/10 text-bad')}>
+              {formError}
+              {redirectToLogin && (
+                <Link to="/login" className="link mt-2 flex items-center gap-1 text-[13px]">
+                  <LogIn size={13} /> 去登录页
+                </Link>
+              )}
+            </div>
+          )}
+
           <div className="flex gap-2">
-            <Button variant="ghost" lg onClick={() => setStep(0)} className="shrink-0">
+            <Button type="button" variant="ghost" lg disabled={busy} onClick={() => setStep(0)} className="shrink-0">
               <ArrowLeft size={14} /> 上一步
             </Button>
-            <Button lg onClick={saveTokenAndFinish} className="min-w-0 flex-1">
-              保存并继续 <ArrowRight size={14} />
+            <Button type="submit" lg disabled={busy} className="min-w-0 flex-1">
+              {busy && <Spinner size={14} />}
+              {busy ? '创建中…' : '创建账号并继续'}
             </Button>
           </div>
-        </div>
+        </form>
       )}
 
       {step === 2 && (
@@ -147,8 +277,9 @@ export default function Setup() {
           </span>
           <div>
             <p className="text-[15px] font-semibold">设置完成</p>
-            <p className="mt-1 text-[13px] text-ink-2">
-              {token.trim() ? '管理令牌已保存到本机浏览器。' : '尚未配置令牌，可随时在登录页补充。'}
+            <p className="mt-1 text-[13px] leading-relaxed break-words text-ink-2">
+              管理员账号 <span className="num font-medium text-ink">{createdUser || username}</span> 已创建，
+              并且你已经登录。实例现在处于全鉴权模式。
             </p>
           </div>
           <Button lg className="w-full" onClick={() => navigate('/', { replace: true })}>
