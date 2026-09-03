@@ -19,6 +19,9 @@ import (
 // sessionTouchInterval 是会话 last_seen_at 的最小刷新间隔（避免每请求一次写库）。
 const sessionTouchInterval = 60 * time.Second
 
+// setupTokenHeader 是一次性首装令牌的请求头名（非回环来源 setup 必带）。
+const setupTokenHeader = "X-Cloudpath-Setup-Token"
+
 // userView 把 store 查询结果转契约视图（docs/api.md §2.2 {user}）。
 func userView(u store.AuthUser) api.UserView {
 	return api.UserView{
@@ -27,8 +30,24 @@ func userView(u store.AuthUser) api.UserView {
 	}
 }
 
+// setupAuthorized 判定首装请求是否放行：真实 TCP loopback 永远放行；
+// 非回环必须携带未消费的一次性 setup token（恒时比较）。
+func (s *Server) setupAuthorized(r *http.Request) bool {
+	if auth.IsLoopbackRemote(r) {
+		return true
+	}
+	if s.cfg.SetupToken == "" || s.setupTokenUsed.Load() {
+		return false
+	}
+	return auth.ConstantTimeEqual(r.Header.Get(setupTokenHeader), s.cfg.SetupToken)
+}
+
 // handleAuthSetup 首装引导：仅当用户数为 0（原子判定），创建 default 租户 + 首个 admin。
 func (s *Server) handleAuthSetup(w http.ResponseWriter, r *http.Request) {
+	if !s.setupAuthorized(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "setup 需要回环来源或一次性 setup token"})
+		return
+	}
 	if s.cfg.Store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store unavailable"})
 		return
@@ -75,7 +94,8 @@ func (s *Server) handleAuthSetup(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "already set up"})
 		return
 	}
-	s.authForced.Store(true) // 首个用户落库后立即进入账号模式（全鉴权）
+	s.authForced.Store(true)     // 首个用户落库后立即进入账号模式（全鉴权）
+	s.setupTokenUsed.Store(true) // 一次性 setup token 已消费，后续复用失效
 	s.audit(r, audit.Event{
 		TenantID: u.TenantID, ActorType: audit.ActorSystem, ActorName: "system",
 		Action: audit.ActionSetup, TargetType: audit.TargetTenant, TargetID: u.TenantSlug,
@@ -90,7 +110,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store unavailable"})
 		return
 	}
-	if ok, retry := s.loginLimiter.Allow(auth.ClientIP(r)); !ok {
+	if ok, retry := s.loginLimiter.Allow(auth.ClientIP(r, s.trustedProxies)); !ok {
 		w.Header().Set("Retry-After", strconv.Itoa(int(retry.Seconds())+1))
 		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "登录尝试过多，请稍后再试"})
 		return
@@ -107,9 +127,14 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	username := strings.TrimSpace(body.Username)
 	u, err := s.cfg.Store.GetUserByUsername(username)
 	known := err == nil
-	badCreds := errors.Is(err, sql.ErrNoRows)
+	badCreds := false
 	if known {
-		badCreds = u.Disabled || !auth.VerifyPassword(u.PasswordHash, body.Password)
+		ok := s.verifyPassword(u.PasswordHash, body.Password)
+		badCreds = u.Disabled || !ok
+	} else if errors.Is(err, sql.ErrNoRows) {
+		// 未知用户同样执行一次固定 Argon2id 派生，收敛用户名枚举时序。
+		s.dummyVerify(body.Password)
+		badCreds = true
 	}
 	if badCreds {
 		tenantID := s.auditTenantID(nil)
@@ -142,7 +167,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	auth.SetSessionCookie(w, r, sid, int(ttl.Seconds()))
+	auth.SetSessionCookie(w, r, sid, int(ttl.Seconds()), s.trustedProxies)
 	s.audit(r, audit.Event{
 		TenantID: u.TenantID, ActorType: audit.ActorUser, ActorID: u.ID, ActorName: u.Username,
 		Action: audit.ActionLogin, TargetType: audit.TargetTenant, TargetID: u.TenantSlug,

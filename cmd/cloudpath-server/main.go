@@ -3,11 +3,13 @@
 // 用法：
 //
 //	cloudpath-server [-addr 127.0.0.1:8080] [-db data/cloudpath.db] [-token XXX] [-webui webui/dist]
-//	[-require-auth] [-login-rate 5] [-session-days 7]
+//	[-require-auth] [-login-rate 5] [-session-days 7] [-setup-token XXX]
+//	[-trusted-proxies "10.0.0.0/8,127.0.0.1"]
 //
 // 环境变量：CLOUDPATH_ADDR / CLOUDPATH_DB / CLOUDPATH_TOKEN / CLOUDPATH_WEBUI /
 // CLOUDPATH_RETENTION_DAYS / CLOUDPATH_CMD_RATE / CLOUDPATH_REQUIRE_AUTH /
-// CLOUDPATH_LOGIN_RATE / CLOUDPATH_SESSION_DAYS / CLOUDPATH_LOG / CLOUDPATH_LOG_FORMAT
+// CLOUDPATH_LOGIN_RATE / CLOUDPATH_SESSION_DAYS / CLOUDPATH_LOG / CLOUDPATH_LOG_FORMAT /
+// CLOUDPATH_SETUP_TOKEN / CLOUDPATH_TRUSTED_PROXIES
 package main
 
 import (
@@ -24,6 +26,7 @@ import (
 	"time"
 
 	_ "github.com/DeliciousBuding/cloud-path/examples/stcb" // 适配器注册（命令白名单校验用）
+	"github.com/DeliciousBuding/cloud-path/internal/auth"
 	"github.com/DeliciousBuding/cloud-path/internal/logx"
 	"github.com/DeliciousBuding/cloud-path/internal/server"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
@@ -51,8 +54,18 @@ func main() {
 		"单 IP 每分钟登录尝试上限（<=0 用默认 5）")
 	sessionDays := flag.Int("session-days", envInt("CLOUDPATH_SESSION_DAYS", 7),
 		"会话有效期（天，<=0 用默认 7）")
+	setupToken := flag.String("setup-token", os.Getenv("CLOUDPATH_SETUP_TOKEN"),
+		"一次性首装令牌：非回环来源执行首次 setup 必带；成功后失效")
+	trustedProxies := flag.String("trusted-proxies", os.Getenv("CLOUDPATH_TRUSTED_PROXIES"),
+		"可信反代 CIDR 白名单，逗号分隔（仅这些来源的 X-Forwarded-* 头被采信）")
 	flag.Parse()
 	logx.Setup(*logLevel, *logFormat)
+
+	proxies, err := auth.ParseTrustedProxies(splitList(*trustedProxies))
+	if err != nil {
+		slog.Error("invalid trusted-proxies", "err", err)
+		os.Exit(1)
+	}
 
 	st, err := store.Open(*dbPath)
 	if err != nil {
@@ -68,6 +81,8 @@ func main() {
 		RequireAuth:     *requireAuth,
 		LoginRatePerMin: *loginRate,
 		SessionDays:     *sessionDays,
+		SetupToken:      *setupToken,
+		TrustedProxies:  proxies,
 	})
 	if len(splitList(*origins)) == 0 {
 		slog.Warn("WS Origin 策略为开发模式（同源 + localhost）：公网部署请用 -allowed-origins 显式收紧")
@@ -87,6 +102,7 @@ func main() {
 			"auth", *token != "", "require_auth", *requireAuth,
 			"retention_days", *retentionDays, "cmd_rate_per_min", *cmdRate,
 			"login_rate_per_min", *loginRate, "session_days", *sessionDays,
+			"setup_token", *setupToken != "", "trusted_proxies", splitList(*trustedProxies),
 			"origins", splitList(*origins))
 		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("http server failed", "err", err)

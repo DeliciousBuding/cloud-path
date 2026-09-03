@@ -142,7 +142,7 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 			tenant = t.Slug
 		}
 	} else if s.cfg.Token != "" {
-		if hello.Token != s.cfg.Token {
+		if !auth.ConstantTimeEqual(hello.Token, s.cfg.Token) {
 			edgeAuthFail("invalid_token", defaultTid)
 			ws.Close(websocket.StatusPolicyViolation, "invalid token")
 			slog.Warn("edge auth failed", "edge", hello.EdgeID, "remote", r.RemoteAddr)
