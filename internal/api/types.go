@@ -345,3 +345,127 @@ type TokenView struct {
 	LastUsedAt *int64   `json:"last_used_at,omitempty"`
 	RevokedAt  *int64   `json:"revoked_at,omitempty"`
 }
+
+// ---- 概览与插件实例管理视图（docs/api.md §3.6 / §3.7）----
+
+// OverviewView 是 WebUI Overview 页的一次性聚合读面。
+// 所有计数都来自真实 edge 上报与 Server 权威态，禁止用占位/假数据填充。
+type OverviewView struct {
+	DevicesOnline  int           `json:"devices_online"`
+	DevicesTotal   int           `json:"devices_total"`
+	EdgesOnline    int           `json:"edges_online"`
+	EdgesTotal     int           `json:"edges_total"`
+	PluginsActive  int           `json:"plugins_active"`
+	PluginsDesired int           `json:"plugins_desired"`
+	CommandsFailed int           `json:"commands_failed"`
+	RecentEvents   []EventView   `json:"recent_events"`
+	OfflineDevices []DeviceView  `json:"offline_devices"`
+	FailedCommands []CommandView `json:"failed_commands"`
+	ServerTime     int64         `json:"server_time"`
+}
+
+// PluginInstanceDesiredView 是 Server 权威期望态的只读视图。
+// SecretRefs 只含 secret://<name> handle 名称，永不携带明文。
+type PluginInstanceDesiredView struct {
+	InstanceID string            `json:"instance_id"`
+	PluginID   string            `json:"plugin_id"`
+	Version    string            `json:"version"`
+	Enabled    bool              `json:"enabled"`
+	Isolation  string            `json:"isolation"`
+	Config     map[string]string `json:"config,omitempty"`
+	SecretRefs []string          `json:"secret_refs,omitempty"`
+	Revision   uint64            `json:"revision"`
+	UpdatedAt  int64             `json:"updated_at"`
+}
+
+// PluginInstanceObservedView 是 Edge 上报投影的只读视图。
+// 只有 Edge 真实上报过才存在；Server 不得凭空合成。
+type PluginInstanceObservedView struct {
+	State        string `json:"state"`
+	Health       string `json:"health"`
+	Version      string `json:"version,omitempty"`
+	Detail       string `json:"detail,omitempty"`
+	RestartCount int    `json:"restart_count"`
+	LastHealthy  int64  `json:"last_healthy,omitempty"`
+	ReportedAt   int64  `json:"reported_at,omitempty"`
+}
+
+// PluginInstanceView 是 Catalog/UI 的合成视图：desired 与 observed 永远分开呈现，
+// 绝不把「期望启用」渲染成「实际健康」。
+type PluginInstanceView struct {
+	ID              string                      `json:"id"`
+	TenantID        int64                       `json:"tenant_id"`
+	EdgeID          string                      `json:"edge_id"`
+	Desired         PluginInstanceDesiredView   `json:"desired"`
+	HasObserved     bool                        `json:"has_observed"`
+	Observed        *PluginInstanceObservedView `json:"observed,omitempty"`
+	EdgeOnline      bool                        `json:"edge_online"`
+	DesiredRevision uint64                      `json:"desired_revision"`
+	AppliedRevision uint64                      `json:"applied_revision"`
+	Drift           bool                        `json:"drift"`
+	Stale           bool                        `json:"stale"`
+	LastAckAt       int64                       `json:"last_ack_at,omitempty"`
+}
+
+// PluginInstanceListResponse 是 GET /api/plugin-instances 的载荷。
+type PluginInstanceListResponse struct {
+	Instances []PluginInstanceView `json:"instances"`
+}
+
+// PluginInstanceCreateRequest 是 POST /api/plugin-instances 的载荷。
+// Config 值只允许非敏感标量或 secret://<name> handle；明文 secret 一律拒绝。
+type PluginInstanceCreateRequest struct {
+	EdgeID     string            `json:"edge_id"`
+	InstanceID string            `json:"instance_id"`
+	PluginID   string            `json:"plugin_id"`
+	Version    string            `json:"version"`
+	Enabled    *bool             `json:"enabled,omitempty"`
+	Isolation  string            `json:"isolation,omitempty"`
+	Config     map[string]string `json:"config,omitempty"`
+	SecretRefs []string          `json:"secret_refs,omitempty"`
+	// ConfirmPermissions 为 true 时表示调用者已确认插件权限扩大；
+	// 缺省 false 时权限扩大请求必须被拒绝且不产生新 revision。
+	ConfirmPermissions bool `json:"confirm_permissions,omitempty"`
+}
+
+// PluginInstanceUpdateRequest 是 PATCH /api/plugin-instances/{id} 的载荷。
+// 所有字段可选；只更新出现的字段。
+type PluginInstanceUpdateRequest struct {
+	Version            *string           `json:"version,omitempty"`
+	Enabled            *bool             `json:"enabled,omitempty"`
+	Isolation          *string           `json:"isolation,omitempty"`
+	Config             map[string]string `json:"config,omitempty"`
+	SecretRefs         []string          `json:"secret_refs,omitempty"`
+	ConfirmPermissions bool              `json:"confirm_permissions,omitempty"`
+}
+
+// PluginInstanceDeleteRequest 是 DELETE /api/plugin-instances/{id} 的载荷。
+// 默认保留插件数据；只有显式 Purge=true（要求 admin）才删除本地数据。
+type PluginInstanceDeleteRequest struct {
+	Purge bool `json:"purge,omitempty"`
+}
+
+// PluginInstanceWriteResponse 是所有插件实例写操作的统一响应。
+// Revision 是写成功后 tenant/edge 的新 desired revision；Accepted 表示 Edge 是否已 ack。
+type PluginInstanceWriteResponse struct {
+	ID        string             `json:"id"`
+	Revision  uint64             `json:"revision"`
+	RequestID string             `json:"request_id"`
+	Instance  PluginInstanceView `json:"instance"`
+}
+
+// PluginInstanceActionRequest 是 POST /api/plugin-instances/{id}/reconcile 的载荷。
+type PluginInstanceActionRequest struct {
+	Force bool `json:"force,omitempty"`
+}
+
+// 插件实例写操作的稳定错误码。前端按码呈现，不解析错误文本。
+const (
+	PluginErrNotFound          = "plugin_instance_not_found"
+	PluginErrConflict          = "plugin_instance_conflict"
+	PluginErrQuota             = "plugin_quota_exceeded"
+	PluginErrPermissionConfirm = "plugin_permission_confirmation_required"
+	PluginErrEdgeOffline       = "plugin_edge_offline"
+	PluginErrSecretForbidden   = "plugin_secret_forbidden"
+	PluginErrInvalidConfig     = "plugin_invalid_config"
+)
