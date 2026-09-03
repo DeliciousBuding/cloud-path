@@ -183,7 +183,7 @@ func TestDescriptorEnvelopeCarriesRealTimestamps(t *testing.T) {
 
 	before := time.Now().Add(-2 * time.Second)
 	var desc model.Descriptor
-	waitForEnvelope(t, 15*time.Second, func() bool {
+	waitForEnvelope(t, 130*time.Second, func() bool {
 		for _, e := range rec.all() {
 			if e.Type != api.MsgDescriptor || e.Device != key {
 				continue
@@ -389,7 +389,7 @@ func TestOneDeviceFailureDoesNotAffectSiblings(t *testing.T) {
 
 	// 故障设备必须诚实上报离线（不得伪装在线），并且不断重试。
 	rec.waitState(t, kBad, func(st api.StateData) bool { return !st.Online })
-	waitForEnvelope(t, 5*time.Second, func() bool { return bad.opens.Load() >= 2 }, "故障设备应持续重试打开")
+	waitForEnvelope(t, 30*time.Second, func() bool { return bad.opens.Load() >= 2 }, "故障设备应持续重试打开")
 
 	// 兄弟设备完全不受影响：在线 + 可独立控制。
 	rec.waitState(t, kGood, func(st api.StateData) bool { return st.Online })

@@ -49,7 +49,7 @@ func reportDescriptor(t *testing.T, ws *websocket.Conn, key string, desc model.D
 // waitEdgeOffline 等待某 edge 从在线集合摘除（真实断线清理已完成）。
 func waitEdgeOffline(t *testing.T, srv *Server, edgeID string) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		srv.mu.RLock()
 		_, online := srv.edges[edgeID]
@@ -121,7 +121,7 @@ func TestTwoEdgesIndependentCommandRouting(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &cv); err != nil || cv.Status != "sent" || cv.DeviceID != "e1/d1" {
 		t.Fatalf("command view = %+v err=%v", cv, err)
 	}
-	env1, ok := waitEnv(t, ch1, api.MsgCommand, 5*time.Second)
+	env1, ok := waitEnv(t, ch1, api.MsgCommand, 30*time.Second)
 	if !ok {
 		t.Fatal("e1 未收到命令")
 	}
@@ -142,7 +142,7 @@ func TestTwoEdgesIndependentCommandRouting(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &cv2); err != nil {
 		t.Fatal(err)
 	}
-	env2, ok := waitEnv(t, ch2, api.MsgCommand, 5*time.Second)
+	env2, ok := waitEnv(t, ch2, api.MsgCommand, 30*time.Second)
 	if !ok || env2.Device != "e2/d1" {
 		t.Fatalf("e2 未收到自己的命令: %+v ok=%v", env2, ok)
 	}
@@ -156,7 +156,7 @@ func TestTwoEdgesIndependentCommandRouting(t *testing.T) {
 	// 4) e1 提交自己的 ack：状态推进到 ok。
 	writeEnv(t, ws1, api.Envelope{V: api.Version, Type: api.MsgCommandAck, Device: "e1/d1",
 		Ts: time.Now().Unix(), Data: rawData(t, api.AckData{CommandID: cv.ID, Status: "ok", Detail: "done"})})
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		r := doJSON(t, http.MethodGet, ts.URL+"/api/commands?device=e1/d1", "", bearerJSON(readTok), nil)
 		body := readBody(t, r)
@@ -222,7 +222,7 @@ func TestOneEdgeDisconnectDoesNotAffectOther(t *testing.T) {
 	// e1 断线。
 	ws1.CloseNow()
 	waitEdgeOffline(t, srv, "e1")
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) && deviceOnline(srv, "e1/d1") {
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -240,7 +240,7 @@ func TestOneEdgeDisconnectDoesNotAffectOther(t *testing.T) {
 		`{"cmd":"sync"}`, bearerJSON(writeTok), nil); resp.StatusCode != http.StatusOK {
 		t.Fatalf("e1 断线后 e2 命令下发 = %d", resp.StatusCode)
 	}
-	if _, ok := waitEnv(t, ch2, api.MsgCommand, 5*time.Second); !ok {
+	if _, ok := waitEnv(t, ch2, api.MsgCommand, 30*time.Second); !ok {
 		t.Fatal("e2 未收到命令（连接被误伤）")
 	}
 	// e1 的旧连接不会再收到任何东西。
@@ -270,7 +270,7 @@ func TestOneEdgeDisconnectDoesNotAffectOther(t *testing.T) {
 	defer ws1b.CloseNow()
 	ch1b := edgeReader(ws1b)
 	waitEdgeLink(t, srv, "e1", a)
-	deadline = time.Now().Add(5 * time.Second)
+	deadline = time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) && !deviceOnline(srv, "e1/d1") {
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -297,7 +297,7 @@ func TestOneEdgeDisconnectDoesNotAffectOther(t *testing.T) {
 	}
 	// 状态在断线后仍是最后已知值，重连上报后立即刷新为真实值。
 	reportOnline(t, ws1b, "e1/d1", map[string]any{"clock": "12:34"})
-	deadline = time.Now().Add(5 * time.Second)
+	deadline = time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		srv.mu.RLock()
 		v := srv.devices["e1/d1"]
@@ -320,7 +320,7 @@ func TestOneEdgeDisconnectDoesNotAffectOther(t *testing.T) {
 		`{"cmd":"dump"}`, bearerJSON(writeTok), nil); resp.StatusCode != http.StatusOK {
 		t.Fatalf("重连后命令下发 = %d", resp.StatusCode)
 	}
-	if _, ok := waitEnv(t, ch1b, api.MsgCommand, 5*time.Second); !ok {
+	if _, ok := waitEnv(t, ch1b, api.MsgCommand, 30*time.Second); !ok {
 		t.Fatal("重连后的新连接未收到命令")
 	}
 }

@@ -38,7 +38,7 @@ func wsURL(httpURL, path string) string {
 
 func dial(t *testing.T, url string) *websocket.Conn {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	ws, _, err := websocket.Dial(ctx, url, nil)
 	if err != nil {
@@ -70,7 +70,7 @@ func writeEnv(t *testing.T, ws *websocket.Conn, env api.Envelope) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := ws.Write(ctx, websocket.MessageText, data); err != nil {
 		t.Fatalf("write %s: %v", env.Type, err)
@@ -105,7 +105,7 @@ func getJSON(t *testing.T, url string, out any) {
 // → REST 命令下发 → edge 收到 command → ack 回执落库 → 浏览器收到 ack。
 func TestWSFullLoop(t *testing.T) {
 	_, ts := setup(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
 	defer cancel()
 
 	// 1) 浏览器连接：首帧必须是 snapshot

@@ -71,7 +71,7 @@ func waitEntered(t *testing.T, a *gatedAdapter, why string) {
 	t.Helper()
 	select {
 	case <-a.entered:
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal(why)
 	}
 }

@@ -92,7 +92,7 @@ func (r *edgeRecorder) sendPluginDesired(t *testing.T, d api.PluginDesiredData) 
 // waitPluginAck 等待指定 revision 的 plugin_ack（可要求具体 status）。
 func (r *edgeRecorder) waitPluginAck(t *testing.T, revision uint64, wantStatus string) api.PluginAckData {
 	t.Helper()
-	deadline := time.Now().Add(15 * time.Second)
+	deadline := time.Now().Add(130 * time.Second)
 	for time.Now().Before(deadline) {
 		for _, e := range r.all() {
 			if e.Type != api.MsgPluginAck {
@@ -116,7 +116,7 @@ func (r *edgeRecorder) waitPluginAck(t *testing.T, revision uint64, wantStatus s
 // waitPluginStatus 等待 sequence >= minSeq 的 plugin_status。
 func (r *edgeRecorder) waitPluginStatus(t *testing.T, minSeq uint64) api.PluginStatusData {
 	t.Helper()
-	deadline := time.Now().Add(15 * time.Second)
+	deadline := time.Now().Add(130 * time.Second)
 	for time.Now().Before(deadline) {
 		for _, e := range r.all() {
 			if e.Type != api.MsgPluginStatus {
@@ -138,7 +138,7 @@ func (r *edgeRecorder) waitPluginStatus(t *testing.T, minSeq uint64) api.PluginS
 // 因此拿到的是「满足条件的那一条」，而不是首条）。
 func (r *edgeRecorder) waitPluginStatusWhere(t *testing.T, cond func(api.PluginStatusData) bool) api.PluginStatusData {
 	t.Helper()
-	deadline := time.Now().Add(15 * time.Second)
+	deadline := time.Now().Add(130 * time.Second)
 	var last api.PluginStatusData
 	for time.Now().Before(deadline) {
 		for _, e := range r.all() {

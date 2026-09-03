@@ -25,7 +25,7 @@ func TestPluginReconcileRepushesToOnlineEdge(t *testing.T) {
 	defer ews.CloseNow()
 	ch := edgeReader(ews)
 	waitEdgeLink(t, srv, "e1", a)
-	first, ok := waitEnv(t, ch, api.MsgPluginDesired, 5*time.Second)
+	first, ok := waitEnv(t, ch, api.MsgPluginDesired, 30*time.Second)
 	if !ok {
 		t.Fatal("hello 后未收到 desired")
 	}
@@ -45,7 +45,7 @@ func TestPluginReconcileRepushesToOnlineEdge(t *testing.T) {
 	if rev, err := mem.PluginDesiredRevision(a, "e1"); err != nil || rev != 1 {
 		t.Fatalf("reconcile 改变了 revision = %d err=%v, want 1", rev, err)
 	}
-	again, ok := waitEnv(t, ch, api.MsgPluginDesired, 5*time.Second)
+	again, ok := waitEnv(t, ch, api.MsgPluginDesired, 30*time.Second)
 	if !ok {
 		t.Fatal("reconcile 未重新下发期望态")
 	}

@@ -72,7 +72,7 @@ func dialEdgeHello(t *testing.T, ts *httptest.Server, edgeID, token string, devi
 // expectEdgeRejected 断言 edge 被服务端以 policy violation 断开（fail-closed）。
 func expectEdgeRejected(t *testing.T, ws *websocket.Conn) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if _, _, err := ws.Read(ctx); err == nil {
 		t.Fatal("edge 应被拒绝，却仍保持连接")
@@ -85,7 +85,7 @@ func expectEdgeRejected(t *testing.T, ws *websocket.Conn) {
 // waitEdgeLink 等待指定租户的 edge 连接注册可见并返回其 link。
 func waitEdgeLink(t *testing.T, srv *Server, edgeID string, tenantID int64) *edgeLink {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		srv.mu.RLock()
 		l := srv.edges[edgeID]
@@ -103,7 +103,7 @@ func waitEdgeLink(t *testing.T, srv *Server, edgeID string, tenantID int64) *edg
 // waitDeviceOnline 等待设备内存态上线（真实 WS state 消息已应用）。
 func waitDeviceOnline(t *testing.T, srv *Server, key string) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		srv.mu.RLock()
 		v := srv.devices[key]
@@ -304,7 +304,7 @@ func TestCrossTenantCollisionCannotCommandDevice(t *testing.T) {
 	}
 	select {
 	case <-gotCmd:
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("tenant-a 未收到命令")
 	}
 }

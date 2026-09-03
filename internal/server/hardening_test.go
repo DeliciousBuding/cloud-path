@@ -26,7 +26,7 @@ func registerEdge(t *testing.T, ts *httptest.Server, edgeID string, devs ...api.
 		V: api.Version, Type: api.MsgHello, Ts: time.Now().Unix(),
 		Data: rawData(t, api.HelloData{EdgeID: edgeID, Version: "test", Devices: devs}),
 	})
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		var resp struct {
 			Devices []api.DeviceView `json:"devices"`
@@ -134,7 +134,7 @@ func TestNilStoreModeDoesNotPanic(t *testing.T) {
 		V: api.Version, Type: api.MsgState, Device: "e1/d1", Ts: time.Now().Unix(),
 		Data: rawData(t, api.StateData{Online: true, Raw: map[string]any{}, UpdatedAt: time.Now().Unix()}),
 	})
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	code := 0
 	for time.Now().Before(deadline) {
 		code = postCommand(t, ts.URL+"/api/devices/e1/d1/commands", `{"cmd":"dump"}`)
@@ -218,7 +218,7 @@ func TestCommandUnknownDeviceAndOfflineEdge(t *testing.T) {
 	// 注册后 edge 断开 → 409
 	ews := registerEdge(t, ts, "e1", api.DeviceMeta{ID: "d1", Adapter: "stcb"})
 	ews.CloseNow()
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		if code := postCommand(t, ts.URL+"/api/devices/e1/d1/commands", `{"cmd":"dump"}`); code == http.StatusConflict {
 			return

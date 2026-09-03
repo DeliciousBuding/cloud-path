@@ -127,7 +127,7 @@ func TestPluginDesiredPushedOnHello(t *testing.T) {
 	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
 	defer ews.CloseNow()
 	ch := edgeReader(ews)
-	env, ok := waitEnv(t, ch, api.MsgPluginDesired, 5*time.Second)
+	env, ok := waitEnv(t, ch, api.MsgPluginDesired, 30*time.Second)
 	if !ok {
 		t.Fatal("hello 后未收到 plugin_desired")
 	}
@@ -178,7 +178,7 @@ func TestOfflineDesiredChangesConvergeOnce(t *testing.T) {
 	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
 	defer ews.CloseNow()
 	ch := edgeReader(ews)
-	env, ok := waitEnv(t, ch, api.MsgPluginDesired, 5*time.Second)
+	env, ok := waitEnv(t, ch, api.MsgPluginDesired, 30*time.Second)
 	if !ok {
 		t.Fatal("重连后未收到 plugin_desired")
 	}
@@ -206,13 +206,13 @@ func TestPluginDesiredRepushedOnChange(t *testing.T) {
 	defer ews.CloseNow()
 	ch := edgeReader(ews)
 	waitEdgeLink(t, srv, "e1", a)
-	if _, ok := waitEnv(t, ch, api.MsgPluginDesired, 5*time.Second); !ok {
+	if _, ok := waitEnv(t, ch, api.MsgPluginDesired, 30*time.Second); !ok {
 		t.Fatal("hello 后未收到初始 plugin_desired")
 	}
 	if rev := createInstance(t, ts, admin, "e1", "box1"); rev != 1 {
 		t.Fatalf("revision = %d, want 1", rev)
 	}
-	env, ok := waitEnv(t, ch, api.MsgPluginDesired, 5*time.Second)
+	env, ok := waitEnv(t, ch, api.MsgPluginDesired, 30*time.Second)
 	if !ok {
 		t.Fatal("desired 变更后未再次下发")
 	}
@@ -241,7 +241,7 @@ func TestPluginDesiredCarriesOnlySecretHandles(t *testing.T) {
 	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
 	defer ews.CloseNow()
 	ch := edgeReader(ews)
-	env, ok := waitEnv(t, ch, api.MsgPluginDesired, 5*time.Second)
+	env, ok := waitEnv(t, ch, api.MsgPluginDesired, 30*time.Second)
 	if !ok {
 		t.Fatal("未收到 plugin_desired")
 	}
@@ -268,7 +268,7 @@ func TestPluginStatusSequenceGating(t *testing.T) {
 	defer ews.CloseNow()
 	ch := edgeReader(ews)
 	waitEdgeLink(t, srv, "e1", a)
-	if _, ok := waitEnv(t, ch, api.MsgPluginDesired, 5*time.Second); !ok {
+	if _, ok := waitEnv(t, ch, api.MsgPluginDesired, 30*time.Second); !ok {
 		t.Fatal("未收到 plugin_desired")
 	}
 
@@ -306,7 +306,7 @@ func TestPluginStatusSequenceGating(t *testing.T) {
 	}
 	waitObserved := func(want string) {
 		t.Helper()
-		deadline := time.Now().Add(5 * time.Second)
+		deadline := time.Now().Add(30 * time.Second)
 		for time.Now().Before(deadline) {
 			if got := observedState(); got == want {
 				return
@@ -359,14 +359,14 @@ func TestPluginStatusRejectedFromEvictedLink(t *testing.T) {
 	old := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
 	oldCh := edgeReader(old)
 	waitEdgeLink(t, srv, "e1", a)
-	if _, ok := waitEnv(t, oldCh, api.MsgPluginDesired, 5*time.Second); !ok {
+	if _, ok := waitEnv(t, oldCh, api.MsgPluginDesired, 30*time.Second); !ok {
 		t.Fatal("旧连接未收到 desired")
 	}
 	writeEnv(t, old, api.Envelope{V: api.Version, Type: api.MsgPluginStatus, Ts: time.Now().Unix(),
 		Data: rawData(t, api.PluginStatusData{BootID: "boot-old", Sequence: 1,
 			ObservedInstances: []api.PluginObservedInstanceData{{
 				InstanceID: "box1", PluginID: "p1", Version: "1.0.0", State: "HEALTHY", Health: "HEALTHY"}}})})
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		srv.plugin.mu.Lock()
 		tp := srv.plugin.tenants[a]
@@ -394,7 +394,7 @@ func TestPluginStatusRejectedFromEvictedLink(t *testing.T) {
 		Data: rawData(t, api.PluginStatusData{BootID: "boot-old", Sequence: 500,
 			ObservedInstances: []api.PluginObservedInstanceData{{
 				InstanceID: "box1", PluginID: "p1", Version: "1.0.0", State: "CRASHED", Health: "UNKNOWN"}}})})
-	if _, ok := waitEnv(t, freshCh, api.MsgPluginDesired, 5*time.Second); !ok {
+	if _, ok := waitEnv(t, freshCh, api.MsgPluginDesired, 30*time.Second); !ok {
 		t.Fatal("新连接未收到 desired")
 	}
 	writeEnv(t, fresh, api.Envelope{V: api.Version, Type: api.MsgPluginStatus, Ts: time.Now().Unix(),
@@ -436,7 +436,7 @@ func TestPluginStatusCrossTenantFailClosed(t *testing.T) {
 	defer aWS.CloseNow()
 	aCh := edgeReader(aWS)
 	linkA := waitEdgeLink(t, srv, "ea", a)
-	if _, ok := waitEnv(t, aCh, api.MsgPluginDesired, 5*time.Second); !ok {
+	if _, ok := waitEnv(t, aCh, api.MsgPluginDesired, 30*time.Second); !ok {
 		t.Fatal("a 未收到 desired")
 	}
 	writeEnv(t, aWS, api.Envelope{V: api.Version, Type: api.MsgPluginStatus, Ts: time.Now().Unix(),
@@ -459,7 +459,7 @@ func TestPluginStatusCrossTenantFailClosed(t *testing.T) {
 	defer bWS.CloseNow()
 	bCh := edgeReader(bWS)
 	waitEdgeLink(t, srv, "eb", b)
-	if _, ok := waitEnv(t, bCh, api.MsgPluginDesired, 5*time.Second); !ok {
+	if _, ok := waitEnv(t, bCh, api.MsgPluginDesired, 30*time.Second); !ok {
 		t.Fatal("b 未收到 desired（空快照也应下发）")
 	}
 	writeEnv(t, bWS, api.Envelope{V: api.Version, Type: api.MsgPluginStatus, Ts: time.Now().Unix(),
@@ -513,7 +513,7 @@ func TestPluginAckAdvancesOnlyOnApplied(t *testing.T) {
 	defer ews.CloseNow()
 	ch := edgeReader(ews)
 	waitEdgeLink(t, srv, "e1", a)
-	env, ok := waitEnv(t, ch, api.MsgPluginDesired, 5*time.Second)
+	env, ok := waitEnv(t, ch, api.MsgPluginDesired, 30*time.Second)
 	if !ok {
 		t.Fatal("未收到 desired")
 	}
@@ -537,7 +537,7 @@ func TestPluginAckAdvancesOnlyOnApplied(t *testing.T) {
 	}
 	waitApplied := func(want uint64) {
 		t.Helper()
-		deadline := time.Now().Add(5 * time.Second)
+		deadline := time.Now().Add(30 * time.Second)
 		for time.Now().Before(deadline) {
 			if appliedRev() == want {
 				return

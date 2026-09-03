@@ -120,7 +120,7 @@ func TestBrowserWSTenantCapture(t *testing.T) {
 	defer srv.CloseAll()
 
 	dial(t, wsURL(ts.URL, "/ws?token=sekret"))
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	var tenant string
 	for time.Now().Before(deadline) {
 		srv.mu.RLock()

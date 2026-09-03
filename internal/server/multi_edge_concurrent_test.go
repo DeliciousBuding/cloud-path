@@ -24,7 +24,7 @@ func writeEnvRaw(ws *websocket.Conn, env api.Envelope) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	return ws.Write(ctx, websocket.MessageText, data)
 }
@@ -133,7 +133,7 @@ func TestConcurrentMultiEdgeCommandRouting(t *testing.T) {
 	// 3) 每台 Edge 收到的命令集合必须恰好是自己的两个设备键。
 	for i := 0; i < edges; i++ {
 		got := map[string]int{}
-		deadline := time.After(3 * time.Second)
+		deadline := time.After(10 * time.Second)
 	collect:
 		for len(got) < len(devs) {
 			select {

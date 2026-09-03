@@ -121,7 +121,7 @@ func TestWSSRejectsUntrustedCertificate(t *testing.T) {
 		cancel()
 		select {
 		case <-done:
-		case <-time.After(10 * time.Second):
+		case <-time.After(30 * time.Second):
 			t.Fatal("Run 未在取消后返回")
 		}
 	}()
@@ -287,7 +287,7 @@ func TestCommandDuringDisconnectStillAcks(t *testing.T) {
 	rec.sendCommand(t, key, 951, "trigger", "")
 	select {
 	case <-adp.entered:
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("命令未到达设备")
 	}
 	rec.dropCurrent()

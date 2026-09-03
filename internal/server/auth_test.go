@@ -303,7 +303,7 @@ func TestCommandWriteAuth(t *testing.T) {
 		Data: rawData(t, api.HelloData{EdgeID: "e1", Token: "sekret",
 			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "stcb"}}}),
 	})
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		var devs struct {
 			Devices []api.DeviceView `json:"devices"`

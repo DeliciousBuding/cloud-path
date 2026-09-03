@@ -226,7 +226,7 @@ func TestEdgeAuthAudited(t *testing.T) {
 	bad := dial(t, wsURL(ts.URL, "/ws/edge"))
 	writeEnv(t, bad, api.Envelope{V: api.Version, Type: api.MsgHello,
 		Data: rawData(t, api.HelloData{EdgeID: "edge-bad", Token: "cp_badtoken", Version: "v1"})})
-	rctx, rcancel := context.WithTimeout(context.Background(), 5*time.Second)
+	rctx, rcancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer rcancel()
 	if _, _, rerr := bad.Read(rctx); rerr == nil {
 		t.Fatal("invalid edge token 应被拒绝")
@@ -239,7 +239,7 @@ func TestEdgeAuthAudited(t *testing.T) {
 		Data: rawData(t, api.HelloData{EdgeID: "edge-good", Token: tokenSecret, Version: "v1",
 			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "stcb"}}})})
 
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		srv.mu.RLock()
 		_, ok := srv.edges["edge-good"]

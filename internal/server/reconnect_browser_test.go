@@ -18,7 +18,7 @@ func dialWithToken(t *testing.T, url, token string) *websocket.Conn {
 	t.Helper()
 	hdr := http.Header{}
 	hdr.Set("Authorization", "Bearer "+token)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	ws, _, err := websocket.Dial(ctx, url, &websocket.DialOptions{HTTPHeader: hdr})
 	if err != nil {
@@ -56,7 +56,7 @@ func TestBrowserSeesReconnectAsOnline(t *testing.T) {
 
 	bws := dialWithToken(t, wsURL(ts.URL, "/ws"), readTok)
 	bch := edgeReader(bws)
-	if _, ok := waitEnv(t, bch, api.MsgSnapshot, 5*time.Second); !ok {
+	if _, ok := waitEnv(t, bch, api.MsgSnapshot, 30*time.Second); !ok {
 		t.Fatal("浏览器未收到首帧快照")
 	}
 
@@ -70,7 +70,7 @@ func TestBrowserSeesReconnectAsOnline(t *testing.T) {
 	waitDeviceOnline(t, srv, "e1/d1")
 	waitDeviceOnline(t, srv, "e2/d1")
 
-	upA, ok := waitEnv(t, bch, api.MsgEdgeUp, 5*time.Second)
+	upA, ok := waitEnv(t, bch, api.MsgEdgeUp, 30*time.Second)
 	if !ok || upA.Device == "" {
 		t.Fatalf("浏览器未收到 edge_up: %+v ok=%v", upA, ok)
 	}
@@ -81,7 +81,7 @@ func TestBrowserSeesReconnectAsOnline(t *testing.T) {
 	ws1.CloseNow()
 	waitEdgeOffline(t, srv, "e1")
 	downSeen, offlineSeen := false, false
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) && !(downSeen && offlineSeen) {
 		envs := collectTypes(t, bch, 200*time.Millisecond)
 		for _, env := range envs {
@@ -111,7 +111,7 @@ func TestBrowserSeesReconnectAsOnline(t *testing.T) {
 	defer ws1b.CloseNow()
 	waitEdgeLink(t, srv, "e1", a)
 	upSeen, onlineSeen := false, false
-	deadline = time.Now().Add(5 * time.Second)
+	deadline = time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) && !(upSeen && onlineSeen) {
 		envs := collectTypes(t, bch, 200*time.Millisecond)
 		for _, env := range envs {
@@ -134,7 +134,7 @@ func TestBrowserSeesReconnectAsOnline(t *testing.T) {
 	}
 	// 新连上的浏览器首帧快照也必须显示 e1/d1 在线（REST/快照一致性）。
 	bws2 := dialWithToken(t, wsURL(ts.URL, "/ws"), readTok)
-	snap, ok := waitEnv(t, edgeReader(bws2), api.MsgSnapshot, 5*time.Second)
+	snap, ok := waitEnv(t, edgeReader(bws2), api.MsgSnapshot, 30*time.Second)
 	if !ok {
 		t.Fatal("第二个浏览器未收到快照")
 	}

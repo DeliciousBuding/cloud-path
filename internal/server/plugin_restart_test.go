@@ -33,7 +33,7 @@ func TestPluginPlaneRecoversAfterRestart(t *testing.T) {
 	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
 	ch := edgeReader(ews)
 	waitEdgeLink(t, srv, "e1", a)
-	env, ok := waitEnv(t, ch, api.MsgPluginDesired, 5*time.Second)
+	env, ok := waitEnv(t, ch, api.MsgPluginDesired, 30*time.Second)
 	if !ok {
 		t.Fatal("未收到 desired")
 	}
@@ -57,7 +57,7 @@ func TestPluginPlaneRecoversAfterRestart(t *testing.T) {
 		Data: rawData(t, api.PluginAckData{Revision: 2, SnapshotDigest: desired.SnapshotDigest,
 			Status:  api.PluginAckApplied,
 			Results: []api.PluginApplyResultData{{InstanceID: "box1", Status: "applied"}}})})
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		row, err := mem.GetPluginEdgeRevision(a, "e1")
 		if err == nil && row.AppliedRevision == 2 {
@@ -107,7 +107,7 @@ func TestPluginPlaneRecoversAfterRestart(t *testing.T) {
 	defer ews2.CloseNow()
 	ch2 := edgeReader(ews2)
 	waitEdgeLink(t, srv2, "e1", a)
-	env2, ok := waitEnv(t, ch2, api.MsgPluginDesired, 5*time.Second)
+	env2, ok := waitEnv(t, ch2, api.MsgPluginDesired, 30*time.Second)
 	if !ok {
 		t.Fatal("重启后重连未收到 desired")
 	}

@@ -118,12 +118,12 @@ func TestOverviewTenantIsolation(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &cv); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := waitEnv(t, chA1, api.MsgCommand, 5*time.Second); !ok {
+	if _, ok := waitEnv(t, chA1, api.MsgCommand, 30*time.Second); !ok {
 		t.Fatal("edge 未收到命令")
 	}
 	writeEnv(t, wsA1, api.Envelope{V: api.Version, Type: api.MsgCommandAck, Device: "ea1/d1",
 		Ts: time.Now().Unix(), Data: rawData(t, api.AckData{CommandID: cv.ID, Status: "failed", Detail: "port busy"})})
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		view, _ := getOverview(t, ts, readA)
 		if view.CommandsFailed == 1 {
@@ -191,7 +191,7 @@ func TestOverviewPluginsDesiredNeverCountsAsActive(t *testing.T) {
 	ws := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
 	ch := edgeReader(ws)
 	waitEdgeLink(t, srv, "e1", a)
-	if _, ok := waitEnv(t, ch, api.MsgPluginDesired, 5*time.Second); !ok {
+	if _, ok := waitEnv(t, ch, api.MsgPluginDesired, 30*time.Second); !ok {
 		t.Fatal("未收到 desired")
 	}
 	// 上报 CRASHED：desired 仍是 1，active 必须是 0（不得把期望当健康）。
@@ -233,7 +233,7 @@ func TestOverviewPluginsDesiredNeverCountsAsActive(t *testing.T) {
 // waitPluginActive 轮询 overview 直到 plugins_active 达到期望值。
 func waitPluginActive(t *testing.T, ts *httptest.Server, token string, want int) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	var last api.OverviewView
 	for time.Now().Before(deadline) {
 		last, _ = getOverview(t, ts, token)

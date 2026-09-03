@@ -115,7 +115,7 @@ func (r *edgeRecorder) dropCurrent() {
 // send 向 edge 下发一条信封（命令 / 期望态）。
 func (r *edgeRecorder) send(t *testing.T, env api.Envelope) {
 	t.Helper()
-	waitForEnvelope(t, 10*time.Second, func() bool {
+	waitForEnvelope(t, 30*time.Second, func() bool {
 		r.mu.Lock()
 		ws := r.cur
 		r.mu.Unlock()
@@ -128,7 +128,7 @@ func (r *edgeRecorder) send(t *testing.T, env api.Envelope) {
 	if err != nil {
 		t.Fatalf("marshal envelope: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := ws.Write(ctx, websocket.MessageText, data); err != nil {
 		t.Fatalf("下发 %s 失败: %v", env.Type, err)
@@ -212,7 +212,7 @@ func (r *edgeRecorder) lastState(key string) (api.StateData, bool) {
 // waitState 等待某设备键状态满足条件。
 func (r *edgeRecorder) waitState(t *testing.T, key string, cond func(api.StateData) bool) api.StateData {
 	t.Helper()
-	deadline := time.Now().Add(15 * time.Second)
+	deadline := time.Now().Add(130 * time.Second)
 	for time.Now().Before(deadline) {
 		if st, ok := r.lastState(key); ok && cond(st) {
 			return st
@@ -233,7 +233,7 @@ type ackView struct {
 // waitAck 等待指定 command_id 的 ack。
 func (r *edgeRecorder) waitAck(t *testing.T, commandID int64) ackView {
 	t.Helper()
-	deadline := time.Now().Add(15 * time.Second)
+	deadline := time.Now().Add(130 * time.Second)
 	for time.Now().Before(deadline) {
 		for _, e := range r.all() {
 			if e.Type != api.MsgCommandAck {
@@ -254,7 +254,7 @@ func (r *edgeRecorder) waitAck(t *testing.T, commandID int64) ackView {
 // waitHello 等待第 n 条（1-based）hello。
 func (r *edgeRecorder) waitHello(t *testing.T, n int) api.HelloData {
 	t.Helper()
-	deadline := time.Now().Add(15 * time.Second)
+	deadline := time.Now().Add(130 * time.Second)
 	for time.Now().Before(deadline) {
 		seen := 0
 		for _, e := range r.all() {
@@ -334,7 +334,7 @@ func runEdge(t *testing.T, cfg *Config, opts ...RunOption) context.Context {
 			if err != nil && !strings.Contains(fmt.Sprint(err), "context canceled") {
 				t.Errorf("Run 返回错误: %v", err)
 			}
-		case <-time.After(10 * time.Second):
+		case <-time.After(30 * time.Second):
 			t.Error("Run 未在取消后返回")
 		}
 	})

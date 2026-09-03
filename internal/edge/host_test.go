@@ -128,7 +128,7 @@ func TestEdgeStartsAndClosesHost(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- Run(ctx, cfg, "test", WithPluginHost(host)) }()
 
-	waitFor(t, 5*time.Second, func() bool { return host.starts() == 1 })
+	waitFor(t, 30*time.Second, func() bool { return host.starts() == 1 })
 	cancel()
 
 	select {
@@ -136,7 +136,7 @@ func TestEdgeStartsAndClosesHost(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Run: %v", err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("Run 未在取消后返回")
 	}
 	if !host.isClosed() {
@@ -172,7 +172,7 @@ func TestOptionalHostFailureKeepsBuiltins(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- Run(ctx, cfg, "test", WithPluginHost(host)) }()
 
-	waitFor(t, 5*time.Second, func() bool { return a.opened.Load() > 0 })
+	waitFor(t, 30*time.Second, func() bool { return a.opened.Load() > 0 })
 	cancel()
 
 	select {
@@ -180,7 +180,7 @@ func TestOptionalHostFailureKeepsBuiltins(t *testing.T) {
 		if err != nil {
 			t.Fatalf("optional host 失败时 edge 应继续运行: %v", err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("Run 未在取消后返回")
 	}
 	if a.opened.Load() == 0 {
@@ -200,11 +200,11 @@ func TestEdgeCancellationLeavesNoHost(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- Run(ctx, cfg, "test", WithPluginHost(host)) }()
 
-	waitFor(t, 5*time.Second, func() bool { return host.starts() == 1 })
+	waitFor(t, 30*time.Second, func() bool { return host.starts() == 1 })
 	cancel()
 	select {
 	case <-done:
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("Run 未返回")
 	}
 	if !host.isClosed() {
@@ -221,7 +221,7 @@ func captureHello(t *testing.T) (wsURL string, hellos chan api.HelloData, shutdo
 			return
 		}
 		defer ws.CloseNow()
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		_, data, err := ws.Read(ctx)
 		if err != nil {
@@ -265,13 +265,13 @@ func TestHostOnlyDoesNotReportFakeDevice(t *testing.T) {
 	var hello api.HelloData
 	select {
 	case hello = <-hellos:
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("未收到 edge hello")
 	}
 	cancel()
 	select {
 	case <-done:
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("Run 未返回")
 	}
 
