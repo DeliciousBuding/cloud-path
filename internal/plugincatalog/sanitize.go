@@ -17,6 +17,8 @@ var (
 	uncPathPattern = regexp.MustCompile(`\\\\[\w.-]+(?:\\[^\s"']*)+`)
 	// credentialPattern 命中 key=value 形式的疑似凭据片段。
 	credentialPattern = regexp.MustCompile(`(?i)(password|passwd|pwd|token|secret|api[-_]?key|access[-_]?key|authorization|cookie)(["']?\s*[:=]\s*)([^\s,;}"']+)`)
+	// bearerPattern 命中 HTTP 认证方案后跟的凭据值（Authorization: Bearer xxx）。
+	bearerPattern = regexp.MustCompile(`(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]+`)
 )
 
 // pathRedaction 是绝对路径的统一占位符（不泄漏本机目录结构）。
@@ -34,6 +36,12 @@ func SanitizeDetail(s string) string {
 		return ""
 	}
 	s = credentialPattern.ReplaceAllString(s, "$1$2"+credentialRedaction)
+	s = bearerPattern.ReplaceAllStringFunc(s, func(m string) string {
+		if i := strings.IndexAny(m, " \t"); i > 0 {
+			return m[:i+1] + credentialRedaction
+		}
+		return credentialRedaction
+	})
 	s = uncPathPattern.ReplaceAllString(s, pathRedaction)
 	s = winPathPattern.ReplaceAllString(s, pathRedaction)
 	s = posixPathPattern.ReplaceAllString(s, pathRedaction)

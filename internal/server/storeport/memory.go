@@ -96,10 +96,9 @@ func (m *Memory) UpdatePluginInstance(row PluginInstanceRow) (uint64, error) {
 	if !ok {
 		return 0, ErrNotFound
 	}
-	if old.TenantID != row.TenantID {
-		return 0, ErrTenantMismatch
-	}
-	ek := edgeKey{tenantID: row.TenantID, edgeID: row.EdgeID}
+	// 键里已含 tenantID，本实现结构上无法改写既有行的 tenant 归属；
+	// ErrTenantMismatch 留给按 (edge,instance) 命中行的持久化适配器使用。
+	ek := edgeKey{tenantID: old.TenantID, edgeID: old.EdgeID}
 	rev := m.rev[ek] + 1
 	m.rev[ek] = rev
 	row.Revision = rev
