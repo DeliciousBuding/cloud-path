@@ -143,6 +143,7 @@ CloudPath 使用双通道发现：
 2. **精选通道**：官方维护的 Registry，记录经过审查的插件与发布者策略。
 
 Topic 只是候选集合，不是信任证明。CLI 搜到仓库后还必须检查根 Manifest、兼容范围、GitHub Release、资产摘要和可选构建证明。详细流程见 [architecture/github-ecosystem.md](architecture/github-ecosystem.md)。
+仓库组合、插件命名、孵化拆仓门与公开边界见 [architecture/repository-strategy.md](architecture/repository-strategy.md)。
 
 ## 9. 插件运行时
 
