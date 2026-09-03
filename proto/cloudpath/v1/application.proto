@@ -1,0 +1,331 @@
+syntax = "proto3";
+
+package cloudpath.v1.application;
+
+option go_package = "github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/application";
+
+// 本文件是 Application Protocol v1 的**语言无关契约文本**，不做 codegen。
+// Go 侧手写类型见 sdk/go/cloudpath/v1/application/。
+//
+// 语义唯一真理：docs/architecture/plugin-system.md §6 Application Protocol v1、
+// docs/architecture/capability-model.md（Requirement/Binding/Event）。
+//
+// 硬约束：ApplicationEffect 只能表达 Core 允许的操作
+// （领域记录 upsert/delete、请求命令、计划任务、通知）。
+// 不得返回任意 SQL、系统命令、文件路径操作或全局凭据请求。
+
+// ApplicationService 由插件进程暴露，Core 作为客户端调用。
+// HandleEvents 是 bidi-streaming：Core 推 ApplicationEvent，插件回 ApplicationEffect。
+service ApplicationService {
+  rpc Initialize(InitializeRequest) returns (InitializeResponse);
+  rpc Describe(DescribeRequest) returns (ApplicationDescriptor);
+  rpc ConfigureInstance(ConfigureInstanceRequest) returns (ConfigureInstanceResponse);
+  rpc ValidateBinding(ValidateBindingRequest) returns (ValidateBindingResponse);
+  rpc HandleEvents(stream ApplicationEvent) returns (stream ApplicationEffect);
+  rpc HandleRequest(PluginHTTPRequest) returns (PluginHTTPResponse);
+  rpc RunJob(RunJobRequest) returns (RunJobResponse);
+  rpc Health(HealthRequest) returns (HealthResponse);
+  rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
+}
+
+// ---------------------------------------------------------------------------
+// 通用状态（与 driver.proto 的内联 Status 保持同码表）
+// ---------------------------------------------------------------------------
+
+message Status {
+  enum Code {
+    OK = 0;
+    CANCELLED = 1;
+    UNKNOWN = 2;
+    INVALID_ARGUMENT = 3;
+    DEADLINE_EXCEEDED = 4;
+    NOT_FOUND = 5;
+    ALREADY_EXISTS = 6;
+    PERMISSION_DENIED = 7;
+    RESOURCE_EXHAUSTED = 8;
+    FAILED_PRECONDITION = 9;
+    ABORTED = 10;
+    OUT_OF_RANGE = 11;
+    UNIMPLEMENTED = 12;
+    INTERNAL = 13;
+    UNAVAILABLE = 14;
+    DATA_LOSS = 15;
+    UNAUTHENTICATED = 16;
+  }
+  Code code = 1;
+  string message = 2;
+}
+
+// ---------------------------------------------------------------------------
+// 握手 / Describe
+// ---------------------------------------------------------------------------
+
+message InitializeRequest {
+  string plugin_id = 1;
+  string plugin_version = 2;
+  string launch_id = 3;
+  string handshake_cookie = 4;
+  uint32 protocol_version = 5;
+  repeated uint32 supported_protocol_versions = 6;
+  string node_id = 7;
+  string runtime_type = 8;
+  map<string, string> host_info = 9;
+}
+
+message InitializeResponse {
+  uint32 negotiated_protocol_version = 1;
+  Status status = 2;
+  string runtime_id = 3;
+}
+
+message DescribeRequest {}
+
+message ApplicationDescriptor {
+  string application_id = 1;                   // contributes.applications[].id
+  string version = 2;                          // 描述结构版本
+  repeated string schema_versions = 3;         // ApplicationEvent/Effect 数据 schema 版本集合
+  repeated RequirementDescriptor requirements = 4;
+  repeated JobDescriptor jobs = 5;
+  bool declarative_only = 6;                   // true 表示不启动 process 后端
+}
+
+message RequirementDescriptor {
+  string id = 1;                               // 如 reminder-output
+  string capability = 2;                       // 含 @version
+  string cardinality = 3;                      // one|zero-or-one|one-or-more
+  uint32 min_items = 4;                        // 仅 one-or-more 有意义
+}
+
+message JobDescriptor {
+  string id = 1;
+  string title = 2;
+  string input_schema_json = 3;                // JSON Schema
+}
+
+// ---------------------------------------------------------------------------
+// 实例配置 / 绑定校验
+// ---------------------------------------------------------------------------
+
+message ConfigureInstanceRequest {
+  string plugin_instance_id = 1;
+  bytes config = 2;
+  uint32 config_revision = 3;
+}
+
+message ConfigureInstanceResponse {
+  string plugin_instance_id = 1;
+  uint32 applied_revision = 2;
+  Status status = 3;
+}
+
+message Binding {
+  string requirement_id = 1;
+  string entity_id = 2;                        // 稳定 entity_id；端口/重连变化不影响绑定
+}
+
+message ValidateBindingRequest {
+  string plugin_instance_id = 1;
+  repeated Binding bindings = 2;
+}
+
+message ValidateBindingResponse {
+  bool valid = 1;
+  repeated BindingIssue issues = 2;
+}
+
+message BindingIssue {
+  string requirement_id = 1;
+  string severity = 2;                         // error|warning
+  string message = 3;
+}
+
+// ---------------------------------------------------------------------------
+// 事件：Core -> Application
+// ---------------------------------------------------------------------------
+
+message ApplicationEvent {
+  string plugin_instance_id = 1;
+  uint64 sequence = 2;                         // 同 instance 内单调递增
+  string schema_version = 3;
+  oneof body {
+    CapabilityEvent capability_event = 10;
+    ScheduleTick schedule_tick = 11;
+    RequestCompleted request_completed = 12;
+    InstanceLifecycle instance_lifecycle = 13;
+  }
+}
+
+message CapabilityEvent {
+  string requirement_id = 1;                   // 绑定到 binding requirement
+  string entity_id = 2;
+  string event_type = 3;                       // capability/application 命名空间
+  string payload_json = 4;
+  string occurred_at = 5;                      // RFC3339
+}
+
+message ScheduleTick {
+  string schedule_id = 1;
+  string occurred_at = 2;
+  string window_json = 3;                      // Core 定义的计划窗口原文
+}
+
+enum CommandState {
+  COMMAND_STATE_UNSPECIFIED = 0;
+  COMMAND_STATE_CREATED = 1;
+  COMMAND_STATE_DISPATCHED = 2;
+  COMMAND_STATE_ACCEPTED = 3;
+  COMMAND_STATE_RUNNING = 4;
+  COMMAND_STATE_SUCCEEDED = 5;
+  COMMAND_STATE_FAILED = 6;
+  COMMAND_STATE_TIMED_OUT = 7;
+  COMMAND_STATE_CANCELLED = 8;
+}
+
+message RequestCompleted {
+  string request_id = 1;
+  string entity_id = 2;
+  string action = 3;
+  CommandState state = 4;
+  string result_json = 5;
+  string error_code = 6;
+}
+
+message InstanceLifecycle {
+  string state = 1;                            // configured|started|paused|stopped|removed
+  string detail = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Effect：Application -> Core（白名单操作，见文件头约束）
+// ---------------------------------------------------------------------------
+
+message ApplicationEffect {
+  string plugin_instance_id = 1;
+  uint64 sequence = 2;                         // 同 instance 内单调递增
+  string schema_version = 3;
+  oneof effect {
+    UpsertDomainRecord upsert_record = 10;
+    DeleteDomainRecord delete_record = 11;
+    RequestCommand request_command = 12;
+    ScheduleTask schedule_task = 13;
+    CancelScheduledTask cancel_scheduled_task = 14;
+    SendNotification send_notification = 15;
+  }
+}
+
+message UpsertDomainRecord {
+  string record_type = 1;                      // 必须落在 plugin 命名空间（Core 注入前缀）
+  string record_id = 2;
+  string data_json = 3;                        // 写入 plugin namespaced store
+  string version = 4;                          // 乐观并发版本；空 = 无条件 upsert
+}
+
+message DeleteDomainRecord {
+  string record_type = 1;
+  string record_id = 2;
+  string version = 3;
+}
+
+message RequestCommand {
+  string entity_id = 1;                        // 只能指向已绑定 entity
+  string action = 2;
+  string args_json = 3;
+  string idempotency_key = 4;
+  string deadline = 5;                         // RFC3339
+}
+
+message ScheduleTask {
+  string schedule_id = 1;
+  string cron = 2;                             // Core 校验的受支持 cron 子集
+  string payload_json = 3;
+}
+
+message CancelScheduledTask {
+  string schedule_id = 1;
+}
+
+message SendNotification {
+  string title = 1;
+  string body = 2;
+  string severity = 3;                         // info|warning|critical
+}
+
+// ---------------------------------------------------------------------------
+// Plugin HTTP 子路由（HandleRequest）
+// ---------------------------------------------------------------------------
+
+// 路由只能挂在 /api/plugins/{plugin_id}/instances/{instance_id}/... 下，
+// 上下文由 Core 注入，插件拿不到全局管理员令牌。
+message PluginHTTPRequest {
+  string request_id = 1;
+  string plugin_instance_id = 2;
+  string method = 3;
+  string path = 4;                             // 相对上述前缀
+  map<string, string> headers = 5;             // Core 过滤后的白名单头
+  bytes body = 6;
+  RequestContext context = 7;
+}
+
+message RequestContext {
+  string tenant_id = 1;
+  string actor_id = 2;
+  string instance_id = 3;
+  repeated string scopes = 4;                  // Core 授出的 scope 集合
+}
+
+message PluginHTTPResponse {
+  uint32 status_code = 1;
+  map<string, string> headers = 2;
+  bytes body = 3;
+}
+
+// ---------------------------------------------------------------------------
+// RunJob：Core 触发的后台任务
+// ---------------------------------------------------------------------------
+
+message RunJobRequest {
+  string plugin_instance_id = 1;
+  string job_id = 2;                           // Core 生成
+  string job_type = 3;                         // ApplicationDescriptor.jobs[].id
+  string args_json = 4;
+  string idempotency_key = 5;
+  string deadline = 6;                         // RFC3339
+}
+
+message RunJobResponse {
+  string job_id = 1;
+  Status status = 2;
+  string result_json = 3;
+}
+
+// ---------------------------------------------------------------------------
+// Health / Shutdown（与 driver.proto 同形）
+// ---------------------------------------------------------------------------
+
+message HealthRequest {}
+
+enum HealthState {
+  HEALTH_STATE_UNSPECIFIED = 0;
+  HEALTH_STATE_SERVING = 1;
+  HEALTH_STATE_NOT_SERVING = 2;
+}
+
+message HealthResponse {
+  HealthState state = 1;
+  repeated InstanceHealth instances = 2;
+}
+
+message InstanceHealth {
+  string plugin_instance_id = 1;
+  HealthState state = 2;
+  string detail = 3;
+}
+
+message ShutdownRequest {
+  string reason = 1;
+  uint32 grace_seconds = 2;
+}
+
+message ShutdownResponse {
+  Status status = 1;
+}
