@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight, Cpu, Network, PowerOff, Server } from 'lucide-react'
-import { Badge, EmptyState, KeyValue, PageHeader, Panel, Segmented, StatusDot } from '@/components/ui'
+import { ArrowRight, Cpu, Network, PowerOff, Server, WifiOff } from 'lucide-react'
+import { Badge, EmptyState, ErrorState, KeyValue, PageHeader, Panel, Segmented, StatusDot } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { useDevices } from '@/hooks/useDevices'
 import { useEdges } from '@/hooks/useEdges'
@@ -15,7 +15,7 @@ import { fmtDateTime } from '@/lib/format'
  * 只是语义色转灰并给出「不影响其他节点」的系统级说明 —— 一台掉线不牵连其他台的呈现。
  */
 export default function Edges() {
-  const { list: edges, online, loading: edgeLoading } = useEdges()
+  const { list: edges, online, loading: edgeLoading, error, refetch } = useEdges()
   const { list: devices } = useDevices()
   const [filter, setFilter] = useState<EdgeFilter>('all')
 
@@ -56,6 +56,10 @@ export default function Edges() {
 
       {edgeLoading ? (
         <Panel><RowSkeleton rows={3} /></Panel>
+      ) : error ? (
+        <ErrorState icon={<WifiOff size={20} />} title="边缘节点列表加载失败"
+          hint="拿不到 GET /api/edges。这不代表没有节点接入 —— 请检查 server 是否可达后重试。"
+          onRetry={refetch} />
       ) : edges.length === 0 ? (
         <EmptyState icon={<Network size={24} />} title="没有边缘节点"
           hint="在接入主机上启动 cloudpath-edge（读取 edge.yaml）即会自动注册到这里；离线节点也会保留记录。" />

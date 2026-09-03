@@ -158,7 +158,7 @@ describe('危险动作与回执', () => {
     render(<ActionPanel deviceId={KEY} set={declared} />)
     await user.click(screen.getByRole('button', { name: '断开' }))
     const items = useToasts.getState().items
-    expect(items[items.length - 1]).toMatchObject({ title: '断开下发失败', tone: 'bad' })
+    expect(items[items.length - 1]).toMatchObject({ title: '断开未下发', tone: 'bad' })
     expect(screen.getByRole('button', { name: '断开' })).toBeEnabled()
   })
 })

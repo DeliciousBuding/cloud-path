@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Cpu, History, Network, Server } from 'lucide-react'
-import { Badge, EmptyState, KeyValue, Panel, StatusDot } from '@/components/ui'
+import { Badge, EmptyState, ErrorState, KeyValue, Panel, StatusDot } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { EventFeed } from '@/components/EventFeed'
 import { api } from '@/lib/api'
@@ -19,7 +19,7 @@ import { fmtDateTime, mergeEvents } from '@/lib/format'
 export default function EdgeDetail() {
   const { edgeId = '' } = useParams()
   const id = decodeURIComponent(edgeId)
-  const { list: edges, loading: edgeLoading } = useEdges()
+  const { list: edges, loading: edgeLoading, error: edgeError, refetch } = useEdges()
   const { list: devices } = useDevices()
   const liveEvents = useLive((s) => s.events)
 
@@ -51,8 +51,14 @@ export default function EdgeDetail() {
     return (
       <>
         <BackLink />
+        {edgeError ? (
+          <ErrorState icon={<Network size={20} />} title="边缘节点信息加载失败"
+            hint={`拿不到节点列表（GET /api/edges），因此无法确认 ${id} 是否存在。请检查 server 是否可达后重试。`}
+            onRetry={refetch} />
+        ) : (
         <EmptyState icon={<Network size={24} />} title="边缘节点不存在"
           hint={`没有找到 ${id}。节点接入后会自动注册；若它曾长期离线且从未注册设备，可能不在记录里。`} />
+        )}
       </>
     )
   }

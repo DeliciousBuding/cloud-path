@@ -20,6 +20,9 @@ import type { PluginInstanceView } from '@/lib/types'
 
 type Tab = 'catalog' | 'installed' | 'instances'
 
+/** 单个分区最多渲染多少条：实例/插件可能很多，超出部分如实说明而不是静默截断 */
+const LIST_CAP = 200
+
 /**
  * 插件面三分：
  *   目录 Catalog   = 插件声明事实（GET /api/plugins）：kind/version/digest/verified/permissions/contributes
@@ -78,7 +81,7 @@ export default function Plugins() {
               hint="还没有已安装的插件被登记到目录里。Edge 安装插件并上报后，这里会出现它的声明事实（版本、摘要、权限、贡献）。" />
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
-              {plugins.map((p) => {
+              {plugins.slice(0, LIST_CAP).map((p) => {
                 const trust = trustMeta(undefined, p.verified)
                 const contributes = [
                   ...(p.contributes?.drivers ?? []).map((x) => ({ kind: 'Driver', ...x })),
@@ -146,6 +149,11 @@ export default function Plugins() {
               })}
             </div>
           )}
+          {plugins.length > LIST_CAP && (
+            <p className="mt-4 text-center text-[11px] text-ink-3">
+              仅显示前 {LIST_CAP} 个插件（目录共 {plugins.length} 个）
+            </p>
+          )}
         </TabPanel>
       )}
 
@@ -162,7 +170,6 @@ export default function Plugins() {
           ) : (
             <div className="space-y-5">
               {[...byEdge.entries()].map(([edgeId, list]) => {
-                const anyOnline = list.some((v) => v.edge_online)
                 const edgeOnline = list[0]?.edge_online ?? false
                 return (
                   <Panel key={edgeId}
@@ -182,7 +189,7 @@ export default function Plugins() {
                       </p>
                     )}
                     <ul className="m-0 list-none divide-y divide-hairline p-0">
-                      {list.map((v) => {
+                      {list.slice(0, LIST_CAP).map((v) => {
                         const st = stateMeta(v.observed?.state)
                         const hl = healthMeta(v.observed?.health)
                         return (
@@ -215,7 +222,7 @@ export default function Plugins() {
                               <>
                                 <Badge tone="idle">Edge 未上报</Badge>
                                 <span className="ml-auto shrink-0 text-[11px] text-ink-3">
-                                  {anyOnline ? '节点在线但还没回过' : '节点离线'}
+                                  {v.edge_online ? '节点在线但还没回过' : '节点离线'}
                                 </span>
                               </>
                             )}
@@ -255,10 +262,15 @@ export default function Plugins() {
               hint="新建一个实例：指定目标 Edge、插件与固定版本。提交后 Server 生成期望态与单调递增的 revision，Edge 应用并上报后才会出现实际态。" />
           ) : (
             <div className="grid gap-4">
-              {instances.map((v) => (
+              {instances.slice(0, LIST_CAP).map((v) => (
                 <InstanceRow key={v.id} v={v} catalog={catalogIndex.get(v.desired.plugin_id)}
                   onEdit={() => setEditing(v)} />
               ))}
+              {instances.length > LIST_CAP && (
+                <p className="text-center text-[11px] text-ink-3">
+                  仅显示前 {LIST_CAP} 个实例（共 {instances.length} 个）
+                </p>
+              )}
               <p className="text-[11px] leading-relaxed text-ink-3">
                 每行都分开写「期望态」与「实际态」：期望已启用不等于 Edge 已经运行。实际态缺席时明确显示「Edge 未上报」。
               </p>

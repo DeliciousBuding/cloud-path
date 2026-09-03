@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router'
 import {
   Activity, AlertTriangle, ArrowRight, Boxes, CheckCircle2, Cpu, History, Inbox, Network,
-  PowerOff, XCircle,
+  PowerOff, WifiOff, XCircle,
 } from 'lucide-react'
 import { Badge, EmptyState, ErrorState, Panel, PageHeader, SectionTitle, StatTile } from '@/components/ui'
 import { DeviceCard } from '@/components/DeviceCard'
@@ -27,7 +27,7 @@ import { useLive } from '@/store/ws'
  */
 export default function Overview() {
   const { data, loading, error, isFetching, refetch } = useOverview()
-  const { list: devices, loading: devLoading } = useDevices()
+  const { list: devices, loading: devLoading, error: devError, refetch: refetchDevices } = useDevices()
   const liveEvents = useLive((s) => s.events)
   const status = useLive((s) => s.status)
   const { data: health } = useQuery({
@@ -215,6 +215,10 @@ export default function Overview() {
             <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
               <DeviceCardSkeleton /><DeviceCardSkeleton />
             </div>
+          ) : devError ? (
+            <ErrorState icon={<WifiOff size={20} />} title="设备状态加载失败"
+              hint="拿不到设备列表（GET /api/devices）。概览计数与设备列表是两条独立通道，上面的计数可能仍然可用。"
+              onRetry={refetchDevices} compact />
           ) : devices.length === 0 ? (
             <EmptyState
               icon={<Inbox size={24} />}

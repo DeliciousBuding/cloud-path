@@ -5,7 +5,9 @@ import {
   Activity, ArrowLeft, Braces, Command, Gauge, Grid3x3, History, LayoutDashboard, Radio,
   RadioTower, Sparkles, Terminal,
 } from 'lucide-react'
-import { Badge, EmptyState, KeyValue, Panel, Segmented, StatusDot, TabBar, TabPanel } from '@/components/ui'
+import {
+  Badge, EmptyState, ErrorState, KeyValue, Panel, Segmented, StatusDot, TabBar, TabPanel,
+} from '@/components/ui'
 import type { TabItem } from '@/components/ui'
 import {
   DescriptorView, EntityPanel, JsonBlock, RawView, StatusBadge, SummaryChips, SummaryGroups,
@@ -44,8 +46,9 @@ export default function DeviceDetail() {
   const liveEvents = useLive((s) => s.events)
   const series = useLive((s) => s.series[key]) ?? {}
 
-  const { data: rest } = useQuery({
-    queryKey: ['device', key], queryFn: () => api.device(edgeId, deviceId), refetchInterval: 10000,
+  const { data: rest, error: devError, refetch } = useQuery({
+    queryKey: ['device', key], queryFn: () => api.device(edgeId, deviceId),
+    refetchInterval: 10000, retry: false,
   })
   const { data: evHist, isLoading: evLoading } = useQuery({
     queryKey: ['device-events', key], queryFn: () => api.events({ device: key, limit: 100 }),
@@ -93,8 +96,15 @@ export default function DeviceDetail() {
     return (
       <>
         <BackLink />
-        <EmptyState icon={<RadioTower size={24} />} title="设备未注册"
-          hint={`没有找到 ${key}。设备接入后会自动注册；请检查 edge 配置与连接。`} />
+        {devError ? (
+          // 接口失败不等于设备不存在：这两种结论对用户完全不同
+          <ErrorState icon={<RadioTower size={20} />} title="设备信息加载失败"
+            hint={`拿不到 ${key} 的详情（GET /api/devices/...）。这不代表设备不存在，请检查 server 是否可达后重试。`}
+            onRetry={() => { void refetch() }} />
+        ) : (
+          <EmptyState icon={<RadioTower size={24} />} title="设备未注册"
+            hint={`没有找到 ${key}。设备接入后会自动注册；请检查 edge 配置与连接。`} />
+        )}
       </>
     )
   }

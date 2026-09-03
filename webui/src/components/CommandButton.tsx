@@ -5,6 +5,7 @@ import { useLive } from '@/store/ws'
 import { toast } from '@/store/toast'
 import { cn } from '@/lib/cn'
 import { ConfirmDialog } from './ConfirmDialog'
+import { commandErrorCopy } from '@/lib/format'
 import type { CommandAction } from '@/lib/descriptor'
 
 const ACK_TIMEOUT_MS = 15000
@@ -83,7 +84,8 @@ export function CommandButton({ deviceId, action, args, className }: {
       setPendingId(cv.id)
     } catch (e) {
       setBusy(false)
-      toast.bad(`${label}下发失败`, e instanceof Error ? e.message : String(e))
+      // 按 HTTP 状态说人话（权限不足 / 节点离线 / 限流 …），不把服务端原文甩给用户
+      toast.bad(`${label}未下发`, commandErrorCopy(e))
     }
   }
 

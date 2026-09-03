@@ -159,11 +159,15 @@ describe('概览：加载与错误态（不得白屏）', () => {
     expect(stub.to('/api/overview').length).toBeGreaterThan(before)
   })
 
-  it('端点缺席（404，server lane 未合并）→ 错误态而不是崩溃', async () => {
+  it('端点缺席（404，server lane 未合并）→ 错误态而不是崩溃，且接口失败不冒充「没有设备」', async () => {
     installFetch((url) => (url === '/healthz' ? stubResponse(200, health) : stubResponse(404, {})))
     renderWithProviders(<Overview />)
-    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    // 概览与设备列表是两条独立通道，各自失败各自说 —— 因此这里有两个 role=alert
+    expect((await screen.findAllByRole('alert')).length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText('概览数据加载失败')).toBeInTheDocument()
+    expect(screen.getByText('设备状态加载失败')).toBeInTheDocument()
+    // 失败 ≠ 空：不许出现「还没有设备接入」这种假空态
+    expect(screen.queryByText('还没有设备接入')).not.toBeInTheDocument()
     expect(screen.getByText('实时设备状态')).toBeInTheDocument()
   })
 

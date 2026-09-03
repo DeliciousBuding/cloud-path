@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Cpu, Inbox, Search, SearchX } from 'lucide-react'
-import { EmptyState, PageHeader, Panel, Segmented } from '@/components/ui'
+import { Cpu, Inbox, Search, SearchX, WifiOff } from 'lucide-react'
+import { EmptyState, ErrorState, PageHeader, Panel, Segmented } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { DeviceRow, DeviceRowHead } from '@/components/DeviceRow'
 import { useDevices } from '@/hooks/useDevices'
@@ -20,7 +20,7 @@ function matches(d: DeviceView, q: string): boolean {
  * 过滤后无结果与「一台都没有」是两种不同的空态。
  */
 export default function Devices() {
-  const { list, online, loading } = useDevices()
+  const { list, online, loading, error, refetch } = useDevices()
   const [filter, setFilter] = useState<Filter>('all')
   const [q, setQ] = useState('')
 
@@ -72,6 +72,11 @@ export default function Devices() {
 
       {loading ? (
         <Panel><RowSkeleton rows={6} /></Panel>
+      ) : error ? (
+        // 接口失败 ≠ 没有设备：必须分开说，否则用户会以为集群是空的
+        <ErrorState icon={<WifiOff size={20} />} title="设备列表加载失败"
+          hint="拿不到 GET /api/devices。这不代表没有设备接入 —— 请检查 server 是否可达后重试。"
+          onRetry={refetch} />
       ) : list.length === 0 ? (
         <EmptyState icon={<Inbox size={24} />} title="还没有设备接入"
           hint="在边缘主机上配置 edge.yaml 并启动 cloudpath-edge，设备会自动注册到这里。" />
