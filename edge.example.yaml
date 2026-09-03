@@ -56,3 +56,12 @@ devices:
 #   required: false                    # true=host 失败则 edge 启动失败；false=记录 DEGRADED 继续内置设备
 #   lock: plugins.lock                 # 缺省 <root>/plugins.lock
 #   close_timeout_s: 10                # host 优雅关闭 deadline（秒）
+#   sync_state: data/plugin-state/applied.json   # 插件控制面本地 applied cache（缺省 <state_dir>/applied.json）
+#                                      #   保存最近成功应用的 revision + Server 下发的快照摘要 + 每实例结果；
+#                                      #   进程重启后据此拒绝旧 revision（boot_id 每次启动都换新，不从缓存恢复）
+#   secret_dir: data/plugin-state/secrets        # 本地 secret provider 根目录（缺省 <state_dir>/secrets）
+#                                      #   明文只放在 <secret_dir>/<tenant>/<instance>/<name>，权限须 0600 等价；
+#                                      #   Server 只下发 secret://<name> handle，且必须同时满足
+#                                      #   「插件 manifest 已声明该名字」+「实例配置显式绑定该 handle」才解析；
+#                                      #   handle 缺失/已吊销/权限不安全/声明不符 → 该实例 fail-closed，不回落旧明文。
+#                                      #   留空则本 Edge 不提供明文：任何绑定 handle 的实例都会被拒绝。

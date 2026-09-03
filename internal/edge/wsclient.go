@@ -50,7 +50,12 @@ type wsClient struct {
 
 	onCommand func(api.Envelope)
 	onOnline  func() // 重连成功后回调（上层据此强制补报状态）
+	// onPluginDesired 处理 server 下发的插件期望态快照（未配置插件控制面时为 nil）。
+	onPluginDesired func(api.Envelope)
 }
+
+// setPluginHandler 注入插件期望态处理器（未导出：由 Run 按配置接线）。
+func (c *wsClient) setPluginHandler(fn func(api.Envelope)) { c.onPluginDesired = fn }
 
 func newWSClient(cfg *Config, version string, metas []api.DeviceMeta,
 	onCommand func(api.Envelope), onOnline func()) *wsClient {
@@ -165,6 +170,9 @@ func (c *wsClient) session(ctx context.Context) error {
 				err := ws.Write(wctx, websocket.MessageText, msg)
 				cancel()
 				if err != nil {
+					// 消息已经出队却发现连接正在死：必须放回离线缓冲，
+					// 否则一次真实的 failed ack / 事件就被静默吞掉了。
+					c.requeue(msg)
 					return
 				}
 			}
@@ -192,7 +200,7 @@ func (c *wsClient) session(ctx context.Context) error {
 		}
 	}()
 
-	// 读循环（本协程）：处理 server 下行命令
+	// 读循环（本协程）：处理 server 下行消息
 	for {
 		_, data, err := ws.Read(sessCtx)
 		if err != nil {
@@ -205,9 +213,28 @@ func (c *wsClient) session(ctx context.Context) error {
 			slog.Warn("bad server message", "err", err)
 			continue
 		}
-		if env.Type == api.MsgCommand && c.onCommand != nil {
-			// 命令执行可能较慢（sync 逐字节 250ms+），异步执行不阻塞读
-			go c.onCommand(env)
+		switch env.Type {
+		case api.MsgCommand:
+			if c.onCommand != nil {
+				// 命令执行可能较慢（stcb 对时逐字节 250ms+），异步执行不阻塞读
+				go c.onCommand(env)
+			}
+		case api.MsgPluginDesired:
+			if c.onPluginDesired != nil {
+				// 应用期望态可能要启动插件进程（秒级），同样异步不阻塞读；
+				// Syncer 内部串行，多份快照不会交错写本地状态。
+				go c.onPluginDesired(env)
+				continue
+			}
+			// 本 Edge 未承载插件控制面：忽略并记 debug，绝不断开连接
+			// （control-plane-sync.md §4 的向后兼容要求）。
+			slog.Debug("plugin_desired ignored: plugin control plane disabled on this edge",
+				"type", string(env.Type))
+		case api.MsgPing, api.MsgPong:
+			// 由 websocket 库与本客户端的 ping 泵处理
+		default:
+			// 未知/浏览器向消息：忽略并记 debug，不断开连接。
+			slog.Debug("ignoring server message", "type", string(env.Type))
 		}
 	}
 }
@@ -259,6 +286,28 @@ func (c *wsClient) enqueue(env api.Envelope) bool {
 // 状态/Descriptor 幂等（重连后由 onOnline 全量重报），缓冲它们只会挤掉真事件。
 func isBufferable(t api.MsgType) bool {
 	return t == api.MsgEvent || t == api.MsgCommandAck
+}
+
+// requeue 把一条**已出队但写失败**的消息放回离线缓冲（仅限可缓冲类型）。
+// 与 buffer 的区别只在调用时机：buffer 发生在入队时（已知离线），requeue 发生在
+// 出队后写失败时（连接正在死）。两者都必须存在，否则消息会从缝里漏掉。
+func (c *wsClient) requeue(data []byte) {
+	var probe struct {
+		Type api.MsgType `json:"type"`
+	}
+	if err := json.Unmarshal(data, &probe); err != nil || !isBufferable(probe.Type) {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.pending) >= offlineBufferCap {
+		c.pending = append(c.pending[:0], c.pending[1:]...)
+		c.dropped++
+	}
+	c.pending = append(c.pending, data)
+	c.buffered++
+	slog.Warn("write failed, message requeued for replay", "type", string(probe.Type),
+		"buffered", len(c.pending))
 }
 
 // buffer 把不可重放消息（事件 / 命令 ack）放入离线缓冲（有界，超限丢最旧）。

@@ -21,6 +21,10 @@ type HostManager interface {
 	RegisterInstallation(pluginhost.Installation) error
 	CreateInstance(pluginhost.InstanceSpec) (pluginhost.Instance, error)
 	Start(tenant, id string) error
+	// Disable 停用一个实例但保留其定义（期望态 enabled=false 时调用）。
+	Disable(tenant, id string) error
+	// Remove 删除一个实例；默认保留插件数据，只有显式 purge 才删。
+	Remove(tenant, id string, opts ...pluginhost.RemoveOption) (pluginhost.RemoveResult, error)
 	Close() error
 }
 
@@ -31,6 +35,9 @@ type HostOptions struct {
 	PluginsDir string
 	LockPath   string
 	Logger     *slog.Logger
+	// Secrets 是本地 secret provider（§7）。nil 表示本 Edge 不提供本地明文：
+	// 任何绑定 secret:// handle 的实例都会 fail-closed，绝不静默跳过校验。
+	Secrets SecretResolver
 }
 
 // Host reloads installed plugins and enabled instance states into a Manager
@@ -133,16 +140,18 @@ func (h *Host) Run(ctx context.Context) error {
 	return h.opts.Manager.Close()
 }
 
-func (h *Host) load(ctx context.Context, states []InstanceState) (LoadResult, error) {
+// registerInstallations 把 lockfile 里的每个安装物注册进 Manager（幂等：
+// 已注册即跳过）。ApplySnapshot 每次应用期望态前都会调用它，因此新装插件
+// 无需重启 Edge 就能被实例引用。
+func (h *Host) registerInstallations(ctx context.Context) (int, error) {
 	lock, err := registry.LoadLockFile(h.opts.LockPath)
 	if err != nil {
-		return LoadResult{}, err
+		return 0, err
 	}
-
-	res := LoadResult{Idle: true}
+	registered := 0
 	for _, locked := range lock.Plugins {
 		if err := ctx.Err(); err != nil {
-			return LoadResult{}, err
+			return registered, err
 		}
 		inst := pluginhost.Installation{
 			PluginID: locked.ID,
@@ -150,14 +159,25 @@ func (h *Host) load(ctx context.Context, states []InstanceState) (LoadResult, er
 			Path:     h.installationPath(locked),
 			Kind:     h.installationKind(locked),
 		}
-		err := h.opts.Manager.RegisterInstallation(inst)
-		if err != nil {
+		if err := h.opts.Manager.RegisterInstallation(inst); err != nil {
 			if !errors.Is(err, pluginhost.ErrInstallationExists) {
-				return LoadResult{}, fmt.Errorf("register %s@%s: %w", locked.ID, locked.Version, err)
+				return registered, fmt.Errorf("register %s@%s: %w", locked.ID, locked.Version, err)
 			}
 			continue
 		}
-		res.Installations++
+		registered++
+	}
+	return registered, nil
+}
+
+func (h *Host) load(ctx context.Context, states []InstanceState) (LoadResult, error) {
+	res := LoadResult{Idle: true}
+	registered, err := h.registerInstallations(ctx)
+	if err != nil {
+		return LoadResult{}, err
+	}
+	if registered > 0 {
+		res.Installations += registered
 		res.Idle = false
 	}
 
@@ -220,9 +240,18 @@ func (h *Host) installationKind(locked registry.LockedPlugin) pluginhost.Kind {
 	return kind
 }
 
+// configForState 合并期望态配置与配置路径，交给 Manager 建实例。
+// 这里出现的值只可能是非敏感标量或 secret:// handle：明文永不进入本映射。
 func configForState(state InstanceState) map[string]string {
-	if strings.TrimSpace(state.ConfigPath) == "" {
+	if len(state.Config) == 0 && strings.TrimSpace(state.ConfigPath) == "" {
 		return nil
 	}
-	return map[string]string{"path": state.ConfigPath}
+	out := make(map[string]string, len(state.Config)+1)
+	for k, v := range state.Config {
+		out[k] = v
+	}
+	if strings.TrimSpace(state.ConfigPath) != "" {
+		out["path"] = state.ConfigPath
+	}
+	return out
 }

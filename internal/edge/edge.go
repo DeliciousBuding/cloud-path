@@ -15,6 +15,7 @@ import (
 	"github.com/DeliciousBuding/cloud-path/internal/device"
 	"github.com/DeliciousBuding/cloud-path/internal/edgedriverhost"
 	"github.com/DeliciousBuding/cloud-path/internal/model"
+	"github.com/DeliciousBuding/cloud-path/internal/plugincontrol"
 )
 
 // Edge 是边缘代理运行时：N 台设备监督协程 + 1 条 server 长连接。
@@ -23,6 +24,9 @@ type Edge struct {
 	client *wsClient
 	sups   map[string]*supervisor // key: "<edge_id>/<device_id>"
 	ctx    context.Context        // 运行期根 ctx（命令执行据此取消）
+	// sync 是插件控制面收敛器；nil 表示本 Edge 不承载插件面
+	// （plugin_desired 忽略并记 debug，plugin_status 不上报）。
+	sync *plugincontrol.Syncer
 }
 
 // supervisor 监督单台设备：打开→采集→端口死→退避重开（热插拔自愈）。
@@ -185,6 +189,7 @@ type RunOption func(*runOptions)
 type runOptions struct {
 	host       PluginHost
 	httpClient *http.Client
+	sync       *plugincontrol.Syncer
 }
 
 // WithPluginHost 注入外部 Driver Plugin Host；nil 等价于未启用。
@@ -253,6 +258,12 @@ func Run(ctx context.Context, cfg *Config, version string, opts ...RunOption) er
 	if ro.httpClient != nil {
 		e.client.httpClient = ro.httpClient
 	}
+	if ro.sync != nil {
+		e.sync = ro.sync
+		e.client.setPluginHandler(e.onPluginDesired)
+		slog.Info("plugin control plane enabled", "tenant", cfg.PluginHost.Tenant,
+			"boot_id", ro.sync.BootID(), "applied_revision", ro.sync.AppliedRevision())
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -267,6 +278,13 @@ func Run(ctx context.Context, cfg *Config, version string, opts ...RunOption) er
 			if err := host.Run(ctx); err != nil {
 				slog.Warn("external driver host stop", "err", err)
 			}
+		}()
+	}
+	if e.sync != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			e.pluginStatusLoop(ctx)
 		}()
 	}
 	for key, sup := range e.sups {
@@ -522,13 +540,16 @@ func (e *Edge) onDeviceEvent(key string, ev device.Event) {
 	})
 }
 
-// onServerOnline 在（重）连上 server 后强制补报全部设备状态：
+// onServerOnline 在（重）连上 server 后强制补报全部设备状态与插件实际态：
 // 断线期间状态消息是被丢弃的（幂等），重连后必须主动刷一遍，面板才不会停在旧值。
+// 插件面同理：重连即重报 plugin_status（带本次进程的 boot_id 与最新 sequence），
+// Server 据此恢复真实 observed；期望态由 Server 在 hello 后重新下发完整快照收敛。
 func (e *Edge) onServerOnline() {
 	for key, sup := range e.sups {
 		e.reportState(key, sup, true)
 		e.reportDescriptor(key, sup, true)
 	}
+	e.reportPluginStatus()
 }
 
 // onCommand 执行 server 下行命令并回执 ack。

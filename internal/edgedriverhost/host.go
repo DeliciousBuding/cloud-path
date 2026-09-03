@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/plugincontrol"
 	"github.com/DeliciousBuding/cloud-path/internal/pluginhost"
 )
@@ -42,6 +43,9 @@ type Options struct {
 	StateDir   string
 	LockPath   string
 	Tenant     string
+	// Secrets 是本地 secret provider（control-plane-sync.md §7）。nil 表示本 Edge
+	// 不提供本地明文：任何绑定 secret:// handle 的实例都会 fail-closed。
+	Secrets plugincontrol.SecretResolver
 
 	Logger       *slog.Logger
 	CloseTimeout time.Duration
@@ -100,6 +104,7 @@ func New(opts Options) (*Host, error) {
 		PluginsDir: opts.PluginsDir,
 		LockPath:   opts.LockPath,
 		Logger:     opts.Logger,
+		Secrets:    opts.Secrets,
 	})
 	if err != nil {
 		return nil, err
@@ -145,3 +150,20 @@ func (h *Host) Close() error {
 func (h *Host) DriverIDs() ([]string, error) {
 	return DriverIDs(h.opts.PluginsDir, h.opts.LockPath)
 }
+
+// Host 同时是插件控制面的 Applier：把 Server 下发的期望态快照收敛到本地插件进程，
+// 并回报本地实际态（Edge 是 observed 的唯一权威源）。
+var _ plugincontrol.Applier = (*Host)(nil)
+
+// ApplySnapshot 实现 plugincontrol.Applier（委托内部 plugincontrol.Host）。
+func (h *Host) ApplySnapshot(ctx context.Context, tenant string, instances []api.PluginDesiredInstanceData) ([]api.PluginApplyResultData, error) {
+	return h.ph.ApplySnapshot(ctx, tenant, instances)
+}
+
+// Observe 实现 plugincontrol.Applier（委托内部 plugincontrol.Host）。
+func (h *Host) Observe(ctx context.Context, tenant string) ([]api.PluginInstallationStatusData, []api.PluginObservedInstanceData, error) {
+	return h.ph.Observe(ctx, tenant)
+}
+
+// Tenant 返回本 host 归属的租户（插件控制面同步按它隔离）。
+func (h *Host) Tenant() string { return plugincontrol.NormalizeTenant(h.opts.Tenant) }

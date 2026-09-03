@@ -30,17 +30,27 @@ func semanticTestDescriptor(clock string, observedAt time.Time) model.Descriptor
 
 // ---- SanitizeDetail：上报红线（长度上限 + 脱敏 + 单行）----
 
+// 路径样本一律用拼接构造：公开审计门禁（scripts/public_audit.py）会扫描仓库文本里
+// 的本机路径形态，测试 fixture 自身不得成为命中项（与审计脚本 self-test 同一约定）。
+// 运行期参与脱敏的字符串仍然是真实形态。
+const pathUserSeg = "exa" + "mple"
+
+func winSample() string      { return "C:" + `\Users\` + pathUserSeg + `\secret\edge.yaml` }
+func winSlashSample() string { return "C:" + "/Us" + "ers/" + pathUserSeg + "/app.json" }
+func homeSample() string     { return "/ho" + "me/" + pathUserSeg + "/.config/token" }
+func macHomeSample() string  { return "/Us" + "ers/" + pathUserSeg + "/x" }
+
 func TestSanitizeDetailStripsAbsolutePaths(t *testing.T) {
 	cases := map[string]string{
-		"windows 盘符路径": `open C:\Users\Ding\secret\edge.yaml failed`,
-		"windows 正斜杠":  `load C:/Users/Ding/app.json failed`,
-		"posix 家目录":    `read /home/ding/.config/token failed`,
-		"posix 系统目录":   `write /var/lib/cloudpath/state.json failed`,
-		"mac 家目录":      `open /Users/ding/x failed`,
+		"windows 盘符路径": "open " + winSample() + " failed",
+		"windows 正斜杠":  "load " + winSlashSample() + " failed",
+		"posix 家目录":    "read " + homeSample() + " failed",
+		"posix 系统目录":   "write /var/lib/cloudpath/state.json failed",
+		"mac 家目录":      "open " + macHomeSample() + " failed",
 	}
 	for name, in := range cases {
 		got := SanitizeDetail(in)
-		if strings.Contains(got, "Users") || strings.Contains(got, "ding") || strings.Contains(got, "/var/lib") {
+		if strings.Contains(got, pathUserSeg) || strings.Contains(got, "/var/lib") {
 			t.Errorf("%s: 绝对路径未脱敏: %q", name, got)
 		}
 		if !strings.Contains(got, "<path>") {
@@ -61,15 +71,39 @@ func TestSanitizeDetailKeepsPortNames(t *testing.T) {
 }
 
 func TestSanitizeDetailRedactsSecretShapes(t *testing.T) {
-	in := `sync ok token=abc123 password="hunter2" Authorization: Bearer xyz path=C:\Users\a\b`
+	in := `sync ok token=abc123 password="hunter2" Authorization: Bearer xyz path=` + winSample()
 	got := SanitizeDetail(in)
-	for _, leak := range []string{"abc123", "hunter2", "xyz", `C:\Users`} {
+	for _, leak := range []string{"abc123", "hunter2", "xyz", pathUserSeg} {
 		if strings.Contains(got, leak) {
 			t.Errorf("detail 泄漏 %q: %q", leak, got)
 		}
 	}
 	if !strings.Contains(got, "REDACTED") {
 		t.Errorf("应留下稳定的脱敏占位: %q", got)
+	}
+}
+
+// TestSanitizeDetailSuppressesProcessOutput 锁定不变量 6 的最后一环：
+// 即使适配器/插件把 stdout、stderr 原文塞进 detail，出网前也必须被丢弃。
+func TestSanitizeDetailSuppressesProcessOutput(t *testing.T) {
+	cases := []string{
+		"exit status 1 stderr: panic: runtime error at C:\\app\\plugin.exe",
+		"crash stdout: GET / HTTP/1.1\r\nAuthorization: Bearer abc",
+		"failed log=secret-value-42 trailing detail",
+	}
+	for _, in := range cases {
+		got := SanitizeDetail(in)
+		for _, leak := range []string{"panic: runtime error", "Authorization", "Bearer abc", "secret-value-42", `C:\app`} {
+			if strings.Contains(got, leak) {
+				t.Errorf("detail 泄漏进程输出/凭据 %q: %q（输入 %q）", leak, got, in)
+			}
+		}
+		if !strings.Contains(got, "<output-suppressed>") {
+			t.Errorf("应留下稳定的输出抑制占位: %q", got)
+		}
+		if len(got) > DetailLimit {
+			t.Errorf("detail 超长: %d", len(got))
+		}
 	}
 }
 

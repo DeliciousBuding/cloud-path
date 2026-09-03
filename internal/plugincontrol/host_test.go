@@ -15,6 +15,8 @@ type fakeHostManager struct {
 	installations []pluginhost.Installation
 	created       []pluginhost.InstanceSpec
 	started       []string
+	disabled      []string
+	removed       []string
 	closed        bool
 }
 
@@ -44,6 +46,20 @@ func (f *fakeHostManager) Start(tenant, id string) error {
 	defer f.mu.Unlock()
 	f.started = append(f.started, tenant+"/"+id)
 	return nil
+}
+
+func (f *fakeHostManager) Disable(tenant, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.disabled = append(f.disabled, tenant+"/"+id)
+	return nil
+}
+
+func (f *fakeHostManager) Remove(tenant, id string, _ ...pluginhost.RemoveOption) (pluginhost.RemoveResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.removed = append(f.removed, tenant+"/"+id)
+	return pluginhost.RemoveResult{DataPreserved: true}, nil
 }
 
 func (f *fakeHostManager) Close() error {

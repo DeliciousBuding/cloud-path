@@ -181,6 +181,41 @@ func TestOfflineAckIsBufferedNotDropped(t *testing.T) {
 	}
 }
 
+// TestRequeueAfterFailedWrite 单元级锁定「已出队但写失败」的消息不得被吞掉：
+// 可缓冲类型（事件 / 命令 ack）放回离线缓冲等重连回放，幂等的状态消息则丢弃
+// （由重连后的全量重报覆盖）。
+func TestRequeueAfterFailedWrite(t *testing.T) {
+	cfg := &Config{Server: "ws://127.0.0.1:1/ws/edge", EdgeID: "e1", ReportIntervalS: 30}
+	c := newWSClient(cfg, "test", nil, nil, nil)
+
+	ack := mustJSON(api.Envelope{V: api.Version, Type: api.MsgCommandAck, Device: "e1/d1",
+		Ts: time.Now().Unix(), Data: mustJSON(api.AckData{CommandID: 55, Status: "failed", Detail: "device offline"})})
+	c.requeue(ack)
+	if c.Buffered() != 1 {
+		t.Fatalf("写失败的 ack 必须回到离线缓冲，got %d 条", c.Buffered())
+	}
+	event := mustJSON(api.Envelope{V: api.Version, Type: api.MsgEvent, Device: "e1/d1",
+		Ts: time.Now().Unix(), Data: mustJSON(api.EventData{Type: "REMIND"})})
+	c.requeue(event)
+	if c.Buffered() != 2 {
+		t.Fatalf("写失败的事件必须回到离线缓冲，got %d 条", c.Buffered())
+	}
+	state := mustJSON(api.Envelope{V: api.Version, Type: api.MsgState, Device: "e1/d1",
+		Ts: time.Now().Unix(), Data: mustJSON(api.StateData{Online: true})})
+	c.requeue(state)
+	if c.Buffered() != 2 {
+		t.Fatalf("状态消息幂等，不得占用离线缓冲，got %d 条", c.Buffered())
+	}
+	// 无法解析的字节直接丢弃，不得把垃圾塞进缓冲。
+	c.requeue([]byte("not json"))
+	if c.Buffered() != 2 {
+		t.Fatalf("垃圾字节不得进缓冲，got %d 条", c.Buffered())
+	}
+	if n := c.flushPending(); n != 2 {
+		t.Fatalf("回放条数 = %d, want 2", n)
+	}
+}
+
 var gatedSeq atomic.Int64
 
 // gatedAdapter 的 Send 会阻塞到 gate 关闭，用于精确制造「命令执行中断线」。
