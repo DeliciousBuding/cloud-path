@@ -42,6 +42,9 @@ type Installation struct {
 	PluginID string
 	Version  string
 	Path     string
+	// Kind selects the protocol client the host builds for this installation.
+	// A zero value means KindDriver.
+	Kind Kind
 }
 
 // Isolation selects whether an instance shares a plugin process with other
@@ -611,18 +614,24 @@ func (m *Manager) Metrics(tenant, id string) (Metrics, error) {
 // rec. The caller must hold m.mu.
 func (m *Manager) newProcGroupLocked(rec *instanceRecord) *procGroup {
 	inst := m.installations[installationKey(rec.inst.PluginID, rec.inst.Version)]
+	kind := inst.Kind
+	if kind == 0 {
+		kind = kindFromProtocol(m.opts.Protocol)
+	}
 	cfg := Config{
-		PluginID:         inst.PluginID,
-		Protocol:         m.opts.Protocol,
-		ProtocolVersion:  m.opts.ProtocolVersion,
-		Command:          CommandSpec{Path: inst.Path, Args: m.opts.CommandArgs, Env: m.opts.CommandEnv},
-		HandshakeTimeout: m.opts.HandshakeTimeout,
-		ShutdownTimeout:  m.opts.ShutdownTimeout,
-		MaxRestarts:      m.opts.MaxRestarts,
-		BaseBackoff:      m.opts.BaseBackoff,
-		MaxBackoff:       m.opts.MaxBackoff,
-		LogBufferSize:    m.opts.LogBufferSize,
-		Jitter:           m.opts.Jitter,
+		PluginID:            inst.PluginID,
+		Kind:                kind,
+		Protocol:            kind.Protocol(),
+		ProtocolVersion:     m.opts.ProtocolVersion,
+		Command:             CommandSpec{Path: inst.Path, Args: m.opts.CommandArgs, Env: m.opts.CommandEnv},
+		HandshakeTimeout:    m.opts.HandshakeTimeout,
+		ShutdownTimeout:     m.opts.ShutdownTimeout,
+		HealthCheckInterval: m.opts.HealthCheckInterval,
+		MaxRestarts:         m.opts.MaxRestarts,
+		BaseBackoff:         m.opts.BaseBackoff,
+		MaxBackoff:          m.opts.MaxBackoff,
+		LogBufferSize:       m.opts.LogBufferSize,
+		Jitter:              m.opts.Jitter,
 	}
 	if rec.inst.Isolation == IsolationPerInstance {
 		cfg.Command.Env = append(append([]string{}, cfg.Command.Env...),

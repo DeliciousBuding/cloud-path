@@ -1,6 +1,7 @@
 package pluginharness
 
 import (
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -9,6 +10,10 @@ import (
 	"sync"
 
 	"github.com/DeliciousBuding/cloud-path/internal/pluginhost"
+	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/driver"
+	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/status"
+	"github.com/DeliciousBuding/cloud-path/sdk/go/pluginruntime"
+	"github.com/DeliciousBuding/cloud-path/sdk/go/transport"
 )
 
 // ErrKilled is returned by FakeProcess.Wait when the host force-kills the
@@ -16,6 +21,10 @@ import (
 var ErrKilled = errors.New("fake plugin process killed")
 
 // FakeRunner is an in-memory pluginhost.Runner used by the Supervisor tests.
+// Although the process itself is in-memory, each fake process still dials the
+// real launch listener with the injected credentials and serves a minimal
+// Driver Protocol so the Supervisor's socket handshake, RPC health and RPC
+// shutdown paths run end to end.
 type FakeRunner struct {
 	mu       sync.Mutex
 	factory  func() *FakeProcess
@@ -110,7 +119,8 @@ func (r *FakeRunner) StartedCount() int {
 	return len(r.started)
 }
 
-// FakeProcess is an in-memory pluginhost.Process.
+// FakeProcess is an in-memory pluginhost.Process that also connects to the
+// real launch listener, so the host observes a real socket authentication.
 type FakeProcess struct {
 	mu      sync.Mutex
 	pid     int
@@ -125,9 +135,10 @@ type FakeProcess struct {
 	crashAfterHandshake bool
 	onSignal            func(os.Signal)
 
-	exited  bool
-	killed  bool
-	signals []os.Signal
+	exited        bool
+	killed        bool
+	signals       []os.Signal
+	hostTransport transport.Transport
 
 	exitOnce sync.Once
 	writeMu  sync.Mutex
@@ -145,11 +156,52 @@ func newFakeProcess() *FakeProcess {
 
 func (p *FakeProcess) run() {
 	if p.autoHandshake {
+		p.dialHost()
 		p.WriteStdout(p.handshakeLine())
 	}
 	if p.crashAfterHandshake {
 		p.Exit(errors.New("simulated plugin crash"))
+		return
 	}
+	if p.autoHandshake {
+		p.serveHost()
+	}
+}
+
+// dialHost connects to the injected endpoint using the injected launch
+// credentials. A missing endpoint (for example a timeout-only test) is a no-op.
+func (p *FakeProcess) dialHost() {
+	p.mu.Lock()
+	env := p.env
+	p.mu.Unlock()
+	endpoint := env[pluginhost.EnvPluginEndpoint]
+	if endpoint == "" {
+		return
+	}
+	creds := pluginruntime.Credentials{
+		LaunchID: env[pluginhost.EnvLaunchID],
+		Proof:    env[pluginhost.EnvProof],
+	}
+	tr, err := pluginruntime.Dial(context.Background(), endpoint, creds, pluginruntime.DefaultConfig())
+	if err != nil {
+		return
+	}
+	p.mu.Lock()
+	p.hostTransport = tr
+	p.mu.Unlock()
+}
+
+// serveHost runs a minimal Driver Protocol server over the dialed transport so
+// the host's periodic Health and Shutdown RPCs succeed.
+func (p *FakeProcess) serveHost() {
+	p.mu.Lock()
+	tr := p.hostTransport
+	p.mu.Unlock()
+	if tr == nil {
+		return
+	}
+	srv := driver.NewRPCServer(tr, fakeDriverServer{})
+	_ = srv.Serve(context.Background())
 }
 
 func (p *FakeProcess) handshakeLine() string {
@@ -157,16 +209,23 @@ func (p *FakeProcess) handshakeLine() string {
 	env := p.env
 	p.mu.Unlock()
 	version, _ := strconv.ParseUint(env[pluginhost.EnvProtocolVersion], 10, 32)
+	transportName := "tcp"
+	endpoint := "127.0.0.1:40000"
+	if raw := env[pluginhost.EnvPluginEndpoint]; raw != "" {
+		if ep, err := pluginruntime.ParseEndpoint(raw); err == nil {
+			transportName, endpoint = ep.Scheme, ep.Addr
+		}
+	}
 	return (pluginhost.Handshake{
 		Marker:          pluginhost.HandshakeMarker,
 		PluginID:        env[pluginhost.EnvPluginID],
 		Protocol:        env[pluginhost.EnvProtocol],
 		ProtocolVersion: uint32(version),
-		Transport:       "tcp",
-		Endpoint:        "127.0.0.1:40000",
+		Transport:       transportName,
+		Endpoint:        endpoint,
 		RPC:             "grpc",
 		LaunchID:        env[pluginhost.EnvLaunchID],
-		Proof:           env[pluginhost.EnvHandshakeCookie],
+		Proof:           env[pluginhost.EnvProof],
 	}).String()
 }
 
@@ -215,7 +274,11 @@ func (p *FakeProcess) Exit(err error) {
 	p.exitOnce.Do(func() {
 		p.mu.Lock()
 		p.exited = true
+		tr := p.hostTransport
 		p.mu.Unlock()
+		if tr != nil {
+			_ = tr.Close()
+		}
 		_ = p.stdoutW.Close()
 		_ = p.stderrW.Close()
 		p.waitCh <- err
@@ -266,6 +329,44 @@ func (p *FakeProcess) Env() map[string]string {
 		out[k] = v
 	}
 	return out
+}
+
+// fakeDriverServer is the minimal DriverService the fake process serves. Only
+// Health and Shutdown are exercised by the host lifecycle; the other methods
+// return stable empty responses.
+type fakeDriverServer struct{}
+
+var _ driver.DriverServer = fakeDriverServer{}
+
+func (fakeDriverServer) Initialize(_ context.Context, _ *driver.InitializeRequest) (*driver.InitializeResponse, error) {
+	return &driver.InitializeResponse{NegotiatedProtocolVersion: driver.ProtocolVersion, Status: status.New()}, nil
+}
+func (fakeDriverServer) Describe(_ context.Context) (*driver.DriverDescriptor, error) {
+	return &driver.DriverDescriptor{DriverID: "fake-driver"}, nil
+}
+func (fakeDriverServer) ConfigureInstance(_ context.Context, _ *driver.ConfigureInstanceRequest) (*driver.ConfigureInstanceResponse, error) {
+	return &driver.ConfigureInstanceResponse{Status: status.New()}, nil
+}
+func (fakeDriverServer) Discover(_ context.Context, _ *driver.DiscoverRequest, _ driver.DiscoveryWriter) error {
+	return nil
+}
+func (fakeDriverServer) OpenDevice(_ context.Context, _ *driver.OpenDeviceRequest) (*driver.OpenDeviceResponse, error) {
+	return &driver.OpenDeviceResponse{Status: status.New()}, nil
+}
+func (fakeDriverServer) CloseDevice(_ context.Context, _ *driver.CloseDeviceRequest) (*driver.CloseDeviceResponse, error) {
+	return &driver.CloseDeviceResponse{Status: status.New()}, nil
+}
+func (fakeDriverServer) Watch(_ context.Context, _ *driver.WatchRequest, _ driver.DriverMessageWriter) error {
+	return nil
+}
+func (fakeDriverServer) Execute(_ context.Context, _ *driver.ExecuteRequest) (*driver.ExecuteResponse, error) {
+	return &driver.ExecuteResponse{Status: status.New()}, nil
+}
+func (fakeDriverServer) Health(_ context.Context) (*driver.HealthResponse, error) {
+	return &driver.HealthResponse{State: driver.HealthStateServing}, nil
+}
+func (fakeDriverServer) Shutdown(_ context.Context, _ *driver.ShutdownRequest) (*driver.ShutdownResponse, error) {
+	return &driver.ShutdownResponse{Status: status.New()}, nil
 }
 
 func envMap(env []string) map[string]string {

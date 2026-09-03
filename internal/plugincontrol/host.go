@@ -148,6 +148,7 @@ func (h *Host) load(ctx context.Context, states []InstanceState) (LoadResult, er
 			PluginID: locked.ID,
 			Version:  locked.Version,
 			Path:     h.installationPath(locked),
+			Kind:     h.installationKind(locked),
 		}
 		err := h.opts.Manager.RegisterInstallation(inst)
 		if err != nil {
@@ -197,6 +198,26 @@ func (h *Host) load(ctx context.Context, states []InstanceState) (LoadResult, er
 
 func (h *Host) installationPath(locked registry.LockedPlugin) string {
 	return filepath.Join(h.opts.PluginsDir, registry.SafePluginID(locked.ID), "assets", locked.Digest)
+}
+
+// installationKind reads the installed manifest kind so the host selects the
+// right protocol client. A missing or unreadable manifest falls back to the
+// Driver protocol rather than failing the whole host reload.
+func (h *Host) installationKind(locked registry.LockedPlugin) pluginhost.Kind {
+	manifestPath := filepath.Join(h.opts.PluginsDir, registry.SafePluginID(locked.ID), "plugin.yaml")
+	manifest, err := registry.LoadManifest(manifestPath)
+	if err != nil {
+		h.opts.Logger.Debug("plugin manifest kind unavailable; defaulting to driver",
+			"plugin_id", locked.ID, "error", err)
+		return pluginhost.KindDriver
+	}
+	kind, err := pluginhost.ParseKind(manifest.Kind)
+	if err != nil {
+		h.opts.Logger.Debug("plugin manifest kind unknown; defaulting to driver",
+			"plugin_id", locked.ID, "kind", manifest.Kind)
+		return pluginhost.KindDriver
+	}
+	return kind
 }
 
 func configForState(state InstanceState) map[string]string {
