@@ -1,0 +1,20 @@
+# 私有层：构想/设备清单/部署/待办，不入库
+.local/
+
+# 构建产物与依赖
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# 本地环境与凭据
+.env
+.env.*
+*.local.json
