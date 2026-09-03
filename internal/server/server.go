@@ -33,6 +33,7 @@ import (
 	"github.com/DeliciousBuding/cloud-path/internal/auth"
 	"github.com/DeliciousBuding/cloud-path/internal/device"
 	"github.com/DeliciousBuding/cloud-path/internal/model"
+	"github.com/DeliciousBuding/cloud-path/internal/plugincatalog"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
 	"github.com/DeliciousBuding/cloud-path/webui"
 )
@@ -66,6 +67,8 @@ type Config struct {
 	LoginRatePerMin int
 	// SessionDays 是服务端会话 TTL（天）。<=0 用默认 7。
 	SessionDays int
+	// PluginCatalog 是只读插件目录（可选）。nil 时插件端点返回空列表而非崩溃。
+	PluginCatalog plugincatalog.Catalog
 }
 
 func (c Config) retentionDays() int {
@@ -110,9 +113,10 @@ type Server struct {
 	descriptors   map[string]model.Descriptor // 最近一次 edge 上报的 Descriptor（device key → desc）
 	deviceTenants map[string]string           // device key → 租户 slug（缺省 default；REST 隔离用）
 
-	loginLimiter *auth.RateLimiter // 登录限流：次/分/IP
-	authForced   atomic.Bool       // 账号模式：已有用户或 -require-auth
-	auditWrite   auditWriteFunc    // 审计落库（默认写 store；测试可注入）
+	loginLimiter  *auth.RateLimiter     // 登录限流：次/分/IP
+	authForced    atomic.Bool           // 账号模式：已有用户或 -require-auth
+	auditWrite    auditWriteFunc        // 审计落库（默认写 store；测试可注入）
+	pluginCatalog plugincatalog.Catalog // 只读插件目录（注入；nil=空列表）
 }
 
 type edgeLink struct {
@@ -143,6 +147,7 @@ func New(cfg Config) *Server {
 		descriptors:   map[string]model.Descriptor{},
 		deviceTenants: map[string]string{},
 		loginLimiter:  auth.NewRateLimiter(cfg.loginRatePerMin()),
+		pluginCatalog: cfg.PluginCatalog,
 	}
 	s.auditWrite = s.defaultAuditWrite()
 	s.hydrate()
@@ -621,6 +626,10 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/api/commands", s.handleListCommands)
 			r.Get("/api/adapters", s.handleListAdapters)
 			r.Get("/api/stats", s.handleStats)
+			r.Get("/api/plugins", s.handleListPlugins)
+			r.Get("/api/plugins/{pluginID}", s.handleGetPlugin)
+			r.Get("/api/plugin-instances", s.handleListPluginInstances)
+			r.Get("/api/plugin-instances/{id}", s.handleGetPluginInstance)
 		})
 		r.Post("/api/devices/{edgeID}/{deviceID}/commands", s.authWrite(s.handlePostCommand))
 	})
