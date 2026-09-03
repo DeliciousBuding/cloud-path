@@ -25,6 +25,7 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/DeliciousBuding/cloud-path/examples/demo" // 参考演示设备适配器（无硬件；/api/adapters 与命令白名单同源）
 	_ "github.com/DeliciousBuding/cloud-path/examples/stcb" // 适配器注册（命令白名单校验用）
 	"github.com/DeliciousBuding/cloud-path/internal/auth"
 	"github.com/DeliciousBuding/cloud-path/internal/logx"
