@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "cloudpath.dev/plugin-manifest/v1alpha1",
+  "title": "PluginManifest",
+  "description": "插件仓库根 plugin.yaml 的机器可读 schema（A7 Registry 校验用）。",
+  "type": "object",
+  "required": ["apiVersion", "kind", "id", "version", "protocol", "entrypoint"],
+  "properties": {
+    "apiVersion": {"const": "plugins.cloudpath.dev/v1alpha1"},
+    "kind": {"enum": ["Driver", "Application", "Connector"]},
+    "id": {"type": "string"},
+    "version": {"type": "string"},
+    "protocol": {"type": "integer", "description": "RPC 协议版本"},
+    "entrypoint": {"type": "string"},
+    "compatibility": {"type": "object", "properties": {"core": {"type": "string"}}},
+    "permissions": {
+      "type": "object",
+      "properties": {
+        "hardware": {"type": "array", "items": {"type": "string"}},
+        "network": {"type": "array", "items": {"type": "string"}},
+        "filesystem": {"type": "array", "items": {"type": "string"}},
+        "secrets": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "capabilities": {"type": "array", "items": {"type": "string"}},
+    "requirements": {"type": "array", "items": {"type": "object"}}
+  }
+}

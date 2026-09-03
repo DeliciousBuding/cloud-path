@@ -31,3 +31,6 @@ webui/dist/
 *.code-workspace
 .DS_Store
 Thumbs.db
+
+# ---- git worktree 隔离 checkout ----
+.worktrees/

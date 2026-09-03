@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "cloudpath.dev/descriptor/v1",
+  "title": "DeviceDescriptor",
+  "description": "Edge/Adapter 上报给 Core 与前端 SchemaRenderer 的设备描述（A1 生产，A2 消费）。",
+  "type": "object",
+  "required": ["device_id", "external_id", "status", "entities"],
+  "properties": {
+    "device_id": {"type": "string", "description": "Core 内稳定 ID（不得用串口名）"},
+    "external_id": {"type": "string", "description": "Driver 范围内不可变 ID"},
+    "manufacturer": {"type": "string"},
+    "model": {"type": "string"},
+    "status": {"type": "string", "enum": ["online", "offline", "unavailable", "degraded"]},
+    "entities": {"type": "array", "items": {"$ref": "#/definitions/Entity"}}
+  },
+  "definitions": {
+    "Entity": {
+      "type": "object",
+      "required": ["entity_id", "unique_key", "category", "capabilities"],
+      "properties": {
+        "entity_id": {"type": "string"},
+        "unique_key": {"type": "string", "description": "Driver 范围内用户不可改的唯一键"},
+        "name": {"type": "string"},
+        "category": {"type": "string", "enum": ["sensor", "actuator", "diagnostic", "config"]},
+        "capabilities": {"type": "array", "items": {"type": "string"}},
+        "observations": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/definitions/Observation"}
+        }
+      }
+    },
+    "Observation": {
+      "type": "object",
+      "required": ["capability", "property", "value"],
+      "properties": {
+        "capability": {"type": "string"},
+        "property": {"type": "string"},
+        "value": {},
+        "unit": {"type": "string"},
+        "quality": {"type": "string", "enum": ["good", "uncertain", "bad", "unavailable"]},
+        "observed_at": {"type": "string", "format": "date-time"},
+        "received_at": {"type": "string", "format": "date-time"},
+        "sequence": {"type": "integer"}
+      }
+    }
+  }
+}
