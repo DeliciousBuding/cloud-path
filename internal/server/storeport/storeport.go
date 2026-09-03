@@ -140,11 +140,15 @@ type PluginStore interface {
 	GetPluginInstance(tenantID int64, edgeID, instanceID string) (PluginInstanceRow, bool, error)
 	CreatePluginInstance(row PluginInstanceRow) (uint64, error)
 	UpdatePluginInstance(row PluginInstanceRow) (uint64, error)
+	// DeletePluginInstance 删除期望态并 +1 revision（Edge 需要收敛「实例已移除」）。
+	// purge=false 必须保留该实例的 observed 投影行与全部审计；purge=true 才删投影。
 	DeletePluginInstance(tenantID int64, edgeID, instanceID string, purge bool) (uint64, error)
 	PluginDesiredRevision(tenantID int64, edgeID string) (uint64, error)
 
 	// ---- Edge revision / applied 投影 ----
 	GetPluginEdgeRevision(tenantID int64, edgeID string) (PluginEdgeRevisionRow, error)
+	// SetPluginEdgeApplied 写入 applied_revision 与 ack 时间。rejected/failed 的 ack
+	// 也会调用它，但传入的是**未变化的** appliedRevision（只刷新 LastAckAt）。
 	SetPluginEdgeApplied(tenantID int64, edgeID, bootID string, seq, appliedRevision uint64, at int64) error
 	SetPluginEdgeReport(tenantID int64, edgeID, bootID string, seq uint64, at int64) error
 

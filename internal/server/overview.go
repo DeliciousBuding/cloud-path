@@ -59,7 +59,8 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 插件计数：desired 来自 Server 权威期望态，active 只统计 Edge 真实上报且健康的实例。
+	// 插件计数：PluginsDesired = 期望**启用**的实例数（Server 权威期望态）；
+	// PluginsActive = Edge 真实上报、投影未过期且状态为运行中的实例数。
 	// 「期望启用」绝不计入 active（不变量 5：desired≠observed）。
 	if s.plugin.enabled() {
 		instances, err := plugincatalog.InstanceViews(pluginProjection{s}, tenant)
@@ -85,14 +86,16 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, view)
 }
 
-// pluginObservedActive 判定一条 observed 投影是否算「活跃」：
-// Edge 上报的 state/health 为健康态才算，绝不因为 desired enabled 就算活跃。
+// pluginObservedActive 判定一条 observed 投影是否算「活跃」：实例已在运行
+// （pluginhost 状态 HEALTHY/DEGRADED，或健康探测为 HEALTHY）才算；
+// STOPPED/CRASHED/BACKOFF/DISABLED/STARTING 与「无上报」一律不计入，
+// 绝不因为 desired enabled 就算活跃。
 func pluginObservedActive(in api.PluginInstanceView) bool {
 	if in.Observed == nil {
 		return false
 	}
 	switch in.Observed.State {
-	case "HEALTHY", "DEGRADED", "STARTING":
+	case "HEALTHY", "DEGRADED":
 		return true
 	}
 	return in.Observed.Health == "HEALTHY"

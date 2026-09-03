@@ -246,8 +246,9 @@ func (s *Server) handleCreatePluginInstance(w http.ResponseWriter, r *http.Reque
 	defer p.writeMu.Unlock()
 	if _, err := p.ensureLoaded(ctx.tenantID, ctx.tenantSlug); err != nil {
 		slog.Warn("plugin create: load tenant plane", "err", err, "tenant_id", ctx.tenantID)
-		s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrConflict,
-			http.StatusInternalServerError, "plugin store unavailable"))
+		// 存储不可用是部署/IO 缺陷，不是用户冲突：用独立稳定码而不是占用 conflict。
+		s.writePluginError(w, r, ctx, &pluginWriteError{code: pluginErrStoreUnavailable,
+			status: http.StatusInternalServerError, message: "plugin store unavailable"})
 		return
 	}
 	if dupEdge, dup := p.findInstanceLocked(ctx.tenantID, instanceID); dup {
@@ -315,8 +316,9 @@ func (s *Server) handleUpdatePluginInstance(w http.ResponseWriter, r *http.Reque
 	p.writeMu.Lock()
 	defer p.writeMu.Unlock()
 	if _, err := p.ensureLoaded(ctx.tenantID, ctx.tenantSlug); err != nil {
-		s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrConflict,
-			http.StatusInternalServerError, "plugin store unavailable"))
+		// 存储不可用是部署/IO 缺陷，不是用户冲突：用独立稳定码而不是占用 conflict。
+		s.writePluginError(w, r, ctx, &pluginWriteError{code: pluginErrStoreUnavailable,
+			status: http.StatusInternalServerError, message: "plugin store unavailable"})
 		return
 	}
 	row, ok := p.getInstanceLocked(ctx.tenantID, id)
@@ -424,8 +426,9 @@ func (s *Server) handleDeletePluginInstance(w http.ResponseWriter, r *http.Reque
 	p.writeMu.Lock()
 	defer p.writeMu.Unlock()
 	if _, err := p.ensureLoaded(ctx.tenantID, ctx.tenantSlug); err != nil {
-		s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrConflict,
-			http.StatusInternalServerError, "plugin store unavailable"))
+		// 存储不可用是部署/IO 缺陷，不是用户冲突：用独立稳定码而不是占用 conflict。
+		s.writePluginError(w, r, ctx, &pluginWriteError{code: pluginErrStoreUnavailable,
+			status: http.StatusInternalServerError, message: "plugin store unavailable"})
 		return
 	}
 	row, ok := p.getInstanceLocked(ctx.tenantID, id)
@@ -482,8 +485,9 @@ func (s *Server) handleReconcilePluginInstance(w http.ResponseWriter, r *http.Re
 		}
 	}
 	if _, err := p.ensureLoaded(ctx.tenantID, ctx.tenantSlug); err != nil {
-		s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrConflict,
-			http.StatusInternalServerError, "plugin store unavailable"))
+		// 存储不可用是部署/IO 缺陷，不是用户冲突：用独立稳定码而不是占用 conflict。
+		s.writePluginError(w, r, ctx, &pluginWriteError{code: pluginErrStoreUnavailable,
+			status: http.StatusInternalServerError, message: "plugin store unavailable"})
 		return
 	}
 	row, ok := p.getInstanceLocked(ctx.tenantID, id)
@@ -563,8 +567,8 @@ func mapStoreError(err error, id string) *pluginWriteError {
 			message: "plugin instance not found"}
 	default:
 		slog.Warn("plugin store write failed", "err", err, "instance", id)
-		return newPluginWriteError(api.PluginErrConflict, http.StatusInternalServerError,
-			"plugin store write failed")
+		return &pluginWriteError{code: pluginErrStoreUnavailable,
+			status: http.StatusInternalServerError, message: "plugin store write failed"}
 	}
 }
 

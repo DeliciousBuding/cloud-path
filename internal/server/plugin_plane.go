@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -59,8 +60,6 @@ type pluginEdgePlane struct {
 	lastSequence    uint64
 	lastReportAt    int64
 	lastAckAt       int64
-	lastAckStatus   string
-	lastResults     []api.PluginApplyResultData
 	observed        map[string]api.PluginObservedInstanceData
 	installations   map[string]api.PluginInstallationStatusData
 }
@@ -317,6 +316,9 @@ func (p *pluginPlane) desiredSnapshotLocked(t *pluginTenantPlane, edgeID string)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].InstanceID < out[j].InstanceID })
 	if len(out) > maxDesiredSnapshotInstances {
+		// 快照被截断意味着 Edge 会漏掉实例：这是配额失效级别的异常，必须显式告警。
+		slog.Error("plugin desired snapshot truncated", "edge", edgeID,
+			"instances", len(out), "limit", maxDesiredSnapshotInstances)
 		out = out[:maxDesiredSnapshotInstances]
 	}
 	return api.PluginDesiredData{

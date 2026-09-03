@@ -231,7 +231,9 @@ func (s *Server) applyPluginAck(link *edgeLink, data api.PluginAckData) (bool, s
 		return false, "unknown_revision"
 	}
 	if data.Status != api.PluginAckApplied {
-		ep.lastAckAt, ep.lastAckStatus, ep.lastResults = now, data.Status, results
+		// rejected/failed：applied_revision 原样写回（只刷新 ack 时间与 boot/sequence），
+		// 保持上一个完整已应用快照；逐实例结果进审计，不进内存死字段。
+		ep.lastAckAt = now
 		if err := p.store.SetPluginEdgeApplied(link.tenantID, link.edgeID, bootID,
 			ep.lastSequence, ep.appliedRevision, now); err != nil {
 			slog.Warn("plugin_ack: persist rejection", "err", err, "edge", link.edgeID)
@@ -246,11 +248,11 @@ func (s *Server) applyPluginAck(link *edgeLink, data api.PluginAckData) (bool, s
 		return false, "digest_mismatch"
 	}
 	if data.Revision <= ep.appliedRevision {
-		ep.lastAckAt, ep.lastAckStatus, ep.lastResults = now, data.Status, results
+		ep.lastAckAt = now
 		return false, "duplicate_ack"
 	}
 	ep.appliedRevision = data.Revision
-	ep.lastAckAt, ep.lastAckStatus, ep.lastResults = now, data.Status, results
+	ep.lastAckAt = now
 	if err := p.store.SetPluginEdgeApplied(link.tenantID, link.edgeID, bootID,
 		ep.lastSequence, data.Revision, now); err != nil {
 		slog.Warn("plugin_ack: persist applied", "err", err, "edge", link.edgeID)
