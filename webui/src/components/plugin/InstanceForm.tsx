@@ -13,6 +13,7 @@ import { Button, TextField } from '@/components/ui'
 import { PermissionList, PluginErrorNote } from './PluginFacts'
 import { useEdges } from '@/hooks/useEdges'
 import { useCreateInstance, useUpdateInstance } from '@/hooks/usePlugins'
+import { optionLabel } from '@/lib/format'
 import { permissionCount, secretHandleName } from '@/lib/plugins'
 import type {
   PluginCatalogView, PluginInstanceCreateRequest, PluginInstanceUpdateRequest, PluginInstanceView,
@@ -24,7 +25,8 @@ const ISOLATIONS = [
   { value: 'none', label: '无隔离（none）' },
 ]
 
-const SELECT_CLS = 'input text-[13px]'
+// 原生 select/option 不吃 CSS 截断：限宽 + overflow-hidden，option 文本另做收敛
+const SELECT_CLS = 'input overflow-hidden text-[13px]'
 
 interface ConfigRow { key: string; value: string }
 
@@ -104,7 +106,7 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
                 {edges.length === 0 && <option value="">（还没有边缘节点）</option>}
                 {edges.map((ed) => (
                   <option key={ed.edge_id} value={ed.edge_id}>
-                    {ed.edge_id}{ed.online ? '' : '（离线）'}
+                    {optionLabel(`${ed.edge_id}${ed.online ? '' : '（离线）'}`, 40)}
                   </option>
                 ))}
               </select>
@@ -133,7 +135,7 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
             <select id="pi-plugin" className={SELECT_CLS} value={pluginId} onChange={(e) => setPluginId(e.target.value)}>
               {catalog.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.id}{p.version ? ` · ${p.version}` : ''}{p.verified ? '' : '（未验证）'}
+                  {optionLabel(`${p.id}${p.version ? ` · ${p.version}` : ''}${p.verified ? '' : '（未验证）'}`, 40)}
                 </option>
               ))}
             </select>

@@ -100,3 +100,13 @@ const ROLE_LABELS: Record<string, string> = {
 export function roleLabel(role: string): string {
   return ROLE_LABELS[role] ?? role
 }
+
+/**
+ * 下拉候选等窄容器里的标签截断。
+ * 原生 <option> 不受 CSS truncate 约束（下拉弹层宽度也不受父容器限制），
+ * 因此后端给的长标识符只能在文本层收敛，否则 390px 上选择器会被撑宽、弹层不可读。
+ */
+export function optionLabel(s: string, max = 32): string {
+  const v = String(s ?? '')
+  return v.length > max ? `${v.slice(0, max)}…` : v
+}

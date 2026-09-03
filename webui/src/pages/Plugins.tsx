@@ -92,7 +92,9 @@ export default function Plugins() {
                         {p.id}
                       </span>
                       <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                        <Badge tone="idle">{p.kind || '未知类型'}</Badge>
+                        <Badge tone="idle" className="max-w-full">
+                          <span className="min-w-0 truncate">{p.kind || '未知类型'}</span>
+                        </Badge>
                         <Badge tone={trust.tone}>
                           {p.verified ? <ShieldCheck size={11} className="shrink-0" /> : null}
                           {trust.label}
@@ -195,13 +197,15 @@ export default function Plugins() {
                             </span>
                             {v.has_observed ? (
                               <>
-                                <Badge tone={st.tone === 'idle' ? 'idle' : st.tone}>{st.label}</Badge>
+                                <Badge tone={st.tone === 'idle' ? 'idle' : st.tone} className="max-w-full">
+                                  <span className="min-w-0 truncate">{st.label}</span>
+                                </Badge>
                                 <span className="num truncate text-[11px] text-ink-2">{v.observed?.version || '未给出版本'}</span>
                                 <span className="truncate text-[11px] text-ink-3">健康 {hl.label}</span>
                                 <span className="num truncate text-[11px] text-ink-3">
                                   重启 {v.observed?.restart_count ?? 0} 次
                                 </span>
-                                {v.stale && <Badge tone="warn">stale</Badge>}
+                                {v.stale && <Badge tone="warn" className="shrink-0">stale</Badge>}
                                 <span className="num ml-auto shrink-0 text-[11px] text-ink-3"
                                   title={v.observed?.reported_at ? fmtDateTime(v.observed.reported_at) : '未给出上报时间'}>
                                   {v.observed?.reported_at ? fmtDateTime(v.observed.reported_at) : '—'}

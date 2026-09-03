@@ -10,7 +10,7 @@ import { useLive } from '@/store/ws'
 import { useDevices } from '@/hooks/useDevices'
 import { useEdges } from '@/hooks/useEdges'
 import { useCapabilityIndex } from '@/hooks/useDescriptor'
-import { cmdStatusMeta, eventLabel, fmtDateTime, mergeEvents } from '@/lib/format'
+import { cmdStatusMeta, eventLabel, fmtDateTime, mergeEvents, optionLabel } from '@/lib/format'
 import { cn } from '@/lib/cn'
 
 /** 单次拉取上限：与后端 limit 上限一致，超出部分给出明确说明而不是静默截断 */
@@ -29,7 +29,8 @@ const STATUS_FILTERS = [
 ]
 
 /** 下拉共用的样式（390px：min-w-0 + max-w-full，长设备名靠 option 自身截断） */
-const SELECT_CLS = 'min-w-0 max-w-full rounded-full border border-hairline bg-surface px-3 py-1.5 text-xs font-medium outline-none transition-colors focus:border-accent'
+// 原生 select/option 不吃 CSS 截断：select 自身限宽 + overflow-hidden，option 文本另在 optionLabel 里收敛
+const SELECT_CLS = 'min-w-0 max-w-full overflow-hidden rounded-full border border-hairline bg-surface px-3 py-1.5 text-xs font-medium outline-none transition-colors focus:border-accent'
 
 /**
  * 活动页：事件与命令历史（/api/events、/api/commands），带设备 / 边缘 / 状态过滤。
@@ -125,7 +126,9 @@ export default function Activity() {
             <select id="act-device" value={device} onChange={(e) => setDevice(e.target.value)} className={SELECT_CLS}>
               <option value="">全部设备</option>
               {devices.map((d) => (
-                <option key={d.id} value={d.id}>{d.name ? `${d.name}（${d.id}）` : d.id}</option>
+                <option key={d.id} value={d.id}>
+                  {optionLabel(d.name ? `${d.name}（${d.id}）` : d.id, 40)}
+                </option>
               ))}
             </select>
 
@@ -134,7 +137,9 @@ export default function Activity() {
               onChange={(e) => setEdge(e.target.value)} className={cn(SELECT_CLS, 'disabled:opacity-50')}
               title={device ? '已按具体设备筛选' : undefined}>
               <option value="">全部边缘节点</option>
-              {edges.map((e) => <option key={e.edge_id} value={e.edge_id}>{e.edge_id}</option>)}
+              {edges.map((e) => (
+                <option key={e.edge_id} value={e.edge_id}>{optionLabel(e.edge_id, 40)}</option>
+              ))}
             </select>
 
             {tab === 'commands' && (
@@ -243,8 +248,10 @@ function CommandRows({ rows }: { rows: { id: number; device_id: string; cmd: str
           // 390px：徽标/时间不收缩，命令、目标、结果三段各自 truncate
           <li key={c.id} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
             <Badge tone={st.tone} className="shrink-0">{st.label}</Badge>
-            <span className="num min-w-0 max-w-full truncate font-mono text-xs font-medium" title={`${c.cmd}${c.args ? ` ${c.args}` : ''}`}>
-              {c.cmd}{c.args ? <span className="text-ink-3"> {c.args}</span> : null}
+            <span className="num flex min-w-0 max-w-full items-baseline gap-1 font-mono text-xs font-medium"
+              title={`${c.cmd}${c.args ? ` ${c.args}` : ''}`}>
+              <span className="min-w-0 truncate">{c.cmd}</span>
+              {c.args ? <span className="min-w-0 truncate text-ink-3">{c.args}</span> : null}
             </span>
             <Link
               to={`/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`}

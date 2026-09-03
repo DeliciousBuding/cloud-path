@@ -38,11 +38,11 @@ export function InstanceRow({ v, catalog, onEdit }: {
       <div className="mt-3 grid grid-cols-2 gap-2.5">
         <div className="min-w-0 rounded-xl bg-surface-2 px-3 py-2.5">
           <p className="text-[10.5px] font-medium text-ink-3">期望态 · Desired</p>
-          <p className="mt-1 min-w-0 truncate text-[12.5px] font-medium"
+          <p className="mt-1 flex min-w-0 items-baseline gap-1 text-[12.5px] font-medium"
             title={`${v.desired.enabled ? '已启用' : '已停用'} · ${v.desired.version} · revision ${v.desired_revision}`}>
-            {v.desired.enabled ? '已启用' : '已停用'}
-            <span className="text-ink-3"> · </span>
-            <span className="num">{v.desired.version || '—'}</span>
+            <span className="shrink-0">{v.desired.enabled ? '已启用' : '已停用'}</span>
+            <span className="shrink-0 text-ink-3">·</span>
+            <span className="num min-w-0 truncate">{v.desired.version || '—'}</span>
           </p>
           <p className="num mt-0.5 truncate text-[11px] text-ink-3">
             rev {v.desired_revision} · {isolationLabel(v.desired.isolation)}
@@ -52,13 +52,13 @@ export function InstanceRow({ v, catalog, onEdit }: {
           <p className="text-[10.5px] font-medium text-ink-3">实际态 · Observed</p>
           {v.has_observed ? (
             <>
-              <p className={`mt-1 min-w-0 truncate text-[12.5px] font-medium ${
+              <p className={`mt-1 flex min-w-0 items-baseline gap-1 text-[12.5px] font-medium ${
                 st.tone === 'ok' ? 'text-ok' : st.tone === 'bad' ? 'text-bad'
                   : st.tone === 'warn' ? 'text-warn' : ''}`}
                 title={`${st.label} · ${v.observed?.version ?? '未给出版本'} · applied ${v.applied_revision}`}>
-                {st.label}
-                <span className="text-ink-3"> · </span>
-                <span className="num">{v.observed?.version || '未给出'}</span>
+                <span className="min-w-0 truncate">{st.label}</span>
+                <span className="shrink-0 text-ink-3">·</span>
+                <span className="num min-w-0 truncate">{v.observed?.version || '未给出'}</span>
               </p>
               <p className="num mt-0.5 truncate text-[11px] text-ink-3">
                 applied {v.applied_revision} · {hl.label}
@@ -68,7 +68,7 @@ export function InstanceRow({ v, catalog, onEdit }: {
           ) : (
             <>
               <p className="mt-1 truncate text-[12.5px] font-medium text-ink-2">Edge 未上报</p>
-              <p className="mt-0.5 truncate text-[11px] text-ink-3">
+              <p className="mt-0.5 min-w-0 truncate text-[11px] text-ink-3">
                 {v.edge_online ? '节点在线但还没回过' : '节点离线'}
               </p>
             </>
