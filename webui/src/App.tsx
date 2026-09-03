@@ -6,7 +6,7 @@ import { PageSkeleton } from '@/components/Skeleton'
 import { refreshAuth, useAuth } from '@/store/auth'
 import { connectLive, disconnectLive } from '@/store/ws'
 import { applyTheme, watchSystemTheme } from '@/lib/theme'
-import Dashboard from '@/pages/Dashboard'
+import Overview from '@/pages/Overview'
 import Devices from '@/pages/Devices'
 
 // 认证页（FE-DESIGN 提供的全屏壳，不套 Layout 侧栏）：懒加载
@@ -79,7 +79,7 @@ export default function App() {
           <Route path="/setup" element={<Setup />} />
           <Route element={<Layout />}>
             <Route element={<RequireAuth />}>
-              <Route index element={<Dashboard />} />
+              <Route index element={<Overview />} />
               <Route path="devices" element={<Devices />} />
               <Route path="devices/:edgeId/:deviceId" element={<DeviceDetail />} />
               <Route path="events" element={<Events />} />

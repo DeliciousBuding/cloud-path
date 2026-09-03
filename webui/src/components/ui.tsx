@@ -3,7 +3,7 @@
 // 颜色一律走 index.css token（Tailwind 主题类或 .btn/.input/.card 基类），组件内禁止裸色值。
 import { useId, useState } from 'react'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react'
-import { Moon, Sun } from 'lucide-react'
+import { Moon, RefreshCw, Sun } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { setTheme } from '@/lib/theme'
 import type { ThemeMode } from '@/lib/theme'
@@ -94,6 +94,48 @@ export function EmptyState({ icon, title, hint }: { icon?: ReactNode; title: str
       </div>
       <p className="mt-4 text-[15px] font-semibold">{title}</p>
       {hint && <p className="mt-1 max-w-sm text-sm text-ink-2">{hint}</p>}
+    </div>
+  )
+}
+
+/**
+ * 错误态：说清「拿不到什么」+ 一键重试。
+ * 不复述服务端技术细节，也不把错误渲染成空白（空白 = 用户以为没数据）。
+ */
+export function ErrorState({ icon, title, hint, onRetry, retrying, compact }: {
+  icon?: ReactNode; title: string; hint?: ReactNode
+  onRetry?: () => void; retrying?: boolean; compact?: boolean
+}) {
+  return (
+    <div
+      role="alert"
+      className={cn('card flex flex-col items-center justify-center px-6 text-center fade-up',
+        compact ? 'py-9' : 'py-14')}
+    >
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-bad/10 text-bad">
+        {icon ?? <RefreshCw size={20} />}
+      </div>
+      <p className="mt-3.5 text-[15px] font-semibold">{title}</p>
+      {hint && <p className="mt-1 max-w-md text-sm break-words text-ink-2">{hint}</p>}
+      {onRetry && (
+        <button type="button" className="btn btn-ghost mt-5" onClick={onRetry} disabled={retrying}>
+          {retrying ? <Spinner size={13} /> : <RefreshCw size={13} />} 重试
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** 页内分区标题（比 Panel title 更轻，用于把一组卡片归到一个语义段落下） */
+export function SectionTitle({ icon, children, right }: {
+  icon?: ReactNode; children: ReactNode; right?: ReactNode
+}) {
+  return (
+    <div className="mb-3 flex min-w-0 items-center justify-between gap-3 px-1">
+      <h2 className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold tracking-tight">
+        {icon}<span className="truncate">{children}</span>
+      </h2>
+      {right}
     </div>
   )
 }
