@@ -123,10 +123,64 @@ export interface UserView {
   role: Role
   tenant_id: number
   tenant_slug: string
+  /** 已禁用账号（服务端 omitempty：未禁用时字段缺席） */
+  disabled?: boolean
 }
 
 export interface MeResponse {
   user: UserView
+}
+
+/* ------------------------------------------------------------------ *
+ * 管理面（docs/api.md §3.2-3.3）：用户管理 + 租户服务令牌
+ * ------------------------------------------------------------------ */
+
+/** POST /api/users 请求体（username 在租户内唯一） */
+export interface CreateUserInput {
+  username: string
+  /** 留空则服务端回落为 username */
+  name?: string
+  role: Role
+  password: string
+}
+
+/** PATCH /api/users/{id} 请求体：只带要改的字段 */
+export interface UpdateUserInput {
+  name?: string
+  role?: Role
+  disabled?: boolean
+  password?: string
+}
+
+/** 服务令牌 scope（docs/api.md §3.3：read|write|admin|edge 的非空子集） */
+export type TokenScope = 'read' | 'write' | 'admin' | 'edge'
+
+/**
+ * 令牌元数据视图：只有短 prefix，**永不携带明文**。
+ * 明文仅出现在 POST /api/tokens 的响应里一次（见 CreatedToken）。
+ */
+export interface TokenView {
+  id: number
+  name: string
+  prefix: string
+  scopes: TokenScope[]
+  created_at: number
+  expires_at?: number
+  last_used_at?: number
+  revoked_at?: number
+}
+
+/** POST /api/tokens 响应：`token` 是明文，只此一次，不得落任何持久化通道 */
+export interface CreatedToken extends TokenView {
+  token: string
+}
+
+/** POST /api/tokens 请求体 */
+export interface CreateTokenInput {
+  name: string
+  scopes: TokenScope[]
+  /** 缺省 = 永不过期（字段不出现在 body 里） */
+  expires_at?: number
 }
 
 /* ------------------------------------------------------------------ *

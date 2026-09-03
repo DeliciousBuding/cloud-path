@@ -21,6 +21,20 @@ export function authReady(status: AuthStatus): boolean {
   return status === 'in' || status === 'open'
 }
 
+/**
+ * 管理面可见性判据（docs/api.md §3.1）：只有「已登录且 me.role === admin」。
+ * 'open'（me 不可用的开放访问）与 user=null 一律不算 admin —— 用户/令牌列表宁可不渲染，
+ * 也不靠 disabled 遮一层（服务端另有 requireAdmin 门禁兜底）。
+ */
+export function isAdmin(status: AuthStatus, user: UserView | null): boolean {
+  return status === 'in' && user?.role === 'admin'
+}
+
+/** 组件用的管理面可见性 hook */
+export function useIsAdmin(): boolean {
+  return useAuth((s) => isAdmin(s.status, s.user))
+}
+
 let refreshing = false
 
 /**

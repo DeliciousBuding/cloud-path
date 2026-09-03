@@ -2,40 +2,16 @@
 // 承载它们的文本容器必须自己截断（truncate/break）或待在局部滚动容器里，
 // 否则一个长名字就能把 body 顶出横向滚动。用 64 个不可断字符做最坏情况。
 import { screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, it } from 'vitest'
 import Devices from '@/pages/Devices'
 import Edges from '@/pages/Edges'
 import Settings from '@/pages/Settings'
 import { installFetch, stubResponse } from '@/test/http'
+import { LONG, expectContained, expectNoInlinePixelWidth } from '@/test/narrow'
 import { renderWithProviders, resetStores } from '@/test/render'
 import type { DeviceView } from '@/lib/types'
 
-const LONG = 'x'.repeat(64)
 const health = { ok: true, version: LONG, uptime_s: 60, devices_online: 1, devices_total: 1, edges_online: 1 }
-
-/** 自身截断/可断行，或位于局部滚动容器内 —— 二者其一即视为已收口 */
-function guarded(el: Element): boolean {
-  if (/truncate|break-words|break-all/.test(String(el.className ?? ''))) return true
-  for (let p = el.parentElement; p; p = p.parentElement) {
-    if (/overflow-x-auto|overflow-auto|overflow-hidden|overflow-x-hidden/.test(String(p.className ?? ''))) return true
-  }
-  return false
-}
-
-function expectContained(text: string): void {
-  const hits = screen.getAllByText(text)
-  expect(hits.length).toBeGreaterThan(0)
-  for (const el of hits) {
-    expect(guarded(el), `<${el.tagName.toLowerCase()} class="${String(el.className)}"> 未做截断/滚动收口`).toBe(true)
-  }
-}
-
-function expectNoInlinePixelWidth(): void {
-  for (const el of document.querySelectorAll<HTMLElement>('[style]')) {
-    expect(el.style.width).not.toMatch(/px$/)
-    expect(el.style.minWidth).not.toMatch(/px$/)
-  }
-}
 
 const longDevice: DeviceView = {
   id: `edge-1/${LONG}`, edge_id: LONG, adapter: LONG, name: LONG, port: LONG,

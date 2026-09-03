@@ -21,7 +21,7 @@ export default function Edges() {
         <div className="grid gap-4 md:grid-cols-2">
           {list.map((e) => (
             <Panel key={e.edge_id} className="fade-up">
-              // 390px：edge_id 由后端给定，长度不可控 —— 必须可截断，否则撑出横向滚动
+              {/* 390px：edge_id 由后端给定，长度不可控 —— 必须可截断，否则撑出横向滚动 */}
               <div className="flex min-w-0 items-center gap-2">
                 <StatusDot online={e.online} />
                 <span className="num min-w-0 truncate text-[15px] font-semibold tracking-tight" title={e.edge_id}>

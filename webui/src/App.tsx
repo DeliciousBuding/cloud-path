@@ -18,6 +18,8 @@ const DeviceDetail = lazy(() => import('@/pages/DeviceDetail'))
 const Events = lazy(() => import('@/pages/Events'))
 const Edges = lazy(() => import('@/pages/Edges'))
 const Settings = lazy(() => import('@/pages/Settings'))
+// 管理页（用户/服务令牌）：页面自身按 me.role 收口，非 admin 只看到「需要管理员权限」空态
+const Admin = lazy(() => import('@/pages/Admin'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
 /** 登录态探测中的整页占位（与 Layout 相同的内容宽度约束，390px 无横向溢出） */
@@ -83,6 +85,7 @@ export default function App() {
               <Route path="events" element={<Events />} />
               <Route path="edges" element={<Edges />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="admin" element={<Admin />} />
               <Route path="*" element={<NotFound />} />
             </Route>
           </Route>

@@ -27,7 +27,14 @@ export function stubResponse(status: number, body?: unknown, headers: Record<str
 
 export type FetchRoute = (url: string, init?: RequestInit) => StubResponse | Promise<StubResponse>
 
-export interface RecordedCall { url: string; method: string; body: unknown; headers: Record<string, string> }
+export interface RecordedCall {
+  url: string
+  method: string
+  body: unknown
+  headers: Record<string, string>
+  /** fetch 的凭据模式（lib/api.ts 固定 same-origin：会话 cookie 同源自动携带） */
+  credentials?: RequestCredentials
+}
 
 export interface FetchStub {
   calls: RecordedCall[]
@@ -54,6 +61,7 @@ export function installFetch(route: FetchRoute): FetchStub {
       method: (init?.method ?? 'GET').toUpperCase(),
       body,
       headers: (init?.headers ?? {}) as Record<string, string>,
+      credentials: init?.credentials,
     })
     const r = await route(url, init)
     return (r ?? stubResponse(404, { error: 'not found' })) as unknown as Response
