@@ -26,7 +26,11 @@ func (m *fakeManager) RegisterInstallation(pluginhost.Installation) error { retu
 func (m *fakeManager) CreateInstance(spec pluginhost.InstanceSpec) (pluginhost.Instance, error) {
 	return pluginhost.Instance{ID: spec.ID, Tenant: spec.Tenant, PluginID: spec.PluginID, Version: spec.Version}, nil
 }
-func (m *fakeManager) Start(tenant, id string) error { return m.startErr }
+func (m *fakeManager) Start(tenant, id string) error   { return m.startErr }
+func (m *fakeManager) Disable(tenant, id string) error { return nil }
+func (m *fakeManager) Remove(tenant, id string, _ ...pluginhost.RemoveOption) (pluginhost.RemoveResult, error) {
+	return pluginhost.RemoveResult{DataPreserved: true}, nil
+}
 func (m *fakeManager) Close() error {
 	if m.block != nil {
 		<-m.block

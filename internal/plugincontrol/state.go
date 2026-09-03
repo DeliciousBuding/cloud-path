@@ -42,6 +42,11 @@ type InstanceState struct {
 	ConfigPath string `json:"configPath,omitempty"`
 	Enabled    bool   `json:"enabled"`
 	Isolation  string `json:"isolation"`
+	// Config 是 Server 期望态里的非敏感配置（control-plane-sync.md §7）。
+	// 值只允许非敏感标量或 secret://<name> handle：**明文 secret 永不落盘**。
+	// 保存它是为了 Edge 进程重启且仍离线时，能带着最后一个完整 applied revision
+	// 的配置续跑（§8「Edge 重启 → 从本地 applied cache 启动」）。
+	Config map[string]string `json:"config,omitempty"`
 }
 
 // Validate checks the persisted fields that are required for later reload.
@@ -60,6 +65,14 @@ func (s InstanceState) Validate() error {
 	}
 	if _, err := ParseIsolation(s.Isolation); err != nil {
 		return err
+	}
+	for k, v := range s.Config {
+		if strings.TrimSpace(k) == "" || strings.ContainsAny(k, "\r\n\t") {
+			return fmt.Errorf("%w: config key %q", ErrInvalidState, k)
+		}
+		if strings.ContainsAny(v, "\r\n\t") {
+			return fmt.Errorf("%w: config value of %q must be a single-line scalar", ErrInvalidState, k)
+		}
 	}
 	return nil
 }

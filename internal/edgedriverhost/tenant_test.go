@@ -32,6 +32,10 @@ func (m *recordingManager) Start(tenant, id string) error {
 	m.started = append(m.started, tenant+"/"+id)
 	return nil
 }
+func (m *recordingManager) Disable(tenant, id string) error { return nil }
+func (m *recordingManager) Remove(tenant, id string, _ ...pluginhost.RemoveOption) (pluginhost.RemoveResult, error) {
+	return pluginhost.RemoveResult{DataPreserved: true}, nil
+}
 func (m *recordingManager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -1,21 +1,45 @@
 # Cloudpath edge 配置示例 —— 复制为 edge.yaml 后按实际设备填写（edge.yaml 不入库）
 # token 支持环境变量展开：${CLOUDPATH_TOKEN}（凭据不落盘）
 
-server: ws://127.0.0.1:8080/ws/edge   # server 的 edge 接入端点
+server: ws://127.0.0.1:8080/ws/edge   # server 的 edge 接入端点；公网部署用 wss://cloudpath.vectorcontrol.tech/ws/edge
 token: ${CLOUDPATH_TOKEN}              # server 启用鉴权时必填
 edge_id: lab-1                         # 边缘节点唯一 ID（小写字母/数字/-/_；缺省用主机名）
+                                       # 多台电脑接入同一 server 时，每台的 edge_id 必须不同
 
 poll_interval_s: 5                     # 状态转储轮询周期（秒）
 sync_interval_s: 600                   # 周期对时（秒）；设备钟漂移大就调小
 report_interval_s: 30                  # 状态心跳兜底周期（秒）；diff 抑制下无变化也定期上报
 
 devices:
-  - id: demo-1                         # 设备 ID（edge 内唯一；全局键 = <edge_id>/<id>）
-    adapter: stcb                      # 适配器名（见 GET /api/adapters）
-    name: 参考板                        # 展示名（可选）
-    port: COM3                         # Windows: COM3；Linux: /dev/ttyUSB0；macOS: /dev/cu.usbserial
-    baud: 9600
-  # - id: demo-2                       # 一个 edge 可带多台设备（各自独立监督协程）
+  # =====================================================================
+  # A) 无硬件：参考演示设备（adapter: demo）
+  #    手上没有板子时用这个——不需要串口、不需要任何外设，Open 立即成功。
+  #    它上报的是本 edge 进程内真实维护的状态（运行时长/心跳计数/命令计数/
+  #    可写回的设定值与开关），命令真实改变这些状态并产生事件。
+  #    诚实性红线：它是 reference demo device，不是真实硬件（UI 里始终如此标注）。
+  #    port / baud 可以省略（demo 适配器声明 port 非必填，写了也会被忽略）。
+  #    详见 examples/demo/README.md。
+  # =====================================================================
+  - id: sim-1
+    adapter: demo
+    name: 参考设备 1
+  - id: sim-2
+    adapter: demo
+    name: 参考设备 2
+    extra:                             # 适配器自定义参数（原样传给 driverkit.Config.Extra）
+      tick_interval_s: "5"             # demo 心跳周期（秒，默认 10；范围 1..3600）
+
+  # =====================================================================
+  # B) 真实硬件：STC-B 学习板（adapter: stcb，需要串口，port 必填）
+  #    取消注释并改成你机器上的实际端口即可；一个 edge 可带多台设备，
+  #    每台各自独立监督协程——一台掉线/重插不影响同 edge 的其他设备。
+  # =====================================================================
+  # - id: board-1                      # 设备 ID（edge 内唯一；全局键 = <edge_id>/<id>）
+  #   adapter: stcb                    # 适配器名（见 GET /api/adapters）
+  #   name: 参考板                      # 展示名（可选）
+  #   port: COM3                       # Windows: COM3；Linux: /dev/ttyUSB0；macOS: /dev/cu.usbserial
+  #   baud: 9600
+  # - id: board-2
   #   adapter: stcb
   #   port: COM4
   #   baud: 9600
@@ -32,3 +56,12 @@ devices:
 #   required: false                    # true=host 失败则 edge 启动失败；false=记录 DEGRADED 继续内置设备
 #   lock: plugins.lock                 # 缺省 <root>/plugins.lock
 #   close_timeout_s: 10                # host 优雅关闭 deadline（秒）
+#   sync_state: data/plugin-state/applied.json   # 插件控制面本地 applied cache（缺省 <state_dir>/applied.json）
+#                                      #   保存最近成功应用的 revision + Server 下发的快照摘要 + 每实例结果；
+#                                      #   进程重启后据此拒绝旧 revision（boot_id 每次启动都换新，不从缓存恢复）
+#   secret_dir: data/plugin-state/secrets        # 本地 secret provider 根目录（缺省 <state_dir>/secrets）
+#                                      #   明文只放在 <secret_dir>/<tenant>/<instance>/<name>，权限须 0600 等价；
+#                                      #   Server 只下发 secret://<name> handle，且必须同时满足
+#                                      #   「插件 manifest 已声明该名字」+「实例配置显式绑定该 handle」才解析；
+#                                      #   handle 缺失/已吊销/权限不安全/声明不符 → 该实例 fail-closed，不回落旧明文。
+#                                      #   留空则本 Edge 不提供明文：任何绑定 handle 的实例都会被拒绝。

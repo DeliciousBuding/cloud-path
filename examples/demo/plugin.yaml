@@ -1,0 +1,38 @@
+# CloudPath Driver Plugin manifest (v1alpha1) —— 参考演示设备（reference demo device）。
+# Shape follows spec/plugin-manifest.schema.json in the cloud-path core repo.
+#
+# 诚实性红线：本插件不对应任何真实硬件。它驱动 examples/demo 的进程内参考设备——
+# 不打开串口、不访问外设、不生成随机假数；上报的是本进程真实维护的状态
+# （运行时长 / 心跳计数 / 命令计数 / 可写回的设定值与开关）。
+# 因此 permissions.hardware 必须为空：给它加上 serial/usb/gpio 之类硬件权限，
+# 等于把演示设备伪装成真实硬件，属于必须拒绝的改动。
+#
+# Incubation status: 与 examples/stcb 相同——monorepo 内本目录是 cloud-path-edge /
+# cloud-path-server 通过 blank import 消费的进程内参考适配器；本文件冻结独立拆仓
+# （cloud-path-driver-demo）时的机器契约，发布后每个字段在该 schema 版本生命周期内稳定。
+apiVersion: plugins.cloudpath.dev/v1alpha1
+kind: Driver
+id: io.github.deliciousbuding.cloud-path-driver-demo
+version: 0.1.0
+protocol: 1
+entrypoint: cloudpath-driver-demo
+compatibility:
+  core: ">=0.1.0 <0.2.0"
+permissions:
+  # 无硬件、无网络、无文件系统、无 secret：参考设备只操作自己进程内的状态。
+  hardware: []
+  network: []
+  filesystem: []
+  secrets: []
+capabilities:
+  - cloudpath.dev/capability/counter@1
+  - cloudpath.dev/capability/uptime@1
+  - cloudpath.dev/capability/setpoint@1
+  - cloudpath.dev/capability/toggle@1
+  - cloudpath.dev/capability/diagnostics@1
+contributes:
+  # 贡献 id 稳定且不等于插件 id；它等于注册的适配器名（Adapter.Name() == "demo"）。
+  drivers:
+    - id: demo
+      title: Reference Demo Device (no hardware)
+      discovery: manual
