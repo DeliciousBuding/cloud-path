@@ -25,15 +25,24 @@ var schemaV3 string
 //go:embed schema_v4.sql
 var schemaV4 string
 
-// migrations 是有序迁移表：新增版本追加一项，永不修改已发布项。
-var migrations = []struct {
+//go:embed schema_v5.sql
+var schemaV5 string
+
+// migration 是一次 schema 迁移：ddl 走单事务；custom 用于需要 PRAGMA foreign_keys
+// 开关的表重建（如 v5 users 重建），由实现自行管理连接与事务。
+type migration struct {
 	version int
 	ddl     string
-}{
-	{1, schemaV1},
-	{2, schemaV2},
-	{3, schemaV3},
-	{4, schemaV4},
+	custom  func(*sql.DB) error
+}
+
+// migrations 是有序迁移表：新增版本追加一项，永不修改已发布项。
+var migrations = []migration{
+	{version: 1, ddl: schemaV1},
+	{version: 2, ddl: schemaV2},
+	{version: 3, ddl: schemaV3},
+	{version: 4, ddl: schemaV4},
+	{version: 5, custom: migrateV5},
 }
 
 // schemaVersion 是当前 schema 版本（迁移表最后一项）。
@@ -87,17 +96,23 @@ func (s *Store) migrate() error {
 		if version >= m.version {
 			continue
 		}
-		// 每个版本一个事务：DDL 与数据回填同批原子提交，失败不留半迁移。
-		tx, err := s.db.Begin()
-		if err != nil {
-			return fmt.Errorf("store: begin schema v%d: %w", m.version, err)
-		}
-		if _, err := tx.Exec(m.ddl); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("store: schema v%d: %w", m.version, err)
-		}
-		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("store: commit schema v%d: %w", m.version, err)
+		if m.custom != nil {
+			if err := m.custom(s.db); err != nil {
+				return fmt.Errorf("store: schema v%d: %w", m.version, err)
+			}
+		} else {
+			// 每个版本一个事务：DDL 与数据回填同批原子提交，失败不留半迁移。
+			tx, err := s.db.Begin()
+			if err != nil {
+				return fmt.Errorf("store: begin schema v%d: %w", m.version, err)
+			}
+			if _, err := tx.Exec(m.ddl); err != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("store: schema v%d: %w", m.version, err)
+			}
+			if err := tx.Commit(); err != nil {
+				return fmt.Errorf("store: commit schema v%d: %w", m.version, err)
+			}
 		}
 		if _, err := s.db.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, m.version)); err != nil {
 			return fmt.Errorf("store: set user_version=%d: %w", m.version, err)

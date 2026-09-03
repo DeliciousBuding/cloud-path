@@ -10,7 +10,9 @@ type Principal struct {
 	Role       string
 	TenantID   int64
 	TenantSlug string
-	Token      bool // 服务令牌身份（无会话行）
+	Token      bool     // 服务令牌身份（无会话行）
+	Legacy     bool     // legacy -token（等价 default tenant admin）
+	Scopes     []string // 租户服务令牌 scopes（会话/legacy 为空）
 }
 
 type principalKey struct{}

@@ -131,7 +131,7 @@ func TestDescriptorTenantIsolation(t *testing.T) {
 
 	// tenant-a 批量只能看到 a/d1
 	req := httptest.NewRequest(http.MethodGet, "/api/descriptors", nil)
-	req = req.WithContext(auth.WithPrincipal(req.Context(), &auth.Principal{TenantSlug: "tenant-a"}))
+	req = req.WithContext(auth.WithPrincipal(req.Context(), &auth.Principal{TenantSlug: "tenant-a", Role: string(api.RoleViewer)}))
 	rec := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -149,7 +149,7 @@ func TestDescriptorTenantIsolation(t *testing.T) {
 
 	// tenant-b 访问 a/d1 → 404（跨租户与不存在同语义）
 	reqB := httptest.NewRequest(http.MethodGet, "/api/devices/a/d1/descriptor", nil)
-	reqB = reqB.WithContext(auth.WithPrincipal(reqB.Context(), &auth.Principal{TenantSlug: "tenant-b"}))
+	reqB = reqB.WithContext(auth.WithPrincipal(reqB.Context(), &auth.Principal{TenantSlug: "tenant-b", Role: string(api.RoleViewer)}))
 	recB := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(recB, reqB)
 	if recB.Code != http.StatusNotFound {
@@ -158,7 +158,7 @@ func TestDescriptorTenantIsolation(t *testing.T) {
 
 	// tenant-a 访问自己的 descriptor → 200
 	reqA := httptest.NewRequest(http.MethodGet, "/api/devices/a/d1/descriptor", nil)
-	reqA = reqA.WithContext(auth.WithPrincipal(reqA.Context(), &auth.Principal{TenantSlug: "tenant-a"}))
+	reqA = reqA.WithContext(auth.WithPrincipal(reqA.Context(), &auth.Principal{TenantSlug: "tenant-a", Role: string(api.RoleViewer)}))
 	recA := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(recA, reqA)
 	if recA.Code != http.StatusOK {

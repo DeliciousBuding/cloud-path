@@ -74,6 +74,17 @@ func (s *Store) GetTenantBySlug(slug string) (TenantRow, error) {
 	return t, nil
 }
 
+// GetTenantByID 按 id 读租户；不存在返回 sql.ErrNoRows。
+func (s *Store) GetTenantByID(id int64) (TenantRow, error) {
+	var t TenantRow
+	err := s.db.QueryRow(`SELECT id,slug,name,created_at FROM tenant WHERE id=?`, id).
+		Scan(&t.ID, &t.Slug, &t.Name, &t.CreatedAt)
+	if err != nil {
+		return t, err
+	}
+	return t, nil
+}
+
 // CountUsers 返回用户总数（判定账号模式/首装状态）。
 func (s *Store) CountUsers() (int64, error) {
 	var n int64
@@ -137,7 +148,7 @@ func (s *Store) GetUserByUsername(username string) (AuthUser, error) {
 	var disabled int
 	err := s.db.QueryRow(`
 		SELECT u.id,u.tenant_id,u.username,u.name,u.role,u.password_hash,u.created_at,u.disabled,t.slug
-		FROM users u JOIN tenant t ON t.id=u.tenant_id WHERE u.username=?`, username).
+		FROM users u JOIN tenant t ON t.id=u.tenant_id WHERE u.username=? ORDER BY u.id LIMIT 1`, username).
 		Scan(&u.ID, &u.TenantID, &u.Username, &u.Name, &u.Role, &u.PasswordHash,
 			&u.CreatedAt, &disabled, &u.TenantSlug)
 	if err != nil {

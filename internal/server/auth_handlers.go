@@ -22,7 +22,7 @@ const sessionTouchInterval = 60 * time.Second
 func userView(u store.AuthUser) api.UserView {
 	return api.UserView{
 		ID: u.ID, Username: u.Username, Name: u.Name, Role: u.Role,
-		TenantID: u.TenantID, TenantSlug: u.TenantSlug,
+		TenantID: u.TenantID, TenantSlug: u.TenantSlug, Disabled: u.Disabled,
 	}
 }
 
@@ -150,13 +150,14 @@ func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
 	}})
 }
 
-// currentPrincipal 解析请求身份：优先服务令牌（等价 admin），其次会话 cookie。
-// 全部路径无磁盘 I/O 依赖；会话查询失败一律视为未认证（fail-closed）。
+// currentPrincipal 解析请求身份：优先 legacy 服务令牌（等价 default admin），
+// 其次租户服务令牌（仅 Bearer header），最后会话 cookie。
+// 会话查询/令牌查询失败一律视为未认证（fail-closed）。
 func (s *Server) currentPrincipal(r *http.Request) *auth.Principal {
 	if s.cfg.Token != "" && auth.TokenOK(r, s.cfg.Token) {
 		p := &auth.Principal{
 			Username: "token", Name: "服务令牌", Role: string(api.RoleAdmin),
-			Token: true, TenantSlug: "default",
+			Token: true, Legacy: true, TenantSlug: "default",
 		}
 		if s.cfg.Store != nil {
 			if t, err := s.cfg.Store.GetTenantBySlug("default"); err == nil {
@@ -164,6 +165,13 @@ func (s *Server) currentPrincipal(r *http.Request) *auth.Principal {
 			}
 		}
 		return p
+	}
+	if bearer := auth.BearerToken(r); auth.IsTenantToken(bearer) {
+		// 租户令牌只走 header；解析失败即未认证（不回落 cookie）。
+		if p := s.tenantTokenPrincipal(bearer); p != nil {
+			return p
+		}
+		return nil
 	}
 	cookie, err := r.Cookie(auth.SessionCookieName)
 	if err != nil || s.cfg.Store == nil {

@@ -606,17 +606,30 @@ func (s *Server) Routes() http.Handler {
 	// 账号模式（已有用户 / -require-auth）下，除 /healthz、静态资源、/api/auth/* 外全部鉴权。
 	r.Group(func(r chi.Router) {
 		r.Use(s.requireAPIAuth)
-		r.Get("/api/devices", s.handleListDevices)
-		r.Get("/api/devices/{edgeID}/{deviceID}", s.handleGetDevice)
-		r.Get("/api/devices/{edgeID}/{deviceID}/descriptor", s.handleDeviceDescriptor)
+		r.Group(func(r chi.Router) {
+			r.Use(s.requireRole(api.RoleViewer))
+			r.Get("/api/devices", s.handleListDevices)
+			r.Get("/api/devices/{edgeID}/{deviceID}", s.handleGetDevice)
+			r.Get("/api/devices/{edgeID}/{deviceID}/descriptor", s.handleDeviceDescriptor)
+			r.Get("/api/descriptors", s.handleListDescriptors)
+			r.Get("/api/capabilities", s.handleCapabilities)
+			r.Get("/api/events", s.handleListEvents)
+			r.Get("/api/edges", s.handleListEdges)
+			r.Get("/api/commands", s.handleListCommands)
+			r.Get("/api/adapters", s.handleListAdapters)
+			r.Get("/api/stats", s.handleStats)
+		})
 		r.Post("/api/devices/{edgeID}/{deviceID}/commands", s.authWrite(s.handlePostCommand))
-		r.Get("/api/descriptors", s.handleListDescriptors)
-		r.Get("/api/capabilities", s.handleCapabilities)
-		r.Get("/api/events", s.handleListEvents)
-		r.Get("/api/edges", s.handleListEdges)
-		r.Get("/api/commands", s.handleListCommands)
-		r.Get("/api/adapters", s.handleListAdapters)
-		r.Get("/api/stats", s.handleStats)
+	})
+	// 用户/令牌管理：始终要求 admin 身份（legacy token 亦可用；非账号模式未认证 401）。
+	r.Group(func(r chi.Router) {
+		r.Use(s.requireAdmin)
+		r.Get("/api/users", s.handleListUsers)
+		r.Post("/api/users", s.handleCreateUser)
+		r.Patch("/api/users/{id}", s.handleUpdateUser)
+		r.Get("/api/tokens", s.handleListTokens)
+		r.Post("/api/tokens", s.handleCreateToken)
+		r.Delete("/api/tokens/{id}", s.handleDeleteToken)
 	})
 	r.Get("/ws", s.handleBrowserWS)
 	r.Get("/ws/edge", s.handleEdgeWS)
@@ -676,7 +689,7 @@ func (s *Server) logMiddleware(next http.Handler) http.Handler {
 func (s *Server) authWrite(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if p := s.currentPrincipal(r); p != nil {
-			if p.Role == string(api.RoleViewer) {
+			if !auth.RoleAllows(p.Role, string(api.RoleOperator)) {
 				writeJSON(w, http.StatusForbidden, map[string]string{"error": "viewer 只读"})
 				return
 			}
