@@ -115,8 +115,9 @@ func runInspect(args []string) int {
 	fs := flag.NewFlagSet("inspect", flag.ContinueOnError)
 	pluginsDir := fs.String("plugins-dir", envOr("CLOUDPATH_PLUGINS_DIR", defaultPluginsDir), "installed plugin directory")
 	schemaPath := fs.String("schema", envOr("CLOUDPATH_SCHEMA", defaultSchemaPath), "manifest JSON Schema path")
+	lockPath := fs.String("lock", envOr("CLOUDPATH_LOCK", defaultLockFile), "plugins.lock path (used to report installed trust state)")
 	fs.SetOutput(os.Stderr)
-	if err := fs.Parse(args); err != nil {
+	if err := parseCommandFlags(fs, args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
@@ -124,7 +125,7 @@ func runInspect(args []string) int {
 	}
 	source := fs.Arg(0)
 	if source == "" {
-		fmt.Fprintln(os.Stderr, "Usage: cloudpath plugin inspect <id|url> [-plugins-dir DIR] [-schema PATH]")
+		fmt.Fprintln(os.Stderr, "Usage: cloudpath plugin inspect <id|url> [-plugins-dir DIR] [-schema PATH] [-lock PATH]")
 		return 2
 	}
 
@@ -150,7 +151,41 @@ func runInspect(args []string) int {
 	fmt.Printf("  core-compat:     %s\n", manifest.Compatibility.Core)
 	fmt.Printf("  permissions:     %s\n", manifest.PermissionSummary())
 	fmt.Printf("  schema-status:   valid\n")
+	printInstalledTrust(*lockPath, manifest.ID)
 	return 0
+}
+
+// printInstalledTrust reports the recorded trust anchor for an installed plugin.
+// A missing or unreadable lockfile is not an error: inspect also works on sources
+// that were never installed. Only non-secret trust labels are printed.
+func printInstalledTrust(lockPath, pluginID string) {
+	if strings.TrimSpace(lockPath) == "" {
+		return
+	}
+	lock, err := registry.LoadLockFile(lockPath)
+	if err != nil {
+		fmt.Printf("  installed:     no (lockfile not readable)\n")
+		return
+	}
+	entry, ok := lock.Find(pluginID)
+	if !ok {
+		fmt.Printf("  installed:     no\n")
+		return
+	}
+	mode := entry.Mode
+	if mode == "" {
+		mode = "unrecorded"
+	}
+	fmt.Printf("  installed:     yes (%s)\n", entry.Version)
+	fmt.Printf("  trust:         %s\n", mode)
+	fmt.Printf("  verified:      %t\n", entry.Verified)
+	if entry.Evidence != "" {
+		fmt.Printf("  evidence:      %s\n", entry.Evidence)
+	}
+	if strings.TrimSpace(entry.VerifiedPublisher) != "" {
+		fmt.Printf("  publisher:     %s\n", entry.VerifiedPublisher)
+	}
+	fmt.Printf("  source:        %s\n", entry.Source)
 }
 
 func runInstall(args []string) int {
@@ -162,8 +197,9 @@ func runInstall(args []string) int {
 	asset := fs.String("asset", "", "exact Release asset name")
 	digest := fs.String("digest", "", "expected sha256 hex (sha256:<hex> or sha256-<base64>)")
 	yes := fs.Bool("yes", false, "confirm displayed permissions")
+	trust := registerTrustFlags(fs)
 	fs.SetOutput(os.Stderr)
-	if err := fs.Parse(args); err != nil {
+	if err := parseCommandFlags(fs, args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
@@ -171,18 +207,22 @@ func runInstall(args []string) int {
 	}
 	source := fs.Arg(0)
 	if source == "" {
-		fmt.Fprintln(os.Stderr, "Usage: cloudpath plugin install <id|url> [-asset NAME] [-digest HASH] [-yes]")
+		fmt.Fprintln(os.Stderr, "Usage: cloudpath plugin install <id|url> [-asset NAME] [-digest HASH] [-registry-index PATH] [-allow-unreviewed] [-yes]")
 		return 2
 	}
 
 	installer := registry.NewInstaller(*pluginsDir, *lockPath, *schemaPath, *coreVersion)
+	if err := trust.configure(installer); err != nil {
+		return reportError(err, 1)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	result, err := installer.Install(ctx, registry.InstallOptions{
-		Source:       source,
-		Asset:        *asset,
-		Digest:       *digest,
-		ConfirmPerms: *yes,
+		Source:          source,
+		Asset:           *asset,
+		Digest:          *digest,
+		ConfirmPerms:    *yes,
+		AllowUnreviewed: trust.allowUnreviewed(),
 	})
 	if err != nil {
 		return reportError(err, installErrorCode(err))
@@ -194,6 +234,7 @@ func runInstall(args []string) int {
 	fmt.Printf("  version:   %s\n", result.LockEntry.Version)
 	fmt.Printf("  lock:      %s\n", *lockPath)
 	fmt.Printf("  permissions: %s\n", result.Manifest.PermissionSummary())
+	printTrust(result)
 	return 0
 }
 
@@ -210,7 +251,7 @@ func runEnable(args []string) int {
 	configPath := fs.String("config", "", "optional plugin config path")
 	isolation := fs.String("isolation", plugincontrol.IsolationShared, "shared or per-instance")
 	fs.SetOutput(os.Stderr)
-	if err := fs.Parse(args); err != nil {
+	if err := parseCommandFlags(fs, args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
@@ -266,7 +307,7 @@ func runDisable(args []string) int {
 	tenant := fs.String("tenant", envOr("CLOUDPATH_TENANT", defaultTenant), "owning tenant")
 	instance := fs.String("instance", "", "instance id (defaults to the plugin id)")
 	fs.SetOutput(os.Stderr)
-	if err := fs.Parse(args); err != nil {
+	if err := parseCommandFlags(fs, args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
@@ -313,8 +354,10 @@ func runUpdate(args []string) int {
 	tenant := fs.String("tenant", envOr("CLOUDPATH_TENANT", defaultTenant), "owning tenant")
 	instance := fs.String("instance", "", "instance id (defaults to the plugin id)")
 	yes := fs.Bool("yes", false, "confirm permission expansion and permissions disclosure")
+	digest := fs.String("digest", "", "expected sha256 hex of the new artifact (sha256:<hex> or sha256-<base64>)")
+	trust := registerTrustFlags(fs)
 	fs.SetOutput(os.Stderr)
-	if err := fs.Parse(args); err != nil {
+	if err := parseCommandFlags(fs, args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
@@ -322,7 +365,7 @@ func runUpdate(args []string) int {
 	}
 	pluginID := fs.Arg(0)
 	if pluginID == "" {
-		fmt.Fprintln(os.Stderr, "Usage: cloudpath plugin update <id> [-yes] [-tenant NAME] [-instance ID]")
+		fmt.Fprintln(os.Stderr, "Usage: cloudpath plugin update <id> [-digest HASH] [-registry-index PATH] [-allow-unreviewed] [-yes] [-tenant NAME] [-instance ID]")
 		return 2
 	}
 	instanceID := *instance
@@ -340,11 +383,20 @@ func runUpdate(args []string) int {
 	}
 
 	installer := registry.NewInstaller(*pluginsDir, *lockPath, *schemaPath, *coreVersion)
+	if err := trust.configure(installer); err != nil {
+		return reportError(err, 1)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
+	// Existing activates validateUpdateTrust: an update must not downgrade a
+	// verified installation to unreviewed TOFU, and must not silently change
+	// source or verified publisher.
 	result, err := installer.Install(ctx, registry.InstallOptions{
-		Source:       entry.Source,
-		ConfirmPerms: *yes,
+		Source:          entry.Source,
+		Digest:          *digest,
+		ConfirmPerms:    *yes,
+		AllowUnreviewed: trust.allowUnreviewed(),
+		Existing:        entry,
 	})
 	if err != nil {
 		return reportError(err, installErrorCode(err))
@@ -376,6 +428,7 @@ func runUpdate(args []string) int {
 	fmt.Printf("  version:    %s\n", state.Version)
 	fmt.Printf("  permissions: %s\n", result.Manifest.PermissionSummary())
 	fmt.Printf("  observed:   STOPPED (host not running)\n")
+	printTrust(result)
 	return 0
 }
 
@@ -387,7 +440,7 @@ func runRemove(args []string) int {
 	instance := fs.String("instance", "", "instance id (defaults to the plugin id)")
 	purge := fs.Bool("purge", false, "delete plugin data (default preserves it)")
 	fs.SetOutput(os.Stderr)
-	if err := fs.Parse(args); err != nil {
+	if err := parseCommandFlags(fs, args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
@@ -439,7 +492,7 @@ func runHost(args []string) int {
 	shutdownTimeout := fs.Duration("shutdown-timeout", 5*time.Second, "plugin shutdown timeout")
 	maxRestarts := fs.Int("max-restarts", 3, "crash-loop restart budget per process")
 	fs.SetOutput(os.Stderr)
-	if err := fs.Parse(args); err != nil {
+	if err := parseCommandFlags(fs, args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
@@ -538,8 +591,18 @@ func errorCode(err error) string {
 		return "ERR_INVALID_MANIFEST"
 	case errors.Is(err, registry.ErrDigestMismatch):
 		return "ERR_DIGEST_MISMATCH"
+	case errors.Is(err, registry.ErrInvalidDigest):
+		return "ERR_INVALID_DIGEST"
 	case errors.Is(err, registry.ErrDigestUnavailable):
 		return "ERR_DIGEST_UNAVAILABLE"
+	case errors.Is(err, registry.ErrTrustConfirmationRequired):
+		return "ERR_TRUST_CONFIRMATION_REQUIRED"
+	case errors.Is(err, registry.ErrRegistryBindingMismatch):
+		return "ERR_REGISTRY_BINDING_MISMATCH"
+	case errors.Is(err, registry.ErrAttestationFailed):
+		return "ERR_ATTESTATION_FAILED"
+	case errors.Is(err, registry.ErrTrustDowngrade):
+		return "ERR_TRUST_DOWNGRADE"
 	case errors.Is(err, registry.ErrCoreIncompatible):
 		return "ERR_CORE_INCOMPATIBLE"
 	case errors.Is(err, registry.ErrProtocolIncompatible):
@@ -570,7 +633,12 @@ func installErrorCode(err error) int {
 		errors.Is(err, registry.ErrCoreIncompatible),
 		errors.Is(err, registry.ErrProtocolIncompatible),
 		errors.Is(err, registry.ErrDigestMismatch),
+		errors.Is(err, registry.ErrInvalidDigest),
 		errors.Is(err, registry.ErrDigestUnavailable),
+		errors.Is(err, registry.ErrTrustConfirmationRequired),
+		errors.Is(err, registry.ErrRegistryBindingMismatch),
+		errors.Is(err, registry.ErrAttestationFailed),
+		errors.Is(err, registry.ErrTrustDowngrade),
 		errors.Is(err, registry.ErrPermissionConfirmationRequired):
 		return 3
 	default:
@@ -614,9 +682,138 @@ func truncate(s string, n int) string {
 	return s[:n-3] + "..."
 }
 
+// trustFlagSet carries the trust-anchor options shared by `plugin install` and
+// `plugin update`. Trust decisions are resolved by the registry package; the CLI
+// only supplies independent evidence and the explicit unreviewed opt-in.
+type trustFlagSet struct {
+	registryIndex       *string
+	allowUnreviewedFlag *bool
+}
+
+// registerTrustFlags declares the trust flags on a command FlagSet.
+func registerTrustFlags(fs *flag.FlagSet) trustFlagSet {
+	return trustFlagSet{
+		registryIndex:       fs.String("registry-index", envOr("CLOUDPATH_REGISTRY_INDEX", ""), "curated Registry index YAML supplying verified plugin bindings"),
+		allowUnreviewedFlag: fs.Bool("allow-unreviewed", envBoolOr("CLOUDPATH_ALLOW_UNREVIEWED", false), "accept an unreviewed trust-on-first-use same-origin checksum"),
+	}
+}
+
+// allowUnreviewed reports whether unreviewed trust-on-first-use was opted into.
+func (t trustFlagSet) allowUnreviewed() bool {
+	return t.allowUnreviewedFlag != nil && *t.allowUnreviewedFlag
+}
+
+// configure loads the curated Registry index onto the installer when one was
+// requested. A malformed index fails closed before any install side effect, so a
+// corrupt index can never silently degrade to unverified metadata.
+func (t trustFlagSet) configure(installer *registry.Installer) error {
+	if t.registryIndex == nil {
+		return nil
+	}
+	path := strings.TrimSpace(*t.registryIndex)
+	if path == "" {
+		return nil
+	}
+	idx, err := registry.LoadRegistryIndex(path)
+	if err != nil {
+		return err
+	}
+	installer.RegistryIndex = idx
+	return nil
+}
+
+// printTrust reports how the installed artifact was authenticated. It never
+// prints secrets or local evidence payloads, only the non-secret trust label.
+func printTrust(result *registry.InstallResult) {
+	fmt.Printf("  trust:       %s\n", result.Mode)
+	fmt.Printf("  verified:    %t\n", result.Verified)
+	fmt.Printf("  evidence:    %s\n", result.Evidence)
+	if publisher := strings.TrimSpace(result.LockEntry.VerifiedPublisher); publisher != "" {
+		fmt.Printf("  publisher:   %s\n", publisher)
+	}
+}
+
+// parseCommandFlags parses args while tolerating flags written after the
+// positional argument. Go's flag package stops at the first non-flag argument,
+// which would silently ignore flags in the documented order
+// `plugin install <id|url> [-digest HASH] [-allow-unreviewed] [-yes]`. Silently
+// dropping a user-supplied trust or confirmation flag is a safety problem, so
+// flags are reordered ahead of the positionals before parsing.
+func parseCommandFlags(fs *flag.FlagSet, args []string) error {
+	flags := make([]string, 0, len(args))
+	positional := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		name, isFlag := splitFlagName(arg)
+		if !isFlag {
+			positional = append(positional, arg)
+			continue
+		}
+		flags = append(flags, arg)
+		if strings.Contains(arg, "=") {
+			continue
+		}
+		// Only a known non-boolean flag may consume the next argument. An unknown
+		// flag is left for flag.Parse to report, and a boolean flag never
+		// consumes a value that belongs to the positional argument.
+		f := fs.Lookup(name)
+		if f == nil || isBoolFlag(f) {
+			continue
+		}
+		if i+1 < len(args) {
+			i++
+			flags = append(flags, args[i])
+		}
+	}
+	return fs.Parse(append(flags, positional...))
+}
+
+// splitFlagName extracts the flag name from a -name or --name argument. It
+// reports false for a bare "-", "--" or any non-flag argument, so a positional
+// value that merely starts with a dash is never mistaken for a flag name.
+func splitFlagName(arg string) (string, bool) {
+	if !strings.HasPrefix(arg, "-") || arg == "-" || arg == "--" {
+		return "", false
+	}
+	name := strings.TrimLeft(arg, "-")
+	if name == "" {
+		return "", false
+	}
+	if eq := strings.IndexByte(name, '='); eq >= 0 {
+		name = name[:eq]
+	}
+	return name, true
+}
+
+// isBoolFlag reports whether a declared flag takes no separate value.
+func isBoolFlag(f *flag.Flag) bool {
+	type boolFlag interface{ IsBoolFlag() bool }
+	if bf, ok := f.Value.(boolFlag); ok {
+		return bf.IsBoolFlag()
+	}
+	return false
+}
+
 func envOr(key, def string) string {
 	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
 		return v
 	}
 	return def
+}
+
+// envBoolOr reads a boolean environment variable, falling back to def when the
+// variable is unset or not a recognised boolean literal.
+func envBoolOr(key string, def bool) bool {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return def
+	}
+	switch strings.ToLower(raw) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return def
+	}
 }

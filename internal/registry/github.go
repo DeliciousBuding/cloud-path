@@ -75,10 +75,31 @@ func NewGitHubClient() *GitHubClient {
 	return &GitHubClient{
 		HTTPClient:   &http.Client{Timeout: 45 * time.Second},
 		Token:        token,
-		BaseURL:      githubAPIBase,
+		BaseURL:      githubAPIBaseFromEnv(),
 		MaxJSONBytes: defaultMaxJSONBytes,
 		MaxRetries:   defaultMaxRetries,
 	}
+}
+
+// githubAPIBaseFromEnv resolves the GitHub REST API base URL. CLOUDPATH_GITHUB_API
+// takes precedence over the gh CLI standard GITHUB_API_URL, which both take
+// precedence over the public default. This makes the CLI testable end to end
+// against a local server and usable against GitHub Enterprise. A value that is
+// not an absolute http(s) URL is ignored so a malformed environment can never
+// redirect installs to an unintended origin.
+func githubAPIBaseFromEnv() string {
+	for _, key := range []string{"CLOUDPATH_GITHUB_API", "GITHUB_API_URL"} {
+		raw := strings.TrimSpace(os.Getenv(key))
+		if raw == "" {
+			continue
+		}
+		u, err := url.Parse(raw)
+		if err != nil || !u.IsAbs() || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+			continue
+		}
+		return strings.TrimRight(raw, "/")
+	}
+	return githubAPIBase
 }
 
 func (c *GitHubClient) baseURL() string {

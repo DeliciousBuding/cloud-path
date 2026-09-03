@@ -15,7 +15,12 @@ func TestErrorCodeStable(t *testing.T) {
 	}{
 		{registry.ErrInvalidManifest, "ERR_INVALID_MANIFEST"},
 		{registry.ErrDigestMismatch, "ERR_DIGEST_MISMATCH"},
+		{registry.ErrInvalidDigest, "ERR_INVALID_DIGEST"},
 		{registry.ErrDigestUnavailable, "ERR_DIGEST_UNAVAILABLE"},
+		{registry.ErrTrustConfirmationRequired, "ERR_TRUST_CONFIRMATION_REQUIRED"},
+		{registry.ErrRegistryBindingMismatch, "ERR_REGISTRY_BINDING_MISMATCH"},
+		{registry.ErrAttestationFailed, "ERR_ATTESTATION_FAILED"},
+		{registry.ErrTrustDowngrade, "ERR_TRUST_DOWNGRADE"},
 		{registry.ErrCoreIncompatible, "ERR_CORE_INCOMPATIBLE"},
 		{registry.ErrProtocolIncompatible, "ERR_PROTOCOL_INCOMPATIBLE"},
 		{registry.ErrHostRuntimeUnavailable, "ERR_HOST_RUNTIME_UNAVAILABLE"},
@@ -41,7 +46,12 @@ func TestInstallErrorCodeStable(t *testing.T) {
 		registry.ErrCoreIncompatible,
 		registry.ErrProtocolIncompatible,
 		registry.ErrDigestMismatch,
+		registry.ErrInvalidDigest,
 		registry.ErrDigestUnavailable,
+		registry.ErrTrustConfirmationRequired,
+		registry.ErrRegistryBindingMismatch,
+		registry.ErrAttestationFailed,
+		registry.ErrTrustDowngrade,
 		registry.ErrPermissionConfirmationRequired,
 	} {
 		if got := installErrorCode(err); got != 3 {
@@ -66,7 +76,6 @@ func TestRedactSecrets(t *testing.T) {
 	if !strings.Contains(out, "[REDACTED]") {
 		t.Fatalf("redactSecrets should mark secrets as redacted: %q", out)
 	}
-	// GH_TOKEN is also considered.
 	t.Setenv("GITHUB_TOKEN", "")
 	ghSecret := "gho_another_secret"
 	t.Setenv("GH_TOKEN", ghSecret)
