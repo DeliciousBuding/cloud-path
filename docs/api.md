@@ -1,6 +1,6 @@
 # Cloudpath HTTP API 契约
 
-最后更新：2026-09-03
+最后更新：2026-09-04
 
 > 管理台与自动化客户端的唯一 HTTP 契约 SSOT。边缘节点走 WebSocket 协议，见 `protocol.md`。
 > 基础路径：管理台同源（默认 `http://127.0.0.1:8080`）。所有 JSON 为 UTF-8。
@@ -46,6 +46,15 @@
 | `GET /api/edges` | 读 | 边缘节点（含离线） |
 | `GET /api/commands?device=&status=&limit=` | 读 | 命令历史 |
 | `GET /api/adapters` | 读 | 适配器命令白名单（前端命令面板事实源） |
+| `GET /api/devices/{edge}/{device}/descriptor` | 读 | 单设备 Descriptor（Schema-driven UI 事实源） |
+| `GET /api/descriptors` | 读 | 会话可见的全部设备 Descriptor + 随行 Capability catalog |
+| `GET /api/capabilities` | 读 | Capability 列表 |
+| `GET /api/overview` | 读 | Overview 首屏聚合读面（§5.1） |
+| `GET /api/plugins` | 读 | 插件目录（§5.2） |
+| `GET /api/plugins/{pluginID}` | 读 | 单插件视图（§5.2） |
+| `GET /api/plugin-instances` | 读 | 插件实例列表（§5.3） |
+| `GET /api/plugin-instances/{id}` | 读 | 单插件实例（§5.3） |
+| `GET /api/audit?since=&action=&limit=` | admin | 审计日志（本租户，limit 上限 1000） |
 | `GET /api/stats` | 读 | 计数/保留期/`auth_enabled`/`schema_version` |
 | `GET /ws` | 读 | 浏览器实时通道（快照 + fan-out）；Origin 策略见下 |
 | `GET /ws/edge` | 服务令牌 | edge 接入；hello 携带 `token` |
@@ -97,3 +106,98 @@
 
 - 契约变更随 `docs/design.md` 实现偏差记录同步；WS envelope `v` 字段独立演进（`protocol.md`）。
 - 旧客户端（仅服务令牌）在账号模式下继续可用（令牌等价 admin）。
+
+## 5. 插件控制面与聚合读面（v0.1）
+
+> desired/observed 同步语义 SSOT：[architecture/control-plane-sync.md](architecture/control-plane-sync.md)；
+> WS 侧 desired/status/ack 消息见 [protocol.md](protocol.md)。
+> 不变量：**Desired 只由 Server 权威写入，Observed 只由 Edge 真实上报**，二者永远分开呈现，
+> 绝不把「期望启用」渲染成「实际健康」。
+
+### 5.1 `GET /api/overview`（读）
+
+WebUI 首屏一次性聚合。所有计数来自真实 Edge 上报与 Server 权威态，禁止占位/假数据。载荷：
+
+| 字段 | 含义 |
+|---|---|
+| `devices_online` / `devices_total` | 设备在线数 / 总数 |
+| `edges_online` / `edges_total` | Edge 在线数 / 总数 |
+| `plugins_active` / `plugins_desired` | 插件 observed 活跃数 / desired 启用数 |
+| `commands_failed` | 失败命令数 |
+| `recent_events` | 近期事件（`EventView[]`，新→旧） |
+| `offline_devices` | 离线设备（`DeviceView[]`） |
+| `failed_commands` | 失败命令（`CommandView[]`） |
+| `server_time` | 服务器当前 Unix 秒 |
+
+### 5.2 插件目录（读）
+
+- `GET /api/plugins` → `{"plugins":[PluginView…]}`：当前租户可见的已安装插件目录；
+  catalog 未配置时返回空列表（真实空态，不是错误）。
+- `GET /api/plugins/{pluginID}` → 单个 `PluginView`；不存在 `404 {"error":"plugin not found"}`；
+  catalog 内部错误 `500 {"error":"plugin catalog unavailable"}`。
+
+### 5.3 插件实例（读）
+
+`GET /api/plugin-instances` → `{"instances":[PluginInstanceView…]}`；
+`GET /api/plugin-instances/{id}` → 单实例视图。跨租户/未知 id 一律 `404`（不泄漏存在性）。
+
+`PluginInstanceView` 关键字段：
+
+| 字段 | 含义 |
+|---|---|
+| `id` / `tenant_id` / `edge_id` | 实例主键与归属 |
+| `desired` | Server 权威期望态 `{instance_id,plugin_id,version,enabled,isolation,config,secret_refs,revision,updated_at}`；`secret_refs` 只含 `secret://<name>` handle，永无明文 |
+| `has_observed` / `observed` | Edge 上报投影（只有真实上报过才存在，Server 不合成）：`{state,health,version,detail,restart_count,last_healthy,reported_at}` |
+| `edge_online` | 所属 Edge 是否在线 |
+| `desired_revision` / `applied_revision` | 当前期望 revision vs Edge 已 ack applied 的 revision |
+| `drift` | desired 与 applied 不一致 |
+| `stale` | observed 上报超时（不可信） |
+| `last_ack_at` | Edge 最近一次 ack 时间 |
+
+### 5.4 插件实例写面（operator+）
+
+| 方法 路径 | 权限 | 载荷 |
+|---|---|---|
+| `POST /api/plugin-instances` | operator | `{edge_id,instance_id,plugin_id,version,enabled?,isolation?,config?,secret_refs?,confirm_permissions?}` |
+| `PATCH /api/plugin-instances/{id}` | operator | 字段全可选（只更新出现的字段）：`{version?,enabled?,isolation?,config?,secret_refs?,confirm_permissions?}` |
+| `DELETE /api/plugin-instances/{id}` | operator；`purge:true` 需 admin | `{purge?}`；默认保留插件本地数据 |
+| `POST /api/plugin-instances/{id}/reconcile` | operator | `{force?}`；重推当前 desired 快照 |
+
+写成功统一 `200`（`PluginInstanceWriteResponse`）：`{id,revision,request_id,instance}`；
+`revision` 为本次写后 tenant/edge 的新 desired revision。
+
+写不变量（测试锁定）：
+
+1. 每次合法写 = RBAC → 权限/配额检查 → 事务（desired revision +1）→ 审计 → WS 向目标 Edge 推最新快照。
+2. `config`/`secret_refs` 只接受非敏感标量或 `secret://<name>` handle；键名形似凭据却给明文值 →
+   `403 plugin_secret_forbidden`。明文 secret 永不进 DB / WS / 审计 / 日志。
+3. 权限扩大类变更需 admin 或显式 `confirm_permissions:true`，否则
+   `403 plugin_permission_confirmation_required`，且不产生新 revision。
+4. 同租户 `instance_id` 重复 → `409 plugin_instance_conflict`。
+5. `reconcile` 时目标 Edge 离线或发送队列满 → `409 plugin_edge_offline`（期望态已保存，
+   Edge 重连后自动收敛）。
+
+### 5.5 插件写面稳定错误码
+
+错误响应统一 `{"error":"<code>","code":"<code>","message":"<人读文本>","request_id":"…"}`。
+前端按 `code` 呈现，绝不解析 `message`。
+
+| code | HTTP | 触发条件 |
+|---|---|---|
+| `plugin_invalid_config` | 400 | 载荷非法、config 键值不合法或超限 |
+| `authentication_required` | 401 | 无有效凭据的写操作（非回环来源） |
+| `plugin_secret_forbidden` | 403 | config/secret_refs 中出现明文 secret |
+| `plugin_permission_confirmation_required` | 403 | 权限扩大未显式确认（非 admin） |
+| `plugin_instance_not_found` | 404 | 实例不存在或跨租户 |
+| `plugin_instance_conflict` | 409 | `instance_id` 已存在 |
+| `plugin_edge_offline` | 409 | reconcile 时目标 Edge 离线 / 发送队列满 |
+| `plugin_quota_exceeded` | 429 | 租户插件实例配额已满 |
+| `plugin_store_unavailable` | 503 / 500 | 插件存储未接线（503）或写入失败（500） |
+
+### 5.6 已知边界（v0.1 接受）
+
+- **令牌会话无实时通道**：用租户服务令牌登录的 WebUI 只有 REST（Authorization header）。
+  浏览器 `WebSocket` 无法携带自定义 header，而账号模式下 `/ws` 以会话 cookie 鉴权，因此令牌会话
+  没有实时推送；UI 诚实显示「实时通道已断开」并定时刷新页面数据。账号密码会话（cookie）功能完整。
+- `applied_revision` 仅由 Edge `plugin_ack(applied)` 推进；WS 下发是尽力而为，断线重连以全量
+  desired 快照收敛（不回放断线期间的中间状态），详见 protocol.md / control-plane-sync.md。

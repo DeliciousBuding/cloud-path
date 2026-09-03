@@ -118,26 +118,28 @@ cp edge.example.yaml edge.yaml    # edge.yaml 是本地私有配置，不入库
 
 - **有真实串口设备**：在 `edge.yaml` 里填 `port`（Windows `COM3`、Linux `/dev/ttyUSB0`、
   macOS `/dev/cu.usbserial-*`）与 `adapter: stcb`。
-- **没有硬件**：Edge 仍然会连上 Server 并注册设备，但设备保持 **offline**
-  （Edge 日志 `device open failed ... Serial port not found`，按 1→2→4→8…→30s 退避重试）。
-  这足以验证「Edge 接入 / 多机接入 / 命令链路 / 断线重连」，只是设备状态不可用。
-  **当前基线没有内置的模拟/演示适配器**（`GET /api/adapters` 只返回 `stcb`），
-  该项见文末「尚未实现」。
+- **没有硬件**：用内置参考演示适配器 `adapter: demo`（无需串口）。设备会真实上线并持续
+  上报模拟状态（tick/uptime/level），命令 `ping/set/dump/noop` 真实执行并返回结果，
+  零硬件即可验证「Edge 接入 / 多机接入 / 命令闭环 / 断线重连」全链路；demo 与 `stcb` 真板
+  设备可挂在同一个 Edge 上共存。（`adapter: stcb` 而串口不存在时设备保持 offline，
+  Edge 按 1→2→4→8…→30s 退避重试拔插自愈。）
 
 ### 3. 打开管理台
 
 浏览器访问 <http://127.0.0.1:8080>：
 
-- `/setup`：首装向导（探测 server 连通性、保存访问令牌）。
-- `/login`：登录页。**当前接受访问令牌**（即 `CLOUDPATH_TOKEN` 或租户令牌）；
-  账号密码登录的服务端契约（`POST /api/auth/login`）已实现，WebUI 表单接线状态见文末表格。
-- 登录后：概览 `/`、设备 `/devices`、设备详情 `/devices/<edge>/<device>`、事件 `/events`、
-  边缘节点 `/edges`、系统 `/settings`；`role=admin` 另有管理页 `/admin`（用户、令牌、一次性令牌明文面板）。
+- `/setup`：首装向导（在服务器本机/回环创建首个管理员账号；完成后转登录页）。
+- `/login`：登录页。**账号密码登录**（会话 cookie）为主路径，实时通道 `/ws` 跟随登录态；
+  也接受「访问令牌」（`CLOUDPATH_TOKEN` 或租户令牌）作为兜底——令牌会话只有 REST、没有实时推送
+  （浏览器 WebSocket 无法携带 Authorization header），UI 会诚实显示「实时通道已断开」并定时刷新数据。
+- 登录后：概览 `/`、设备 `/devices`、设备详情 `/devices/<edge>/<device>`、活动 `/activity`
+  （旧 `/events` 路由自动跳转）、插件 `/plugins`、实例详情 `/plugins/<id>`、边缘节点 `/edges`、
+  边缘详情 `/edges/<edge>`、设置 `/settings`；`role=admin` 另有管理页 `/admin`（用户、令牌、一次性令牌明文面板）。
 
 ### 4. 看设备、下发命令、看事件
 
 设备卡片出现后，在详情页的命令面板点按钮（白名单来自适配器：
-`sync / dump / trigger / open / isp / raw`），或用 API：
+`stcb` 为 `sync / dump / trigger / open / isp / raw`，`demo` 为 `ping / set / dump / noop`），或用 API：
 
 ```bash
 curl -fsS -X POST http://127.0.0.1:8080/api/devices/<edge_id>/<device_id>/commands \
@@ -244,6 +246,8 @@ curl -fsS http://127.0.0.1:8080/api/edges                 # 边缘节点在线�
 - `edge` scope 的令牌**只能**连 `/ws/edge`；用它请求 REST（如 `/api/devices`）会得到 `403`。
 - 一台 Edge 掉线不会踢掉另一台的连接，也不会改写对方的在线状态。
 - 跨租户互相不可见：设备/事件/命令/插件实例都按 `tenant_id` 隔离。
+- 使用者若用租户令牌登录 WebUI 只有 REST（无 `/ws` 实时推送，页面定时刷新并诚实提示）；
+  需要完整实时通道就为其创建账号，走账号密码登录。
 
 ---
 
@@ -426,26 +430,36 @@ cloud-path/
   （actor/tenant/action/outcome/request_id/remote_ip）。
 - 设备监督（拔插退避重开）、离线事件有界缓冲与重连回放、断线指数退避重连、
   重启后从 SQLite 水合（一律先标离线，等 edge 重新上报）。
-- 参考 Driver `stcb`（进程内 blank import，命令白名单 `sync/dump/trigger/open/isp/raw`）。
+- 参考 Driver `stcb`（进程内 blank import，命令白名单 `sync/dump/trigger/open/isp/raw`）与内置
+  参考演示适配器 `demo`（无硬件，`ping/set/dump/noop`，server/edge 双端同源注册，`/api/adapters` 与白名单同一事实源）。
 - 参考 Application `scheduled-compartment`（进程式插件，Plugin Host 拉起，只依赖公开 SDK）
   与 [deploy/split/](deploy/split/README.md) 独立仓生成器。
 - 外部 Driver Plugin Host：desired-state + `plugins.lock` 监督插件进程；
   Registry CLI 的 search/inspect/install/enable/disable/update/remove/host 与信任锚校验。
-- `secret://<name>` handle 边界（本地 provider、租户/实例隔离、未声明 fail-closed）。
-- WebUI：概览/设备/详情/事件/边缘/系统 + 管理页（用户、令牌、一次性令牌明文面板）。
+- 插件控制面全链路：Server desired 权威（写面 REST + 9 个稳定错误码 + RBAC/配额/审计/WS
+  同链路推送）→ Edge reconcile（单调 revision、幂等 ack、离线跑 last-applied、重连只收敛最终
+  快照）→ observed 上报投影（脱敏）→ UI desired/observed 双栏诚实呈现（drift/stale/last-ack）。
+- `GET /api/overview` 聚合读面与 WebUI Overview/Activity/Plugins 产品信息架构；
+  账号密码登录（会话 cookie，实时通道跟随登录态）与 390px 窄屏视觉守卫测试。
+- `secret://<name>` handle 边界（本地 provider、租户/实例隔离、未声明 fail-closed；明文 secret
+  永不进 Server DB / WS / 审计 / 日志 / UI）。
+- WebUI：概览/设备/详情/活动/插件（目录·实例·desired/observed）/边缘/设置 + 管理页
+  （用户、令牌、一次性令牌明文面板），浅色/深色双主题与 390px 窄屏收口。
 - 发布工程：全平台构建矩阵、架构断言门禁、CI（Linux+Windows）、Release + checksums、
   systemd/nginx 部署物料与 SOP。
 
 **尚未实现 / 目标态（不要当现状使用）**
 
-- **内置模拟/演示适配器**：当前只有 `stcb`；无硬件时 Edge 可上线但设备 offline。
-- **WebUI 账号密码登录表单**：服务端 `POST /api/auth/login` 已实现，登录页当前只接受访问令牌。
-- **插件实例管理写面 REST**（`POST/PATCH/DELETE /api/plugin-instances`、`/reconcile`）与
-  **Overview 聚合读面** `GET /api/overview`：契约已冻结（见
-  [docs/architecture/control-plane-sync.md](docs/architecture/control-plane-sync.md)），实现未合入基线。
-- **外部 Driver 的 handshake/descriptor/observation 桥接进 Edge 数据流**：当前只上报 unsupported。
-- **中心 Secret Store**：v0.1 明确不做（见上）。
-- **插件独立仓发布**：药盒插件仓物料已可生成；建仓/打 tag/首次 Release 待执行。
+- **外部 Driver 的 handshake/descriptor/observation 桥接进 Edge 数据流**：Plugin Host 能监督
+  外部插件进程，但外部 Driver 的设备数据流尚未桥接（上报 unsupported）；进程内参考 Driver
+  `stcb`/`demo` 不受影响。
+- **令牌会话的实时通道**：用租户服务令牌登录的 WebUI 只有 REST，无 `/ws` 实时推送
+  （浏览器 WebSocket 无法携带自定义 header）；账号密码会话功能完整。v0.1 接受此限制，UI 诚实呈现。
+- **中心 Secret Store**：v0.1 明确不做（见上）；secret 一律 `secret://<name>` handle + Edge 本地
+  provider 解析，未来可替换 Vault/KMS 而不改 desired 协议。
+- **插件独立仓 Release**：药盒 Application 插件已拆入独立仓
+  [`cloud-path-app-scheduled-compartment`](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment)
+  （[deploy/split/](deploy/split/README.md) 生成器生成）；独立 Release 资产发布待执行。
   STC-B Driver 与 Registry 客户端按当前决策**不拆仓**，留在主仓。
 - MQTT/Modbus 等协议接入、远程 OTA 编排、时序聚合与业务分析（P2–P4 规划，见
   [docs/architecture.md](docs/architecture.md)）。
