@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DeliciousBuding/cloudpath/internal/api"
-	"github.com/DeliciousBuding/cloudpath/internal/device"
+	"github.com/DeliciousBuding/cloud-path/internal/api"
+	"github.com/DeliciousBuding/cloud-path/internal/device"
 )
 
 // Edge 是边缘代理运行时：N 台设备监督协程 + 1 条 server 长连接。

@@ -27,10 +27,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/DeliciousBuding/cloudpath/internal/api"
-	"github.com/DeliciousBuding/cloudpath/internal/device"
-	"github.com/DeliciousBuding/cloudpath/internal/store"
-	"github.com/DeliciousBuding/cloudpath/webui"
+	"github.com/DeliciousBuding/cloud-path/internal/api"
+	"github.com/DeliciousBuding/cloud-path/internal/device"
+	"github.com/DeliciousBuding/cloud-path/internal/store"
+	"github.com/DeliciousBuding/cloud-path/webui"
 )
 
 const (

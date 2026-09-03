@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DeliciousBuding/cloudpath/internal/device"
+	"github.com/DeliciousBuding/cloud-path/internal/device"
 	"go.bug.st/serial"
 )
 

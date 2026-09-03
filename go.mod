@@ -1,4 +1,4 @@
-module github.com/DeliciousBuding/cloudpath
+module github.com/DeliciousBuding/cloud-path
 
 go 1.26.3
 

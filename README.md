@@ -45,7 +45,7 @@
 ### 1. 起中心服务
 
 ```bash
-git clone https://github.com/DeliciousBuding/cloudpath.git
+git clone https://github.com/DeliciousBuding/cloud-path.git
 cd cloudpath
 
 # 需要 Go 1.26+、Node 20+、pnpm；task 可选（go install github.com/go-task/task/v3/cmd/task@latest）

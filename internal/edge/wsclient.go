@@ -11,7 +11,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/DeliciousBuding/cloudpath/internal/api"
+	"github.com/DeliciousBuding/cloud-path/internal/api"
 )
 
 const (

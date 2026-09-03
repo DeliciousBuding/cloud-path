@@ -58,7 +58,7 @@
 
 ```
 cloudpath/
-├── go.mod                      # module github.com/DeliciousBuding/cloudpath
+├── go.mod                      # module github.com/DeliciousBuding/cloud-path
 ├── Taskfile.yml                # setup/build/dev/test/lint/run/clean
 ├── cmd/
 │   ├── cloudpath-server/main.go

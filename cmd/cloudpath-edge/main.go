@@ -15,9 +15,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	_ "github.com/DeliciousBuding/cloudpath/examples/stcb" // 设备适配器注册
-	"github.com/DeliciousBuding/cloudpath/internal/edge"
-	"github.com/DeliciousBuding/cloudpath/internal/logx"
+	_ "github.com/DeliciousBuding/cloud-path/examples/stcb" // 设备适配器注册
+	"github.com/DeliciousBuding/cloud-path/internal/edge"
+	"github.com/DeliciousBuding/cloud-path/internal/logx"
 )
 
 // version 由构建注入：-ldflags "-X main.version=vX.Y.Z"

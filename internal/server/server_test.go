@@ -13,9 +13,9 @@ import (
 
 	"github.com/coder/websocket"
 
-	_ "github.com/DeliciousBuding/cloudpath/examples/stcb" // 注册 stcb 适配器（命令白名单）
-	"github.com/DeliciousBuding/cloudpath/internal/api"
-	"github.com/DeliciousBuding/cloudpath/internal/store"
+	_ "github.com/DeliciousBuding/cloud-path/examples/stcb" // 注册 stcb 适配器（命令白名单）
+	"github.com/DeliciousBuding/cloud-path/internal/api"
+	"github.com/DeliciousBuding/cloud-path/internal/store"
 )
 
 func setup(t *testing.T) (*Server, *httptest.Server) {

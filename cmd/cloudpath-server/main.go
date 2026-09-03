@@ -21,10 +21,10 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/DeliciousBuding/cloudpath/examples/stcb" // 适配器注册（命令白名单校验用）
-	"github.com/DeliciousBuding/cloudpath/internal/logx"
-	"github.com/DeliciousBuding/cloudpath/internal/server"
-	"github.com/DeliciousBuding/cloudpath/internal/store"
+	_ "github.com/DeliciousBuding/cloud-path/examples/stcb" // 适配器注册（命令白名单校验用）
+	"github.com/DeliciousBuding/cloud-path/internal/logx"
+	"github.com/DeliciousBuding/cloud-path/internal/server"
+	"github.com/DeliciousBuding/cloud-path/internal/store"
 )
 
 // version 由构建注入：-ldflags "-X main.version=vX.Y.Z"

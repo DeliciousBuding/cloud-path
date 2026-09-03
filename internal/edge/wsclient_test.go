@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DeliciousBuding/cloudpath/internal/api"
+	"github.com/DeliciousBuding/cloud-path/internal/api"
 )
 
 func testClient() *wsClient {

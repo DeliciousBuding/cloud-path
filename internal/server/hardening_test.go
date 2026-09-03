@@ -13,9 +13,9 @@ import (
 
 	"github.com/coder/websocket"
 
-	_ "github.com/DeliciousBuding/cloudpath/examples/stcb"
-	"github.com/DeliciousBuding/cloudpath/internal/api"
-	"github.com/DeliciousBuding/cloudpath/internal/store"
+	_ "github.com/DeliciousBuding/cloud-path/examples/stcb"
+	"github.com/DeliciousBuding/cloud-path/internal/api"
+	"github.com/DeliciousBuding/cloud-path/internal/store"
 )
 
 // registerEdge 走一次 hello 注册并等到 REST 可见（避免测试竞态）。
