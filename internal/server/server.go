@@ -1226,10 +1226,7 @@ func (s *Server) RunSweeper(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-timeoutT.C:
-			if s.cfg.Store == nil {
-				continue
-			}
-			n, err := s.cfg.Store.TimeoutStaleCommands(90 * time.Second)
+			n, err := s.timeoutOnce(commandTimeoutTTL)
 			if err != nil {
 				slog.Warn("sweeper: timeout commands", "err", err)
 			} else if n > 0 {
@@ -1239,6 +1236,17 @@ func (s *Server) RunSweeper(ctx context.Context) {
 			s.pruneOnce()
 		}
 	}
+}
+
+// commandTimeoutTTL 是命令等待 ack 的上限：超过即由 sweeper 标为 timeout。
+const commandTimeoutTTL = 90 * time.Second
+
+// timeoutOnce 把超过 ttl 仍未 ack 的命令标记为 timeout（sweeper 与测试共用同一路径）。
+func (s *Server) timeoutOnce(ttl time.Duration) (int64, error) {
+	if s.cfg.Store == nil {
+		return 0, nil
+	}
+	return s.cfg.Store.TimeoutStaleCommands(ttl)
 }
 
 // pruneOnce 执行一次保留期清理（sweeper 与测试共用）。

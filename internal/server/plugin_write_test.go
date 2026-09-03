@@ -97,6 +97,22 @@ func listInstances(t *testing.T, srv *Server, tenantID int64, slug, role string)
 	return out
 }
 
+// listInstancesHTTP 用租户令牌走真实 HTTP 读 GET /api/plugin-instances
+// （账号模式服务器不能用注入 principal 的 servePlugin）。
+func listInstancesHTTP(t *testing.T, ts *httptest.Server, token string) api.PluginInstanceListResponse {
+	t.Helper()
+	resp := doJSON(t, http.MethodGet, ts.URL+"/api/plugin-instances", "", bearerJSON(token), nil)
+	raw := readBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("list instances = %d body=%s", resp.StatusCode, raw)
+	}
+	var out api.PluginInstanceListResponse
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		t.Fatalf("decode instances: %v (%s)", err, raw)
+	}
+	return out
+}
+
 // auditActions 返回某租户已落库的审计动作+结果（断言「失败必须被真实记录」用）。
 func auditActions(t *testing.T, st *store.Store, tenantID int64) []string {
 	t.Helper()
