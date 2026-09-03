@@ -64,16 +64,21 @@ type ConnectorContributionView struct {
 // InstanceView 是单个插件实例的期望+观测视图。desired_enabled 与 observed_state
 // 相互独立；Host 未运行时 observed_state/health 为 unknown。
 type InstanceView struct {
-	Tenant         string      `json:"tenant"`
-	ID             string      `json:"id"`
-	Plugin         string      `json:"plugin"`
-	Version        string      `json:"version"`
-	DesiredEnabled bool        `json:"desired_enabled"`
-	ObservedState  string      `json:"observed_state"`
-	Health         string      `json:"health"`
-	DataPreserved  bool        `json:"data_preserved"`
-	ConfigPresent  bool        `json:"config_present"`
-	Metrics        MetricsView `json:"metrics"`
+	Tenant         string `json:"tenant"`
+	EdgeID         string `json:"edge_id"`
+	ID             string `json:"id"`
+	Plugin         string `json:"plugin"`
+	Version        string `json:"version"`
+	DesiredEnabled bool   `json:"desired_enabled"`
+	ObservedState  string `json:"observed_state"`
+	Health         string `json:"health"`
+	DataPreserved  bool   `json:"data_preserved"`
+	ConfigPresent  bool   `json:"config_present"`
+	// Drift 表示 desired_revision 与 applied_revision 不一致（期望已变、Edge 未确认）。
+	Drift bool `json:"drift"`
+	// Stale 表示 observed 投影过期或所属 edge 离线；只标记，绝不改写 desired。
+	Stale   bool        `json:"stale"`
+	Metrics MetricsView `json:"metrics"`
 }
 
 // MetricsView 是实例的脱敏资源指标快照。不可观测字段以 -1 标记 unavailable。

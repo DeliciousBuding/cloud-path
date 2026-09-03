@@ -34,6 +34,7 @@ import (
 	"github.com/DeliciousBuding/cloud-path/internal/device"
 	"github.com/DeliciousBuding/cloud-path/internal/model"
 	"github.com/DeliciousBuding/cloud-path/internal/plugincatalog"
+	"github.com/DeliciousBuding/cloud-path/internal/server/storeport"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
 	"github.com/DeliciousBuding/cloud-path/webui"
 )
@@ -72,8 +73,15 @@ type Config struct {
 	SetupToken string
 	// TrustedProxies 是可信反代 CIDR allowlist（已解析）；nil = 不采信任何转发头。
 	TrustedProxies *auth.TrustedProxies
-	// PluginCatalog 是只读插件目录（可选）。nil 时插件端点返回空列表而非崩溃。
+	// PluginCatalog 是只读插件目录（可选）。nil 时默认用 Server 自己的插件控制面
+	// 投影构造（真实数据源），因此插件端点永不返回内置/静态样例。
 	PluginCatalog plugincatalog.Catalog
+	// PluginStore 是插件控制面持久化端口（internal/server/storeport，§3 契约）。
+	// nil = 未接线：插件写 API 返回 503，WS plugin_* 消息按旧协议忽略，读面为空。
+	// 生产必须由 SQLite 适配器注入（见 storeport/adapter_sqlite.go）。
+	PluginStore storeport.PluginStore
+	// PluginStaleAfter 是 observed 投影过期阈值；<=0 用默认 2 分钟。
+	PluginStaleAfter time.Duration
 }
 
 func (c Config) retentionDays() int {
@@ -122,7 +130,8 @@ type Server struct {
 	loginLimiter  *auth.RateLimiter     // 登录限流：次/分/IP
 	authForced    atomic.Bool           // 账号模式：已有用户或 -require-auth
 	auditWrite    auditWriteFunc        // 审计落库（默认写 store；测试可注入）
-	pluginCatalog plugincatalog.Catalog // 只读插件目录（注入；nil=空列表）
+	pluginCatalog plugincatalog.Catalog // 只读插件目录（注入；默认接自己的投影）
+	plugin        *pluginPlane          // 插件控制面运行态（desired 缓存 + observed 投影）
 
 	trustedProxies *auth.TrustedProxies             // 反代 allowlist（nil=不信任转发头）
 	setupTokenUsed atomic.Bool                      // 一次性 setup token 已消费
@@ -139,6 +148,9 @@ type edgeLink struct {
 	connectedAt time.Time
 	send        chan []byte
 	cancel      context.CancelFunc
+	// pluginBootID 是本连接上已确立的 Edge 启动标识（首条被接受的 plugin_status 写入）。
+	// 同一连接出现不同 boot_id = 旧 boot 迟到消息，一律忽略（暗卷 2）。
+	pluginBootID string
 }
 
 type browserConn struct {
@@ -166,6 +178,12 @@ func New(cfg Config) *Server {
 		dummyVerify:    auth.DummyVerify,
 	}
 	s.auditWrite = s.defaultAuditWrite()
+	s.plugin = newPluginPlane(cfg.PluginStore, cfg.PluginStaleAfter)
+	if s.pluginCatalog == nil {
+		// 默认目录直接读 Server 的插件控制面投影：安装物来自 Edge 上报，
+		// 期望态来自 Server 权威存储，不存在任何 fake/静态来源。
+		s.pluginCatalog = plugincatalog.NewProjectionCatalog(pluginProjection{s})
+	}
 	s.hydrate()
 	return s
 }
@@ -338,6 +356,31 @@ func (s *Server) markEdgeOffline(link *edgeLink) {
 	for _, env := range envs {
 		s.broadcast(env)
 	}
+}
+
+// markLinkDevicesOnlineLocked 把新注册连接声明的设备标为在线（调用方持 s.mu）。
+// 这是 markEdgeOffline 的精确镜像：断线时按连接消失把设备标离线，重连时按连接
+// 建立把设备标回在线；Edge 随后的 state 上报仍是设备级 observed 权威。
+// 只翻转当前离线的设备，避免重连风暴里重复广播已在线的设备。
+func (s *Server) markLinkDevicesOnlineLocked(link *edgeLink) ([]statePersist, []api.Envelope) {
+	var pend []statePersist
+	var envs []api.Envelope
+	now := time.Now().Unix()
+	for _, key := range link.devices {
+		v, ok := s.devices[key]
+		if !ok || v.Online {
+			continue
+		}
+		v.Online = true
+		v.LastSeen = now
+		b, err := json.Marshal(v.State)
+		if err != nil {
+			b = []byte("{}")
+		}
+		pend = append(pend, statePersist{key: key, stateJSON: string(b), online: true, updatedAt: v.UpdatedAt})
+		envs = append(envs, s.stateEnvelope(key, v))
+	}
+	return pend, envs
 }
 
 // tenantIDForSlug 解析 edge hello 自报 tenant slug 为 DB tenant id。
@@ -666,12 +709,22 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/api/commands", s.handleListCommands)
 			r.Get("/api/adapters", s.handleListAdapters)
 			r.Get("/api/stats", s.handleStats)
+			r.Get("/api/overview", s.handleOverview)
 			r.Get("/api/plugins", s.handleListPlugins)
 			r.Get("/api/plugins/{pluginID}", s.handleGetPlugin)
 			r.Get("/api/plugin-instances", s.handleListPluginInstances)
 			r.Get("/api/plugin-instances/{id}", s.handleGetPluginInstance)
 		})
 		r.Post("/api/devices/{edgeID}/{deviceID}/commands", s.authWrite(s.handlePostCommand))
+		// 插件实例管理写面（control-plane-sync §6）：viewer 只读，operator 可写，
+		// purge / 权限扩大 / secret binding 变更额外要求 admin 或显式 confirm_permissions。
+		r.Group(func(r chi.Router) {
+			r.Use(s.requireRole(api.RoleOperator))
+			r.Post("/api/plugin-instances", s.authWrite(s.handleCreatePluginInstance))
+			r.Patch("/api/plugin-instances/{id}", s.authWrite(s.handleUpdatePluginInstance))
+			r.Delete("/api/plugin-instances/{id}", s.authWrite(s.handleDeletePluginInstance))
+			r.Post("/api/plugin-instances/{id}/reconcile", s.authWrite(s.handleReconcilePluginInstance))
+		})
 	})
 	// 用户/令牌管理：始终要求 admin 身份（legacy token 亦可用；非账号模式未认证 401）。
 	r.Group(func(r chi.Router) {
