@@ -53,8 +53,10 @@ func ReadManifestSource(ctx context.Context, client *GitHubClient, source, plugi
 
 	if pluginsDir != "" {
 		idPath := filepath.Join(pluginsDir, SafePluginID(raw), "plugin.yaml")
-		if data, err := os.ReadFile(idPath); err == nil {
-			return &ManifestSource{Data: data, Path: idPath}, nil
+		if pathWithin(pluginsDir, idPath) {
+			if data, err := os.ReadFile(idPath); err == nil {
+				return &ManifestSource{Data: data, Path: idPath}, nil
+			}
 		}
 	}
 
@@ -62,7 +64,12 @@ func ReadManifestSource(ctx context.Context, client *GitHubClient, source, plugi
 }
 
 // SafePluginID turns arbitrary plugin IDs into a filesystem-safe directory name.
+// It never returns ".", ".." or a path separator, so the result is always a
+// single safe path component that cannot escape its parent.
 func SafePluginID(id string) string {
+	if id == "" || id == "." || id == ".." {
+		return "plugin"
+	}
 	var b strings.Builder
 	for _, r := range id {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) || strings.ContainsRune("._-", r) {
@@ -71,8 +78,9 @@ func SafePluginID(id string) string {
 			b.WriteByte('_')
 		}
 	}
-	if b.Len() == 0 {
+	result := b.String()
+	if result == "" || result == "." || result == ".." {
 		return "plugin"
 	}
-	return b.String()
+	return result
 }

@@ -226,9 +226,21 @@ Commands:
   remove <id>          Remove a plugin instance (A4 Plugin Host; data retained by default)`)
 }
 
+// reportError prints a redacted error and returns the stable exit code.
 func reportError(err error, code int) int {
-	fmt.Fprintf(os.Stderr, "cloudpath: error[%s]: %v\n", errorCode(err), err)
+	fmt.Fprintf(os.Stderr, "cloudpath: error[%s]: %v\n", errorCode(err), redactSecrets(err.Error()))
 	return code
+}
+
+// redactSecrets strips any configured GitHub token and Authorization-style
+// credentials from a message before it is printed.
+func redactSecrets(s string) string {
+	for _, key := range []string{"GITHUB_TOKEN", "GH_TOKEN"} {
+		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+			s = strings.ReplaceAll(s, v, "[REDACTED]")
+		}
+	}
+	return s
 }
 
 func errorCode(err error) string {
@@ -241,10 +253,16 @@ func errorCode(err error) string {
 		return "ERR_DIGEST_UNAVAILABLE"
 	case errors.Is(err, registry.ErrCoreIncompatible):
 		return "ERR_CORE_INCOMPATIBLE"
+	case errors.Is(err, registry.ErrProtocolIncompatible):
+		return "ERR_PROTOCOL_INCOMPATIBLE"
 	case errors.Is(err, registry.ErrHostRuntimeUnavailable):
 		return "ERR_HOST_RUNTIME_UNAVAILABLE"
 	case errors.Is(err, registry.ErrPermissionConfirmationRequired):
 		return "ERR_PERMISSION_CONFIRMATION_REQUIRED"
+	case errors.Is(err, registry.ErrRateLimited):
+		return "ERR_RATE_LIMITED"
+	case errors.Is(err, registry.ErrUnsafeArtifact):
+		return "ERR_UNSAFE_ARTIFACT"
 	case errors.Is(err, registry.ErrUnsupportedSource), errors.Is(err, registry.ErrNotFound):
 		return "ERR_NOT_FOUND"
 	default:
@@ -256,6 +274,7 @@ func installErrorCode(err error) int {
 	switch {
 	case errors.Is(err, registry.ErrInvalidManifest),
 		errors.Is(err, registry.ErrCoreIncompatible),
+		errors.Is(err, registry.ErrProtocolIncompatible),
 		errors.Is(err, registry.ErrDigestMismatch),
 		errors.Is(err, registry.ErrDigestUnavailable),
 		errors.Is(err, registry.ErrPermissionConfirmationRequired):

@@ -1,0 +1,12 @@
+apiVersion: plugins.cloudpath.dev/v1alpha1
+kind: Driver
+id: io.github.example.driver
+version: 0.1.0
+protocol: 1
+entrypoint: ./driver
+compatibility:
+  core: ">=0.1.0 <0.2.0"
+permissions:
+  network: [outbound]
+  filesystem: [/tmp]
+  secrets: [token]

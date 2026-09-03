@@ -3,6 +3,7 @@ package registry
 import (
 	"fmt"
 	"os"
+	"sort"
 
 	"gopkg.in/yaml.v3"
 )
@@ -46,7 +47,7 @@ func ParseManifest(data []byte) (*Manifest, error) {
 
 // LoadManifest reads a manifest file without schema validation.
 func LoadManifest(path string) (*Manifest, error) {
-	data, err := os.ReadFile(path)
+	data, err := readFileRetry(path)
 	if err != nil {
 		return nil, fmt.Errorf("read plugin.yaml %s: %w", path, err)
 	}
@@ -85,6 +86,46 @@ func ValidateManifestFile(path, schemaPath string) (*Manifest, error) {
 		return nil, fmt.Errorf("read manifest schema %s: %w", schemaPath, err)
 	}
 	return ValidateManifest(data, schema)
+}
+
+// PermissionExpansion returns the permission entries present in incoming but not
+// in existing, formatted as category:value, in deterministic order. It returns
+// nil when incoming is a subset of or equal to existing, i.e. no expansion.
+func PermissionExpansion(existing, incoming *Permissions) []string {
+	if existing == nil {
+		existing = &Permissions{}
+	}
+	if incoming == nil {
+		incoming = &Permissions{}
+	}
+	seen := make(map[string]bool)
+	for _, v := range existing.Hardware {
+		seen["hardware\x00"+v] = true
+	}
+	for _, v := range existing.Network {
+		seen["network\x00"+v] = true
+	}
+	for _, v := range existing.Filesystem {
+		seen["filesystem\x00"+v] = true
+	}
+	for _, v := range existing.Secrets {
+		seen["secrets\x00"+v] = true
+	}
+	var added []string
+	add := func(category string, values []string) {
+		for _, v := range values {
+			key := category + "\x00" + v
+			if !seen[key] {
+				added = append(added, category+":"+v)
+			}
+		}
+	}
+	add("hardware", incoming.Hardware)
+	add("network", incoming.Network)
+	add("filesystem", incoming.Filesystem)
+	add("secrets", incoming.Secrets)
+	sort.Strings(added)
+	return added
 }
 
 // PermissionSummary returns a compact human-readable permission disclosure.
