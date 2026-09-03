@@ -54,7 +54,7 @@ func (s *Server) audit(r *http.Request, ev audit.Event) {
 		ev.RequestID = audit.RequestID(r.Context())
 	}
 	if ev.RemoteIP == "" {
-		ev.RemoteIP = auth.ClientIP(r)
+		ev.RemoteIP = auth.ClientIP(r, s.trustedProxies)
 	}
 	s.recordAudit(ev)
 }

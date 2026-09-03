@@ -21,9 +21,9 @@ func NewSessionID() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-// SetSessionCookie 写 cp_session cookie：HttpOnly + SameSite=Lax；反代 TLS 下加 Secure。
-// maxAge 为 TTL 秒（每次登录新 ID，天然防会话固定）。
-func SetSessionCookie(w http.ResponseWriter, r *http.Request, sessionID string, maxAge int) {
+// SetSessionCookie 写 cp_session cookie：HttpOnly + SameSite=Lax；真实 TLS 或
+// 可信反代声明的 https 下加 Secure。maxAge 为 TTL 秒（每次登录新 ID，防固定）。
+func SetSessionCookie(w http.ResponseWriter, r *http.Request, sessionID string, maxAge int, proxies *TrustedProxies) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookieName,
 		Value:    sessionID,
@@ -31,7 +31,7 @@ func SetSessionCookie(w http.ResponseWriter, r *http.Request, sessionID string, 
 		MaxAge:   maxAge,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   IsSecureRequest(r),
+		Secure:   IsSecureRequest(r, proxies),
 	})
 }
 
@@ -48,10 +48,14 @@ func ClearSessionCookie(w http.ResponseWriter) {
 	})
 }
 
-// IsSecureRequest 判断请求是否走 TLS：直连 TLS 或反代 X-Forwarded-Proto=https。
-func IsSecureRequest(r *http.Request) bool {
+// IsSecureRequest 判断请求是否走 TLS：真实 TLS，或可信反代声明的
+// X-Forwarded-Proto=https。未命中可信反代时伪造 proto 头一律忽略。
+func IsSecureRequest(r *http.Request, proxies *TrustedProxies) bool {
 	if r.TLS != nil {
 		return true
+	}
+	if !proxies.TrustsRemote(r.RemoteAddr) {
+		return false
 	}
 	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }

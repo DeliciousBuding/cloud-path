@@ -26,6 +26,17 @@ const (
 var argon2Prefix = fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$",
 	argon2.Version, Argon2Memory, Argon2Time, Argon2Threads)
 
+// dummyPasswordHash 是未知用户登录时执行的固定假哈希：与真实 VerifyPassword
+// 走同一 argon2id 参数，保证未知用户与已知用户的耗时同量级，收敛用户名枚举时序。
+var dummyPasswordHash = func() string {
+	salt := make([]byte, argon2SaltLen)
+	copy(salt, "cloudpath-dummy-salt")
+	key := argon2.IDKey([]byte("cloudpath-dummy-password"), salt, Argon2Time, Argon2Memory, Argon2Threads, Argon2KeyLen)
+	return argon2Prefix +
+		base64.RawStdEncoding.EncodeToString(salt) + "$" +
+		base64.RawStdEncoding.EncodeToString(key)
+}()
+
 // HashPassword 生成可持久化的 argon2id 哈希（含参数与盐，自描述，永不落明文）。
 func HashPassword(password string) (string, error) {
 	salt := make([]byte, argon2SaltLen)
@@ -67,4 +78,10 @@ func VerifyPassword(encoded, password string) bool {
 	}
 	got := argon2.IDKey([]byte(password), salt, t, m, p, uint32(len(want)))
 	return subtle.ConstantTimeCompare(got, want) == 1
+}
+
+// DummyVerify 对未知用户执行一次完整 Argon2id 派生，结果丢弃。
+// 登录路径对不存在的用户名也必须烧掉等量 CPU，避免通过响应时延枚举用户名。
+func DummyVerify(password string) {
+	VerifyPassword(dummyPasswordHash, password)
 }

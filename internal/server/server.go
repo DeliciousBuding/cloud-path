@@ -67,6 +67,11 @@ type Config struct {
 	LoginRatePerMin int
 	// SessionDays 是服务端会话 TTL（天）。<=0 用默认 7。
 	SessionDays int
+	// SetupToken 是一次性首装令牌：非回环来源执行 /api/auth/setup 时必须携带；
+	// 首次成功 setup 后进程内失效。空 = 仅允许真实 TCP loopback setup。
+	SetupToken string
+	// TrustedProxies 是可信反代 CIDR allowlist（已解析）；nil = 不采信任何转发头。
+	TrustedProxies *auth.TrustedProxies
 	// PluginCatalog 是只读插件目录（可选）。nil 时插件端点返回空列表而非崩溃。
 	PluginCatalog plugincatalog.Catalog
 }
@@ -117,6 +122,11 @@ type Server struct {
 	authForced    atomic.Bool           // 账号模式：已有用户或 -require-auth
 	auditWrite    auditWriteFunc        // 审计落库（默认写 store；测试可注入）
 	pluginCatalog plugincatalog.Catalog // 只读插件目录（注入；nil=空列表）
+
+	trustedProxies *auth.TrustedProxies             // 反代 allowlist（nil=不信任转发头）
+	setupTokenUsed atomic.Bool                      // 一次性 setup token 已消费
+	verifyPassword func(hash, password string) bool // 登录密码校验（测试可注入）
+	dummyVerify    func(password string)            // 未知用户 dummy 校验（测试可注入）
 }
 
 type edgeLink struct {
@@ -138,16 +148,19 @@ type browserConn struct {
 // New 创建服务并从数据库水合上次已知状态（重启后面板不空白，离线标记）。
 func New(cfg Config) *Server {
 	s := &Server{
-		cfg:           cfg,
-		startedAt:     time.Now(),
-		devices:       map[string]*api.DeviceView{},
-		edges:         map[string]*edgeLink{},
-		browsers:      map[*browserConn]struct{}{},
-		cmdHits:       map[string][]time.Time{},
-		descriptors:   map[string]model.Descriptor{},
-		deviceTenants: map[string]string{},
-		loginLimiter:  auth.NewRateLimiter(cfg.loginRatePerMin()),
-		pluginCatalog: cfg.PluginCatalog,
+		cfg:            cfg,
+		startedAt:      time.Now(),
+		devices:        map[string]*api.DeviceView{},
+		edges:          map[string]*edgeLink{},
+		browsers:       map[*browserConn]struct{}{},
+		cmdHits:        map[string][]time.Time{},
+		descriptors:    map[string]model.Descriptor{},
+		deviceTenants:  map[string]string{},
+		loginLimiter:   auth.NewRateLimiter(cfg.loginRatePerMin()),
+		trustedProxies: cfg.TrustedProxies,
+		pluginCatalog:  cfg.PluginCatalog,
+		verifyPassword: auth.VerifyPassword,
+		dummyVerify:    auth.DummyVerify,
 	}
 	s.auditWrite = s.defaultAuditWrite()
 	s.hydrate()
@@ -744,11 +757,7 @@ func (s *Server) accountMode() bool {
 }
 
 func (s *Server) tokenOK(r *http.Request) bool {
-	got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if got == "" {
-		got = r.URL.Query().Get("token") // 浏览器 WS/EventSource 无法自定义 header
-	}
-	return got == s.cfg.Token
+	return auth.TokenOK(r, s.cfg.Token)
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

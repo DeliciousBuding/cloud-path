@@ -1,6 +1,8 @@
 package pluginhost
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"fmt"
 	"net"
 	"strconv"
@@ -135,4 +137,12 @@ func parseProtocolDecl(field string) (string, uint32, error) {
 		return "", 0, fmt.Errorf("handshake: malformed protocol version %q", v)
 	}
 	return k, uint32(n), nil
+}
+
+// constantTimeEqual 恒时比较两个秘密字符串：先散列成定长摘要再比较，
+// 避免长度早退泄露 secret 内容（proof/token 类字段必须走这里）。
+func constantTimeEqual(a, b string) bool {
+	ah := sha256.Sum256([]byte(a))
+	bh := sha256.Sum256([]byte(b))
+	return subtle.ConstantTimeCompare(ah[:], bh[:]) == 1
 }

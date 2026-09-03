@@ -627,7 +627,7 @@ func (s *Supervisor) validateHandshake(launch *launch, h Handshake) error {
 	if h.LaunchID != launchID {
 		return errors.New("handshake launch id mismatch")
 	}
-	if h.Proof != proof {
+	if !constantTimeEqual(h.Proof, proof) {
 		return errors.New("handshake proof mismatch")
 	}
 	if launch != nil {
