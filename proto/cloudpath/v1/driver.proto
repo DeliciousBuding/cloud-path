@@ -1,0 +1,391 @@
+syntax = "proto3";
+
+package cloudpath.v1.driver;
+
+option go_package = "github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/driver";
+
+// 本文件是 Driver Protocol v1 的**语言无关契约文本**，不是可编译目标：
+// 本仓库有意不引入 protoc/protoc-gen-go，也不生成任何代码。
+// Go 侧以手写 struct + JSON 编解码实现，与这里的 message/field 一一对应，
+// 见 sdk/go/cloudpath/v1/driver/。真 gRPC/named pipe/Unix socket 传输归
+// A4 Plugin Host；本 SDK 只定义 transport 接口（sdk/go/transport）。
+//
+// 语义唯一真理：docs/architecture/plugin-system.md §5 Driver Protocol v1、
+// docs/architecture/capability-model.md（Observation/Event/Command）。
+
+// DriverService 由插件进程暴露，Host/Core 作为客户端调用。
+// 注意流方向：
+//   Discover: server-streaming（插件 -> Core 的 DiscoveryEvent）
+//   Watch:    server-streaming（插件 -> Core 的 DriverMessage）
+// 其余均为 unary。
+service DriverService {
+  rpc Initialize(InitializeRequest) returns (InitializeResponse);
+  rpc Describe(DescribeRequest) returns (DriverDescriptor);
+  rpc ConfigureInstance(ConfigureInstanceRequest) returns (ConfigureInstanceResponse);
+  rpc Discover(DiscoverRequest) returns (stream DiscoveryEvent);
+  rpc OpenDevice(OpenDeviceRequest) returns (OpenDeviceResponse);
+  rpc CloseDevice(CloseDeviceRequest) returns (CloseDeviceResponse);
+  rpc Watch(WatchRequest) returns (stream DriverMessage);
+  rpc Execute(ExecuteRequest) returns (ExecuteResponse);
+  rpc Health(HealthRequest) returns (HealthResponse);
+  rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
+}
+
+// ---------------------------------------------------------------------------
+// 通用状态（driver/application 契约各自内联一份，保持单文件自洽）
+// ---------------------------------------------------------------------------
+
+message Status {
+  enum Code {
+    OK = 0;
+    CANCELLED = 1;
+    UNKNOWN = 2;
+    INVALID_ARGUMENT = 3;
+    DEADLINE_EXCEEDED = 4;
+    NOT_FOUND = 5;
+    ALREADY_EXISTS = 6;
+    PERMISSION_DENIED = 7;
+    RESOURCE_EXHAUSTED = 8;
+    FAILED_PRECONDITION = 9;
+    ABORTED = 10;
+    OUT_OF_RANGE = 11;
+    UNIMPLEMENTED = 12;
+    INTERNAL = 13;
+    UNAVAILABLE = 14;
+    DATA_LOSS = 15;
+    UNAUTHENTICATED = 16;
+  }
+  Code code = 1;
+  string message = 2;
+}
+
+// ---------------------------------------------------------------------------
+// 握手与版本协商
+// ---------------------------------------------------------------------------
+
+message InitializeRequest {
+  string plugin_id = 1;                        // 来自 manifest metadata.id
+  string plugin_version = 2;                   // manifest metadata.version（发布包 SemVer）
+  string launch_id = 3;                        // Host 生成，进程生命周期唯一
+  string handshake_cookie = 4;                 // 一次性随机 cookie；在进程握手行中先被 Host 校验
+  uint32 protocol_version = 5;                 // 首选协议版本
+  repeated uint32 supported_protocol_versions = 6; // 插件支持的协议版本集合（升序）
+  string node_id = 7;                          // 接入节点（edge）
+  string runtime_type = 8;                     // process/embedded
+  map<string, string> host_info = 9;           // Host 注入的平台信息（OS/arch/...）
+}
+
+message InitializeResponse {
+  uint32 negotiated_protocol_version = 1;      // 双方共同支持的最大版本；0 表示协商失败
+  Status status = 2;
+  bool replay_supported = 3;                   // 是否支持从最后确认 sequence 续传
+  string runtime_id = 4;                       // 插件运行时自报标识（用于诊断）
+}
+
+// ---------------------------------------------------------------------------
+// Describe：稳定、确定性的驱动描述
+// ---------------------------------------------------------------------------
+
+message DescribeRequest {}
+
+message DriverDescriptor {
+  string driver_id = 1;                        // contributes.drivers[].id，manifest 声明
+  string version = 2;                          // 描述结构版本（schema version），非发布版本
+  repeated string schema_versions = 3;         // DriverMessage/DiscoveryEvent 数据 schema 版本集合
+  repeated CapabilityDescriptor capabilities = 4;
+  // 注意：同一版本内 Describe 输出必须逐字节稳定；并发实例不得改变该结果。
+}
+
+message CapabilityDescriptor {
+  string id = 1;                               // cloudpath.dev/capability/temperature@1
+  string title = 2;
+  repeated PropertyDescriptor properties = 3;
+  repeated EventDescriptor events = 4;
+  repeated ActionDescriptor actions = 5;
+  // presentation/UI hint 不在此处：UI 不是语义真相。
+}
+
+message PropertyDescriptor {
+  string name = 1;
+  string type = 2;                             // number|string|bool|integer|json
+  string unit = 3;                             // 统一单位代码，禁止随意本地化文本
+  string access = 4;                           // read|write|readwrite
+  repeated string quality = 5;                 // good|uncertain|bad|unavailable
+}
+
+message EventDescriptor {
+  string name = 1;                             // 如 threshold-crossed
+  string payload_schema_json = 2;              // JSON Schema（字符串形式，语言无关）
+}
+
+message ActionDescriptor {
+  string name = 1;                             // 如 calibrate
+  string input_schema_json = 2;                // JSON Schema
+  string result_schema_json = 3;               // JSON Schema
+}
+
+// ---------------------------------------------------------------------------
+// 实例配置
+// ---------------------------------------------------------------------------
+
+message ConfigureInstanceRequest {
+  string plugin_instance_id = 1;
+  bytes config = 2;                            // 按 configSchema 校验后的 JSON 字节
+  uint32 config_revision = 3;                  // 单调递增，配置回滚/乱序防护
+}
+
+message ConfigureInstanceResponse {
+  string plugin_instance_id = 1;
+  uint32 applied_revision = 2;
+  Status status = 3;
+}
+
+// ---------------------------------------------------------------------------
+// Discover：发现事件流
+// ---------------------------------------------------------------------------
+
+message DiscoverRequest {
+  string plugin_instance_id = 1;
+  string discovery_id = 2;                     // Core 生成，幂等键
+  map<string, string> parameters = 3;          // 只包含 Host 批准的资源
+}
+
+message DiscoveryEvent {
+  string plugin_instance_id = 1;
+  uint64 sequence = 2;                         // 同 instance 的发现事件序
+  string schema_version = 3;
+  string discovery_id = 4;
+  oneof body {
+    DiscoveryStarted started = 10;
+    DiscoveryFoundDevice found_device = 11;
+    DiscoveryProgress progress = 12;
+    DiscoveryFinished finished = 13;
+    DiscoveryFailed failed = 14;
+  }
+}
+
+message DiscoveryStarted { string discovery_id = 1; }
+message DiscoveryFoundDevice {
+  string device_id = 1;
+  string external_id = 2;
+  string manufacturer = 3;
+  string model = 4;
+}
+message DiscoveryProgress { double fraction = 1; string detail = 2; } // fraction: [0,1]
+message DiscoveryFinished { uint32 found_count = 1; }
+message DiscoveryFailed { Status status = 1; }
+
+// ---------------------------------------------------------------------------
+// Open/Close Device：仅使用 Host 已批准的端口/资源
+// ---------------------------------------------------------------------------
+
+message OpenDeviceRequest {
+  string plugin_instance_id = 1;
+  string device_id = 2;
+  map<string, string> connection_hints = 3;    // 批准的串口/路径等连接属性
+}
+
+message OpenDeviceResponse {
+  string plugin_instance_id = 1;
+  string device_id = 2;
+  Status status = 3;
+}
+
+message CloseDeviceRequest {
+  string plugin_instance_id = 1;
+  string device_id = 2;
+}
+
+message CloseDeviceResponse {
+  string plugin_instance_id = 1;
+  string device_id = 2;
+  Status status = 3;
+}
+
+// ---------------------------------------------------------------------------
+// Watch：上报流（Device/Entity/Observation/Event/CommandProgress/Diagnostic）
+// ---------------------------------------------------------------------------
+
+message WatchRequest {
+  string plugin_instance_id = 1;
+  uint64 resume_from_sequence = 2;             // >0 表示请求续传；需 InitializeResponse.replay_supported
+  repeated string device_ids = 3;              // 空 = 该 instance 全部设备
+  uint32 max_buffered = 4;                     // Host 声明的排队容量提示（背压协商）
+}
+
+message DriverMessage {
+  string plugin_instance_id = 1;               // 必填
+  uint64 sequence = 2;                         // 必填；同 instance+device 内单调递增
+  string schema_version = 3;                   // 数据语义版本
+  string device_id = 4;                        // 去重作用域：Core 按 (instance, device, sequence) 去重
+  oneof body {
+    DeviceUpsert device_upsert = 10;
+    EntityUpsert entity_upsert = 11;
+    Observation observation = 12;
+    Event event = 13;
+    CommandProgress command_progress = 14;
+    Diagnostic diagnostic = 15;
+  }
+}
+
+enum DeviceStatus {
+  DEVICE_STATUS_UNSPECIFIED = 0;
+  DEVICE_STATUS_ONLINE = 1;
+  DEVICE_STATUS_OFFLINE = 2;
+  DEVICE_STATUS_UNAVAILABLE = 3;
+  DEVICE_STATUS_DEGRADED = 4;
+}
+
+message Device {
+  string device_id = 1;                        // Core 内稳定 ID（重连后必须复原）
+  string external_id = 2;                      // Driver 范围内不可变 ID；禁止使用串口名
+  string manufacturer = 3;
+  string model = 4;
+  DeviceStatus status = 5;
+  string display_name = 6;                     // 默认显示名；用户可改名
+}
+
+message DeviceUpsert {
+  Device device = 1;
+  bool removed = 2;                            // true = 设备移除
+}
+
+enum EntityCategory {
+  ENTITY_CATEGORY_UNSPECIFIED = 0;
+  ENTITY_CATEGORY_SENSOR = 1;
+  ENTITY_CATEGORY_ACTUATOR = 2;
+  ENTITY_CATEGORY_DIAGNOSTIC = 3;
+  ENTITY_CATEGORY_CONFIG = 4;
+}
+
+message Entity {
+  string entity_id = 1;
+  string device_id = 2;
+  string unique_key = 3;                       // Driver 范围内不可由用户修改
+  string name = 4;
+  EntityCategory category = 5;
+  repeated string capabilities = 6;            // 稳定 capability id（含 @version）
+  map<string, string> attributes = 7;          // 展示性附加属性（非语义真相）
+}
+
+message EntityUpsert {
+  Entity entity = 1;
+  bool removed = 2;
+}
+
+message Observation {
+  string entity_id = 1;
+  string capability = 2;                       // 含 @version
+  string property = 3;
+  Value value = 4;
+  string observed_at = 5;                      // RFC3339；可来自设备（时钟不可信时以 received_at 为准）
+  string received_at = 6;                      // 必须由可信 Edge/Core 生成，插件禁止伪造语义
+  string quality = 7;                          // good|uncertain|bad|unavailable
+}
+
+message Value {
+  oneof kind {
+    double number_value = 1;
+    int64 int_value = 2;
+    string string_value = 3;
+    bool bool_value = 4;
+    string json_value = 5;                     // 结构化 JSON 原文
+  }
+}
+
+message Event {
+  string entity_id = 1;
+  string device_id = 2;
+  string event_type = 3;                       // Capability/Application 命名空间；不维护平台级业务枚举
+  string payload_json = 4;                     // 按 capability events[].payloadSchema 校验
+  string occurred_at = 5;                      // RFC3339
+  string correlation_id = 6;                   // 与命令/其他事件的关联
+}
+
+message CommandProgress {
+  string command_id = 1;
+  string idempotency_key = 2;
+  string entity_id = 3;
+  string action = 4;
+  CommandState state = 5;
+  double progress = 6;                         // 可选 [0,1]；无明确进度时置 0
+  string detail = 7;
+  string result_json = 8;                      // 仅 SUCCEEDED 有意义
+  string error_code = 9;                       // FAILED/TIMED_OUT/CANCELLED 时给出
+}
+
+message Diagnostic {
+  string level = 1;                            // debug|info|warn|error
+  string message = 2;
+  map<string, string> fields = 3;
+  string observed_at = 4;                      // RFC3339
+  string raw_json = 5;                         // Raw 兼容/取证面；不是语义通道
+}
+
+// ---------------------------------------------------------------------------
+// Execute：命令通道（含幂等执行与取消）
+// ---------------------------------------------------------------------------
+
+enum CommandState {
+  COMMAND_STATE_UNSPECIFIED = 0;
+  COMMAND_STATE_CREATED = 1;
+  COMMAND_STATE_DISPATCHED = 2;
+  COMMAND_STATE_ACCEPTED = 3;
+  COMMAND_STATE_RUNNING = 4;
+  COMMAND_STATE_SUCCEEDED = 5;
+  COMMAND_STATE_FAILED = 6;
+  COMMAND_STATE_TIMED_OUT = 7;
+  COMMAND_STATE_CANCELLED = 8;
+}
+
+message ExecuteRequest {
+  string plugin_instance_id = 1;
+  string idempotency_key = 2;                  // 必填：execute 与 cancel 共用幂等域
+  string entity_id = 3;                        // cancel 时为空
+  string action = 4;                           // cancel 时为空
+  string args_json = 5;
+  string deadline = 6;                         // RFC3339 绝对截止时间，双端共同强制
+  string actor = 7;                            // Core 注入的 tenant/actor 上下文
+  string cancel_command_id = 8;                // 非空 = 取消该 command_id 的进行中命令
+}
+
+message ExecuteResponse {
+  string command_id = 1;
+  string idempotency_key = 2;
+  Status status = 3;                           // OK=已接受；非 OK=拒绝
+  CommandState state = 4;                      // ACCEPTED / 取消时 CANCELLED
+  bool replay = 5;                             // true = 幂等缓存命中，未重复执行
+  string accepted_deadline = 6;                // 插件确认采用的 deadline（RFC3339）
+}
+
+// ---------------------------------------------------------------------------
+// Health / Shutdown
+// ---------------------------------------------------------------------------
+
+message HealthRequest {}
+
+enum HealthState {
+  HEALTH_STATE_UNSPECIFIED = 0;
+  HEALTH_STATE_SERVING = 1;
+  HEALTH_STATE_NOT_SERVING = 2;
+}
+
+message InstanceHealth {
+  string plugin_instance_id = 1;
+  HealthState state = 2;
+  string detail = 3;
+}
+
+message HealthResponse {
+  HealthState state = 1;
+  repeated InstanceHealth instances = 2;
+}
+
+message ShutdownRequest {
+  string reason = 1;
+  uint32 grace_seconds = 2;                    // Host 期望的优雅退出窗口
+}
+
+message ShutdownResponse {
+  Status status = 1;
+}
