@@ -19,6 +19,9 @@ var schemaV1 string
 //go:embed schema_v2.sql
 var schemaV2 string
 
+//go:embed schema_v3.sql
+var schemaV3 string
+
 // migrations 是有序迁移表：新增版本追加一项，永不修改已发布项。
 var migrations = []struct {
 	version int
@@ -26,6 +29,7 @@ var migrations = []struct {
 }{
 	{1, schemaV1},
 	{2, schemaV2},
+	{3, schemaV3},
 }
 
 // schemaVersion 是当前 schema 版本（迁移表最后一项）。

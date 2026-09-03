@@ -3,9 +3,11 @@
 // 用法：
 //
 //	cloudpath-server [-addr 127.0.0.1:8080] [-db data/cloudpath.db] [-token XXX] [-webui webui/dist]
+//	[-require-auth] [-login-rate 5] [-session-days 7]
 //
 // 环境变量：CLOUDPATH_ADDR / CLOUDPATH_DB / CLOUDPATH_TOKEN / CLOUDPATH_WEBUI /
-// CLOUDPATH_RETENTION_DAYS / CLOUDPATH_CMD_RATE / CLOUDPATH_LOG / CLOUDPATH_LOG_FORMAT
+// CLOUDPATH_RETENTION_DAYS / CLOUDPATH_CMD_RATE / CLOUDPATH_REQUIRE_AUTH /
+// CLOUDPATH_LOGIN_RATE / CLOUDPATH_SESSION_DAYS / CLOUDPATH_LOG / CLOUDPATH_LOG_FORMAT
 package main
 
 import (
@@ -43,6 +45,12 @@ func main() {
 		"单设备每分钟命令下发上限（防跑飞的 UI/脚本刷串口）")
 	origins := flag.String("allowed-origins", os.Getenv("CLOUDPATH_ALLOWED_ORIGINS"),
 		"WS 允许的浏览器 Origin 模式，逗号分隔（留空=开发策略：同源+localhost）")
+	requireAuth := flag.Bool("require-auth", envBool("CLOUDPATH_REQUIRE_AUTH"),
+		"无用户时也强制读/写鉴权（L2 公网，配合 -token 使用）")
+	loginRate := flag.Int("login-rate", envInt("CLOUDPATH_LOGIN_RATE", 5),
+		"单 IP 每分钟登录尝试上限（<=0 用默认 5）")
+	sessionDays := flag.Int("session-days", envInt("CLOUDPATH_SESSION_DAYS", 7),
+		"会话有效期（天，<=0 用默认 7）")
 	flag.Parse()
 	logx.Setup(*logLevel, *logFormat)
 
@@ -56,7 +64,10 @@ func main() {
 	srv := server.New(server.Config{
 		Store: st, Token: *token, Version: version, WebUIDir: *webuiDir,
 		RetentionDays: *retentionDays, CmdRatePerMin: *cmdRate,
-		AllowedOrigins: splitList(*origins),
+		AllowedOrigins:  splitList(*origins),
+		RequireAuth:     *requireAuth,
+		LoginRatePerMin: *loginRate,
+		SessionDays:     *sessionDays,
 	})
 	if len(splitList(*origins)) == 0 {
 		slog.Warn("WS Origin 策略为开发模式（同源 + localhost）：公网部署请用 -allowed-origins 显式收紧")
@@ -73,7 +84,9 @@ func main() {
 	}
 	go func() {
 		slog.Info("cloudpath-server listening", "addr", *addr, "db", *dbPath, "version", version,
-			"auth", *token != "", "retention_days", *retentionDays, "cmd_rate_per_min", *cmdRate,
+			"auth", *token != "", "require_auth", *requireAuth,
+			"retention_days", *retentionDays, "cmd_rate_per_min", *cmdRate,
+			"login_rate_per_min", *loginRate, "session_days", *sessionDays,
 			"origins", splitList(*origins))
 		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("http server failed", "err", err)
@@ -112,6 +125,15 @@ func splitList(v string) []string {
 		}
 	}
 	return out
+}
+
+// envBool 读布尔环境变量：1/true/yes/on 为真（其余为假）。
+func envBool(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
 }
 
 // envInt 读整型环境变量：缺失或非法回退默认值（配置错误不应让服务起不来）。

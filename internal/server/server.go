@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -28,15 +29,18 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/DeliciousBuding/cloud-path/internal/api"
+	"github.com/DeliciousBuding/cloud-path/internal/auth"
 	"github.com/DeliciousBuding/cloud-path/internal/device"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
 	"github.com/DeliciousBuding/cloud-path/webui"
 )
 
 const (
-	defaultRetentionDays = 30
-	defaultCmdRatePerMin = 20
-	maxCommandArgsLen    = 64
+	defaultRetentionDays   = 30
+	defaultCmdRatePerMin   = 20
+	defaultLoginRatePerMin = 5
+	defaultSessionDays     = 7
+	maxCommandArgsLen      = 64
 )
 
 // Config 是服务配置。
@@ -53,6 +57,12 @@ type Config struct {
 	// "*.example.com:8443"）。留空 = 开发策略：同源 + localhost/127.0.0.1 任意端口。
 	// 公网部署必须显式配置（非浏览器客户端不带 Origin，不受影响）。
 	AllowedOrigins []string
+	// RequireAuth 在无用户时也强制读/写鉴权（L2 公网形态，配合服务令牌）。
+	RequireAuth bool
+	// LoginRatePerMin 是单 IP 每分钟登录尝试上限。<=0 用默认 5。
+	LoginRatePerMin int
+	// SessionDays 是服务端会话 TTL（天）。<=0 用默认 7。
+	SessionDays int
 }
 
 func (c Config) retentionDays() int {
@@ -69,6 +79,21 @@ func (c Config) cmdRatePerMin() int {
 	return c.CmdRatePerMin
 }
 
+func (c Config) loginRatePerMin() int {
+	if c.LoginRatePerMin <= 0 {
+		return defaultLoginRatePerMin
+	}
+	return c.LoginRatePerMin
+}
+
+func (c Config) sessionTTL() time.Duration {
+	days := c.SessionDays
+	if days <= 0 {
+		days = defaultSessionDays
+	}
+	return time.Duration(days) * 24 * time.Hour
+}
+
 // Server 持有全部运行态。
 type Server struct {
 	cfg       Config
@@ -79,6 +104,9 @@ type Server struct {
 	edges    map[string]*edgeLink       // key: edge_id（在线连接）
 	browsers map[*browserConn]struct{}
 	cmdHits  map[string][]time.Time // 命令限流滑窗：device key → 命中时刻
+
+	loginLimiter *auth.RateLimiter // 登录限流：次/分/IP
+	authForced   atomic.Bool       // 账号模式：已有用户或 -require-auth
 }
 
 type edgeLink struct {
@@ -98,12 +126,13 @@ type browserConn struct {
 // New 创建服务并从数据库水合上次已知状态（重启后面板不空白，离线标记）。
 func New(cfg Config) *Server {
 	s := &Server{
-		cfg:       cfg,
-		startedAt: time.Now(),
-		devices:   map[string]*api.DeviceView{},
-		edges:     map[string]*edgeLink{},
-		browsers:  map[*browserConn]struct{}{},
-		cmdHits:   map[string][]time.Time{},
+		cfg:          cfg,
+		startedAt:    time.Now(),
+		devices:      map[string]*api.DeviceView{},
+		edges:        map[string]*edgeLink{},
+		browsers:     map[*browserConn]struct{}{},
+		cmdHits:      map[string][]time.Time{},
+		loginLimiter: auth.NewRateLimiter(cfg.loginRatePerMin()),
 	}
 	s.hydrate()
 	return s
@@ -113,6 +142,15 @@ func (s *Server) hydrate() {
 	st := s.cfg.Store
 	if st == nil {
 		return
+	}
+	// 首装自动创建 default 租户；已有用户则进入账号模式（重启恢复，失败不阻碍设备水合）。
+	if _, err := st.EnsureDefaultTenant(); err != nil {
+		slog.Warn("hydrate: ensure default tenant", "err", err)
+	}
+	if n, err := st.CountUsers(); err != nil {
+		slog.Warn("hydrate: count users", "err", err)
+	} else if n > 0 {
+		s.authForced.Store(true)
 	}
 	rows, err := st.ListDevices()
 	if err != nil {
@@ -328,15 +366,23 @@ func (s *Server) Routes() http.Handler {
 	r.Use(s.logMiddleware)
 
 	r.Get("/healthz", s.handleHealth)
-	r.Route("/api", func(r chi.Router) {
-		r.Get("/devices", s.handleListDevices)
-		r.Get("/devices/{edgeID}/{deviceID}", s.handleGetDevice)
-		r.Post("/devices/{edgeID}/{deviceID}/commands", s.authWrite(s.handlePostCommand))
-		r.Get("/events", s.handleListEvents)
-		r.Get("/edges", s.handleListEdges)
-		r.Get("/commands", s.handleListCommands)
-		r.Get("/adapters", s.handleListAdapters)
-		r.Get("/stats", s.handleStats)
+	r.Route("/api/auth", func(r chi.Router) {
+		r.Post("/setup", s.handleAuthSetup)
+		r.Post("/login", s.handleAuthLogin)
+		r.Post("/logout", s.handleAuthLogout)
+		r.Get("/me", s.handleAuthMe)
+	})
+	// 账号模式（已有用户 / -require-auth）下，除 /healthz、静态资源、/api/auth/* 外全部鉴权。
+	r.Group(func(r chi.Router) {
+		r.Use(s.requireAPIAuth)
+		r.Get("/api/devices", s.handleListDevices)
+		r.Get("/api/devices/{edgeID}/{deviceID}", s.handleGetDevice)
+		r.Post("/api/devices/{edgeID}/{deviceID}/commands", s.authWrite(s.handlePostCommand))
+		r.Get("/api/events", s.handleListEvents)
+		r.Get("/api/edges", s.handleListEdges)
+		r.Get("/api/commands", s.handleListCommands)
+		r.Get("/api/adapters", s.handleListAdapters)
+		r.Get("/api/stats", s.handleStats)
 	})
 	r.Get("/ws", s.handleBrowserWS)
 	r.Get("/ws/edge", s.handleEdgeWS)
@@ -357,13 +403,21 @@ func (s *Server) acceptOpts() websocket.AcceptOptions {
 	return websocket.AcceptOptions{OriginPatterns: devOriginPatterns}
 }
 
-// securityHeaders 加最小安全响应头（管理台可能挂在反代后对外）。
+// cspHeader 是契约 §1.5 的 CSP：内联主题脚本的 SHA-256 由 webui/index.html 计算
+// （首帧防暗色闪白脚本，字节级一致，改动脚本必须同步本哈希）。
+const cspHeader = "default-src 'self'; script-src 'self' 'sha256-jKH63gcAPxRiFu8qDqGCGYrEoEL5nCbt8h3hWkIeBB0='; " +
+	"style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; " +
+	"frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+
+// securityHeaders 加安全响应头（所有响应，含 4xx/5xx；管理台可能挂在反代后对外）。
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		h.Set("Content-Security-Policy", cspHeader)
 		next.ServeHTTP(w, r)
 	})
 }
@@ -382,15 +436,51 @@ func (s *Server) logMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// authWrite 在设置 Token 时强制 Bearer 鉴权（写操作）。未设 token = 本机模式。
+// authWrite 是写操作鉴权单点（docs/api.md §1 不变量「无凭据不写」）：
+// 有效凭据（会话 / Bearer 服务令牌）放行；viewer 只读；账号模式无凭据 401；
+// 否则无凭据只允许回环来源，外源 403。
 func (s *Server) authWrite(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if s.cfg.Token != "" && !s.tokenOK(r) {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+		if p := s.currentPrincipal(r); p != nil {
+			if p.Role == string(api.RoleViewer) {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": "viewer 只读"})
+				return
+			}
+			h(w, r)
+			return
+		}
+		if s.accountMode() {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+			return
+		}
+		if !auth.IsLoopbackRemote(r) {
+			writeJSON(w, http.StatusForbidden, map[string]string{
+				"error": "写操作需要回环来源或有效凭据"})
 			return
 		}
 		h(w, r)
 	}
+}
+
+// requireAPIAuth 在账号模式下强制 /api/* 鉴权（豁免由路由分组保证）。
+func (s *Server) requireAPIAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !s.accountMode() {
+			next.ServeHTTP(w, r)
+			return
+		}
+		p := s.currentPrincipal(r)
+		if p == nil {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), p)))
+	})
+}
+
+// accountMode 是否进入全鉴权：-require-auth 显式开启，或已有用户（setup 完成）。
+func (s *Server) accountMode() bool {
+	return s.cfg.RequireAuth || s.authForced.Load()
 }
 
 func (s *Server) tokenOK(r *http.Request) bool {
@@ -751,6 +841,7 @@ func (s *Server) spaHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
+		s.setStaticCacheHeaders(w, r, clean)
 		if f, err := fsys.Open(clean); err == nil {
 			f.Close()
 			http.FileServerFS(fsys).ServeHTTP(w, r)
@@ -763,8 +854,19 @@ func (s *Server) spaHandler() http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
 		if _, err := w.Write(index); err != nil {
 			slog.Debug("spa: write index", "err", err)
 		}
 	})
+}
+
+// setStaticCacheHeaders 落实契约 §1.6：/（index.html）no-cache；/assets/*（内容哈希）immutable。
+func (s *Server) setStaticCacheHeaders(w http.ResponseWriter, r *http.Request, clean string) {
+	switch {
+	case r.URL.Path == "/" || clean == "index.html":
+		w.Header().Set("Cache-Control", "no-cache")
+	case strings.HasPrefix(clean, "assets/"):
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	}
 }

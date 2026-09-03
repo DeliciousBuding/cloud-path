@@ -80,7 +80,7 @@ func TestStatsEndpoint(t *testing.T) {
 	}
 	var st api.StatsView
 	getJSON(t, ts.URL+"/api/stats", &st)
-	if st.Devices != 1 || st.Events != 1 || st.SchemaVersion != 2 {
+	if st.Devices != 1 || st.Events != 1 || st.SchemaVersion != 3 {
 		t.Fatalf("stats = %+v", st)
 	}
 	if st.RetentionDays != defaultRetentionDays || st.AuthEnabled {
@@ -363,18 +363,42 @@ func TestEdgeReconnectEvictionKeepsState(t *testing.T) {
 	}
 }
 
+// TestSecurityHeaders 契约 §1.5：五个安全头 + CSP 在**所有**响应出现（含 4xx）。
 func TestSecurityHeaders(t *testing.T) {
 	_, ts := setup(t)
-	resp, err := http.Get(ts.URL + "/healthz")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	if got := resp.Header.Get("X-Content-Type-Options"); got != "nosniff" {
-		t.Fatalf("X-Content-Type-Options = %q", got)
-	}
-	if got := resp.Header.Get("X-Frame-Options"); got != "DENY" {
-		t.Fatalf("X-Frame-Options = %q", got)
+	for _, path := range []string{"/healthz", "/api/nope", "/"} {
+		resp, err := http.Get(ts.URL + path)
+		if err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		resp.Body.Close()
+		if got := resp.Header.Get("X-Content-Type-Options"); got != "nosniff" {
+			t.Fatalf("%s: X-Content-Type-Options = %q", path, got)
+		}
+		if got := resp.Header.Get("X-Frame-Options"); got != "DENY" {
+			t.Fatalf("%s: X-Frame-Options = %q", path, got)
+		}
+		if got := resp.Header.Get("Referrer-Policy"); got != "no-referrer" {
+			t.Fatalf("%s: Referrer-Policy = %q", path, got)
+		}
+		if got := resp.Header.Get("Permissions-Policy"); got != "camera=(), microphone=(), geolocation=()" {
+			t.Fatalf("%s: Permissions-Policy = %q", path, got)
+		}
+		csp := resp.Header.Get("Content-Security-Policy")
+		for _, want := range []string{
+			"default-src 'self'",
+			"script-src 'self' 'sha256-jKH63gcAPxRiFu8qDqGCGYrEoEL5nCbt8h3hWkIeBB0='",
+			"style-src 'self' 'unsafe-inline'",
+			"img-src 'self' data:",
+			"connect-src 'self' ws: wss:",
+			"frame-ancestors 'none'",
+			"base-uri 'self'",
+			"form-action 'self'",
+		} {
+			if !strings.Contains(csp, want) {
+				t.Fatalf("%s: CSP 缺少 %q（got %q）", path, want, csp)
+			}
+		}
 	}
 }
 

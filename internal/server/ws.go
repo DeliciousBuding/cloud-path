@@ -265,8 +265,13 @@ func (s *Server) ownsDevice(link *edgeLink, key string) bool {
 
 // handleBrowserWS 浏览器实时订阅：连接即发全量快照，随后接收 fan-out。
 func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
-	// 可选 token 校验（查询参数，浏览器 WS 无法自定义 header）
-	if s.cfg.Token != "" && !s.tokenOK(r) {
+	// 账号模式：会话 cookie 或服务令牌；否则沿用 P1 的 token 可选校验（查询参数，浏览器 WS 无法自定义 header）。
+	if s.accountMode() {
+		if s.currentPrincipal(r) == nil {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
+	} else if s.cfg.Token != "" && !s.tokenOK(r) {
 		http.Error(w, "invalid token", http.StatusUnauthorized)
 		return
 	}

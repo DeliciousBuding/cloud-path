@@ -162,3 +162,41 @@ type StatsView struct {
 	RetentionDays int   `json:"retention_days"`
 	AuthEnabled   bool  `json:"auth_enabled"`
 }
+
+// ---- 鉴权与多租户（docs/api.md §2）----
+
+// UserRole 是用户角色：admin 管理、operator 可读可写、viewer 只读。
+type UserRole string
+
+const (
+	RoleAdmin    UserRole = "admin"
+	RoleOperator UserRole = "operator"
+	RoleViewer   UserRole = "viewer"
+)
+
+// UserView 是鉴权相关端点的用户视图（/api/auth/login、/api/auth/me）。
+type UserView struct {
+	ID         int64  `json:"id"`
+	Username   string `json:"username"`
+	Name       string `json:"name"`
+	Role       string `json:"role"`
+	TenantID   int64  `json:"tenant_id"`
+	TenantSlug string `json:"tenant_slug"`
+}
+
+// TenantView 是租户视图。
+type TenantView struct {
+	ID        int64  `json:"id"`
+	Slug      string `json:"slug"`
+	Name      string `json:"name"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+// SessionView 是服务端会话视图（内部管理用，不直接透出会话 ID）。
+type SessionView struct {
+	ID         string `json:"id"`
+	UserID     int64  `json:"user_id"`
+	CreatedAt  int64  `json:"created_at"`
+	ExpiresAt  int64  `json:"expires_at"`
+	LastSeenAt int64  `json:"last_seen_at"`
+}

@@ -42,7 +42,10 @@ func TestMigrationReachesCurrentVersion(t *testing.T) {
 		}
 		names = append(names, n)
 	}
-	want := []string{"idx_commands_device", "idx_commands_status", "idx_events_device_ts", "idx_events_ts"}
+	want := []string{
+		"idx_commands_device", "idx_commands_status", "idx_events_device_ts", "idx_events_ts",
+		"idx_sessions_expires", "idx_sessions_user", "idx_users_tenant",
+	}
 	if len(names) != len(want) {
 		t.Fatalf("indexes = %v, want %v", names, want)
 	}
