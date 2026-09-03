@@ -1,0 +1,27 @@
+# Docker build context 只保留 Go/前端构建所需的最小集合。
+# 注意：webui/dist 会在 builder stage 从 webui stage 显式复制。
+.git
+.github
+.local
+bin
+data
+dist
+deploy
+docs
+firmware
+scripts
+webui/node_modules
+webui/dist
+**/node_modules
+**/dist
+**/*.log
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.exe
+*.md
+edge.yaml
+Taskfile.yml
+AGENTS.md
+CLAUDE.md
+LICENSE

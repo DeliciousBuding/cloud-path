@@ -1,0 +1,17 @@
+# Cloudpath edge 容器配置示例。
+# 说明：这里使用容器网络内的 server 主机名；宿主机直跑时改成
+# ws://127.0.0.1:8080/ws/edge。token 由 CLOUDPATH_TOKEN 环境变量展开。
+server: ws://server:8080/ws/edge
+token: ${CLOUDPATH_TOKEN}
+edge_id: lab-1
+
+poll_interval_s: 5
+sync_interval_s: 600
+report_interval_s: 30
+
+devices:
+  - id: demo-1
+    adapter: stcb
+    name: 演示板
+    port: /dev/ttyUSB0
+    baud: 9600
