@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { NavLink, Outlet } from 'react-router'
+import { NavLink, Outlet, useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
-  LayoutDashboard, Cpu, Activity, Network, Settings, Monitor, Puzzle, ShieldCheck, Sun, Moon, WifiOff,
+  LayoutDashboard, Cpu, Activity, LogOut, Network, Settings, Monitor, Puzzle, ShieldCheck, Sun, Moon,
+  UserRound, WifiOff,
 } from 'lucide-react'
 import { Logo } from './Logo'
 import { StatusDot } from './ui'
@@ -11,7 +12,8 @@ import { api } from '@/lib/api'
 import { cn } from '@/lib/cn'
 import { useLive } from '@/store/ws'
 import { getTheme, setTheme, type ThemeMode } from '@/lib/theme'
-import { useIsAdmin } from '@/store/auth'
+import { roleLabel } from '@/lib/format'
+import { logout, useAuth, useIsAdmin } from '@/store/auth'
 
 /**
  * 产品级信息架构（固定顺序）：
@@ -90,10 +92,49 @@ function Brand() {
   )
 }
 
+/** 当前登录账号 + 登出（只在账号模式已登录时出现；开放访问/未登录不渲染） */
+function AccountPill() {
+  const status = useAuth((s) => s.status)
+  const user = useAuth((s) => s.user)
+  const navigate = useNavigate()
+  const [busy, setBusy] = useState(false)
+  if (status !== 'in' || !user) return null
+
+  async function signOut() {
+    setBusy(true)
+    await logout()
+    navigate('/login', { replace: true })
+  }
+
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
+        <UserRound size={12} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[12px] font-medium" title={user.name || user.username}>
+          {user.name || user.username}
+        </span>
+        <span className="block truncate text-[10px] text-ink-3" title={`${user.username} · ${roleLabel(user.role)}`}>
+          {roleLabel(user.role)}
+        </span>
+      </span>
+      <button
+        type="button" onClick={() => void signOut()} disabled={busy}
+        aria-label="登出" title="登出当前账号"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-3 transition-colors hover:text-bad disabled:opacity-50"
+      >
+        <LogOut size={13} />
+      </button>
+    </div>
+  )
+}
+
 function SidebarFooter() {
   const { data } = useQuery({ queryKey: ['health-sidebar'], queryFn: api.health, refetchInterval: 30000 })
   return (
     <div className="mt-auto space-y-3 border-t border-hairline px-3 pt-3 pb-1">
+      <AccountPill />
       <div className="flex items-center justify-between">
         <ConnPill />
         <ThemeControl />
