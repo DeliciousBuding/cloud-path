@@ -54,6 +54,15 @@ func (s *Store) EnsureDefaultTenant() (int64, error) {
 	return id, nil
 }
 
+// CreateTenant 创建新租户（P2 测试/后续租户管理使用），返回其 id。
+func (s *Store) CreateTenant(slug, name string) (int64, error) {
+	res, err := s.db.Exec(`INSERT INTO tenant(slug,name,created_at) VALUES(?,?,?)`, slug, name, now())
+	if err != nil {
+		return 0, fmt.Errorf("store: create tenant: %w", err)
+	}
+	return res.LastInsertId()
+}
+
 // GetTenantBySlug 按 slug 读租户；不存在返回 sql.ErrNoRows。
 func (s *Store) GetTenantBySlug(slug string) (TenantRow, error) {
 	var t TenantRow

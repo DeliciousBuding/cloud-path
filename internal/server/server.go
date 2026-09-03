@@ -185,7 +185,10 @@ func (s *Server) hydrate() {
 			v.Online = false // 重启后一律离线，等 edge 重新上报
 		}
 		s.devices[d.ID] = v
-		s.deviceTenants[d.ID] = defaultTenantSlug
+		if d.TenantSlug == "" {
+			d.TenantSlug = defaultTenantSlug
+		}
+		s.deviceTenants[d.ID] = d.TenantSlug
 	}
 	slog.Info("hydrated devices from store", "count", len(rows))
 }
@@ -214,14 +217,14 @@ func (s *Server) applyMeta(edgeID, tenant string, metas []api.DeviceMeta) []api.
 	return metas
 }
 
-// persistDevices 落库设备元信息（锁外调用）。
-func (s *Server) persistDevices(edgeID string, metas []api.DeviceMeta) {
+// persistDevices 落库设备元信息（锁外调用）。tenantID 来自 edge hello 的 tenant slug。
+func (s *Server) persistDevices(edgeID string, metas []api.DeviceMeta, tenantID int64) {
 	if s.cfg.Store == nil {
 		return
 	}
 	for _, m := range metas {
 		key := api.DeviceKey(edgeID, m.ID)
-		if err := s.cfg.Store.UpsertDevice(key, edgeID, m.Adapter, m.Name, m.Port); err != nil {
+		if err := s.cfg.Store.UpsertDeviceTenant(key, edgeID, m.Adapter, m.Name, m.Port, tenantID); err != nil {
 			slog.Warn("upsert device", "err", err, "device", key)
 		}
 	}
@@ -287,6 +290,25 @@ func (s *Server) markEdgeOffline(link *edgeLink) {
 	for _, env := range envs {
 		s.broadcast(env)
 	}
+}
+
+// tenantIDForSlug 解析 edge hello 自报 tenant slug 为 DB tenant id。
+// Store 为 nil 时返回 0（仅内存态）；未知非 default 租户 fail-closed，拒绝写入。
+func (s *Server) tenantIDForSlug(slug string) (int64, error) {
+	if s.cfg.Store == nil {
+		return 0, nil
+	}
+	if slug == "" {
+		slug = defaultTenantSlug
+	}
+	id, err := s.cfg.Store.TenantIDBySlug(slug)
+	if err == nil {
+		return id, nil
+	}
+	if slug == defaultTenantSlug {
+		return s.cfg.Store.EnsureDefaultTenant()
+	}
+	return 0, fmt.Errorf("unknown tenant %q: %w", slug, err)
 }
 
 func (s *Server) stateEnvelope(key string, v *api.DeviceView) api.Envelope {
@@ -753,8 +775,14 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListDevices(w http.ResponseWriter, r *http.Request) {
+	p := auth.FromContext(r.Context())
 	s.mu.RLock()
-	views := s.deviceViews()
+	var views []api.DeviceView
+	if p == nil {
+		views = s.deviceViews()
+	} else {
+		views = s.deviceViewsFor(p.TenantSlug)
+	}
 	s.mu.RUnlock()
 	writeJSON(w, http.StatusOK, map[string]any{"devices": views})
 }
@@ -763,12 +791,13 @@ func (s *Server) handleGetDevice(w http.ResponseWriter, r *http.Request) {
 	key := api.DeviceKey(chi.URLParam(r, "edgeID"), chi.URLParam(r, "deviceID"))
 	s.mu.RLock()
 	v, ok := s.devices[key]
+	allowed := s.allowedDescriptor(r, key)
 	var out api.DeviceView
-	if ok {
+	if ok && allowed {
 		out = *v
 	}
 	s.mu.RUnlock()
-	if !ok {
+	if !ok || !allowed {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "device not found"})
 		return
 	}
@@ -818,8 +847,14 @@ func (s *Server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListEdges(w http.ResponseWriter, r *http.Request) {
+	p := auth.FromContext(r.Context())
 	s.mu.RLock()
-	views := s.edgeViews()
+	var views []api.EdgeView
+	if p == nil {
+		views = s.edgeViews()
+	} else {
+		views = s.edgeViewsFor(p.TenantSlug)
+	}
 	s.mu.RUnlock()
 	writeJSON(w, http.StatusOK, map[string]any{"edges": views})
 }
@@ -832,7 +867,13 @@ func (s *Server) handleListEvents(w http.ResponseWriter, r *http.Request) {
 	dev := r.URL.Query().Get("device")
 	since := int64(queryInt(r, "since", 0, 0))
 	limit := queryInt(r, "limit", 100, 1000)
-	rows, err := s.cfg.Store.ListEvents(dev, since, limit)
+	var rows []store.EventRow
+	var err error
+	if p := auth.FromContext(r.Context()); p != nil {
+		rows, err = s.cfg.Store.ListEventsTenant(p.TenantID, dev, since, limit)
+	} else {
+		rows, err = s.cfg.Store.ListEvents(dev, since, limit)
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -849,8 +890,16 @@ func (s *Server) handleListCommands(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"commands": []api.CommandView{}})
 		return
 	}
-	rows, err := s.cfg.Store.ListCommands(r.URL.Query().Get("device"),
-		r.URL.Query().Get("status"), queryInt(r, "limit", 100, 1000))
+	dev := r.URL.Query().Get("device")
+	status := r.URL.Query().Get("status")
+	limit := queryInt(r, "limit", 100, 1000)
+	var rows []store.CommandRow
+	var err error
+	if p := auth.FromContext(r.Context()); p != nil {
+		rows, err = s.cfg.Store.ListCommandsTenant(p.TenantID, dev, status, limit)
+	} else {
+		rows, err = s.cfg.Store.ListCommands(dev, status, limit)
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -885,7 +934,13 @@ func (s *Server) handleListAdapters(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	view := api.StatsView{RetentionDays: s.cfg.retentionDays(), AuthEnabled: s.cfg.Token != ""}
 	if s.cfg.Store != nil {
-		st, err := s.cfg.Store.Stats()
+		var st store.Stats
+		var err error
+		if p := auth.FromContext(r.Context()); p != nil {
+			st, err = s.cfg.Store.StatsTenant(p.TenantID)
+		} else {
+			st, err = s.cfg.Store.Stats()
+		}
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
@@ -917,7 +972,7 @@ func (s *Server) allowCommand(key string) bool {
 	return true
 }
 
-// handlePostCommand 下发命令：参数校验 → 白名单 → 限流 → 建库 → WS 推给 edge → 状态 sent。
+// handlePostCommand 下发命令：租户校验 → 参数校验 → 白名单 → 限流 → 建库 → WS 推给 edge → 状态 sent。
 func (s *Server) handlePostCommand(w http.ResponseWriter, r *http.Request) {
 	key := api.DeviceKey(chi.URLParam(r, "edgeID"), chi.URLParam(r, "deviceID"))
 	var body struct {
@@ -935,8 +990,10 @@ func (s *Server) handlePostCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	p := auth.FromContext(r.Context())
 	s.mu.RLock()
 	v, devOK := s.devices[key]
+	tenantOK := s.allowedDescriptor(r, key)
 	var adapter string
 	var link *edgeLink
 	if devOK {
@@ -944,7 +1001,7 @@ func (s *Server) handlePostCommand(w http.ResponseWriter, r *http.Request) {
 		link = s.edges[v.EdgeID]
 	}
 	s.mu.RUnlock()
-	if !devOK {
+	if !devOK || !tenantOK {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "device not found"})
 		return
 	}
@@ -977,7 +1034,13 @@ func (s *Server) handlePostCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := s.cfg.Store.CreateCommand(key, body.Cmd, body.Args)
+	var id int64
+	var err error
+	if p != nil {
+		id, err = s.cfg.Store.CreateCommandTenant(key, body.Cmd, body.Args, p.TenantID)
+	} else {
+		id, err = s.cfg.Store.CreateCommand(key, body.Cmd, body.Args)
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -985,15 +1048,29 @@ func (s *Server) handlePostCommand(w http.ResponseWriter, r *http.Request) {
 	data, _ := json.Marshal(api.CommandData{CommandID: id, Cmd: body.Cmd, Args: body.Args})
 	env := api.Envelope{V: api.Version, Type: api.MsgCommand, Device: key, Ts: time.Now().Unix(), Data: data}
 	payload, _ := json.Marshal(env)
+	markSent := func() error {
+		if p != nil {
+			_, err := s.cfg.Store.UpdateCommandStatusScoped(id, key, p.TenantID, "sent", "")
+			return err
+		}
+		return s.cfg.Store.UpdateCommandStatus(id, "sent", "")
+	}
+	markFailed := func() error {
+		if p != nil {
+			_, err := s.cfg.Store.UpdateCommandStatusScoped(id, key, p.TenantID, "failed", "edge 发送队列满")
+			return err
+		}
+		return s.cfg.Store.UpdateCommandStatus(id, "failed", "edge 发送队列满")
+	}
 	select {
 	case link.send <- payload:
-		if err := s.cfg.Store.UpdateCommandStatus(id, "sent", ""); err != nil {
+		if err := markSent(); err != nil {
 			slog.Warn("mark command sent", "err", err, "cmd_id", id)
 		}
 		writeJSON(w, http.StatusOK, api.CommandView{ID: id, DeviceID: key, Cmd: body.Cmd, Args: body.Args,
 			Status: "sent", CreatedAt: time.Now().Unix()})
 	default:
-		if err := s.cfg.Store.UpdateCommandStatus(id, "failed", "edge 发送队列满"); err != nil {
+		if err := markFailed(); err != nil {
 			slog.Warn("mark command failed", "err", err, "cmd_id", id)
 		}
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "edge busy"})
