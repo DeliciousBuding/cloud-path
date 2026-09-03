@@ -7,6 +7,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/DeliciousBuding/cloud-path/internal/model"
 )
 
 // Command 是一次命令下发。ID 为 server 侧命令行主键（edge 本地命令为 0）。
@@ -57,6 +59,25 @@ type Adapter interface {
 	SupportedCommands() []string
 	// Open 打开设备并启动接收循环；onEvent 回调设备事件（适配器保证并发安全调用）。
 	Open(ctx context.Context, cfg Config, onEvent func(Event)) (Device, error)
+}
+
+// DescriptorProvider 由 Adapter 可选实现：声明该适配器设备的静态 Descriptor
+// （Entity/Capability 结构与身份；身份取自 Open 时的 cfg，观测值由 Device 后填）。
+// 未实现则 Core 对该适配器设备不生成 Descriptor（前端走通用回落）。
+type DescriptorProvider interface {
+	Descriptor(cfg Config) model.Descriptor
+}
+
+// CapabilityProvider 由 Adapter 可选实现：声明该适配器使用的 Capability catalog
+// （Capability 文档，供 /api/capabilities 下发）。未实现则 catalog 为空。
+type CapabilityProvider interface {
+	Capabilities() []model.Capability
+}
+
+// DescriptorSource 由 Device 可选实现：提供带实时观测的完整 Descriptor。
+// 未实现时 edge 回落使用 Adapter 的静态 Descriptor。
+type DescriptorSource interface {
+	Descriptor() model.Descriptor
 }
 
 var (

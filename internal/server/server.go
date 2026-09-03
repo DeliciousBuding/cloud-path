@@ -31,6 +31,7 @@ import (
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/auth"
 	"github.com/DeliciousBuding/cloud-path/internal/device"
+	"github.com/DeliciousBuding/cloud-path/internal/model"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
 	"github.com/DeliciousBuding/cloud-path/webui"
 )
@@ -41,6 +42,7 @@ const (
 	defaultLoginRatePerMin = 5
 	defaultSessionDays     = 7
 	maxCommandArgsLen      = 64
+	defaultTenantSlug      = "default"
 )
 
 // Config 是服务配置。
@@ -99,11 +101,13 @@ type Server struct {
 	cfg       Config
 	startedAt time.Time
 
-	mu       sync.RWMutex
-	devices  map[string]*api.DeviceView // key: "<edge>/<dev>"
-	edges    map[string]*edgeLink       // key: edge_id（在线连接）
-	browsers map[*browserConn]struct{}
-	cmdHits  map[string][]time.Time // 命令限流滑窗：device key → 命中时刻
+	mu            sync.RWMutex
+	devices       map[string]*api.DeviceView // key: "<edge>/<dev>"
+	edges         map[string]*edgeLink       // key: edge_id（在线连接）
+	browsers      map[*browserConn]struct{}
+	cmdHits       map[string][]time.Time      // 命令限流滑窗：device key → 命中时刻
+	descriptors   map[string]model.Descriptor // 最近一次 edge 上报的 Descriptor（device key → desc）
+	deviceTenants map[string]string           // device key → 租户 slug（缺省 default；REST 隔离用）
 
 	loginLimiter *auth.RateLimiter // 登录限流：次/分/IP
 	authForced   atomic.Bool       // 账号模式：已有用户或 -require-auth
@@ -112,6 +116,7 @@ type Server struct {
 type edgeLink struct {
 	edgeID      string
 	version     string
+	tenant      string
 	devices     []string
 	connectedAt time.Time
 	send        chan []byte
@@ -121,18 +126,21 @@ type edgeLink struct {
 type browserConn struct {
 	send   chan []byte
 	cancel context.CancelFunc
+	tenant string // 空 = 全局（无账号开发模式）；非空 = 只接收该租户消息
 }
 
 // New 创建服务并从数据库水合上次已知状态（重启后面板不空白，离线标记）。
 func New(cfg Config) *Server {
 	s := &Server{
-		cfg:          cfg,
-		startedAt:    time.Now(),
-		devices:      map[string]*api.DeviceView{},
-		edges:        map[string]*edgeLink{},
-		browsers:     map[*browserConn]struct{}{},
-		cmdHits:      map[string][]time.Time{},
-		loginLimiter: auth.NewRateLimiter(cfg.loginRatePerMin()),
+		cfg:           cfg,
+		startedAt:     time.Now(),
+		devices:       map[string]*api.DeviceView{},
+		edges:         map[string]*edgeLink{},
+		browsers:      map[*browserConn]struct{}{},
+		cmdHits:       map[string][]time.Time{},
+		descriptors:   map[string]model.Descriptor{},
+		deviceTenants: map[string]string{},
+		loginLimiter:  auth.NewRateLimiter(cfg.loginRatePerMin()),
 	}
 	s.hydrate()
 	return s
@@ -177,6 +185,7 @@ func (s *Server) hydrate() {
 			v.Online = false // 重启后一律离线，等 edge 重新上报
 		}
 		s.devices[d.ID] = v
+		s.deviceTenants[d.ID] = defaultTenantSlug
 	}
 	slog.Info("hydrated devices from store", "count", len(rows))
 }
@@ -184,7 +193,11 @@ func (s *Server) hydrate() {
 // ---------- 内存态变更（锁内）与落库（锁外） ----------
 
 // applyMeta 在锁内登记设备元信息，返回需要落库的条目（调用方锁外持久化）。
-func (s *Server) applyMeta(edgeID string, metas []api.DeviceMeta) []api.DeviceMeta {
+// tenant 为设备所属租户 slug（来自 edge hello，缺省 default），REST Descriptor 按此隔离。
+func (s *Server) applyMeta(edgeID, tenant string, metas []api.DeviceMeta) []api.DeviceMeta {
+	if tenant == "" {
+		tenant = defaultTenantSlug
+	}
 	for _, m := range metas {
 		key := api.DeviceKey(edgeID, m.ID)
 		v, ok := s.devices[key]
@@ -196,6 +209,7 @@ func (s *Server) applyMeta(edgeID string, metas []api.DeviceMeta) []api.DeviceMe
 		v.Adapter = m.Adapter
 		v.Name = m.Name
 		v.Port = m.Port
+		s.deviceTenants[key] = tenant
 	}
 	return metas
 }
@@ -280,10 +294,117 @@ func (s *Server) stateEnvelope(key string, v *api.DeviceView) api.Envelope {
 	return api.Envelope{V: api.Version, Type: api.MsgState, Device: key, Ts: time.Now().Unix(), Data: data}
 }
 
+// descriptorViews 返回全部已知设备的 Descriptor 副本（调用方需持锁；快照用）。
+func (s *Server) descriptorViews() []model.Descriptor {
+	out := make([]model.Descriptor, 0, len(s.devices))
+	for key, v := range s.devices {
+		if d, ok := s.descriptorFor(key, v); ok {
+			out = append(out, d)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].DeviceID < out[j].DeviceID })
+	return out
+}
+
+// descriptorFor 取设备的 Descriptor：优先 edge 上报的实时 Descriptor，回落适配器静态 Descriptor。
+// 身份统一绑定到 "<edge>/<dev>"，状态与设备在线态对齐。调用方需持 s.mu 读锁。
+func (s *Server) descriptorFor(key string, v *api.DeviceView) (model.Descriptor, bool) {
+	short := shortDeviceID(key, v.EdgeID)
+	if d, ok := s.descriptors[key]; ok {
+		d.DeviceID = key
+		if d.ExternalID == "" {
+			d.ExternalID = short
+		}
+		if !v.Online && d.Status == model.DeviceOnline {
+			d.Status = model.DeviceOffline
+		}
+		return d, true
+	}
+	a, ok := device.Get(v.Adapter)
+	if !ok {
+		return model.Descriptor{}, false
+	}
+	dp, ok := a.(device.DescriptorProvider)
+	if !ok {
+		return model.Descriptor{}, false
+	}
+	d := dp.Descriptor(device.Config{ID: short, Name: v.Name, Port: v.Port})
+	d.DeviceID = key
+	if d.ExternalID == "" {
+		d.ExternalID = short
+	}
+	if v.Online && d.Status == model.DeviceUnavailable {
+		d.Status = model.DeviceOnline
+	}
+	if !v.Online && d.Status == model.DeviceOnline {
+		d.Status = model.DeviceOffline
+	}
+	return d, true
+}
+
+// capabilityCatalog 汇总全部已注册适配器的 Capability catalog（去重、按 ID 排序）。
+func (s *Server) capabilityCatalog() []model.Capability {
+	seen := map[string]bool{}
+	var out []model.Capability
+	for _, name := range device.Names() {
+		a, ok := device.Get(name)
+		if !ok {
+			continue
+		}
+		cp, ok := a.(device.CapabilityProvider)
+		if !ok {
+			continue
+		}
+		for _, c := range cp.Capabilities() {
+			if seen[c.Metadata.ID] {
+				continue
+			}
+			seen[c.Metadata.ID] = true
+			out = append(out, c)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Metadata.ID < out[j].Metadata.ID })
+	return out
+}
+
+// deviceTenant 返回设备所属租户 slug；未登记视为 default。
+func (s *Server) deviceTenant(key string) string {
+	if t, ok := s.deviceTenants[key]; ok {
+		return t
+	}
+	return defaultTenantSlug
+}
+
+// allowedDescriptor 判定当前请求身份是否可见该设备的 Descriptor。
+// 无 principal（非账号模式，requireAPIAuth 未注入身份）时不过滤——单租户语义。
+func (s *Server) allowedDescriptor(r *http.Request, key string) bool {
+	p := auth.FromContext(r.Context())
+	if p == nil {
+		return true
+	}
+	return s.deviceTenant(key) == p.TenantSlug
+}
+
+func shortDeviceID(key, edgeID string) string {
+	return strings.TrimPrefix(key, edgeID+"/")
+}
+
+// storeDescriptor 保存 edge 上报的 Descriptor（锁内）。身份键以 edge 信封 Device 为准。
+func (s *Server) storeDescriptor(key string, desc model.Descriptor) {
+	desc.DeviceID = key
+	s.descriptors[key] = desc
+}
+
 // ---------- 广播 ----------
 
-// broadcast 向全部浏览器连接 fan-out。慢消费者丢消息不阻塞（历史仍可从 REST 补）。
+// broadcast 按信封推导租户后 fan-out。慢消费者丢消息不阻塞（历史仍可从 REST 补）。
 func (s *Server) broadcast(env api.Envelope) {
+	s.broadcastAs(env, "")
+}
+
+// broadcastAs 向匹配租户的浏览器 fan-out。tenant 非空时以显式租户为准
+// （edge_down 等边缘连接已摘除、无法从内存反推租户的场景）；空则由信封推导。
+func (s *Server) broadcastAs(env api.Envelope, tenant string) {
 	data, err := json.Marshal(env)
 	if err != nil {
 		slog.Warn("broadcast: marshal", "err", err, "type", env.Type)
@@ -291,7 +412,13 @@ func (s *Server) broadcast(env api.Envelope) {
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	if tenant == "" {
+		tenant = s.envelopeTenantLocked(env)
+	}
 	for bc := range s.browsers {
+		if bc.tenant != "" && tenant != "" && bc.tenant != tenant {
+			continue
+		}
 		select {
 		case bc.send <- data:
 		default:
@@ -300,8 +427,28 @@ func (s *Server) broadcast(env api.Envelope) {
 	}
 }
 
-func (s *Server) snapshot() api.Envelope {
-	data, _ := json.Marshal(api.SnapshotData{Devices: s.deviceViews(), Edges: s.edgeViews()})
+// envelopeTenantLocked 返回信封应投递的租户 slug；空表示全局（调用方需持 s.mu 读锁）。
+func (s *Server) envelopeTenantLocked(env api.Envelope) string {
+	switch env.Type {
+	case api.MsgEdgeUp, api.MsgEdgeDown:
+		if l, ok := s.edges[env.Device]; ok {
+			return l.tenant
+		}
+		return ""
+	default:
+		if env.Device == "" {
+			return ""
+		}
+		return s.deviceTenant(env.Device)
+	}
+}
+
+func (s *Server) snapshotFor(tenant string) api.Envelope {
+	data, _ := json.Marshal(api.SnapshotData{
+		Devices:     s.deviceViewsFor(tenant),
+		Edges:       s.edgeViewsFor(tenant),
+		Descriptors: s.descriptorViewsFor(tenant),
+	})
 	return api.Envelope{V: api.Version, Type: api.MsgSnapshot, Ts: time.Now().Unix(), Data: data}
 }
 
@@ -353,6 +500,68 @@ func (s *Server) edgeViews() []api.EdgeView {
 	return out
 }
 
+// edgeTenant 返回 edge 的租户 slug：在线连接优先，离线按设备反推，未知 default。
+// 调用方需持 s.mu 读锁。
+func (s *Server) edgeTenant(edgeID string) string {
+	if l, ok := s.edges[edgeID]; ok {
+		return l.tenant
+	}
+	for key, v := range s.devices {
+		if v.EdgeID == edgeID {
+			return s.deviceTenant(key)
+		}
+	}
+	return defaultTenantSlug
+}
+
+// deviceViewsFor 返回指定租户的设备视图；tenant 为空返回全量。
+func (s *Server) deviceViewsFor(tenant string) []api.DeviceView {
+	if tenant == "" {
+		return s.deviceViews()
+	}
+	out := make([]api.DeviceView, 0, len(s.devices))
+	for key, v := range s.devices {
+		if s.deviceTenant(key) == tenant {
+			out = append(out, *v)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// edgeViewsFor 返回指定租户的边缘节点；tenant 为空返回全量。
+func (s *Server) edgeViewsFor(tenant string) []api.EdgeView {
+	all := s.edgeViews()
+	if tenant == "" {
+		return all
+	}
+	out := all[:0]
+	for _, e := range all {
+		if s.edgeTenant(e.EdgeID) == tenant {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// descriptorViewsFor 返回指定租户的 Descriptor；tenant 为空返回全量。
+func (s *Server) descriptorViewsFor(tenant string) []model.Descriptor {
+	if tenant == "" {
+		return s.descriptorViews()
+	}
+	out := make([]model.Descriptor, 0, len(s.devices))
+	for key, v := range s.devices {
+		if s.deviceTenant(key) != tenant {
+			continue
+		}
+		if d, ok := s.descriptorFor(key, v); ok {
+			out = append(out, d)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].DeviceID < out[j].DeviceID })
+	return out
+}
+
 // ---------- 路由 ----------
 
 // Routes 组装 chi 路由树。
@@ -377,7 +586,10 @@ func (s *Server) Routes() http.Handler {
 		r.Use(s.requireAPIAuth)
 		r.Get("/api/devices", s.handleListDevices)
 		r.Get("/api/devices/{edgeID}/{deviceID}", s.handleGetDevice)
+		r.Get("/api/devices/{edgeID}/{deviceID}/descriptor", s.handleDeviceDescriptor)
 		r.Post("/api/devices/{edgeID}/{deviceID}/commands", s.authWrite(s.handlePostCommand))
+		r.Get("/api/descriptors", s.handleListDescriptors)
+		r.Get("/api/capabilities", s.handleCapabilities)
 		r.Get("/api/events", s.handleListEvents)
 		r.Get("/api/edges", s.handleListEdges)
 		r.Get("/api/commands", s.handleListCommands)
@@ -561,6 +773,48 @@ func (s *Server) handleGetDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// handleListDescriptors 返回当前租户可见的全部设备 Descriptor + 随行 Capability catalog。
+// 前端 useDescriptor 的批量探测直接消费本形状（descriptors + capabilities）。
+func (s *Server) handleListDescriptors(w http.ResponseWriter, r *http.Request) {
+	caps := s.capabilityCatalog()
+	s.mu.RLock()
+	descs := make([]model.Descriptor, 0, len(s.devices))
+	for key, v := range s.devices {
+		if !s.allowedDescriptor(r, key) {
+			continue
+		}
+		if d, ok := s.descriptorFor(key, v); ok {
+			descs = append(descs, d)
+		}
+	}
+	s.mu.RUnlock()
+	sort.Slice(descs, func(i, j int) bool { return descs[i].DeviceID < descs[j].DeviceID })
+	writeJSON(w, http.StatusOK, map[string]any{"descriptors": descs, "capabilities": caps})
+}
+
+// handleDeviceDescriptor 返回单设备 Descriptor（+ Capability catalog）；不存在/跨租户一律 404。
+func (s *Server) handleDeviceDescriptor(w http.ResponseWriter, r *http.Request) {
+	key := api.DeviceKey(chi.URLParam(r, "edgeID"), chi.URLParam(r, "deviceID"))
+	s.mu.RLock()
+	v, ok := s.devices[key]
+	var d model.Descriptor
+	found := false
+	if ok && s.allowedDescriptor(r, key) {
+		d, found = s.descriptorFor(key, v)
+	}
+	s.mu.RUnlock()
+	if !ok || !found {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "device not found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"descriptor": d, "capabilities": s.capabilityCatalog()})
+}
+
+// handleCapabilities 返回全部已注册适配器的 Capability catalog（设备无关，租户不隔离）。
+func (s *Server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"capabilities": s.capabilityCatalog()})
 }
 
 func (s *Server) handleListEdges(w http.ResponseWriter, r *http.Request) {

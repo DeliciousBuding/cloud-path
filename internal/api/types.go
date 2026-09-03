@@ -2,7 +2,11 @@
 // 两侧二进制都只认这里的类型 —— 契约变更必须同时过前端 lib/types.ts。
 package api
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/DeliciousBuding/cloud-path/internal/model"
+)
 
 // Version 是消息信封协议版本，不兼容变更时递增。
 const Version = 1
@@ -19,6 +23,7 @@ const (
 	MsgCommandAck MsgType = "command_ack" // edge→server→浏览器：命令回执
 	MsgEdgeUp     MsgType = "edge_up"     // server→浏览器：edge 上线
 	MsgEdgeDown   MsgType = "edge_down"   // server→浏览器：edge 离线
+	MsgDescriptor MsgType = "descriptor"  // edge→server→浏览器：设备 Descriptor
 	MsgPing       MsgType = "ping"
 	MsgPong       MsgType = "pong"
 )
@@ -37,6 +42,7 @@ type HelloData struct {
 	EdgeID  string       `json:"edge_id"`
 	Token   string       `json:"token,omitempty"`
 	Version string       `json:"version"`
+	Tenant  string       `json:"tenant,omitempty"` // 缺省 default（docs/api.md §3 P2）
 	Devices []DeviceMeta `json:"devices"`
 }
 
@@ -84,9 +90,11 @@ type EdgeUpData struct {
 }
 
 // SnapshotData 是浏览器连接时的全量快照。
+// Descriptors 随快照一并下发，给前端可靠首屏（webui store/ws.ts 宽容消费）。
 type SnapshotData struct {
-	Devices []DeviceView `json:"devices"`
-	Edges   []EdgeView   `json:"edges"`
+	Devices     []DeviceView       `json:"devices"`
+	Edges       []EdgeView         `json:"edges"`
+	Descriptors []model.Descriptor `json:"descriptors,omitempty"`
 }
 
 // DeviceView 是 REST/WS 的设备视图。

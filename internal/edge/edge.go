@@ -11,6 +11,7 @@ import (
 
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/device"
+	"github.com/DeliciousBuding/cloud-path/internal/model"
 )
 
 // Edge 是边缘代理运行时：N 台设备监督协程 + 1 条 server 长连接。
@@ -32,6 +33,7 @@ type supervisor struct {
 	dev      device.Device
 	last     device.State // 最近一次快照（端口死时保留 Raw 只翻 Online）
 	lastSent string       // 上次上报的状态序列化（diff 抑制）
+	lastDesc string       // 上次上报的 Descriptor 序列化（diff 抑制）
 	sentAt   time.Time
 }
 
@@ -126,6 +128,7 @@ func (e *Edge) supervise(ctx context.Context, key string, sup *supervisor) {
 				"err", err, "retry_in", backoff.Round(time.Millisecond))
 			sup.setDev(nil)
 			e.reportState(key, sup, true)
+			e.reportDescriptor(key, sup, true)
 			select {
 			case <-ctx.Done():
 				return
@@ -148,6 +151,7 @@ func (e *Edge) supervise(ctx context.Context, key string, sup *supervisor) {
 			time.Sleep(300 * time.Millisecond)
 			_ = dev.Send(sctx, device.Command{Cmd: "dump"})
 			e.reportState(key, sup, true)
+			e.reportDescriptor(key, sup, true)
 		}()
 
 		select {
@@ -158,6 +162,7 @@ func (e *Edge) supervise(ctx context.Context, key string, sup *supervisor) {
 		_ = dev.Close()
 		sup.setDev(nil)
 		e.reportState(key, sup, true)
+		e.reportDescriptor(key, sup, true)
 		if ctx.Err() != nil {
 			return
 		}
@@ -183,8 +188,11 @@ func (e *Edge) pollLoop(ctx context.Context, key string, sup *supervisor) {
 			sctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			_ = sup.send(sctx, device.Command{Cmd: "dump"})
 			cancel()
-			// 转储回包 ~100ms 到达，稍候再快照上报
-			time.AfterFunc(500*time.Millisecond, func() { e.reportState(key, sup, false) })
+			// 转储回包 ~100ms 到达，稍候再快照上报 + Descriptor 刷新（观测值随之更新）
+			time.AfterFunc(500*time.Millisecond, func() {
+				e.reportState(key, sup, false)
+				e.reportDescriptor(key, sup, false)
+			})
 		case <-syncT.C:
 			sctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			if err := sup.send(sctx, device.Command{Cmd: "sync"}); err != nil {
@@ -217,6 +225,57 @@ func (e *Edge) reportState(key string, sup *supervisor, force bool) {
 	}
 }
 
+// reportDescriptor 上报设备 Descriptor：变化即发，force 无视 diff（上线/重连首刷）。
+func (e *Edge) reportDescriptor(key string, sup *supervisor, force bool) {
+	env := e.descriptorEnvelope(key, sup)
+	if env == nil {
+		return
+	}
+	sup.mu.Lock()
+	changed := string(env.Data) != sup.lastDesc
+	sup.mu.Unlock()
+	if !force && !changed {
+		return
+	}
+	if e.client.enqueue(*env) || force {
+		sup.mu.Lock()
+		sup.lastDesc = string(env.Data)
+		sup.mu.Unlock()
+	}
+}
+
+// descriptorEnvelope 构造设备 Descriptor 的 WS 信封；适配器不支持 Descriptor 时返回 nil。
+// 优先设备实例的实时 Descriptor（含观测值），回落 Adapter 静态 Descriptor（结构骨架）。
+func (e *Edge) descriptorEnvelope(key string, sup *supervisor) *api.Envelope {
+	sup.mu.Lock()
+	dev := sup.dev
+	sup.mu.Unlock()
+
+	var desc model.Descriptor
+	switch {
+	case dev != nil:
+		if ds, ok := dev.(device.DescriptorSource); ok {
+			desc = ds.Descriptor()
+		} else if dp, ok := sup.adapter.(device.DescriptorProvider); ok {
+			desc = dp.Descriptor(device.Config{ID: sup.dcfg.ID, Name: sup.dcfg.Name, Port: sup.dcfg.Port})
+		} else {
+			return nil
+		}
+	default:
+		dp, ok := sup.adapter.(device.DescriptorProvider)
+		if !ok {
+			return nil
+		}
+		desc = dp.Descriptor(device.Config{ID: sup.dcfg.ID, Name: sup.dcfg.Name, Port: sup.dcfg.Port})
+	}
+
+	// 绑定稳定身份：device_id = "<edge>/<dev>"（Core 键），external_id = Driver 内不可变短 ID。
+	desc.DeviceID = key
+	desc.ExternalID = sup.dcfg.ID
+	data := mustJSON(desc)
+	return &api.Envelope{V: api.Version, Type: api.MsgDescriptor, Device: key, Ts: time.Now().Unix(), Data: data}
+}
+
 func (e *Edge) onDeviceEvent(key string, ev device.Event) {
 	slog.Info("device event", "device", key, "type", ev.Type)
 	data := mustJSON(api.EventData{Type: ev.Type})
@@ -234,6 +293,7 @@ func (e *Edge) onDeviceEvent(key string, ev device.Event) {
 func (e *Edge) onServerOnline() {
 	for key, sup := range e.sups {
 		e.reportState(key, sup, true)
+		e.reportDescriptor(key, sup, true)
 	}
 }
 
