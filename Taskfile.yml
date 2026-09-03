@@ -60,8 +60,6 @@ tasks:
       - task: audit:public
       - task: check:links
       - task: check:workflows
-      - task: check:workflows
-      - task: selftest:scripts
 
   webui:build:
     desc: 仅构建前端
@@ -182,3 +180,5 @@ tasks:
       - task: test:templates
       - task: audit:public
       - task: check:links
+      - task: check:workflows
+      - task: selftest:scripts
