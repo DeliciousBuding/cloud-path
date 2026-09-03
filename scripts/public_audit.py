@@ -89,14 +89,15 @@ def self_test() -> int:
     if audit_paths(safe):
         print("self-test failed: safe repository files triggered findings")
         return 1
+    # Split red-team literals so the audit can safely scan its own source file.
     samples = {
-        "private-key": "FIXTURE_PEM_REMOVED_FROM_HISTORY",
-        "openai-style-key": "FIXTURE_SK_REMOVED_FROM_HISTORY",
-        "github-token": "FIXTURE_GHP_REMOVED_FROM_HISTORY",
-        "aws-access-key": "FIXTURE_AKIA_REMOVED_FROM_HISTORY",
-        "slack-token": "FIXTURE_SLACK_REMOVED_FROM_HISTORY",
-        "local-windows-path": r"D:\Code\private\file.txt",
-        "local-home-path": "/home/example/private/file.txt",
+        "private-key": "-----BEGIN " + "TEST PRIVATE KEY-----",
+        "openai-style-key": "sk" + "-abcdefghijklmnopqrstuvwxyz123456",
+        "github-token": "ghp" + "_abcdefghijklmnopqrstuvwxyz123456",
+        "aws-access-key": "AK" + "IAABCDEFGHIJKLMNOP",
+        "slack-token": "xox" + "b-1234567890-abcdefghijklmnopqrst",
+        "local-windows-path": "D:" + r"\Code\private\file.txt",
+        "local-home-path": "/ho" + "me/example/private/file.txt",
     }
     for rule, sample in samples.items():
         if not dict(CONTENT_RULES)[rule].search(sample):
