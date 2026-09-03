@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -30,10 +31,18 @@ func userView(u store.AuthUser) api.UserView {
 	}
 }
 
-// setupAuthorized 判定首装请求是否放行：真实 TCP loopback 永远放行；
-// 非回环必须携带未消费的一次性 setup token（恒时比较）。
+// forwardedHeaderNames 是「请求经过了某个代理」的 IP 转发头信号。
+var forwardedHeaderNames = []string{"X-Forwarded-For", "X-Real-IP", "Forwarded"}
+
+// setupRejectAuditInterval 是被拒首装尝试的审计节流窗口（秒）：公网探测不得打爆
+// 审计表（与 tenant-security-policy 的 quota 审计节流同理）。被节流只影响重复审计，
+// 不影响每次请求的实际拒绝。
+const setupRejectAuditInterval = int64(60)
+
+// setupAuthorized 判定首装请求是否放行：本机真实客户端直连放行；
+// 其余来源必须携带未消费的一次性 setup token（恒时比较）。
 func (s *Server) setupAuthorized(r *http.Request) bool {
-	if auth.IsLoopbackRemote(r) {
+	if s.setupFromLocalClient(r) {
 		return true
 	}
 	if s.cfg.SetupToken == "" || s.setupTokenUsed.Load() {
@@ -42,14 +51,80 @@ func (s *Server) setupAuthorized(r *http.Request) bool {
 	return auth.ConstantTimeEqual(r.Header.Get(setupTokenHeader), s.cfg.SetupToken)
 }
 
+// setupFromLocalClient 判定首装请求是否来自**本机真实客户端**（D4 修复）。
+//
+// 旧判据用 TCP 对端地址（auth.IsLoopbackRemote），在同机反代形态下是致命漏洞：
+// 生产是 nginx 与 server 同机（proxy_pass http://127.0.0.1:<port>），任何公网访客
+// 到达本进程时对端都是 127.0.0.1，于是「回环放行」等于向整个公网开放首装，
+// 已完成初始化的实例面临被重置/被抢注管理员的风险。
+//
+// 现在的判据 fail-closed：
+//   - 请求携带任何 IP 转发头 → 说明经过了代理，真实客户端无法确证
+//     （代理可能如实追加，也可能把客户端伪造的 XFF 原样透传），一律不按本机放行，
+//     只接受未消费的一次性 setup token；
+//   - 无转发头时用 trusted-proxy 感知的 auth.ClientIP 解析真实客户端 IP，
+//     必须是标准回环地址；解析不出 IP 一律视为非本机。
+func (s *Server) setupFromLocalClient(r *http.Request) bool {
+	for _, h := range forwardedHeaderNames {
+		if strings.TrimSpace(r.Header.Get(h)) != "" {
+			return false
+		}
+	}
+	return isLoopbackIPString(auth.ClientIP(r, s.trustedProxies))
+}
+
+// isLoopbackIPString 只认标准回环地址；空串/非 IP/其它网段一律 false。
+func isLoopbackIPString(raw string) bool {
+	ip := net.ParseIP(strings.TrimSpace(raw))
+	return ip != nil && ip.IsLoopback()
+}
+
+// auditSetupRejected 记录被拒的首装尝试（节流后仍保留首条，绝不静默丢弃）。
+func (s *Server) auditSetupRejected(r *http.Request, reason string) {
+	now := time.Now().Unix()
+	last := s.setupRejectAuditAt.Load()
+	if now-last < setupRejectAuditInterval {
+		return
+	}
+	if !s.setupRejectAuditAt.CompareAndSwap(last, now) {
+		return
+	}
+	s.audit(r, audit.Event{
+		TenantID: s.auditTenantID(nil), ActorType: audit.ActorSystem, ActorName: "setup",
+		Action: audit.ActionSetup, TargetType: audit.TargetTenant, TargetID: defaultTenantSlug,
+		Outcome:  audit.OutcomeFailure,
+		Metadata: audit.NewMetadata().String("reason", reason).Map(),
+	})
+}
+
 // handleAuthSetup 首装引导：仅当用户数为 0（原子判定），创建 default 租户 + 首个 admin。
 func (s *Server) handleAuthSetup(w http.ResponseWriter, r *http.Request) {
 	if !s.setupAuthorized(r) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "setup 需要回环来源或一次性 setup token"})
+		s.auditSetupRejected(r, "not_local_client")
+		writeJSON(w, http.StatusForbidden, map[string]string{
+			"error": "setup 需要本机直连来源或一次性 setup token"})
 		return
 	}
 	if s.cfg.Store == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store unavailable"})
+		return
+	}
+	// 已初始化 → 恒定拒绝（幂等，与来源无关）：本机来源也不能重置或抢注管理员。
+	// 放在鉴权之后，未授权来源只看到 403，连「是否已初始化」都探测不到。
+	users, err := s.cfg.Store.CountUsers()
+	if err != nil {
+		slog.Warn("setup: count users", "err", err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store unavailable"})
+		return
+	}
+	if users > 0 {
+		s.audit(r, audit.Event{
+			TenantID: s.auditTenantID(nil), ActorType: audit.ActorSystem, ActorName: "setup",
+			Action: audit.ActionSetup, TargetType: audit.TargetTenant, TargetID: defaultTenantSlug,
+			Outcome:  audit.OutcomeFailure,
+			Metadata: audit.NewMetadata().String("reason", "already_initialized").Map(),
+		})
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "already set up"})
 		return
 	}
 	var body struct {

@@ -243,8 +243,17 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 	}
 	s.edges[hello.EdgeID] = link
 	s.applyMeta(hello.EdgeID, tenant, hello.Devices)
+	onlinePend, onlineEnvs := s.markLinkDevicesOnlineLocked(link)
 	s.mu.Unlock()
 	slog.Info("edge connected", "edge", hello.EdgeID, "devices", link.devices, "version", hello.Version)
+
+	// 2c') edge 上线即恢复其声明设备的在线态（markEdgeOffline 的镜像：连接本身就是
+	// 设备可达性的真实事实）。落库在锁外，随后 Edge 的 state 上报会立即按设备真实
+	// 情况校正（含 online=false），因此这里不会长期掩盖任何离线事实。
+	s.persistStates(onlinePend)
+	for _, env := range onlineEnvs {
+		s.broadcast(env)
+	}
 
 	edgeData, _ := json.Marshal(api.EdgeUpData{EdgeID: hello.EdgeID, Devices: link.devices, Version: hello.Version})
 	s.broadcastAs(api.Envelope{V: api.Version, Type: api.MsgEdgeUp, Device: hello.EdgeID, Ts: time.Now().Unix(), Data: edgeData}, link.tenant)
@@ -266,6 +275,11 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 
 	go writePump(ctx, ws, link.send)
 	go pingPump(ctx, cancel, ws)
+
+	// 3.5) hello 成功后下发当前完整插件期望态快照（control-plane-sync §4.2）。
+	// 只发「当前完整快照」，因此 Edge 离线期间的多次 desired 变更在这里一次性收敛，
+	// 不回放中间副作用；PluginStore 未接线时按旧协议不下发。
+	s.sendPluginDesiredToLink(link)
 
 	// 4) 读循环
 	for {
@@ -359,9 +373,15 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(desc)
 			s.broadcast(api.Envelope{V: api.Version, Type: api.MsgDescriptor, Device: msg.Device,
 				Ts: time.Now().Unix(), Data: data})
+		case api.MsgPluginStatus:
+			// 身份只取自已鉴权 link（tenant/edge），payload 不自报身份。
+			s.handlePluginStatusMsg(link, &msg)
+		case api.MsgPluginAck:
+			s.handlePluginAckMsg(link, &msg)
 		case api.MsgPong:
 			// 库层已处理，忽略
 		default:
+			// 未知消息类型必须忽略并记 debug，绝不因此断开连接（向后兼容，§4）。
 			slog.Debug("edge unhandled msg type", "type", msg.Type)
 		}
 	}

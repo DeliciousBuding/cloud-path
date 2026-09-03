@@ -34,6 +34,7 @@ import (
 	"github.com/DeliciousBuding/cloud-path/internal/device"
 	"github.com/DeliciousBuding/cloud-path/internal/model"
 	"github.com/DeliciousBuding/cloud-path/internal/plugincatalog"
+	"github.com/DeliciousBuding/cloud-path/internal/server/storeport"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
 	"github.com/DeliciousBuding/cloud-path/webui"
 )
@@ -67,13 +68,21 @@ type Config struct {
 	LoginRatePerMin int
 	// SessionDays 是服务端会话 TTL（天）。<=0 用默认 7。
 	SessionDays int
-	// SetupToken 是一次性首装令牌：非回环来源执行 /api/auth/setup 时必须携带；
-	// 首次成功 setup 后进程内失效。空 = 仅允许真实 TCP loopback setup。
+	// SetupToken 是一次性首装令牌：非本机直连来源执行 /api/auth/setup 时必须携带
+	// （同机反代转发的请求也算非本机直连，见 setupFromLocalClient）；
+	// 首次成功 setup 后进程内失效。空 = 仅允许本机直连 setup。
 	SetupToken string
 	// TrustedProxies 是可信反代 CIDR allowlist（已解析）；nil = 不采信任何转发头。
 	TrustedProxies *auth.TrustedProxies
-	// PluginCatalog 是只读插件目录（可选）。nil 时插件端点返回空列表而非崩溃。
+	// PluginCatalog 是只读插件目录（可选）。nil 时默认用 Server 自己的插件控制面
+	// 投影构造（真实数据源），因此插件端点永不返回内置/静态样例。
 	PluginCatalog plugincatalog.Catalog
+	// PluginStore 是插件控制面持久化端口（internal/server/storeport，§3 契约）。
+	// nil = 未接线：插件写 API 返回 503，WS plugin_* 消息按旧协议忽略，读面为空。
+	// 生产必须由 SQLite 适配器注入（见 storeport/adapter_sqlite.go）。
+	PluginStore storeport.PluginStore
+	// PluginStaleAfter 是 observed 投影过期阈值；<=0 用默认 2 分钟。
+	PluginStaleAfter time.Duration
 }
 
 func (c Config) retentionDays() int {
@@ -122,12 +131,14 @@ type Server struct {
 	loginLimiter  *auth.RateLimiter     // 登录限流：次/分/IP
 	authForced    atomic.Bool           // 账号模式：已有用户或 -require-auth
 	auditWrite    auditWriteFunc        // 审计落库（默认写 store；测试可注入）
-	pluginCatalog plugincatalog.Catalog // 只读插件目录（注入；nil=空列表）
+	pluginCatalog plugincatalog.Catalog // 只读插件目录（注入；默认接自己的投影）
+	plugin        *pluginPlane          // 插件控制面运行态（desired 缓存 + observed 投影）
 
-	trustedProxies *auth.TrustedProxies             // 反代 allowlist（nil=不信任转发头）
-	setupTokenUsed atomic.Bool                      // 一次性 setup token 已消费
-	verifyPassword func(hash, password string) bool // 登录密码校验（测试可注入）
-	dummyVerify    func(password string)            // 未知用户 dummy 校验（测试可注入）
+	trustedProxies     *auth.TrustedProxies             // 反代 allowlist（nil=不信任转发头）
+	setupTokenUsed     atomic.Bool                      // 一次性 setup token 已消费
+	setupRejectAuditAt atomic.Int64                     // 被拒首装尝试的上次审计时刻（unix 秒，节流用）
+	verifyPassword     func(hash, password string) bool // 登录密码校验（测试可注入）
+	dummyVerify        func(password string)            // 未知用户 dummy 校验（测试可注入）
 }
 
 type edgeLink struct {
@@ -166,6 +177,12 @@ func New(cfg Config) *Server {
 		dummyVerify:    auth.DummyVerify,
 	}
 	s.auditWrite = s.defaultAuditWrite()
+	s.plugin = newPluginPlane(cfg.PluginStore, cfg.PluginStaleAfter)
+	if s.pluginCatalog == nil {
+		// 默认目录直接读 Server 的插件控制面投影：安装物来自 Edge 上报，
+		// 期望态来自 Server 权威存储，不存在任何 fake/静态来源。
+		s.pluginCatalog = plugincatalog.NewProjectionCatalog(pluginProjection{s})
+	}
 	s.hydrate()
 	return s
 }
@@ -338,6 +355,31 @@ func (s *Server) markEdgeOffline(link *edgeLink) {
 	for _, env := range envs {
 		s.broadcast(env)
 	}
+}
+
+// markLinkDevicesOnlineLocked 把新注册连接声明的设备标为在线（调用方持 s.mu）。
+// 这是 markEdgeOffline 的精确镜像：断线时按连接消失把设备标离线，重连时按连接
+// 建立把设备标回在线；Edge 随后的 state 上报仍是设备级 observed 权威。
+// 只翻转当前离线的设备，避免重连风暴里重复广播已在线的设备。
+func (s *Server) markLinkDevicesOnlineLocked(link *edgeLink) ([]statePersist, []api.Envelope) {
+	var pend []statePersist
+	var envs []api.Envelope
+	now := time.Now().Unix()
+	for _, key := range link.devices {
+		v, ok := s.devices[key]
+		if !ok || v.Online {
+			continue
+		}
+		v.Online = true
+		v.LastSeen = now
+		b, err := json.Marshal(v.State)
+		if err != nil {
+			b = []byte("{}")
+		}
+		pend = append(pend, statePersist{key: key, stateJSON: string(b), online: true, updatedAt: v.UpdatedAt})
+		envs = append(envs, s.stateEnvelope(key, v))
+	}
+	return pend, envs
 }
 
 // tenantIDForSlug 解析 edge hello 自报 tenant slug 为 DB tenant id。
@@ -666,12 +708,22 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/api/commands", s.handleListCommands)
 			r.Get("/api/adapters", s.handleListAdapters)
 			r.Get("/api/stats", s.handleStats)
+			r.Get("/api/overview", s.handleOverview)
 			r.Get("/api/plugins", s.handleListPlugins)
 			r.Get("/api/plugins/{pluginID}", s.handleGetPlugin)
 			r.Get("/api/plugin-instances", s.handleListPluginInstances)
 			r.Get("/api/plugin-instances/{id}", s.handleGetPluginInstance)
 		})
 		r.Post("/api/devices/{edgeID}/{deviceID}/commands", s.authWrite(s.handlePostCommand))
+		// 插件实例管理写面（control-plane-sync §6）：viewer 只读，operator 可写，
+		// purge / 权限扩大 / secret binding 变更额外要求 admin 或显式 confirm_permissions。
+		r.Group(func(r chi.Router) {
+			r.Use(s.requireRole(api.RoleOperator))
+			r.Post("/api/plugin-instances", s.authWrite(s.handleCreatePluginInstance))
+			r.Patch("/api/plugin-instances/{id}", s.authWrite(s.handleUpdatePluginInstance))
+			r.Delete("/api/plugin-instances/{id}", s.authWrite(s.handleDeletePluginInstance))
+			r.Post("/api/plugin-instances/{id}/reconcile", s.authWrite(s.handleReconcilePluginInstance))
+		})
 	})
 	// 用户/令牌管理：始终要求 admin 身份（legacy token 亦可用；非账号模式未认证 401）。
 	r.Group(func(r chi.Router) {
@@ -753,6 +805,11 @@ func (s *Server) authWrite(h http.HandlerFunc) http.HandlerFunc {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 			return
 		}
+		// 无凭据写操作的兜底放行只看真实 TCP 对端（不采信任何转发头）。
+		// 注意：同机反代形态下公网访客的对端同样是 127.0.0.1，因此这条路径**只**在
+		// 非账号模式（无用户且未开 -require-auth）下存在；生产必须先完成首装
+		// （setup 侧已按 trusted-proxy 感知的真实客户端 IP 收紧，见 setupFromLocalClient），
+		// 一旦进入账号模式本分支不可达。
 		if !auth.IsLoopbackRemote(r) {
 			writeJSON(w, http.StatusForbidden, map[string]string{
 				"error": "写操作需要回环来源或有效凭据"})
@@ -1176,10 +1233,7 @@ func (s *Server) RunSweeper(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-timeoutT.C:
-			if s.cfg.Store == nil {
-				continue
-			}
-			n, err := s.cfg.Store.TimeoutStaleCommands(90 * time.Second)
+			n, err := s.timeoutOnce(commandTimeoutTTL)
 			if err != nil {
 				slog.Warn("sweeper: timeout commands", "err", err)
 			} else if n > 0 {
@@ -1189,6 +1243,17 @@ func (s *Server) RunSweeper(ctx context.Context) {
 			s.pruneOnce()
 		}
 	}
+}
+
+// commandTimeoutTTL 是命令等待 ack 的上限：超过即由 sweeper 标为 timeout。
+const commandTimeoutTTL = 90 * time.Second
+
+// timeoutOnce 把超过 ttl 仍未 ack 的命令标记为 timeout（sweeper 与测试共用同一路径）。
+func (s *Server) timeoutOnce(ttl time.Duration) (int64, error) {
+	if s.cfg.Store == nil {
+		return 0, nil
+	}
+	return s.cfg.Store.TimeoutStaleCommands(ttl)
 }
 
 // pruneOnce 执行一次保留期清理（sweeper 与测试共用）。
