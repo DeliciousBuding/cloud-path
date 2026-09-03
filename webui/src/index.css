@@ -180,3 +180,34 @@ body {
   }
   .card-lift:hover { transform: none; }
 }
+
+
+/* ---------- 表单与认证页（Login / Setup 共用） ---------- */
+
+/* 文本输入框：颜色全部走 token，聚焦环用 accent 混色 */
+.input {
+  width: 100%;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--color-ink);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-tile);
+  appearance: none;
+  transition: border-color .18s ease, box-shadow .18s ease, background-color .3s ease;
+}
+.input::placeholder { color: var(--color-ink-3); }
+.input:focus {
+  outline: none;
+  background: var(--color-surface);
+  border-color: color-mix(in srgb, var(--color-accent) 55%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 16%, transparent);
+}
+.input-error, .input-error:focus {
+  border-color: var(--color-bad);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-bad) 15%, transparent);
+}
+
+/* 大号按钮（认证页主操作） */
+.btn-lg { padding: 11px 20px; font-size: 14px; font-weight: 600; }

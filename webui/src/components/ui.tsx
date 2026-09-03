@@ -1,6 +1,13 @@
-// 基础 UI 原语（Apple 极简）：Badge / StatusDot / Panel / PageHeader / StatTile / EmptyState / Segmented
-import type { ReactNode } from 'react'
+// 基础 UI 原语（Apple 极简）：Badge / StatusDot / Panel / PageHeader / StatTile / EmptyState /
+// Segmented / KeyValue / Spinner / Button / TextField / ThemeToggle / AuthCard
+// 颜色一律走 index.css token（Tailwind 主题类或 .btn/.input/.card 基类），组件内禁止裸色值。
+import { useId, useState } from 'react'
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react'
+import { Moon, Sun } from 'lucide-react'
 import { cn } from '@/lib/cn'
+import { setTheme } from '@/lib/theme'
+import type { ThemeMode } from '@/lib/theme'
+import { Logo } from './Logo'
 
 export type Tone = 'ok' | 'warn' | 'bad' | 'accent' | 'idle'
 
@@ -127,5 +134,96 @@ export function Spinner({ size = 14, className }: { size?: number; className?: s
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" opacity=".2" fill="none" />
       <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none" />
     </svg>
+  )
+}
+
+
+/** 通用按钮：variant 映射 .btn-* 基类；尺寸 lg 用于认证页主操作 */
+export function Button({ variant = 'primary', lg, className, ...rest }: {
+  variant?: 'primary' | 'ghost'
+  lg?: boolean
+} & ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      className={cn('btn', variant === 'primary' ? 'btn-primary' : 'btn-ghost', lg && 'btn-lg', className)}
+      {...rest}
+    />
+  )
+}
+
+/** 带标签/提示/错误的表单输入行（error 优先于 hint 展示） */
+export function TextField({ label, hint, error, className, ...rest }: {
+  label: string
+  hint?: string
+  error?: string
+} & InputHTMLAttributes<HTMLInputElement>) {
+  const id = useId()
+  const desc = error || hint ? `${id}-desc` : undefined
+  return (
+    <div className={className}>
+      <label htmlFor={id} className="mb-1.5 block text-[13px] font-medium text-ink-2">{label}</label>
+      <input
+        id={id}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={desc}
+        className={cn('input', error && 'input-error')}
+        {...rest}
+      />
+      {desc && (
+        <p id={desc} className={cn('mt-1.5 text-xs', error ? 'text-bad' : 'text-ink-3')}>
+          {error ?? hint}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/** 主题快速切换：供 Login/Setup 等脱离 Layout 侧栏的独立页使用 */
+export function ThemeToggle({ className }: { className?: string }) {
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
+  const label = dark ? '切换为浅色外观' : '切换为深色外观'
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={() => {
+        const next: ThemeMode = dark ? 'light' : 'dark'
+        setTheme(next)
+        setDark(!dark)
+      }}
+      className={cn(
+        'flex h-8 w-8 items-center justify-center rounded-full border border-hairline',
+        'bg-surface/70 text-ink-2 transition-colors hover:text-ink',
+        className,
+      )}
+    >
+      {dark ? <Sun size={15} strokeWidth={2} /> : <Moon size={15} strokeWidth={2} />}
+    </button>
+  )
+}
+
+/** 认证/引导页外壳：品牌区 + 居中卡片 + 右上角主题切换（390px 无横向溢出） */
+export function AuthCard({ title, subtitle, children, footer }: {
+  title: string
+  subtitle?: ReactNode
+  children: ReactNode
+  footer?: ReactNode
+}) {
+  return (
+    <div className="relative flex min-h-dvh items-center justify-center overflow-x-hidden px-4 py-10">
+      <ThemeToggle className="absolute right-4 top-4" />
+      <div className="w-full max-w-sm fade-up">
+        <div className="mb-8 flex flex-col items-center text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-[16px] bg-accent/10 text-accent">
+            <Logo size={30} />
+          </span>
+          <h1 className="mt-4 text-[24px] font-bold leading-tight tracking-tight">{title}</h1>
+          {subtitle && <p className="mt-1.5 text-sm text-ink-2">{subtitle}</p>}
+        </div>
+        <div className="card p-6">{children}</div>
+        {footer && <div className="mt-5 text-center text-xs text-ink-3">{footer}</div>}
+      </div>
+    </div>
   )
 }
