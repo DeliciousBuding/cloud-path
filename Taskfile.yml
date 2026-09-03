@@ -53,10 +53,11 @@ tasks:
       - pnpm dev
 
   test:
-    desc: 全部测试（Go 单测 + 前端类型检查）
+    desc: 全部测试（Go 单测 + 前端类型检查/组件测试）
     cmds:
       - go test ./... -count=1
       - cd webui && pnpm exec tsc --noEmit
+      - cd webui && pnpm test -- --run
 
   test:race:
     desc: 带竞态检测的 Go 测试（需 cgo；Windows 上通常不可用，Linux/CI 用）
@@ -70,10 +71,12 @@ tasks:
       - '{{.PY}} scripts/fmtcheck.py'
 
   lint:
-    desc: 全量静态检查（vet + gofmt + 前端类型）
+    desc: 全量静态检查（vet + gofmt + 前端类型/组件测试）
     cmds:
       - task: vet
       - cd webui && pnpm exec tsc --noEmit
+      - cd webui && pnpm test -- --run
+
   audit:public:
     desc: 发布前审计 tracked 文件（secret/私有路径/运行态与不可再分发资产）
     cmds:

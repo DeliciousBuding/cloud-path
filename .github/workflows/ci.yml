@@ -37,7 +37,7 @@ jobs:
           python3 scripts/public_audit.py
 
   webui:
-    name: WebUI install / typecheck
+    name: WebUI install / typecheck / test / build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -46,7 +46,7 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: '9.15.4'
+          version: '10.32.1'
           run_install: false
 
       - name: Set up Node
@@ -63,3 +63,10 @@ jobs:
       - name: Typecheck frontend
         working-directory: webui
         run: pnpm exec tsc --noEmit
+      - name: Test frontend
+        working-directory: webui
+        run: pnpm test -- --run
+
+      - name: Build frontend
+        working-directory: webui
+        run: pnpm build
