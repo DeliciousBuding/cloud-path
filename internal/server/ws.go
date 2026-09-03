@@ -11,6 +11,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/DeliciousBuding/cloud-path/internal/api"
+	"github.com/DeliciousBuding/cloud-path/internal/audit"
 	"github.com/DeliciousBuding/cloud-path/internal/auth"
 	"github.com/DeliciousBuding/cloud-path/internal/model"
 )
@@ -101,6 +102,12 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 	if !validEdgeID(hello.EdgeID) {
 		ws.Close(websocket.StatusProtocolError, "invalid edge_id")
 		slog.Warn("edge rejected: invalid edge_id", "edge", hello.EdgeID, "remote", r.RemoteAddr)
+		s.audit(r, audit.Event{
+			TenantID: s.auditTenantID(nil), ActorType: audit.ActorEdge, ActorName: hello.EdgeID,
+			Action: audit.ActionEdgeAuthFailure, TargetType: audit.TargetEdge, TargetID: hello.EdgeID,
+			Outcome:  audit.OutcomeFailure,
+			Metadata: audit.NewMetadata().String("reason", "invalid_edge_id").Map(),
+		})
 		return
 	}
 	// 1.5) 鉴权：legacy -token（default 租户）或租户服务令牌（要求 edge scope，租户以令牌为准）。
@@ -108,10 +115,24 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 	if tenant == "" {
 		tenant = defaultTenantSlug
 	}
+	defaultTid := s.auditTenantID(nil)
+	edgeAuthFail := func(reason string, tenantID int64) {
+		s.audit(r, audit.Event{
+			TenantID: tenantID, ActorType: audit.ActorEdge, ActorName: hello.EdgeID,
+			Action: audit.ActionEdgeAuthFailure, TargetType: audit.TargetEdge, TargetID: hello.EdgeID,
+			Outcome:  audit.OutcomeFailure,
+			Metadata: audit.NewMetadata().String("reason", reason).Map(),
+		})
+	}
 	var tid int64
 	if auth.IsTenantToken(hello.Token) {
 		row, ok := s.validTenantToken(hello.Token, true)
 		if !ok {
+			failTid := defaultTid
+			if row.TenantID > 0 {
+				failTid = row.TenantID
+			}
+			edgeAuthFail("invalid_token", failTid)
 			ws.Close(websocket.StatusPolicyViolation, "invalid token")
 			slog.Warn("edge auth failed", "edge", hello.EdgeID, "remote", r.RemoteAddr)
 			return
@@ -122,6 +143,7 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if s.cfg.Token != "" {
 		if hello.Token != s.cfg.Token {
+			edgeAuthFail("invalid_token", defaultTid)
 			ws.Close(websocket.StatusPolicyViolation, "invalid token")
 			slog.Warn("edge auth failed", "edge", hello.EdgeID, "remote", r.RemoteAddr)
 			return
@@ -129,6 +151,7 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 		tenant = defaultTenantSlug // legacy -token 绑定 default 租户
 	} else if s.accountMode() {
 		// 账号模式（已有 user / -require-auth）且未配 legacy token：edge 必须出示租户令牌。
+		edgeAuthFail("invalid_token", defaultTid)
 		ws.Close(websocket.StatusPolicyViolation, "invalid token")
 		slog.Warn("edge auth failed", "edge", hello.EdgeID, "remote", r.RemoteAddr)
 		return
@@ -136,12 +159,18 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 	if tid == 0 {
 		t, terr := s.tenantIDForSlug(tenant)
 		if terr != nil {
+			edgeAuthFail("unknown_tenant", defaultTid)
 			ws.Close(websocket.StatusPolicyViolation, "unknown tenant")
 			slog.Warn("edge rejected: unknown tenant", "edge", hello.EdgeID, "tenant", tenant, "err", terr)
 			return
 		}
 		tid = t
 	}
+	s.audit(r, audit.Event{
+		TenantID: tid, ActorType: audit.ActorEdge, ActorName: hello.EdgeID,
+		Action: audit.ActionEdgeAuthSuccess, TargetType: audit.TargetTenant, TargetID: tenant,
+		Outcome: audit.OutcomeSuccess,
+	})
 
 	// 2) 注册连接（同 edge_id 重连挤掉旧连接：新连接优先）
 	ctx, cancel := context.WithCancel(context.WithoutCancel(r.Context()))
