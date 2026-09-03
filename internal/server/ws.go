@@ -115,6 +115,12 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 	if tenant == "" {
 		tenant = defaultTenantSlug
 	}
+	tid, terr := s.tenantIDForSlug(tenant)
+	if terr != nil {
+		ws.Close(websocket.StatusPolicyViolation, "unknown tenant")
+		slog.Warn("edge rejected: unknown tenant", "edge", hello.EdgeID, "tenant", tenant, "err", terr)
+		return
+	}
 	link := &edgeLink{
 		edgeID: hello.EdgeID, version: hello.Version, tenant: tenant,
 		connectedAt: time.Now(), send: make(chan []byte, sendChanSize),
@@ -132,7 +138,7 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 	s.edges[hello.EdgeID] = link
 	metas := s.applyMeta(hello.EdgeID, tenant, hello.Devices)
 	s.mu.Unlock()
-	s.persistDevices(hello.EdgeID, metas) // 落库在锁外
+	s.persistDevices(hello.EdgeID, metas, tid) // 落库在锁外
 	slog.Info("edge connected", "edge", hello.EdgeID, "devices", link.devices, "version", hello.Version)
 
 	edgeData, _ := json.Marshal(api.EdgeUpData{EdgeID: hello.EdgeID, Devices: link.devices, Version: hello.Version})
@@ -223,8 +229,11 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			if s.cfg.Store != nil {
-				if err := s.cfg.Store.UpdateCommandStatus(ack.CommandID, ack.Status, ack.Detail); err != nil {
+				ok, err := s.cfg.Store.UpdateCommandStatusScoped(ack.CommandID, msg.Device, tid, ack.Status, ack.Detail)
+				if err != nil {
 					slog.Warn("store ack", "err", err, "cmd_id", ack.CommandID)
+				} else if !ok {
+					slog.Warn("foreign command ack ignored", "device", msg.Device, "cmd_id", ack.CommandID, "tenant", tenant)
 				}
 			}
 			slog.Info("command ack", "device", msg.Device, "cmd_id", ack.CommandID, "status", ack.Status)

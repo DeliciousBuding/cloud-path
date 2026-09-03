@@ -80,7 +80,7 @@ func TestStatsEndpoint(t *testing.T) {
 	}
 	var st api.StatsView
 	getJSON(t, ts.URL+"/api/stats", &st)
-	if st.Devices != 1 || st.Events != 1 || st.SchemaVersion != 3 {
+	if st.Devices != 1 || st.Events != 1 || st.SchemaVersion != srv.cfg.Store.Version() {
 		t.Fatalf("stats = %+v", st)
 	}
 	if st.RetentionDays != defaultRetentionDays || st.AuthEnabled {
