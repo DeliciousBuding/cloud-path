@@ -31,6 +31,10 @@ jobs:
 
       - name: Test
         run: go test ./...
+      - name: Audit public repository boundary
+        run: |
+          python3 scripts/public_audit.py --self-test
+          python3 scripts/public_audit.py
 
   webui:
     name: WebUI install / typecheck

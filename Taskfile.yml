@@ -74,6 +74,11 @@ tasks:
     cmds:
       - task: vet
       - cd webui && pnpm exec tsc --noEmit
+  audit:public:
+    desc: 发布前审计 tracked 文件（secret/私有路径/运行态与不可再分发资产）
+    cmds:
+      - '{{.PY}} scripts/public_audit.py --self-test'
+      - '{{.PY}} scripts/public_audit.py'
 
   run:
     desc: 生产模式本地起 server（:8080，内嵌前端）
