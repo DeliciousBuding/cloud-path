@@ -142,7 +142,7 @@ CloudPath 使用双通道发现：
 1. **开放通道**：GitHub 仓库 Topic `cloudpath-plugin`。
 2. **精选通道**：官方维护的 Registry，记录经过审查的插件与发布者策略。
 
-Topic 只是候选集合，不是信任证明。CLI 搜到仓库后还必须检查根 Manifest、兼容范围、GitHub Release、资产摘要和可选构建证明。详细流程（GitHub 生态发现与验证）待规划成文。
+Topic 只是候选集合，不是信任证明。CLI 搜到仓库后还必须检查根 Manifest、兼容范围、GitHub Release、资产摘要和可选构建证明。详细流程见 [architecture/github-ecosystem.md](architecture/github-ecosystem.md)。
 
 ## 9. 插件运行时
 
@@ -169,7 +169,10 @@ Topic 只是候选集合，不是信任证明。CLI 搜到仓库后还必须检�
 
 ## 11. 决策记录与实施
 
-ADR 与完整实施计划尚在规划中，成文后补入 `docs/architecture/adr/` 与 `docs/architecture/plan/`。
+- [ADR-0001：能力中心的多契约插件模型](architecture/adr/0001-capability-centered-plugins.md)
+- [ADR-0002：GitHub Topic + Registry 混合发现](architecture/adr/0002-github-plugin-discovery.md)
+
+分阶段实施计划（A0–A8）跟踪在私有层 `.local/progress/`，不进入公开仓库。
 
 ## 12. 非目标
 
