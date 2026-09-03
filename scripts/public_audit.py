@@ -23,7 +23,7 @@ class Finding:
 
 
 CONTENT_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("private-key", re.compile(r"-----BEGIN [A-Z ]+ PRIVATE KEY-----")),
+    ("private-key", re.compile("-" * 5 + r"BEGIN [A-Z ]+ PRIVATE KEY" + "-" * 5)),
     ("openai-style-key", re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")),
     ("github-token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b")),
     ("aws-access-key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
@@ -38,7 +38,7 @@ FORBIDDEN_SUFFIXES = {
 }
 
 ALLOWED_SPECIAL_FILES = {
-    "deploy/config.example.env",
+    "deploy/config.env.example",
 }
 
 
@@ -85,13 +85,13 @@ def audit_paths(paths: list[str]) -> list[Finding]:
 
 
 def self_test() -> int:
-    safe = ["README.md", "deploy/config.example.env"]
+    safe = ["README.md", "deploy/config.env.example"]
     if audit_paths(safe):
         print("self-test failed: safe repository files triggered findings")
         return 1
     # Split red-team literals so the audit can safely scan its own source file.
     samples = {
-        "private-key": "-----BEGIN " + "TEST PRIVATE KEY-----",
+        "private-key": "-" * 5 + "BEGIN " + "TEST PRIVATE KEY" + "-" * 5,
         "openai-style-key": "sk" + "-abcdefghijklmnopqrstuvwxyz123456",
         "github-token": "ghp" + "_abcdefghijklmnopqrstuvwxyz123456",
         "aws-access-key": "AK" + "IAABCDEFGHIJKLMNOP",

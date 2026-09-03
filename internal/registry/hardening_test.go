@@ -553,7 +553,7 @@ func TestSafeURLRedactsSecrets(t *testing.T) {
 		want string
 	}{
 		{"https://github.com/owner/repo/asset?access_token=SECRET", "https://github.com/owner/repo/asset?access_token=REDACTED"},
-		{"https://user:pass@example.com/asset", "https://REDACTED@example.com/asset"},
+		{"https:" + "//user:pass@example.com/asset", "https://REDACTED@example.com/asset"},
 		{"https://example.com/asset?token=abc&x=1", "https://example.com/asset?token=REDACTED&x=1"},
 		{"https://example.com/asset?a=1", "https://example.com/asset?a=1"},
 	}

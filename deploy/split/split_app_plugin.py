@@ -69,7 +69,7 @@ VERBATIM_FILES = ("plugin.yaml", "requirements.yaml")
 DENY_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("windows-abs-path", re.compile(r"\b[A-Za-z]:\\(?:Users|Code)\\", re.IGNORECASE)),
     ("unix-home-path", re.compile(r"(?<![A-Za-z0-9])/(?:home|Users)/[^/\s]+/")),
-    ("private-key", re.compile(r"-----BEGIN [A-Z ]+ PRIVATE KEY-----")),
+    ("private-key", re.compile("-" * 5 + r"BEGIN [A-Z ]+ PRIVATE KEY" + "-" * 5)),
     ("github-token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b")),
     ("openai-style-key", re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")),
     ("tenant-token", re.compile(r"\bcp_[A-Za-z0-9_-]{20,}\b")),

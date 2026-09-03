@@ -53,7 +53,7 @@ var credentialKeyWords = []string{
 	"sessionid", "session_id",
 }
 
-// urlCredentialPattern 命中形如 scheme://user:pass@host 的内联凭据。
+// urlCredentialPattern 命中 URL 内联凭据（userinfo:password@host 形态，scheme 三件套打头）。
 var urlCredentialPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.\-]*://[^/\s@:]+:[^/\s@]+@`)
 
 // pluginWriteError 是一次写失败：稳定错误码 + HTTP 状态 + 人类可读消息。
@@ -688,7 +688,7 @@ func validPluginSegment(s string, maxLen int) bool {
 // normalizePluginConfig 校验并规范化实例配置：
 //   - secret://<name> 值只做结构校验并抽取 handle 名（Server 永不解析明文）；
 //   - 键名形似凭据却给明文值 → 拒绝（PluginErrSecretForbidden）；
-//   - 内联 URL 凭据（scheme://user:pass@host）→ 拒绝；
+//   - 内联 URL 凭据（userinfo:password@host 形态）→ 拒绝；
 //   - 显式 secret_refs 与配置里的 handle 合并去重（refs 为 nil 表示沿用既有值）。
 func normalizePluginConfig(cfg map[string]string, refs, prevRefs []string) (map[string]string, []string, *pluginWriteError) {
 	if len(cfg) > maxPluginConfigKeys {

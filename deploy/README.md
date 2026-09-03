@@ -469,7 +469,7 @@ curl -fsS "https://${SITE}/healthz"
 | [nginx/cloudpath.vectorcontrol.tech.conf](nginx/cloudpath.vectorcontrol.tech.conf) | 可直接安装的公网站点示例（HTTPS + WSS + CDN 真实 IP）；域名与证书路径需替换 |
 | [nginx.conf](nginx.conf) | 与主机无关的通用反代模板（`console.example.com`） |
 | [edge/README.md](edge/README.md) | 客户端（使用者自己电脑）分发与 `edge.yaml` 填写指引 |
-| [config.example.env](config.example.env) | 容器/compose 形态的环境变量示例 |
+| [config.env.example](config.env.example) | 容器/compose 形态的环境变量示例 |
 | [docker-compose.yml](docker-compose.yml) | 容器形态 server（本文不使用；注意宿主架构必须与镜像架构一致） |
 | [docker-compose.edge.yml](docker-compose.edge.yml) | 容器形态 edge overlay（串口需额外设备映射） |
 | [../scripts/assert_arch.py](../scripts/assert_arch.py) | 产物架构断言门禁（硬失败） |

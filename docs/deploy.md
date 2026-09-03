@@ -73,7 +73,7 @@ docker run --rm --name cloudpath-server \
 
 ```bash
 cd deploy
-cp config.example.env .env
+cp config.env.example .env
 # 编辑 .env，至少替换 CLOUDPATH_TOKEN 和 CLOUDPATH_ALLOWED_ORIGINS
 docker compose -f docker-compose.yml up -d --build
 docker compose -f docker-compose.yml ps

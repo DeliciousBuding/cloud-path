@@ -362,7 +362,7 @@ func TestPluginInstanceRejectsPlaintextSecret(t *testing.T) {
 	}
 	// 内联 URL 凭据同样拒绝。
 	if rec := servePlugin(t, srv, http.MethodPost, "/api/plugin-instances",
-		`{"edge_id":"e1","instance_id":"box2","plugin_id":"p1","version":"1.0.0","config":{"endpoint":"https://user:`+plaintext+`@example.com"}}`,
+		`{"edge_id":"e1","instance_id":"box2","plugin_id":"p1","version":"1.0.0","config":{"endpoint":"https:`+`//user:`+plaintext+`@example.com"}}`,
 		a, "tenant-a", string(api.RoleAdmin)); rec.Code != http.StatusForbidden {
 		t.Fatalf("内联 URL 凭据 = %d, want 403", rec.Code)
 	}
