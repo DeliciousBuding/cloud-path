@@ -100,3 +100,39 @@ tasks:
     cmds:
       - go clean
       - '{{.PY}} scripts/clean.py'
+
+  check:links:
+    desc: Markdown 相对链接检查（stdlib-only，含自测）
+    cmds:
+      - '{{.PY}} scripts/check_links.py --self-test'
+      - '{{.PY}} scripts/check_links.py'
+
+  test:templates:
+    desc: Go 插件模板（driver/application）build/vet/test/自测/无 internal import
+    cmds:
+      - for: [driver, application]
+        cmd: >-
+          cd templates/go-plugin/{{.ITEM}} && go build ./... && go vet ./... &&
+          go test ./... -count=1 && {{.PY}} ../../../scripts/fmtcheck.py &&
+          {{.PY}} scripts/validate_manifest.py --self-test &&
+          {{.PY}} scripts/validate_manifest.py plugin.yaml --dir . &&
+          {{.PY}} scripts/rename.py --self-test
+
+  test:web:
+    desc: 前端 frozen install / typecheck / test / build
+    dir: webui
+    cmds:
+      - pnpm install --frozen-lockfile
+      - pnpm exec tsc --noEmit
+      - pnpm test -- --run
+      - pnpm build
+
+  verify:
+    desc: 聚合门禁（vet/test/web/template/audit/links），不递归调用自己
+    cmds:
+      - task: vet
+      - cmd: go test ./... -count=1
+      - task: test:web
+      - task: test:templates
+      - task: audit:public
+      - task: check:links

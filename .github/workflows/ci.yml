@@ -10,9 +10,13 @@ permissions:
   contents: read
 
 jobs:
-  go:
-    name: Go build / vet / test
-    runs-on: ubuntu-latest
+  core-go:
+    name: Core Go (build / vet / test / gofmt)
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,6 +27,11 @@ jobs:
           go-version: '1.26.3'
           cache: true
 
+      - name: Set up Python (gofmt gate)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Build all Go packages
         run: go build ./...
 
@@ -30,14 +39,13 @@ jobs:
         run: go vet ./...
 
       - name: Test
-        run: go test ./...
-      - name: Audit public repository boundary
-        run: |
-          python3 scripts/public_audit.py --self-test
-          python3 scripts/public_audit.py
+        run: go test ./... -count=1
+
+      - name: gofmt gate
+        run: python scripts/fmtcheck.py
 
   webui:
-    name: WebUI install / typecheck / test / build
+    name: WebUI (install / typecheck / test / build)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -63,6 +71,7 @@ jobs:
       - name: Typecheck frontend
         working-directory: webui
         run: pnpm exec tsc --noEmit
+
       - name: Test frontend
         working-directory: webui
         run: pnpm test -- --run
@@ -70,3 +79,79 @@ jobs:
       - name: Build frontend
         working-directory: webui
         run: pnpm build
+
+  plugin-templates:
+    name: Go plugin templates (${{ matrix.kind }})
+    strategy:
+      fail-fast: false
+      matrix:
+        kind: [driver, application]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.3'
+          cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build
+        working-directory: templates/go-plugin/${{ matrix.kind }}
+        run: go build ./...
+
+      - name: Vet
+        working-directory: templates/go-plugin/${{ matrix.kind }}
+        run: go vet ./...
+
+      - name: Test
+        working-directory: templates/go-plugin/${{ matrix.kind }}
+        run: go test ./... -count=1
+
+      - name: gofmt gate
+        working-directory: templates/go-plugin/${{ matrix.kind }}
+        run: test -z "$(gofmt -l .)"
+
+      - name: Manifest validator self-test
+        working-directory: templates/go-plugin/${{ matrix.kind }}
+        run: python scripts/validate_manifest.py --self-test
+
+      - name: Manifest + no-internal-import gate
+        working-directory: templates/go-plugin/${{ matrix.kind }}
+        run: python scripts/validate_manifest.py plugin.yaml --dir .
+
+      - name: Rename self-test
+        working-directory: templates/go-plugin/${{ matrix.kind }}
+        run: python scripts/rename.py --self-test
+
+  public-boundary:
+    name: Public repository boundary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Public audit self-test
+        run: python scripts/public_audit.py --self-test
+
+      # Also gates tracked forbidden assets (runtime/binary, live config,
+      # private layer, env files, local paths) and secret material.
+      - name: Public audit
+        run: python scripts/public_audit.py
+
+      - name: Markdown relative-link check self-test
+        run: python scripts/check_links.py --self-test
+
+      - name: Markdown relative-link check
+        run: python scripts/check_links.py
