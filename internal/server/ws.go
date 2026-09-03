@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/DeliciousBuding/cloud-path/internal/audit"
 	"github.com/DeliciousBuding/cloud-path/internal/auth"
 	"github.com/DeliciousBuding/cloud-path/internal/model"
+	"github.com/DeliciousBuding/cloud-path/internal/store"
 )
 
 const (
@@ -155,6 +157,9 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 		ws.Close(websocket.StatusPolicyViolation, "invalid token")
 		slog.Warn("edge auth failed", "edge", hello.EdgeID, "remote", r.RemoteAddr)
 		return
+	} else {
+		// 无凭据开发态：自报 tenant 不被信任，恒绑定 default（单租户语义，不越权）。
+		tenant = defaultTenantSlug
 	}
 	if tid == 0 {
 		t, terr := s.tenantIDForSlug(tenant)
@@ -172,36 +177,82 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 		Outcome: audit.OutcomeSuccess,
 	})
 
-	// 2) 注册连接（同 edge_id 重连挤掉旧连接：新连接优先）
+	// 2) 注册连接（同租户同 edge_id 重连挤旧连接；跨租户同名 fail-closed，不驱逐）
 	ctx, cancel := context.WithCancel(context.WithoutCancel(r.Context()))
 	defer cancel()
 	link := &edgeLink{
-		edgeID: hello.EdgeID, version: hello.Version, tenant: tenant,
+		edgeID: hello.EdgeID, version: hello.Version, tenant: tenant, tenantID: tid,
 		connectedAt: time.Now(), send: make(chan []byte, sendChanSize),
 		cancel: cancel,
 	}
+	var deviceKeys []string
 	for _, d := range hello.Devices {
-		link.devices = append(link.devices, api.DeviceKey(hello.EdgeID, d.ID))
+		key := api.DeviceKey(hello.EdgeID, d.ID)
+		deviceKeys = append(deviceKeys, key)
+		link.devices = append(link.devices, key)
 	}
 
+	// 2a) 内存绑定预检：跨租户同名 edge/device 直接拒绝（不踢线、不落库、不广播）。
 	s.mu.Lock()
-	if old, ok := s.edges[hello.EdgeID]; ok && old != link {
-		slog.Info("edge reconnected, evicting old link", "edge", hello.EdgeID)
-		old.cancel()
+	if old, ok := s.edges[hello.EdgeID]; ok && old != nil && old.tenantID != tid {
+		s.mu.Unlock()
+		edgeAuthFail("edge_id_owned_by_other_tenant", tid)
+		ws.Close(websocket.StatusPolicyViolation, "edge_id owned by another tenant")
+		slog.Warn("edge rejected: cross-tenant edge_id collision", "edge", hello.EdgeID,
+			"tenant", tenant, "remote", r.RemoteAddr)
+		return
+	}
+	if conflict := s.identityConflictLocked(hello.EdgeID, tenant, deviceKeys); conflict != "" {
+		s.mu.Unlock()
+		edgeAuthFail("identity_owned_by_other_tenant", tid)
+		ws.Close(websocket.StatusPolicyViolation, "identity owned by another tenant")
+		slog.Warn("edge rejected: cross-tenant identity collision", "edge", hello.EdgeID,
+			"conflict", conflict, "tenant", tenant, "remote", r.RemoteAddr)
+		return
+	}
+	s.mu.Unlock()
+
+	// 2b) 事务内 fail-closed 落库（锁外）。写入失败即拒绝，不注册连接、不广播。
+	if err := s.persistDevices(hello.EdgeID, hello.Devices, tid); err != nil {
+		reason := "identity_binding_conflict"
+		if errors.Is(err, store.ErrEdgeTenantMismatch) {
+			reason = "edge_id_owned_by_other_tenant"
+		} else if errors.Is(err, store.ErrDeviceTenantMismatch) {
+			reason = "device_id_owned_by_other_tenant"
+		}
+		edgeAuthFail(reason, tid)
+		ws.Close(websocket.StatusPolicyViolation, "identity owned by another tenant")
+		slog.Warn("edge rejected: identity persist conflict", "edge", hello.EdgeID,
+			"tenant", tenant, "err", err)
+		return
+	}
+
+	// 2c) 注册连接：同租户重连挤旧；2a/2b 之后出现的跨租户竞态仍 fail-closed。
+	s.mu.Lock()
+	if old, ok := s.edges[hello.EdgeID]; ok && old != nil {
+		if old.tenantID != tid {
+			s.mu.Unlock()
+			edgeAuthFail("edge_id_owned_by_other_tenant", tid)
+			ws.Close(websocket.StatusPolicyViolation, "edge_id owned by another tenant")
+			return
+		}
+		if old != link {
+			slog.Info("edge reconnected, evicting old link", "edge", hello.EdgeID, "tenant", tenant)
+			old.cancel()
+		}
 	}
 	s.edges[hello.EdgeID] = link
-	metas := s.applyMeta(hello.EdgeID, tenant, hello.Devices)
+	s.applyMeta(hello.EdgeID, tenant, hello.Devices)
 	s.mu.Unlock()
-	s.persistDevices(hello.EdgeID, metas, tid) // 落库在锁外
 	slog.Info("edge connected", "edge", hello.EdgeID, "devices", link.devices, "version", hello.Version)
 
 	edgeData, _ := json.Marshal(api.EdgeUpData{EdgeID: hello.EdgeID, Devices: link.devices, Version: hello.Version})
 	s.broadcastAs(api.Envelope{V: api.Version, Type: api.MsgEdgeUp, Device: hello.EdgeID, Ts: time.Now().Unix(), Data: edgeData}, link.tenant)
 
-	// 3) 断线清理：设备全部标离线并广播
+	// 3) 断线清理：仅当仍是注册且同租户的连接时才摘除并标离线。
 	defer func() {
 		s.mu.Lock()
-		current := s.edges[hello.EdgeID] == link
+		current := s.edges[hello.EdgeID] == link && link.tenantID == tid
 		if current {
 			delete(s.edges, hello.EdgeID)
 		}
@@ -210,7 +261,7 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 			s.markEdgeOffline(link)
 		}
 		s.broadcastAs(api.Envelope{V: api.Version, Type: api.MsgEdgeDown, Device: hello.EdgeID, Ts: time.Now().Unix(), Data: edgeData}, link.tenant)
-		slog.Info("edge disconnected", "edge", hello.EdgeID, "was_current", current)
+		slog.Info("edge disconnected", "edge", hello.EdgeID, "was_current", current, "tenant", tenant)
 	}()
 
 	go writePump(ctx, ws, link.send)
@@ -268,7 +319,7 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 			}
 			if s.cfg.Store != nil {
 				payload, _ := json.Marshal(ev)
-				id, err := s.cfg.Store.AddEvent(msg.Device, ev.Type, string(payload), msg.Ts)
+				id, err := s.cfg.Store.AddEventTenant(tid, msg.Device, ev.Type, string(payload), msg.Ts)
 				if err != nil {
 					slog.Warn("store event", "err", err, "device", msg.Device)
 				} else {

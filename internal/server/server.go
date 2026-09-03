@@ -117,6 +117,7 @@ type Server struct {
 	cmdHits       map[string][]time.Time      // 命令限流滑窗：device key → 命中时刻
 	descriptors   map[string]model.Descriptor // 最近一次 edge 上报的 Descriptor（device key → desc）
 	deviceTenants map[string]string           // device key → 租户 slug（缺省 default；REST 隔离用）
+	edgeTenants   map[string]string           // edge_id → 租户 slug（首次绑定 sticky，REST/WS 隔离用）
 
 	loginLimiter  *auth.RateLimiter     // 登录限流：次/分/IP
 	authForced    atomic.Bool           // 账号模式：已有用户或 -require-auth
@@ -133,6 +134,7 @@ type edgeLink struct {
 	edgeID      string
 	version     string
 	tenant      string
+	tenantID    int64 // 鉴权/绑定后的租户 id：命令投递与断线清理必须同租户匹配
 	devices     []string
 	connectedAt time.Time
 	send        chan []byte
@@ -156,6 +158,7 @@ func New(cfg Config) *Server {
 		cmdHits:        map[string][]time.Time{},
 		descriptors:    map[string]model.Descriptor{},
 		deviceTenants:  map[string]string{},
+		edgeTenants:    map[string]string{},
 		loginLimiter:   auth.NewRateLimiter(cfg.loginRatePerMin()),
 		trustedProxies: cfg.TrustedProxies,
 		pluginCatalog:  cfg.PluginCatalog,
@@ -210,18 +213,21 @@ func (s *Server) hydrate() {
 			d.TenantSlug = defaultTenantSlug
 		}
 		s.deviceTenants[d.ID] = d.TenantSlug
+		s.edgeTenants[d.EdgeID] = d.TenantSlug
 	}
 	slog.Info("hydrated devices from store", "count", len(rows))
 }
 
 // ---------- 内存态变更（锁内）与落库（锁外） ----------
 
-// applyMeta 在锁内登记设备元信息，返回需要落库的条目（调用方锁外持久化）。
+// applyMeta 在锁内登记设备元信息（调用方锁外持久化）。租户绑定一旦建立即 sticky，
+// 跨租户覆盖在调用方注册路径 fail-closed，本函数不再校验（防御性调用 identityConflictLocked）。
 // tenant 为设备所属租户 slug（来自 edge hello，缺省 default），REST Descriptor 按此隔离。
-func (s *Server) applyMeta(edgeID, tenant string, metas []api.DeviceMeta) []api.DeviceMeta {
+func (s *Server) applyMeta(edgeID, tenant string, metas []api.DeviceMeta) {
 	if tenant == "" {
 		tenant = defaultTenantSlug
 	}
+	s.edgeTenants[edgeID] = tenant
 	for _, m := range metas {
 		key := api.DeviceKey(edgeID, m.ID)
 		v, ok := s.devices[key]
@@ -235,20 +241,41 @@ func (s *Server) applyMeta(edgeID, tenant string, metas []api.DeviceMeta) []api.
 		v.Port = m.Port
 		s.deviceTenants[key] = tenant
 	}
-	return metas
 }
 
-// persistDevices 落库设备元信息（锁外调用）。tenantID 来自 edge hello 的 tenant slug。
-func (s *Server) persistDevices(edgeID string, metas []api.DeviceMeta, tenantID int64) {
-	if s.cfg.Store == nil {
-		return
+// identityConflictLocked 检查 edge 或任一设备身份是否已绑定其他租户（调用方需持 s.mu）。
+// 返回冲突键；空串表示可安全绑定当前租户。
+func (s *Server) identityConflictLocked(edgeID, tenant string, deviceKeys []string) string {
+	if tenant == "" {
+		tenant = defaultTenantSlug
 	}
-	for _, m := range metas {
-		key := api.DeviceKey(edgeID, m.ID)
-		if err := s.cfg.Store.UpsertDeviceTenant(key, edgeID, m.Adapter, m.Name, m.Port, tenantID); err != nil {
-			slog.Warn("upsert device", "err", err, "device", key)
+	if t, ok := s.edgeTenants[edgeID]; ok && t != tenant {
+		return edgeID
+	}
+	for _, key := range deviceKeys {
+		if t, ok := s.deviceTenants[key]; ok && t != tenant {
+			return key
 		}
 	}
+	return ""
+}
+
+// persistDevices 以单事务把 edge 的设备绑定到租户（锁外调用，fail-closed）。
+// 任一 edge/device 身份已属其他租户时整体回滚并返回错误；Store 为 nil 时仅内存态。
+func (s *Server) persistDevices(edgeID string, metas []api.DeviceMeta, tenantID int64) error {
+	if s.cfg.Store == nil {
+		return nil
+	}
+	ins := make([]store.DeviceMetaInput, 0, len(metas))
+	for _, m := range metas {
+		ins = append(ins, store.DeviceMetaInput{
+			ID:      api.DeviceKey(edgeID, m.ID),
+			Adapter: m.Adapter,
+			Name:    m.Name,
+			Port:    m.Port,
+		})
+	}
+	return s.cfg.Store.UpsertDevicesTenant(edgeID, ins, tenantID)
 }
 
 // statePersist 是一次待落库的状态快照。
@@ -1042,9 +1069,12 @@ func (s *Server) handlePostCommand(w http.ResponseWriter, r *http.Request) {
 	tenantOK := s.allowedDescriptor(r, key)
 	var adapter string
 	var link *edgeLink
-	if devOK {
+	if devOK && tenantOK {
 		adapter = v.Adapter
-		link = s.edges[v.EdgeID]
+		// 投递必须同时绑定 principal 租户与连接身份；即使发生键碰撞也不投其他租户连接。
+		if l, ok := s.edges[v.EdgeID]; ok && (p == nil || l.tenantID == p.TenantID) {
+			link = l
+		}
 	}
 	s.mu.RUnlock()
 	if !devOK || !tenantOK {

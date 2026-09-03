@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	_ "embed"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -53,6 +54,12 @@ var migrations = []migration{
 
 // schemaVersion 是当前 schema 版本（迁移表最后一项）。
 var schemaVersion = migrations[len(migrations)-1].version
+
+// ErrDeviceTenantMismatch 表示设备身份已绑定其他租户，写入必须 fail-closed。
+var ErrDeviceTenantMismatch = errors.New("store: device identity bound to another tenant")
+
+// ErrEdgeTenantMismatch 表示 edge 身份已绑定其他租户，写入必须 fail-closed。
+var ErrEdgeTenantMismatch = errors.New("store: edge identity bound to another tenant")
 
 // Store 持有数据库连接。所有方法并发安全（database/sql 连接池）。
 type Store struct {
@@ -126,6 +133,14 @@ func (s *Store) normalizeTenantID(tenantID int64) (int64, error) {
 	return id, nil
 }
 
+// DeviceMetaInput 是批量设备注册的输入（ID 为完整 "<edge>/<dev>" 键）。
+type DeviceMetaInput struct {
+	ID      string
+	Adapter string
+	Name    string
+	Port    string
+}
+
 // UpsertDevice 注册/刷新设备元信息（default 兼容包装，无账号开发模式沿用）。
 func (s *Store) UpsertDevice(id, edgeID, adapter, name, port string) error {
 	return s.upsertDevice(id, edgeID, adapter, name, port, 0)
@@ -136,21 +151,98 @@ func (s *Store) UpsertDeviceTenant(id, edgeID, adapter, name, port string, tenan
 	return s.upsertDevice(id, edgeID, adapter, name, port, tenantID)
 }
 
+// UpsertDevicesTenant 在单个 IMMEDIATE 写事务里绑定 edge 及其全部设备到租户。
+// 任一设备或 edge 已绑定其他租户时整体回滚并返回对应 sentinel error（fail-closed，
+// 不留半绑定行），避免跨租户同名注册污染。
+func (s *Store) UpsertDevicesTenant(edgeID string, metas []DeviceMetaInput, tenantID int64) error {
+	tid, err := s.normalizeTenantID(tenantID)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	return s.upsertDevicesTx(ctx, conn, edgeID, metas, tid)
+}
+
+func (s *Store) upsertDevicesTx(ctx context.Context, conn *sql.Conn, edgeID string, metas []DeviceMetaInput, tid int64) error {
+	if err := beginImmediate(ctx, conn); err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollback(ctx, conn)
+		}
+	}()
+
+	// edge 身份绑定校验：同 edge_id 已有其他租户设备即拒绝整批。
+	var conflict string
+	err := conn.QueryRowContext(ctx,
+		`SELECT id FROM devices WHERE edge_id=? AND tenant_id<>? LIMIT 1`, edgeID, tid).Scan(&conflict)
+	if err == nil {
+		return fmt.Errorf("%w: %q (conflicts with %q)", ErrEdgeTenantMismatch, edgeID, conflict)
+	}
+	if err != sql.ErrNoRows {
+		return err
+	}
+
+	ts := now()
+	for _, m := range metas {
+		res, err := conn.ExecContext(ctx, `
+			INSERT INTO devices(id, edge_id, adapter, name, port, first_seen, last_seen, tenant_id)
+			VALUES(?,?,?,?,?,?,?,?)
+			ON CONFLICT(id) DO UPDATE SET
+				edge_id=excluded.edge_id, adapter=excluded.adapter,
+				name=excluded.name, port=excluded.port, last_seen=excluded.last_seen
+			WHERE devices.tenant_id = excluded.tenant_id`,
+			m.ID, edgeID, m.Adapter, m.Name, m.Port, ts, ts, tid)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("%w: %q", ErrDeviceTenantMismatch, m.ID)
+		}
+	}
+	if err := commit(ctx, conn); err != nil {
+		return err
+	}
+	committed = true
+	return nil
+}
+
 func (s *Store) upsertDevice(id, edgeID, adapter, name, port string, tenantID int64) error {
 	tid, err := s.normalizeTenantID(tenantID)
 	if err != nil {
 		return err
 	}
 	ts := now()
-	_, err = s.db.Exec(`
+	res, err := s.db.Exec(`
 		INSERT INTO devices(id, edge_id, adapter, name, port, first_seen, last_seen, tenant_id)
 		VALUES(?,?,?,?,?,?,?,?)
 		ON CONFLICT(id) DO UPDATE SET
 			edge_id=excluded.edge_id, adapter=excluded.adapter,
-			name=excluded.name, port=excluded.port, last_seen=excluded.last_seen,
-			tenant_id=excluded.tenant_id`,
+			name=excluded.name, port=excluded.port, last_seen=excluded.last_seen
+		WHERE devices.tenant_id = excluded.tenant_id`,
 		id, edgeID, adapter, name, port, ts, ts, tid)
-	return err
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("%w: %q", ErrDeviceTenantMismatch, id)
+	}
+	return nil
 }
 
 // DeviceRow 是 devices 表一行。
@@ -264,6 +356,29 @@ func (s *Store) AddEvent(deviceID, typ, payload string, ts int64) (int64, error)
 		deviceID, deviceID, ts, typ, payload)
 	if err != nil {
 		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// AddEventTenant 只在设备确属指定租户时写事件（fail-closed，不回退 default）。
+func (s *Store) AddEventTenant(tenantID int64, deviceID, typ, payload string, ts int64) (int64, error) {
+	tid, err := s.normalizeTenantID(tenantID)
+	if err != nil {
+		return 0, err
+	}
+	res, err := s.db.Exec(`
+		INSERT INTO events(device_id, tenant_id, ts, type, payload)
+		SELECT id, tenant_id, ?, ?, ? FROM devices WHERE id=? AND tenant_id=?`,
+		ts, typ, payload, deviceID, tid)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	if n == 0 {
+		return 0, sql.ErrNoRows
 	}
 	return res.LastInsertId()
 }
