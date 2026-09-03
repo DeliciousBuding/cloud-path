@@ -4,6 +4,8 @@
 
 > 状态：**目标架构已定，尚未全部实现**。本文是架构入口；当前 P1 实现事实仍以
 > [design.md](design.md) 为准。插件契约落地期间必须同时标注“已实现”和“目标态”，不得把规划写成现状。
+>
+> 插件控制面期望态/实际态同步见 [control-plane-sync.md](architecture/control-plane-sync.md)；租户保留期、配额与插件秘密边界见 [tenant-security-policy.md](architecture/tenant-security-policy.md)。
 
 ## 1. 产品与仓库命名
 

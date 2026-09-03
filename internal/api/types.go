@@ -15,17 +15,20 @@ const Version = 1
 type MsgType string
 
 const (
-	MsgHello      MsgType = "hello"       // edge→server：鉴权+注册
-	MsgSnapshot   MsgType = "snapshot"    // server→浏览器：连接时的全量快照
-	MsgState      MsgType = "state"       // edge→server→浏览器：设备状态
-	MsgEvent      MsgType = "event"       // edge→server→浏览器：设备事件
-	MsgCommand    MsgType = "command"     // server→edge：命令下发
-	MsgCommandAck MsgType = "command_ack" // edge→server→浏览器：命令回执
-	MsgEdgeUp     MsgType = "edge_up"     // server→浏览器：edge 上线
-	MsgEdgeDown   MsgType = "edge_down"   // server→浏览器：edge 离线
-	MsgDescriptor MsgType = "descriptor"  // edge→server→浏览器：设备 Descriptor
-	MsgPing       MsgType = "ping"
-	MsgPong       MsgType = "pong"
+	MsgHello         MsgType = "hello"          // edge→server：鉴权+注册
+	MsgSnapshot      MsgType = "snapshot"       // server→浏览器：连接时的全量快照
+	MsgState         MsgType = "state"          // edge→server→浏览器：设备状态
+	MsgEvent         MsgType = "event"          // edge→server→浏览器：设备事件
+	MsgCommand       MsgType = "command"        // server→edge：命令下发
+	MsgCommandAck    MsgType = "command_ack"    // edge→server→浏览器：命令回执
+	MsgEdgeUp        MsgType = "edge_up"        // server→浏览器：edge 上线
+	MsgEdgeDown      MsgType = "edge_down"      // server→浏览器：edge 离线
+	MsgDescriptor    MsgType = "descriptor"     // edge→server→浏览器：设备 Descriptor
+	MsgPluginStatus  MsgType = "plugin_status"  // edge→server：插件安装/实例实际态全量快照
+	MsgPluginDesired MsgType = "plugin_desired" // server→edge：租户/edge 插件期望态全量快照
+	MsgPluginAck     MsgType = "plugin_ack"     // edge→server：期望态 revision 应用结果
+	MsgPing          MsgType = "ping"
+	MsgPong          MsgType = "pong"
 )
 
 // Envelope 是统一 WS 消息信封。Device 格式为 "<edge_id>/<device_id>"。
@@ -169,6 +172,126 @@ type StatsView struct {
 	SchemaVersion int   `json:"schema_version"`
 	RetentionDays int   `json:"retention_days"`
 	AuthEnabled   bool  `json:"auth_enabled"`
+}
+
+// ---- 插件控制面同步（docs/architecture/control-plane-sync.md）----
+
+// PluginPermissionsData 是插件公开权限声明。这里只携带权限名称，永不携带凭据值。
+type PluginPermissionsData struct {
+	Hardware   []string `json:"hardware,omitempty"`
+	Network    []string `json:"network,omitempty"`
+	Filesystem []string `json:"filesystem,omitempty"`
+	Secrets    []string `json:"secrets,omitempty"`
+}
+
+// PluginDriverContributionData 是 Driver 插件对外贡献的稳定公开元数据。
+type PluginDriverContributionData struct {
+	ID        string `json:"id"`
+	Title     string `json:"title,omitempty"`
+	Discovery string `json:"discovery,omitempty"`
+}
+
+// PluginApplicationContributionData 是 Application 插件对外贡献的稳定公开元数据。
+type PluginApplicationContributionData struct {
+	ID    string `json:"id"`
+	Title string `json:"title,omitempty"`
+}
+
+// PluginConnectorContributionData 是 Connector 插件对外贡献的稳定公开元数据。
+type PluginConnectorContributionData struct {
+	ID        string `json:"id"`
+	Title     string `json:"title,omitempty"`
+	Direction string `json:"direction,omitempty"`
+	Host      string `json:"host,omitempty"`
+}
+
+// PluginContributionsData 汇总一个安装物提供的贡献。它只含公开 manifest 字段。
+type PluginContributionsData struct {
+	Drivers      []PluginDriverContributionData      `json:"drivers,omitempty"`
+	Applications []PluginApplicationContributionData `json:"applications,omitempty"`
+	Connectors   []PluginConnectorContributionData   `json:"connectors,omitempty"`
+}
+
+// PluginInstallationStatusData 是 Edge 上报的已安装插件公开事实。
+// 禁止添加本地路径、启动参数、环境变量或 secret 值。
+type PluginInstallationStatusData struct {
+	PluginID          string                  `json:"plugin_id"`
+	Version           string                  `json:"version"`
+	Kind              string                  `json:"kind"`
+	Protocol          int                     `json:"protocol"`
+	Digest            string                  `json:"digest"`
+	TrustMode         string                  `json:"trust_mode"`
+	Verified          bool                    `json:"verified"`
+	VerifiedPublisher string                  `json:"verified_publisher,omitempty"`
+	Permissions       PluginPermissionsData   `json:"permissions"`
+	Contributions     PluginContributionsData `json:"contributions"`
+	Capabilities      []string                `json:"capabilities,omitempty"`
+}
+
+// PluginObservedInstanceData 是 Edge Plugin Host 的实际态。desired 字段不得放进本结构。
+type PluginObservedInstanceData struct {
+	InstanceID   string  `json:"instance_id"`
+	PluginID     string  `json:"plugin_id"`
+	Version      string  `json:"version"`
+	HostOnline   bool    `json:"host_online"`
+	State        string  `json:"state"`
+	Health       string  `json:"health"`
+	Detail       string  `json:"detail,omitempty"`
+	RestartCount int     `json:"restart_count"`
+	LastHealthy  int64   `json:"last_healthy,omitempty"`
+	MessageRate  float64 `json:"message_rate,omitempty"`
+}
+
+// PluginStatusData 是 Edge→Server 的全量插件实际态快照。
+// tenant/edge 身份必须来自已鉴权 edgeLink，禁止信任 payload 自报身份。
+type PluginStatusData struct {
+	BootID            string                         `json:"boot_id"`
+	Sequence          uint64                         `json:"sequence"`
+	AppliedRevision   uint64                         `json:"applied_revision"`
+	Installations     []PluginInstallationStatusData `json:"installations"`
+	ObservedInstances []PluginObservedInstanceData   `json:"instances"`
+}
+
+// PluginDesiredInstanceData 是 Server 权威期望态中的一个实例。
+// Config 值只允许非敏感标量或 secret://<name> handle；不得携带明文 secret。
+type PluginDesiredInstanceData struct {
+	InstanceID string            `json:"instance_id"`
+	PluginID   string            `json:"plugin_id"`
+	Version    string            `json:"version"`
+	Enabled    bool              `json:"enabled"`
+	Isolation  string            `json:"isolation"`
+	Config     map[string]string `json:"config,omitempty"`
+}
+
+// PluginDesiredData 是 Server→Edge 的声明式全量期望态快照。
+// SnapshotDigest 绑定同 revision 的规范化 payload，防止同 revision 不同内容被接受。
+type PluginDesiredData struct {
+	Revision       uint64                      `json:"revision"`
+	SnapshotDigest string                      `json:"snapshot_digest"`
+	Instances      []PluginDesiredInstanceData `json:"instances"`
+}
+
+// PluginApplyResultData 是单实例 reconcile 结果。Detail 必须有长度上限并经过脱敏。
+type PluginApplyResultData struct {
+	InstanceID string `json:"instance_id"`
+	Status     string `json:"status"`
+	Detail     string `json:"detail,omitempty"`
+}
+
+// Plugin ack 稳定状态值。
+const (
+	PluginAckApplied  = "applied"
+	PluginAckRejected = "rejected"
+	PluginAckFailed   = "failed"
+)
+
+// PluginAckData 是 Edge→Server 的 revision 应用结果。只有 Applied 才允许 Server
+// 推进 applied_revision；Rejected/Failed 保持上一完整 revision。
+type PluginAckData struct {
+	Revision       uint64                  `json:"revision"`
+	SnapshotDigest string                  `json:"snapshot_digest"`
+	Status         string                  `json:"status"`
+	Results        []PluginApplyResultData `json:"results,omitempty"`
 }
 
 // ---- 鉴权与多租户（docs/api.md §2）----

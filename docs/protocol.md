@@ -1,5 +1,7 @@
 # 设备协议契约
 
+最后更新：2026-09-03
+
 Cloudpath 用四个统一概念对接任何设备：`Command`（下发）、`State`（状态）、`Dump`（转储）、
 `Event`（事件）。具体设备的线上协议由 `examples/<device>` 的适配器实现；本文记录概念契约与
 首个参考设备（STC-B）的线上格式。
@@ -40,6 +42,47 @@ Cloudpath 用四个统一概念对接任何设备：`Command`（下发）、`Sta
 
 ---
 
+## Platform WebSocket: Plugin Control Plane
+
+插件控制面复用 edge ↔ server 的版本 1 信封，新增三种向后兼容消息。旧实现遇到未知消息只记录并忽略，不因新增类型断开连接。完整权威划分见 [Plugin Control Plane Synchronization](architecture/control-plane-sync.md)。
+
+| 消息 | 方向 | 作用 |
+|---|---|---|
+| `plugin_status` | edge → server | 上报安装物与实例实际态全量快照 |
+| `plugin_desired` | server → edge | 下发该 tenant/edge 的期望态全量快照 |
+| `plugin_ack` | edge → server | 确认或拒绝一个期望态 revision |
+
+### `plugin_status`
+
+关键字段：
+
+- `boot_id`：Edge 进程启动标识；新进程使用新值；
+- `sequence`：同一 `boot_id` 下单调递增，重复/倒序上报被忽略；
+- `applied_revision`：Edge 最近完整应用成功的 Server revision；
+- `installations`：只含 manifest、digest、trust、permission、contribution 等公开元数据；
+- `instances`：只含 state/health/restart/metrics 等实际态。
+
+payload 不含 tenant/edge 自报身份；Server 必须使用已经鉴权并绑定的 edge 连接身份。禁止上报本地路径、配置值、环境变量、token 或 secret 明文。
+
+### `plugin_desired`
+
+关键字段：
+
+- `revision`：Server 为该 tenant/edge 分配的单调期望态版本；
+- `snapshot_digest`：绑定规范化完整快照；
+- `instances`：实例的 plugin/version/enabled/isolation/config。敏感配置只能是 `secret://<name>` handle。
+
+Edge 拒绝旧 revision。相同 revision + 相同 digest 是幂等重放；相同 revision + 不同 digest 是协议冲突，必须 fail-closed。
+
+### `plugin_ack`
+
+`status` 只允许：
+
+- `applied`：整个快照已经完整应用，可以推进 `applied_revision`；
+- `rejected`：revision/digest/权限/租户等契约错误；
+- `failed`：运行时应用失败，继续保持上一完整 revision。
+
+`results` 可按实例返回状态和经过长度限制、路径/secret 脱敏的 detail。Server 不把 ack 成功混同插件健康；健康只来自后续 `plugin_status`。
 ## Reference: STC-B
 
 STC-B（IAP15F2K61S2）学习板是第一个官方适配设备，实现见 [`examples/stcb`](../examples/stcb/README.md)。
