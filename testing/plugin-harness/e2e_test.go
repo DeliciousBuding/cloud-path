@@ -180,6 +180,26 @@ func waitExit(t *testing.T, cmd *exec.Cmd, timeout time.Duration) {
 	}
 }
 
+// syncBuffer 是带锁的 bytes.Buffer：os/exec 在 cmd.Stdout/Stderr 为非 *os.File
+// 时会起内部 io.Copy goroutine 写缓冲，测试 goroutine 并发读 String() 必须同步
+// （CI -race 实测捕获）。
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 func TestScheduledCompartmentBinaryHostE2E(t *testing.T) {
 	bin := buildBinary(t, appImportPath, "cloud-path-app-scheduled-compartment")
 	creds := pluginruntime.Credentials{LaunchID: "launch-app-e2e", Proof: "proof-app-e2e"}
@@ -228,7 +248,7 @@ func TestScheduledCompartmentBinaryHostE2E(t *testing.T) {
 		}()
 
 		cmd := launchDirect(t, bin, ln.Endpoint().String(), appPluginID, "application", creds.LaunchID, creds.Proof)
-		var stdout, stderr bytes.Buffer
+		var stdout, stderr syncBuffer
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
 		if err := cmd.Start(); err != nil {
@@ -336,7 +356,7 @@ func TestDriverFixtureBinaryHostE2E(t *testing.T) {
 		}()
 
 		cmd := launchDirect(t, bin, ln.Endpoint().String(), driverFixturePluginID, "driver", creds.LaunchID, creds.Proof)
-		var stdout, stderr bytes.Buffer
+		var stdout, stderr syncBuffer
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
 		if err := cmd.Start(); err != nil {

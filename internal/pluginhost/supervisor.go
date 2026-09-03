@@ -199,7 +199,11 @@ func (s *Supervisor) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// normalized 后写回 s.cfg：Snapshot/setState 在 s.mu 下读该字段，这里必须
+	// 持锁写，否则与并发读方构成数据竞争（CI -race 实测捕获，Linux 必现）。
+	s.mu.Lock()
 	s.cfg = cfg
+	s.mu.Unlock()
 	s.collector.setCap(cfg.LogBufferSize)
 
 	backoff := time.Duration(0)

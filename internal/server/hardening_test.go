@@ -354,12 +354,13 @@ func TestEdgeReconnectEvictionKeepsState(t *testing.T) {
 	srv.mu.RLock()
 	link := srv.edges["e1"]
 	v := srv.devices["e1/d1"]
+	online := v != nil && v.Online
 	srv.mu.RUnlock()
 	if link == nil {
 		t.Fatal("新连接未注册")
 	}
-	if v == nil || !v.Online {
-		t.Fatalf("重连不得把设备标离线: %+v", v)
+	if !online {
+		t.Fatalf("重连不得把设备标离线: present=%v", v != nil)
 	}
 }
 

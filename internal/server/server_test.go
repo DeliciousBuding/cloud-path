@@ -268,9 +268,10 @@ func TestEdgeAuth(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	srv.mu.RLock()
 	v, ok := srv.devices["good/d1"]
+	online := ok && v.Online
 	srv.mu.RUnlock()
-	if !ok || !v.Online {
-		t.Fatalf("valid token edge not registered: ok=%v", ok)
+	if !ok || !online {
+		t.Fatalf("valid token edge not registered: ok=%v online=%v", ok, online)
 	}
 	ws2.CloseNow()
 }
@@ -304,15 +305,23 @@ func TestHydrate(t *testing.T) {
 	srv2 := New(Config{Store: st2, Version: "test"})
 	srv2.mu.RLock()
 	v, ok := srv2.devices["e1/d1"]
+	var online bool
+	var clock any
+	var name string
+	if ok {
+		online = v.Online
+		clock = v.State["clock"]
+		name = v.Name
+	}
 	srv2.mu.RUnlock()
 	if !ok {
 		t.Fatal("device not hydrated after restart")
 	}
-	if v.Online {
+	if online {
 		t.Fatal("hydrated device must be offline until edge reconnects")
 	}
-	if v.State["clock"] != "08:00" || v.Name != "节点1" {
-		t.Fatalf("hydrated state lost: %+v", v)
+	if clock != "08:00" || name != "节点1" {
+		t.Fatalf("hydrated state lost: clock=%v name=%q", clock, name)
 	}
 }
 

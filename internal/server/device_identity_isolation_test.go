@@ -184,12 +184,13 @@ func TestCrossTenantCollisionCannotEvictEdge(t *testing.T) {
 	srv.mu.RLock()
 	link := srv.edges["e1"]
 	v := srv.devices["e1/d1"]
+	online := v != nil && v.Online
 	srv.mu.RUnlock()
 	if link != linkA {
 		t.Fatal("tenant-b 注册驱逐了 tenant-a 的连接")
 	}
-	if v == nil || !v.Online {
-		t.Fatalf("tenant-b 注册把 tenant-a 设备标离线: %+v", v)
+	if !online {
+		t.Fatalf("tenant-b 注册把 tenant-a 设备标离线: present=%v", v != nil)
 	}
 
 	writeTokenA := issueTenantToken(t, st, a, `["write"]`)
@@ -338,12 +339,13 @@ func TestStaleDisconnectCannotClearCurrentConnection(t *testing.T) {
 	srv.mu.RLock()
 	link := srv.edges["e1"]
 	v := srv.devices["e1/d1"]
+	online := v != nil && v.Online
 	srv.mu.RUnlock()
 	if link == nil || link.tenantID != a {
 		t.Fatalf("新连接被旧连接 defer 清掉: %+v", link)
 	}
-	if v == nil || !v.Online {
-		t.Fatalf("旧连接 defer 把设备标离线: %+v", v)
+	if !online {
+		t.Fatalf("旧连接 defer 把设备标离线: present=%v", v != nil)
 	}
 
 	// 命令仍投递给当前（新）连接。
