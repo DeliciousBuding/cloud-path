@@ -85,6 +85,19 @@ function qs(params: Record<string, string | number | undefined>): string {
   return s ? `?${s}` : ''
 }
 
+/** Wave2 契约探测：Descriptor/Capability 端点由后端 A1 落地（路径以 A1 实现为准）。
+ *  缺席（404/405/501）或网络不可达时返回 null —— UI 走通用回落，而不是抛错刷屏。 */
+const ABSENT = new Set([404, 405, 501, 502])
+
+async function reqOrNull<T>(path: string): Promise<T | null> {
+  try {
+    return await req<T>(path)
+  } catch (e) {
+    if (!(e instanceof ApiError) || ABSENT.has(e.status)) return null
+    throw e
+  }
+}
+
 export const api = {
   // 认证族（docs/api.md §2.2）：公开端点，401/409/429 是页面语义，不触发全局收敛
   me: () => req<MeResponse>('/api/auth/me', undefined, { public: true }),
@@ -116,6 +129,15 @@ export const api = {
       `/api/devices/${encodeURIComponent(edgeId)}/${encodeURIComponent(devId)}/commands`,
       { method: 'POST', body: JSON.stringify({ cmd, args: args ?? '' }) },
     ),
+
+  // ---- Wave2 Schema 面（返回 unknown，由 lib/descriptor.ts 宽容归一化）----
+  /** 批量 Descriptor（列表页优先，避免每设备一次请求） */
+  descriptors: () => reqOrNull<unknown>('/api/descriptors'),
+  /** 单设备 Descriptor */
+  deviceDescriptor: (edgeId: string, devId: string) =>
+    reqOrNull<unknown>(`/api/devices/${encodeURIComponent(edgeId)}/${encodeURIComponent(devId)}/descriptor`),
+  /** Capability catalog：presentation / actions 的事实源 */
+  capabilities: () => reqOrNull<unknown>('/api/capabilities'),
 }
 
 export function wsUrl(): string {

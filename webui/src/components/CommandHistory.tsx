@@ -4,9 +4,11 @@ import { Panel, Badge } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { api } from '@/lib/api'
 import { cmdMeta, cmdStatusMeta, fmtTime, fmtDateTime } from '@/lib/format'
+import type { CommandAction } from '@/lib/descriptor'
 
-/** 命令历史：REST 轮询该设备的命令与回执状态（含超时/失败原因） */
-export function CommandHistory({ deviceId }: { deviceId: string }) {
+/** 命令历史：REST 轮询该设备的命令与回执状态（含超时/失败原因）。
+ *  命令展示名来自上层传入的声明命令集（actions），未声明则 humanize(cmd)。 */
+export function CommandHistory({ deviceId, actions }: { deviceId: string; actions?: CommandAction[] }) {
   const { data, isLoading } = useQuery({
     queryKey: ['device-commands', deviceId],
     queryFn: () => api.commands({ device: deviceId, limit: 20 }),
@@ -27,7 +29,7 @@ export function CommandHistory({ deviceId }: { deviceId: string }) {
         <ul className="divide-y divide-hairline">
           {rows.map((c) => {
             const st = cmdStatusMeta(c.status)
-            const meta = cmdMeta(c.cmd)
+            const meta = cmdMeta(c.cmd, actions)
             return (
               <li key={c.id} className="flex items-center gap-3 py-2.5">
                 <Badge tone={st.tone}>{st.label}</Badge>
