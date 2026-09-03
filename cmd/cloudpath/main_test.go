@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/DeliciousBuding/cloud-path/internal/plugincontrol"
 	"github.com/DeliciousBuding/cloud-path/internal/registry"
 )
 
@@ -23,6 +24,9 @@ func TestErrorCodeStable(t *testing.T) {
 		{registry.ErrUnsafeArtifact, "ERR_UNSAFE_ARTIFACT"},
 		{registry.ErrUnsupportedSource, "ERR_NOT_FOUND"},
 		{registry.ErrNotFound, "ERR_NOT_FOUND"},
+		{plugincontrol.ErrNotFound, "ERR_NOT_FOUND"},
+		{plugincontrol.ErrInvalidState, "ERR_INVALID_STATE"},
+		{plugincontrol.ErrPermissionConfirmationRequired, "ERR_PERMISSION_CONFIRMATION_REQUIRED"},
 	}
 	for _, tc := range cases {
 		if got := errorCode(tc.err); got != tc.code {
