@@ -29,6 +29,7 @@ import (
 	"github.com/DeliciousBuding/cloud-path/internal/auth"
 	"github.com/DeliciousBuding/cloud-path/internal/logx"
 	"github.com/DeliciousBuding/cloud-path/internal/server"
+	"github.com/DeliciousBuding/cloud-path/internal/server/storeadapter"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
 )
 
@@ -74,11 +75,8 @@ func main() {
 	}
 	defer st.Close()
 
-	// 插件控制面持久化接缝（internal/server/storeport 的接线指引）：
-	// Store lane 的 v7/v8 合并后在此注入 SQLite 适配器，例如
-	//     PluginStore: storeport.AdaptStore(st),
-	// 未接线时 Server 安全降级（插件写 API 503、WS plugin_* 按旧协议忽略、读面真实为空），
-	// 绝不伪造期望态或观测态。
+	// 插件控制面持久化已接线：storeadapter 是 *store.Store -> storeport.PluginStore 的唯一
+	// 薄映射层（Captain 接线点）。st 为 nil 时 New 返回 nil，Server 按未接线安全降级。
 	srv := server.New(server.Config{
 		Store: st, Token: *token, Version: version, WebUIDir: *webuiDir,
 		RetentionDays: *retentionDays, CmdRatePerMin: *cmdRate,
@@ -88,6 +86,7 @@ func main() {
 		SessionDays:     *sessionDays,
 		SetupToken:      *setupToken,
 		TrustedProxies:  proxies,
+		PluginStore:     storeadapter.New(st),
 	})
 	if len(splitList(*origins)) == 0 {
 		slog.Warn("WS Origin 策略为开发模式（同源 + localhost）：公网部署请用 -allowed-origins 显式收紧")
