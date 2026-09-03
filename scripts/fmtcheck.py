@@ -2,26 +2,33 @@
 """gofmt 门禁：列出未格式化文件并以非零码退出。
 
 跨平台替代 `gofmt -l . | grep .` 这类 shell 管道技巧（Windows 上没有 grep/findstr 差异问题）。
-用法：python scripts/fmtcheck.py [目录...]
+gofmt 递归会进入 .worktrees/（开发产物 checkout），结果里过滤掉这些目录与 node_modules/dist。
+用法：python scripts/fmtcheck.py
 """
 import subprocess
 import sys
 
+EXCLUDE = (".worktrees", "node_modules", "dist", ".git")
+
 
 def main() -> int:
-    targets = sys.argv[1:] or ["."]
     proc = subprocess.run(
-        ["gofmt", "-l", *targets],
+        ["gofmt", "-l", "."],
         capture_output=True,
         text=True,
+        errors="replace",
     )
     if proc.returncode != 0:
-        sys.stderr.write(proc.stderr.strip() + "\n")
+        sys.stderr.write((proc.stderr or "").strip() + "\n")
         return proc.returncode
-    files = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
-    if files:
+    bad = [
+        line.strip()
+        for line in proc.stdout.splitlines()
+        if line.strip() and not any(x in line for x in EXCLUDE)
+    ]
+    if bad:
         print("gofmt 未格式化文件：")
-        for f in files:
+        for f in bad:
             print("  " + f)
         print("修复：gofmt -w .")
         return 1
