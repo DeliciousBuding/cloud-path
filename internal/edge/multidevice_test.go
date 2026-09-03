@@ -195,6 +195,17 @@ func TestDescriptorEnvelopeCarriesRealTimestamps(t *testing.T) {
 			if len(d.Entities) == 0 {
 				continue
 			}
+			// 启动时序存在合法窗口：onServerOnline 触发时 dev 尚未就绪，上报的是
+			// Adapter 静态骨架 Descriptor（有结构、无观测值——产品行为，见
+			// descriptorEnvelope 的回落分支）。D1 回归的对象是带观测值的实时
+			// Descriptor，因此等到携带观测值的那一份再断言，不拿骨架误判。
+			obs := 0
+			for _, ent := range d.Entities {
+				obs += len(ent.Observations)
+			}
+			if obs == 0 {
+				continue
+			}
 			desc = d
 			return true
 		}
