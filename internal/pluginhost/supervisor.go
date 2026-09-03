@@ -123,6 +123,7 @@ type Supervisor struct {
 	disabled bool
 
 	wake      chan struct{}
+	restartCh chan struct{}
 	collector *logCollector
 
 	launchID   string
@@ -144,11 +145,12 @@ func NewSupervisor(cfg Config, runner Runner, logger *slog.Logger) *Supervisor {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	return &Supervisor{
-		cfg:    cfg,
-		runner: runner,
-		logger: logger,
-		state:  StateStopped,
-		wake:   make(chan struct{}, 1),
+		cfg:       cfg,
+		runner:    runner,
+		logger:    logger,
+		state:     StateStopped,
+		wake:      make(chan struct{}, 1),
+		restartCh: make(chan struct{}, 1),
 		collector: &logCollector{
 			logger:   logger,
 			pluginID: cfg.PluginID,
@@ -225,6 +227,8 @@ func (s *Supervisor) Run(ctx context.Context) error {
 			s.mu.Unlock()
 		case runDisabled:
 			backoff = 0
+		case runRestart:
+			backoff = 0
 		case runShutdown:
 			return nil
 		}
@@ -264,6 +268,9 @@ func (s *Supervisor) waitEnabled(ctx context.Context) bool {
 			if !s.isDisabled() {
 				return true
 			}
+		case <-s.restartCh:
+			// A health restart requested while disabled is dropped; the
+			// plugin is not running so there is nothing to restart.
 		}
 	}
 }
@@ -280,6 +287,8 @@ func (s *Supervisor) waitBackoff(ctx context.Context, d time.Duration) bool {
 				return false
 			}
 			continue
+		case <-s.restartCh:
+			// Drop a stale health-restart request while backing off.
 		case <-t.C:
 			return true
 		}
@@ -291,6 +300,7 @@ type runOutcome int
 const (
 	runCrashed runOutcome = iota
 	runDisabled
+	runRestart
 	runShutdown
 )
 
@@ -346,6 +356,9 @@ func (s *Supervisor) runOnce(ctx context.Context) runOutcome {
 				s.setState(StateDisabled)
 				return runDisabled
 			}
+		case <-s.restartCh:
+			// Drop a health-restart request that races the handshake; it will
+			// be re-issued by the Manager health loop if still needed.
 		case <-ctx.Done():
 			return s.shutdown(h)
 		}
@@ -368,6 +381,15 @@ func (s *Supervisor) monitor(ctx context.Context, h *procHandle, endpoint string
 			s.logger.Error("duplicate handshake rejected; degrading plugin", "plugin_id", s.cfg.PluginID)
 			s.setState(StateDegraded)
 			continue
+		case <-s.restartCh:
+			s.logger.Info("health restart requested", "plugin_id", s.cfg.PluginID)
+			h.kill()
+			select {
+			case <-h.exitCh:
+			case <-time.After(s.cfg.ShutdownTimeout):
+			}
+			s.setState(StateStopped)
+			return runRestart
 		case <-s.wake:
 			if s.isDisabled() {
 				s.logger.Info("plugin disabled", "plugin_id", s.cfg.PluginID)
@@ -509,6 +531,17 @@ func (s *Supervisor) Enable() {
 	s.mu.Unlock()
 	if changed {
 		s.wakeLoop()
+	}
+}
+
+// Restart requests a supervised in-place restart: the current process is
+// killed and a fresh one is launched inside the same Run loop without touching
+// the crash/restart budget. The Manager health failure policy uses this so
+// health restarts are never counted as crashes.
+func (s *Supervisor) Restart() {
+	select {
+	case s.restartCh <- struct{}{}:
+	default:
 	}
 }
 
