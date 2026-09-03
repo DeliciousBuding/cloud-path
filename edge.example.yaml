@@ -19,3 +19,16 @@ devices:
   #   adapter: stcb
   #   port: COM4
   #   baud: 9600
+
+# 可选的进程内外部 Driver Plugin Host（默认不启用，保持纯内置 adapter 行为）。
+# 启用后由 desired-state + plugins.lock 启动外部 driver 实例；edge 退出时优雅关闭。
+# 外部 driver 的 handshake/descriptor/observation 尚未桥接进 edge 数据流：
+# 只报告 unsupported，不会伪装成在线设备。内置 adapter 与外部 driver ID 冲突会拒绝启动。
+# plugin_host:
+#   enabled: true                      # 是否启用外部 host
+#   root: plugins.d                    # 插件安装根目录（支持 ${ENV} 展开）
+#   state_dir: data/plugin-state       # 插件实例 desired-state 目录
+#   tenant: default                    # 外部 driver 实例租户（缺省 default）
+#   required: false                    # true=host 失败则 edge 启动失败；false=记录 DEGRADED 继续内置设备
+#   lock: plugins.lock                 # 缺省 <root>/plugins.lock
+#   close_timeout_s: 10                # host 优雅关闭 deadline（秒）

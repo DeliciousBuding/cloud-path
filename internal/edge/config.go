@@ -5,6 +5,7 @@ package edge
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -12,13 +13,14 @@ import (
 
 // Config 是 edge 配置（edge.yaml，本地私有不入库）。
 type Config struct {
-	Server          string      `yaml:"server"`            // ws://host:port/ws/edge
-	Token           string      `yaml:"token"`             // 支持 ${ENV} 展开
-	EdgeID          string      `yaml:"edge_id"`           // 缺省用主机名
-	PollIntervalS   int         `yaml:"poll_interval_s"`   // 转储轮询（默认 5）
-	SyncIntervalS   int         `yaml:"sync_interval_s"`   // 对时周期（默认 600）
-	ReportIntervalS int         `yaml:"report_interval_s"` // 状态心跳兜底（默认 30）
-	Devices         []DeviceCfg `yaml:"devices"`
+	Server          string        `yaml:"server"`            // ws://host:port/ws/edge
+	Token           string        `yaml:"token"`             // 支持 ${ENV} 展开
+	EdgeID          string        `yaml:"edge_id"`           // 缺省用主机名
+	PollIntervalS   int           `yaml:"poll_interval_s"`   // 转储轮询（默认 5）
+	SyncIntervalS   int           `yaml:"sync_interval_s"`   // 对时周期（默认 600）
+	ReportIntervalS int           `yaml:"report_interval_s"` // 状态心跳兜底（默认 30）
+	Devices         []DeviceCfg   `yaml:"devices"`
+	PluginHost      PluginHostCfg `yaml:"plugin_host"`
 }
 
 // DeviceCfg 是单台设备配置。
@@ -28,6 +30,18 @@ type DeviceCfg struct {
 	Name    string `yaml:"name"`
 	Port    string `yaml:"port"` // Windows: COM3；Linux: /dev/ttyUSB0
 	Baud    int    `yaml:"baud"` // 默认 9600
+}
+
+// PluginHostCfg 配置可选的进程内外部 Driver Plugin Host。默认不启用，保持 P1
+// 纯内置 adapter 行为；启用时按 desired-state + lockfile 启动外部 driver 实例。
+type PluginHostCfg struct {
+	Enabled       bool   `yaml:"enabled"`         // false=不启用外部 host（默认）
+	Root          string `yaml:"root"`            // 插件安装根目录（如 plugins.d）
+	StateDir      string `yaml:"state_dir"`       // 插件实例 desired-state 目录
+	Tenant        string `yaml:"tenant"`          // 外部 driver 实例租户（缺省 default）
+	Required      bool   `yaml:"required"`        // true=host 失败则 edge 启动失败；false=optional(DEGRADED)
+	Lock          string `yaml:"lock"`            // plugins.lock 路径（缺省 <root>/plugins.lock）
+	CloseTimeoutS int    `yaml:"close_timeout_s"` // host 优雅关闭 deadline（秒，默认 10）
 }
 
 // LoadConfig 读取并校验配置。Token 等字段支持 ${ENV_VAR} 展开（凭据不落盘）。
@@ -85,5 +99,33 @@ func LoadConfig(path string) (*Config, error) {
 			d.Baud = 9600
 		}
 	}
+	if err := cfg.validatePluginHost(); err != nil {
+		return nil, err
+	}
 	return &cfg, nil
+}
+
+// validatePluginHost 校验外部 Driver Plugin Host 配置。默认不启用时不校验；
+// 启用时 fail-closed：root/state 必填，tenant/lock/close_timeout 提供默认值。
+func (c *Config) validatePluginHost() error {
+	ph := &c.PluginHost
+	if !ph.Enabled {
+		return nil
+	}
+	if strings.TrimSpace(ph.Root) == "" {
+		return fmt.Errorf("plugin_host.root 必填（启用外部 Driver Plugin Host 时）")
+	}
+	if strings.TrimSpace(ph.StateDir) == "" {
+		return fmt.Errorf("plugin_host.state_dir 必填（启用外部 Driver Plugin Host 时）")
+	}
+	if strings.TrimSpace(ph.Tenant) == "" {
+		ph.Tenant = "default"
+	}
+	if strings.TrimSpace(ph.Lock) == "" {
+		ph.Lock = filepath.Join(ph.Root, "plugins.lock")
+	}
+	if ph.CloseTimeoutS <= 0 {
+		ph.CloseTimeoutS = 10
+	}
+	return nil
 }

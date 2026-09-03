@@ -14,10 +14,13 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	_ "github.com/DeliciousBuding/cloud-path/examples/stcb" // 设备适配器注册
 	"github.com/DeliciousBuding/cloud-path/internal/edge"
+	"github.com/DeliciousBuding/cloud-path/internal/edgedriverhost"
 	"github.com/DeliciousBuding/cloud-path/internal/logx"
+	"github.com/DeliciousBuding/cloud-path/internal/pluginhost"
 )
 
 // version 由构建注入：-ldflags "-X main.version=vX.Y.Z"
@@ -39,10 +42,33 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := edge.Run(ctx, cfg, version); err != nil {
+	opts := []edge.RunOption{}
+	if cfg.PluginHost.Enabled {
+		host, err := newDriverHost(cfg.PluginHost)
+		if err != nil {
+			slog.Error("external driver host config failed", "err", err)
+			os.Exit(1)
+		}
+		opts = append(opts, edge.WithPluginHost(host))
+	}
+
+	if err := edge.Run(ctx, cfg, version, opts...); err != nil {
 		slog.Error("edge exited with error", "err", err)
 		os.Exit(1)
 	}
+}
+
+// newDriverHost 用生产实现装配外部 Driver Plugin Host。
+func newDriverHost(cfg edge.PluginHostCfg) (*edgedriverhost.Host, error) {
+	return edgedriverhost.New(edgedriverhost.Options{
+		Runner:       pluginhost.ExecRunner{},
+		PluginsDir:   cfg.Root,
+		StateDir:     cfg.StateDir,
+		LockPath:     cfg.Lock,
+		Tenant:       cfg.Tenant,
+		Logger:       slog.Default(),
+		CloseTimeout: time.Duration(cfg.CloseTimeoutS) * time.Second,
+	})
 }
 
 func envOr(key, def string) string {

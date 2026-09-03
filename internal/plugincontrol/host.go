@@ -42,6 +42,10 @@ type Host struct {
 	loadOnce sync.Once
 	loadRes  LoadResult
 	loadErr  error
+
+	tenantOnce sync.Once
+	tenantRes  LoadResult
+	tenantErr  error
 }
 
 // LoadResult is a factual summary of one host load.
@@ -74,13 +78,39 @@ func NewHost(opts HostOptions) (*Host, error) {
 }
 
 // Load registers every lockfile installation and starts every enabled desired
-// instance exactly once. Disabled instances are left stopped. It is safe to
-// call Load repeatedly; subsequent calls return the cached result.
+// instance across all tenants exactly once. Disabled instances are left
+// stopped. It is safe to call Load repeatedly; subsequent calls return the
+// cached result. This is the global mode used by `cloudpath plugin host`.
 func (h *Host) Load(ctx context.Context) (LoadResult, error) {
 	h.loadOnce.Do(func() {
-		h.loadRes, h.loadErr = h.load(ctx)
+		states, err := h.opts.Store.ListAll()
+		if err != nil {
+			h.loadErr = err
+			return
+		}
+		h.loadRes, h.loadErr = h.load(ctx, states)
 	})
 	return h.loadRes, h.loadErr
+}
+
+// LoadTenant registers every lockfile installation but starts only the enabled
+// desired instances of tenant. An empty tenant means "default" and never the
+// global all-tenant set. Used by the edge's in-process driver host so one edge
+// never starts another tenant's instances.
+func (h *Host) LoadTenant(ctx context.Context, tenant string) (LoadResult, error) {
+	h.tenantOnce.Do(func() {
+		tenant = strings.TrimSpace(tenant)
+		if tenant == "" {
+			tenant = "default"
+		}
+		states, err := h.opts.Store.ListTenant(tenant)
+		if err != nil {
+			h.tenantErr = err
+			return
+		}
+		h.tenantRes, h.tenantErr = h.load(ctx, states)
+	})
+	return h.tenantRes, h.tenantErr
 }
 
 // Run loads the configured state, waits for ctx cancellation, and then asks
@@ -103,7 +133,7 @@ func (h *Host) Run(ctx context.Context) error {
 	return h.opts.Manager.Close()
 }
 
-func (h *Host) load(ctx context.Context) (LoadResult, error) {
+func (h *Host) load(ctx context.Context, states []InstanceState) (LoadResult, error) {
 	lock, err := registry.LoadLockFile(h.opts.LockPath)
 	if err != nil {
 		return LoadResult{}, err
@@ -130,10 +160,6 @@ func (h *Host) load(ctx context.Context) (LoadResult, error) {
 		res.Idle = false
 	}
 
-	states, err := h.opts.Store.ListAll()
-	if err != nil {
-		return LoadResult{}, err
-	}
 	for _, state := range states {
 		if err := ctx.Err(); err != nil {
 			return LoadResult{}, err

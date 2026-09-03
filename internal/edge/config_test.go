@@ -117,3 +117,73 @@ func TestLoadConfigMissingFile(t *testing.T) {
 		t.Fatalf("错误信息应指引复制示例配置: %v", err)
 	}
 }
+
+func TestExternalHostDisabledByDefault(t *testing.T) {
+	p := writeCfg(t, `
+server: ws://127.0.0.1:8080/ws/edge
+devices:
+  - id: d1
+    adapter: stcb
+    port: COM3
+`)
+	cfg, err := LoadConfig(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.PluginHost.Enabled {
+		t.Fatal("外部 Driver Plugin Host 应默认禁用")
+	}
+}
+
+func TestExternalHostEnabledDefaults(t *testing.T) {
+	p := writeCfg(t, `
+server: ws://127.0.0.1:8080/ws/edge
+devices:
+  - id: d1
+    adapter: stcb
+    port: COM3
+plugin_host:
+  enabled: true
+  root: plugins.d
+  state_dir: data/plugin-state
+`)
+	cfg, err := LoadConfig(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ph := cfg.PluginHost
+	if !ph.Enabled {
+		t.Fatal("应启用")
+	}
+	if ph.Tenant != "default" {
+		t.Fatalf("tenant 默认值 = %q, want default", ph.Tenant)
+	}
+	if ph.Lock != filepath.Join("plugins.d", "plugins.lock") {
+		t.Fatalf("lock 默认值 = %q", ph.Lock)
+	}
+	if ph.CloseTimeoutS != 10 {
+		t.Fatalf("close_timeout_s 默认值 = %d, want 10", ph.CloseTimeoutS)
+	}
+}
+
+func TestExternalHostEnabledFailClosed(t *testing.T) {
+	cases := map[string]string{
+		"缺 root": `
+server: ws://x/ws/edge
+devices: [{id: d1, adapter: stcb, port: COM3}]
+plugin_host: {enabled: true, state_dir: data/plugin-state}
+`,
+		"缺 state_dir": `
+server: ws://x/ws/edge
+devices: [{id: d1, adapter: stcb, port: COM3}]
+plugin_host: {enabled: true, root: plugins.d}
+`,
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := LoadConfig(writeCfg(t, body)); err == nil {
+				t.Fatalf("%s: 期望报错，实际通过", name)
+			}
+		})
+	}
+}
