@@ -3,7 +3,8 @@ kind: Application
 id: io.github.deliciousbuding.cloud-path-app-scheduled-compartment
 version: 0.1.0
 protocol: 1
-# TODO(A6): replace with the Application Protocol v1 executable after A6 implementation.
+# Executable entrypoint. The Application Protocol v1 service is implemented in
+# cmd/cloud-path-app-scheduled-compartment and served over the host transport.
 entrypoint: cloud-path-app-scheduled-compartment
 requirements:
   - id: reminder-output
