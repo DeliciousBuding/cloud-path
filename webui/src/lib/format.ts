@@ -1,10 +1,12 @@
-// 展示格式化工具（纯函数，无副作用；与 Go 侧语义一一对应）
-import type { EventView } from './types'
+// 展示格式化工具（纯函数，无副作用）。
+//
+// 设备语义不在这里：事件/命令的展示文案由后端声明驱动（Capability spec.events / spec.actions），
+// 未声明时回落 humanize(机器名)。机器 ID、Capability ID、事件类型永不本地化
+// （docs/architecture/capability-model.md §9）。
 import type { Tone } from '@/components/ui'
-
-export function fmtClock(hhmm: string | undefined): string {
-  return hhmm && /^\d{2}:\d{2}$/.test(hhmm) ? hhmm : '--:--'
-}
+import { eventDecl, humanize } from './descriptor'
+import type { CapabilityIndex, CommandAction } from './descriptor'
+import type { EventView } from './types'
 
 export function fmtTime(ts: number): string {
   return new Date(ts * 1000).toLocaleTimeString('zh-CN', { hour12: false })
@@ -32,50 +34,37 @@ export function fmtUptime(sec: number): string {
   return `${Math.floor(sec / 86400)} 天 ${Math.floor((sec % 86400) / 3600)} 小时`
 }
 
-export function fmtDrift(min: number | undefined | null): string {
-  if (min == null || Number.isNaN(min)) return '—'
-  const sign = min > 0 ? '+' : ''
-  return `${sign}${min} 分`
+/** 事件载荷里后端给的展示标签（WS EventData.label / REST payload.label），没有则 undefined */
+export function payloadLabel(payload: string | undefined): string | undefined {
+  if (!payload) return undefined
+  try {
+    const o = JSON.parse(payload) as unknown
+    if (o && typeof o === 'object' && !Array.isArray(o)) {
+      const v = (o as Record<string, unknown>).label
+      if (typeof v === 'string' && v.length > 0) return v
+    }
+  } catch { /* 载荷不是 JSON：交由上层按类型名展示 */ }
+  return undefined
 }
 
-/** 漂移健康度：|d|<=1 优 / <=5 良 / 更大差 */
-export function driftTone(min: number | undefined | null): Tone {
-  if (min == null || Number.isNaN(min)) return 'idle'
-  const a = Math.abs(min)
-  if (a <= 1) return 'ok'
-  if (a <= 5) return 'warn'
-  return 'bad'
+/** 事件展示名：后端 label > Capability events 声明的 title > humanize(类型名) */
+export function eventLabel(type: string, index?: CapabilityIndex, label?: string): string {
+  return label || (index ? eventDecl(type, index)?.title : undefined) || humanize(type)
 }
 
-/** 事件类型 → 展示语义。类型名是设备协议契约（docs/protocol.md），标签是平台通用语义。 */
-export const EVENT_META: Record<string, { label: string; tone: Tone }> = {
-  'BOOT':       { label: '上电',       tone: 'accent' },
-  'REMIND':     { label: '提醒',       tone: 'warn' },
-  'TAKEN':      { label: '已确认',     tone: 'ok' },
-  'TAKEN-LATE': { label: '逾期确认',   tone: 'warn' },
-  'MISSED':     { label: '逾期未确认', tone: 'bad' },
-  'SYNC-OK':    { label: '对时成功',   tone: 'ok' },
+/** 事件语义色：只采纳 Capability 声明的 tone；未声明一律中性，不猜业务含义 */
+export function eventTone(type: string, index?: CapabilityIndex): Tone {
+  return (index ? eventDecl(type, index)?.tone : undefined) ?? 'idle'
 }
 
-export function eventMeta(type: string) {
-  return EVENT_META[type] ?? { label: type, tone: 'idle' as Tone }
+/** 命令展示名/提示：命令集声明（CommandAction）优先，回落 humanize(cmd) */
+export function cmdMeta(cmd: string, actions?: CommandAction[]): { label: string; hint: string } {
+  const a = actions?.find((x) => x.cmd === cmd)
+  if (a) return { label: a.label, hint: a.hint ?? '' }
+  return { label: humanize(cmd), hint: '' }
 }
 
-/** 命令 → 展示语义（与适配器 SupportedCommands 对应；未知命令回落原名） */
-export const CMD_META: Record<string, { label: string; hint: string }> = {
-  sync:    { label: '对时',     hint: '把设备时钟校准到参考时间' },
-  dump:    { label: '读取状态', hint: '请求一次状态转储' },
-  trigger: { label: '触发提醒', hint: '立即进入提醒状态（联调用）' },
-  open:    { label: '模拟确认', hint: '模拟一次开盖/确认动作' },
-  isp:     { label: '进入刷机', hint: '设备软复位进入 ISP 烧录模式' },
-  raw:     { label: '原始指令', hint: '按原样写入串口（高级）' },
-}
-
-export function cmdMeta(cmd: string) {
-  return CMD_META[cmd] ?? { label: cmd, hint: '' }
-}
-
-/** 命令状态 → 徽标语义 */
+/** 命令生命周期状态 → 徽标语义（平台级状态机，非设备语义） */
 export const CMD_STATUS_META: Record<string, { label: string; tone: Tone }> = {
   pending: { label: '待发送', tone: 'idle' },
   sent:    { label: '已下发', tone: 'accent' },

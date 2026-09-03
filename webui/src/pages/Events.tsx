@@ -7,17 +7,18 @@ import { EventFeed } from '@/components/EventFeed'
 import { api } from '@/lib/api'
 import { useLive } from '@/store/ws'
 import { useDevices } from '@/hooks/useDevices'
-import { mergeEvents, EVENT_META } from '@/lib/format'
+import { mergeEvents, eventLabel } from '@/lib/format'
+import { useCapabilityIndex } from '@/hooks/useDescriptor'
 import { cn } from '@/lib/cn'
 
 const PAGE_LIMIT = 500
-const TYPES = Object.keys(EVENT_META)
 
 export default function Events() {
   const liveEvents = useLive((s) => s.events)
   const { list: devices } = useDevices()
   const [device, setDevice] = useState('')
   const [types, setTypes] = useState<Set<string>>(new Set())
+  const index = useCapabilityIndex()
 
   const { data, isFetching, isLoading, refetch } = useQuery({
     queryKey: ['events', device],
@@ -30,6 +31,13 @@ export default function Events() {
     return mergeEvents(live, data?.events ?? [])
       .filter((e) => types.size === 0 || types.has(e.type))
   }, [liveEvents, data, device, types])
+
+  // 过滤选项由当前数据里出现过的事件类型动态生成——前端不维护事件类型枚举
+  const typeOptions = useMemo(() => {
+    const set = new Set<string>()
+    for (const e of merged) set.add(e.type)
+    return [...set].sort()
+  }, [merged])
 
   const toggleType = (t: string) =>
     setTypes((prev) => {
@@ -68,7 +76,7 @@ export default function Events() {
             ))}
           </select>
           <span className="mx-1 h-4 w-px bg-hairline" aria-hidden />
-          {TYPES.map((t) => (
+          {typeOptions.map((t) => (
             <button
               key={t}
               type="button"
@@ -80,7 +88,7 @@ export default function Events() {
                 types.has(t) ? 'bg-accent text-white' : 'bg-ink-3/10 text-ink-2 hover:bg-ink-3/16',
               )}
             >
-              {EVENT_META[t]?.label ?? t}
+              {eventLabel(t, index)}
             </button>
           ))}
           {(types.size > 0 || device) && (

@@ -1,16 +1,26 @@
 // 实时层：单例 WebSocket + zustand。快照水合、状态合并、事件环形缓冲、
-// 漂移历史（会话级）、命令 ack、断线指数退避重连。
+// 数值观测历史（会话级，按属性名通用采样）、Descriptor 缓存、命令 ack、断线指数退避重连。
+//
+// 设备无关原则：这一层不认识任何具体字段名。数值型观测一律按属性名进 series；
+// Descriptor（若后端随 WS 下发）按设备键缓存，供 hooks/useDescriptor 与 SchemaRenderer 消费。
 import { create } from 'zustand'
 import { wsUrl } from '@/lib/api'
+import { normalizeDescriptor, readInlineDescriptor } from '@/lib/descriptor'
 import { authReady, useAuth } from './auth'
 import type {
-  AckData, DeviceView, EdgeUpData, EdgeView, Envelope, EventData,
-  EventView, SnapshotData, StateData,
+  AckData, DeviceDescriptor, DeviceRaw, DeviceView, EdgeUpData, EdgeView, Envelope,
+  EventData, EventView, SnapshotData, StateData,
 } from '@/lib/types'
 
 export type WsStatus = 'connecting' | 'open' | 'closed'
 
-export interface DriftPoint { t: number; v: number }
+/** 会话内数值采样点（t=unix 秒，v=观测值） */
+export interface SeriesPoint { t: number; v: number }
+
+/** 每设备最多跟踪的数值属性数（防 raw 字段爆炸） */
+const MAX_SERIES_KEYS = 6
+/** 每条序列最多保留点数 */
+const MAX_SERIES_POINTS = 240
 
 interface LiveState {
   status: WsStatus
@@ -18,8 +28,10 @@ interface LiveState {
   edges: Record<string, EdgeView>
   /** WS 实时事件（新→旧，本地负 id，与 REST 历史正 id 不冲突） */
   events: EventView[]
-  /** 会话内漂移历史（页面打开起），每设备最多 240 点 */
-  drift: Record<string, DriftPoint[]>
+  /** 会话内数值观测历史：deviceKey → 属性名 → 采样点 */
+  series: Record<string, Record<string, SeriesPoint[]>>
+  /** Descriptor 缓存（WS 下发优先于 REST 探测）：deviceKey → DeviceDescriptor */
+  descriptors: Record<string, DeviceDescriptor>
   /** command_id → 最新 ack */
   acks: Record<number, AckData>
 }
@@ -29,9 +41,28 @@ export const useLive = create<LiveState>(() => ({
   devices: {},
   edges: {},
   events: [],
-  drift: {},
+  series: {},
+  descriptors: {},
   acks: {},
 }))
+
+/** 通用数值采样：raw 里每个有限 number 都进对应属性序列，不认识任何字段名 */
+function pushSeries(
+  prev: Record<string, Record<string, SeriesPoint[]>>,
+  key: string,
+  raw: DeviceRaw | undefined,
+): Record<string, Record<string, SeriesPoint[]>> {
+  if (!raw) return prev
+  const t = Date.now() / 1000
+  let next: Record<string, SeriesPoint[]> | null = null
+  for (const [prop, value] of Object.entries(raw)) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) continue
+    if (!next) next = { ...(prev[key] ?? {}) }
+    if (!(prop in next) && Object.keys(next).length >= MAX_SERIES_KEYS) continue
+    next[prop] = [...(next[prop] ?? []), { t, v: value }].slice(-MAX_SERIES_POINTS)
+  }
+  return next ? { ...prev, [key]: next } : prev
+}
 
 let ws: WebSocket | null = null
 let retry = 0
@@ -122,7 +153,18 @@ function handle(env: Envelope) {
       for (const d of snap.devices ?? []) devices[d.id] = d
       const edges: Record<string, EdgeView> = {}
       for (const e of snap.edges ?? []) edges[e.edge_id] = e
-      useLive.setState({ devices, edges })
+      // 快照可能一并携带 Descriptor（宽容：数组或映射都接受）
+      const descriptors = { ...st.descriptors }
+      const rawList = (snap as { descriptors?: unknown }).descriptors
+      const list: unknown[] = Array.isArray(rawList)
+        ? rawList
+        : rawList ? Object.values(rawList as object) : []
+      for (const item of list) {
+        const dd = normalizeDescriptor(item)
+        if (!dd) continue
+        descriptors[dd.device_id] = dd
+      }
+      useLive.setState({ devices, edges, descriptors })
       break
     }
     case 'state': {
@@ -140,13 +182,19 @@ function handle(env: Envelope) {
         updated_at: data.updated_at || env.ts,
         last_seen: env.ts,
       }
-      const drift = { ...st.drift }
-      const dm = data.raw?.drift_min
-      if (data.online && typeof dm === 'number') {
-        const arr = [...(drift[key] ?? []), { t: Date.now() / 1000, v: dm }]
-        drift[key] = arr.slice(-240)
-      }
-      useLive.setState({ devices: { ...st.devices, [key]: dev }, drift })
+      const series = pushSeries(st.series, key, data.online ? data.raw : undefined)
+      // 过渡形态：Descriptor 内联在 state 载荷里也接受
+      const inline = readInlineDescriptor(data)
+      const descriptors = inline ? { ...st.descriptors, [key]: inline } : st.descriptors
+      useLive.setState({ devices: { ...st.devices, [key]: dev }, series, descriptors })
+      break
+    }
+    case 'descriptor': {
+      // Wave2：后端可直接推 Descriptor（spec/descriptor.schema.json）
+      if (!env.device) return
+      const dd = normalizeDescriptor(env.data)
+      if (!dd) return
+      useLive.setState({ descriptors: { ...st.descriptors, [env.device]: dd } })
       break
     }
     case 'event': {

@@ -11,12 +11,18 @@ import { Logo } from './Logo'
 
 export type Tone = 'ok' | 'warn' | 'bad' | 'accent' | 'idle'
 
-const TONE_CLS: Record<Tone, string> = {
+/** 语义色 → 胶囊底色（导出给 SchemaRenderer 等复用，避免各处重复调色板） */
+export const TONE_CLS: Record<Tone, string> = {
   ok: 'bg-ok/12 text-ok',
   warn: 'bg-warn/14 text-warn',
   bad: 'bg-bad/12 text-bad',
   accent: 'bg-accent/10 text-accent',
   idle: 'bg-ink-3/10 text-ink-2',
+}
+
+/** 语义色 → 前景文字色 */
+export const TONE_TEXT_CLS: Record<Tone, string> = {
+  ok: 'text-ok', warn: 'text-warn', bad: 'text-bad', accent: 'text-accent', idle: 'text-ink-3',
 }
 
 export function Badge({ tone = 'idle', children, className }: { tone?: Tone; children: ReactNode; className?: string }) {
