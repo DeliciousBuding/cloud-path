@@ -31,6 +31,11 @@ type wsClient struct {
 	token   string
 	version string
 
+	// httpClient 用于 WS 拨号。nil 表示用系统信任库的缺省 client
+	// （公网 wss:// + 正规证书即走这条路）；测试注入信任自签 CA 的 client
+	// 以验证 TLS 拨号真的可用。
+	httpClient *http.Client
+
 	edgeID  string
 	devices []api.DeviceMeta
 
@@ -108,9 +113,13 @@ func (c *wsClient) run(ctx context.Context) {
 func (c *wsClient) session(ctx context.Context) error {
 	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	ws, _, err := websocket.Dial(dialCtx, c.url, &websocket.DialOptions{
-		HTTPClient: &http.Client{Timeout: 15 * time.Second},
-	})
+	// ws:// 与 wss:// 走同一条拨号路径：wss 由 net/http 完成 TLS 握手与证书校验
+	// （缺省用系统信任库，公网正规证书直接可用；校验失败即重连退避，不降级明文）。
+	hc := c.httpClient
+	if hc == nil {
+		hc = &http.Client{Timeout: 15 * time.Second}
+	}
+	ws, _, err := websocket.Dial(dialCtx, c.url, &websocket.DialOptions{HTTPClient: hc})
 	if err != nil {
 		return err
 	}
@@ -211,8 +220,12 @@ func (c *wsClient) writeEnvelope(ctx context.Context, ws *websocket.Conn, env ap
 }
 
 // enqueue 入队一条消息。
-//   - 在线：投递到写队列（队满则事件转缓冲、状态丢弃）
-//   - 离线：事件进缓冲等重连回放，状态直接丢（幂等，下一拍重发）
+//   - 在线：投递到写队列（队满则事件/ack 转缓冲、状态丢弃）
+//   - 离线：事件与命令 ack 进缓冲等重连回放，状态直接丢（幂等，下一拍重发）
+//
+// 命令 ack 必须缓冲：命令是在连接活着的时候收到的，执行完却可能已经断开——
+// 若直接丢弃，一次真实的 failed 就永远到不了 Server，命令会停在 sent
+// （「断线期间设备命令不得静默丢失成成功」）。ack 按 command_id 幂等，重放安全。
 //
 // 返回 true 表示已进入写队列（状态上报据此更新 diff 基线）。
 func (c *wsClient) enqueue(env api.Envelope) bool {
@@ -230,19 +243,25 @@ func (c *wsClient) enqueue(env api.Envelope) bool {
 			return true
 		default:
 			slog.Warn("send queue full", "type", env.Type, "device", env.Device)
-			if env.Type == api.MsgEvent {
+			if isBufferable(env.Type) {
 				c.buffer(env, data)
 			}
 			return false
 		}
 	}
-	if env.Type == api.MsgEvent {
+	if isBufferable(env.Type) {
 		c.buffer(env, data)
 	}
 	return false
 }
 
-// buffer 把事件放入离线缓冲（有界，超限丢最旧）。
+// isBufferable 报告该类型消息是否进离线缓冲：不可重放的事件与命令 ack 进缓冲；
+// 状态/Descriptor 幂等（重连后由 onOnline 全量重报），缓冲它们只会挤掉真事件。
+func isBufferable(t api.MsgType) bool {
+	return t == api.MsgEvent || t == api.MsgCommandAck
+}
+
+// buffer 把不可重放消息（事件 / 命令 ack）放入离线缓冲（有界，超限丢最旧）。
 func (c *wsClient) buffer(env api.Envelope, data []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -258,7 +277,7 @@ func (c *wsClient) buffer(env api.Envelope, data []byte) {
 	}
 }
 
-// flushPending 重连后把缓冲事件回放进写队列，返回回放条数。
+// flushPending 重连后把缓冲的事件与命令 ack 回放进写队列，返回回放条数。
 // 写队列满则把剩余部分放回缓冲，下一拍再试。
 func (c *wsClient) flushPending() int {
 	c.mu.Lock()

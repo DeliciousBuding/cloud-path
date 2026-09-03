@@ -358,8 +358,16 @@ func TestDescriptorContract(t *testing.T) {
 			if err := o.Validate(); err != nil {
 				t.Errorf("entity %q observation %q 校验失败: %v", e.EntityID, k, err)
 			}
-			if !o.ObservedAt.IsZero() || !o.ReceivedAt.IsZero() {
-				t.Errorf("entity %q observation %q 不得携带时间戳（会击穿 edge 的 Descriptor diff 抑制）", e.EntityID, k)
+			// observed_at 必须是真实采样时刻：零值（0001-01-01T00:00:00Z）与
+			// 偏差过大都视为缺陷（公网实测曾出现全零时间戳）。
+			if o.ObservedAt.IsZero() {
+				t.Errorf("entity %q observation %q 的 observed_at 为零值（必须是真实采样时刻）", e.EntityID, k)
+			} else if skew := time.Since(o.ObservedAt); skew < -time.Second || skew > 5*time.Second {
+				t.Errorf("entity %q observation %q 的 observed_at 与真实采样时刻偏差 %v", e.EntityID, k, skew)
+			}
+			// received_at 由可信 Edge 生成（capability-model.md §4）：适配器不得自填。
+			if !o.ReceivedAt.IsZero() {
+				t.Errorf("entity %q observation %q 的 received_at 应由 Edge 盖戳，适配器不得自行填写", e.EntityID, k)
 			}
 		}
 	}

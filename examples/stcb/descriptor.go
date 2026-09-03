@@ -2,6 +2,7 @@ package stcb
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/DeliciousBuding/cloud-path/sdk/go/driverkit"
 	"github.com/DeliciousBuding/cloud-path/sdk/go/model"
@@ -123,26 +124,36 @@ func stcbDescriptor(id string) model.Descriptor {
 
 // Descriptor 返回带实时观测的完整 Descriptor（Device 级 DescriptorSource 实现）。
 // 观测值来自最近一次成功解析的转储；无转储时返回静态骨架（unavailable/offline）。
+//
+// observed_at 填**该帧转储被解析出来的真实时刻**（d.lastDump）：既不是零值，
+// 也不是「现在」硬填——转储可能是几秒前收到的，消费方据此判断观测新鲜度。
+// received_at 刻意**不在适配器填**：capability-model.md §4 规定它必须由可信的
+// Edge/Core 生成（外部 Driver 插件的时钟与身份都不可信），由 internal/edge 在
+// 组装上报信封时统一盖戳。
 func (d *dev) Descriptor() model.Descriptor {
 	desc := stcbDescriptor(d.id)
 	d.mu.Lock()
-	dump, dead := d.dump, d.dead
+	dump, dead, last := d.dump, d.dead, d.lastDump
 	d.mu.Unlock()
 
 	switch {
 	case dump != nil:
 		desc.Status = model.DeviceOnline
-		now := fmt.Sprintf("%02d:%02d", dump.Hour, dump.Min)
-		setObservation(&desc, "clock", model.Observation{
-			Capability: capClock, Property: "time", Value: now, Quality: model.QualityGood,
-		})
-		setObservation(&desc, "alarm", model.Observation{
-			Capability: capAlarm, Property: "state", Value: StateLabel(dump.State), Quality: model.QualityGood,
-		})
+		// 同一帧转储解析出的全部观测共享同一个真实采集时刻。
+		at := last
+		if at.IsZero() {
+			at = time.Now()
+		}
+		obs := func(capability, property string, value any) model.Observation {
+			return model.Observation{
+				Capability: capability, Property: property, Value: value,
+				Quality: model.QualityGood, ObservedAt: at,
+			}
+		}
+		setObservation(&desc, "clock", obs(capClock, "time", fmt.Sprintf("%02d:%02d", dump.Hour, dump.Min)))
+		setObservation(&desc, "alarm", obs(capAlarm, "state", StateLabel(dump.State)))
 		for i := range dump.Slots {
-			setObservation(&desc, fmt.Sprintf("compartment-%d", i+1), model.Observation{
-				Capability: capContact, Property: "state", Value: SlotLabel(dump.Slots[i]), Quality: model.QualityGood,
-			})
+			setObservation(&desc, fmt.Sprintf("compartment-%d", i+1), obs(capContact, "state", SlotLabel(dump.Slots[i])))
 		}
 	case dead:
 		desc.Status = model.DeviceOffline

@@ -9,7 +9,41 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/DeliciousBuding/cloud-path/internal/device"
 )
+
+// 生命周期命令名：edge 在设备打开后与每个轮询拍尝试下发。
+//
+// 核心**设备无关**：这两个名字只是缺省约定，是否真的下发由适配器命令白名单决定
+// （不在白名单内则静默跳过，不报错、不刷日志），并可用 DeviceCfg.PollCommand /
+// SyncCommand 按设备覆盖。这样无硬件参考设备（examples/demo）不会因为核心
+// 硬编码真实板子的对时命令而在每次打开/每个对时周期报错。
+const (
+	DefaultPollCommand = "dump" // 触发一次状态读取
+	DefaultSyncCommand = "sync" // 触发一次设备侧时间/基准对齐
+)
+
+// PortOptionalAdapter 由无硬件适配器可选实现：PortRequired() == false 表示
+// 该适配器不需要真实端口，配置校验放宽 port 必填。
+//
+// 这是**结构性约定**而不是 driverkit 契约：examples/* 有「不得 import internal/*」
+// 的拆仓红线，因此约定同时写在本包与适配器包（examples/demo）的文档里，靠方法名
+// 与签名对齐。未实现该接口的适配器（如 stcb）一律 port 必填——校验强度不被削弱；
+// 适配器未注册时同样按必填处理（fail-closed）。
+type PortOptionalAdapter interface{ PortRequired() bool }
+
+// PortRequired 报告具名适配器是否需要真实端口。
+func PortRequired(adapterName string) bool {
+	a, ok := device.Get(adapterName)
+	if !ok {
+		return true // 未注册：无从放宽，fail-closed
+	}
+	if p, ok := a.(PortOptionalAdapter); ok {
+		return p.PortRequired()
+	}
+	return true
+}
 
 // Config 是 edge 配置（edge.yaml，本地私有不入库）。
 type Config struct {
@@ -26,10 +60,17 @@ type Config struct {
 // DeviceCfg 是单台设备配置。
 type DeviceCfg struct {
 	ID      string `yaml:"id"`
-	Adapter string `yaml:"adapter"` // 设备适配器名（如 stcb）
+	Adapter string `yaml:"adapter"` // 设备适配器名（如 stcb / demo）
 	Name    string `yaml:"name"`
-	Port    string `yaml:"port"` // Windows: COM3；Linux: /dev/ttyUSB0
+	Port    string `yaml:"port"` // Windows: COM3；Linux: /dev/ttyUSB0；无硬件适配器可省略
 	Baud    int    `yaml:"baud"` // 默认 9600
+	// Extra 是适配器自定义参数，原样传给 driverkit.Config.Extra
+	// （例如 demo 的 tick_interval_s）。核心不解释其中任何键。
+	Extra map[string]string `yaml:"extra"`
+	// PollCommand / SyncCommand 覆盖生命周期命令名（缺省 dump / sync）。
+	// 无论叫什么，都只在适配器命令白名单内才会真正下发。
+	PollCommand string `yaml:"poll_command"`
+	SyncCommand string `yaml:"sync_command"`
 }
 
 // PluginHostCfg 配置可选的进程内外部 Driver Plugin Host。默认不启用，保持 P1
@@ -42,6 +83,13 @@ type PluginHostCfg struct {
 	Required      bool   `yaml:"required"`        // true=host 失败则 edge 启动失败；false=optional(DEGRADED)
 	Lock          string `yaml:"lock"`            // plugins.lock 路径（缺省 <root>/plugins.lock）
 	CloseTimeoutS int    `yaml:"close_timeout_s"` // host 优雅关闭 deadline（秒，默认 10）
+	// SyncState 是插件控制面本地 applied cache 路径（缺省 <state_dir>/applied.json）：
+	// 保存最近成功应用的 revision + server 下发的规范化摘要 + 每实例结果，
+	// 进程重启后据此拒绝旧 revision（control-plane-sync.md §3.2）。
+	SyncState string `yaml:"sync_state"`
+	// SecretDir 是本地 secret provider 根目录（缺省 <state_dir>/secrets）：
+	// 明文只存在于 <dir>/<tenant>/<instance>/<name>，永不进 WS/日志/cache（§7）。
+	SecretDir string `yaml:"secret_dir"`
 }
 
 // LoadConfig 读取并校验配置。Token 等字段支持 ${ENV_VAR} 展开（凭据不落盘）。
@@ -92,11 +140,18 @@ func LoadConfig(path string) (*Config, error) {
 		if d.Adapter == "" {
 			return nil, fmt.Errorf("devices[%s]: adapter 必填", d.ID)
 		}
-		if d.Port == "" {
+		// port 只对需要真实端口的适配器必填（无硬件参考设备可省略）。
+		if d.Port == "" && PortRequired(d.Adapter) {
 			return nil, fmt.Errorf("devices[%s]: port 必填（如 COM3 或 /dev/ttyUSB0）", d.ID)
 		}
 		if d.Baud <= 0 {
 			d.Baud = 9600
+		}
+		if strings.TrimSpace(d.PollCommand) == "" {
+			d.PollCommand = DefaultPollCommand
+		}
+		if strings.TrimSpace(d.SyncCommand) == "" {
+			d.SyncCommand = DefaultSyncCommand
 		}
 	}
 	if err := cfg.validatePluginHost(); err != nil {
@@ -123,6 +178,12 @@ func (c *Config) validatePluginHost() error {
 	}
 	if strings.TrimSpace(ph.Lock) == "" {
 		ph.Lock = filepath.Join(ph.Root, "plugins.lock")
+	}
+	if strings.TrimSpace(ph.SyncState) == "" {
+		ph.SyncState = filepath.Join(ph.StateDir, "applied.json")
+	}
+	if strings.TrimSpace(ph.SecretDir) == "" {
+		ph.SecretDir = filepath.Join(ph.StateDir, "secrets")
 	}
 	if ph.CloseTimeoutS <= 0 {
 		ph.CloseTimeoutS = 10

@@ -194,39 +194,71 @@ func (d *dev) tickLoop(ctx context.Context) {
 	}
 }
 
+// values 是一次读到的本进程真实状态（Snapshot / Descriptor / 命令摘要共用，
+// 保证三者看到的永远是同一份事实）。
+type values struct {
+	ticks    uint64
+	commands uint64
+	pings    uint64
+	level    int64
+	enabled  bool
+	uptimeS  int64
+	closed   bool
+}
+
+// read 原子读取当前状态。uptime 在关闭后冻结在关闭时刻。
+func (d *dev) read() values {
+	d.mu.Lock()
+	v := values{
+		ticks: d.ticks, commands: d.commands, pings: d.pings,
+		level: d.level, enabled: d.enabled, closed: d.closed,
+	}
+	closedAt := d.closedAt
+	d.mu.Unlock()
+	end := time.Now()
+	if v.closed && !closedAt.IsZero() {
+		end = closedAt
+	}
+	v.uptimeS = int64(end.Sub(d.openedAt).Seconds())
+	return v
+}
+
 // Snapshot 返回本进程内的真实状态。不含随机数、不含伪造硬件字段。
 func (d *dev) Snapshot() driverkit.State {
+	v := d.read()
 	d.mu.Lock()
-	closed, closedAt := d.closed, d.closedAt
-	ticks, commands, pings := d.ticks, d.commands, d.pings
-	level, enabled, updatedAt := d.level, d.enabled, d.updatedAt
+	updatedAt := d.updatedAt
 	d.mu.Unlock()
-
-	end := closedAt
-	if end.IsZero() {
-		end = time.Now()
-	}
 	raw := map[string]any{
 		"kind":      Kind,   // 诚实标注：参考演示设备
 		"hardware":  "none", // 诚实标注：无硬件
-		"uptime_s":  int64(end.Sub(d.openedAt).Seconds()),
-		"ticks":     ticks,
-		"commands":  commands,
-		"pings":     pings,
-		"level":     level,
-		"enabled":   enabled,
+		"uptime_s":  v.uptimeS,
+		"ticks":     v.ticks,
+		"commands":  v.commands,
+		"pings":     v.pings,
+		"level":     v.level,
+		"enabled":   v.enabled,
 		"tick_rate": d.tickInterval.String(),
 	}
-	return driverkit.State{Online: !closed, Raw: raw, UpdatedAt: updatedAt}
+	return driverkit.State{Online: !v.closed, Raw: raw, UpdatedAt: updatedAt}
 }
 
 // Send 执行白名单内命令，真实改变本进程状态并产生事件。
 func (d *dev) Send(ctx context.Context, c driverkit.Command) error {
+	_, err := d.SendWithResult(ctx, c)
+	return err
+}
+
+// SendWithResult 实现 edge 侧的 ResultSender 结构性约定（见 internal/edge/edge.go）：
+// 执行命令并返回真实执行结果的一行非敏感摘要，使成功命令的 command_ack 也带有
+// 可读 detail（而不是只有 status=ok）。摘要全部取自本进程真实状态，不含明文
+// secret、访问令牌、本机绝对路径，也不含任何进程 stdout/stderr 原文。
+func (d *dev) SendWithResult(ctx context.Context, c driverkit.Command) (string, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return "", err
 	}
 	if err := d.alive(); err != nil {
-		return err
+		return "", err
 	}
 	switch c.Cmd {
 	case CmdPing:
@@ -235,18 +267,22 @@ func (d *dev) Send(ctx context.Context, c driverkit.Command) error {
 		d.pings++
 		d.mu.Unlock()
 		d.emit(EventProbed)
-		return nil
+		v := d.read()
+		return fmt.Sprintf("ping pings=%d commands=%d uptime_s=%d", v.pings, v.commands, v.uptimeS), nil
 	case CmdDump:
-		// 状态始终实时可读：dump 只计入命令数，供上层触发一次上报。
+		// 状态始终实时可读：dump 计入命令数并把当前真实状态回给调用方。
 		d.touch()
-		return nil
+		v := d.read()
+		return fmt.Sprintf("dump %s level=%d enabled=%t ticks=%d commands=%d uptime_s=%d",
+			Kind, v.level, v.enabled, v.ticks, v.commands, v.uptimeS), nil
 	case CmdNoop:
 		d.touch()
-		return nil
+		v := d.read()
+		return fmt.Sprintf("noop commands=%d uptime_s=%d", v.commands, v.uptimeS), nil
 	case CmdSet:
 		return d.applySet(c.Args)
 	default:
-		return fmt.Errorf("demo: 不支持的命令 %q（白名单: %v）", c.Cmd, (&Adapter{}).SupportedCommands())
+		return "", fmt.Errorf("demo: 不支持的命令 %q（白名单: %v）", c.Cmd, (&Adapter{}).SupportedCommands())
 	}
 }
 
@@ -268,23 +304,24 @@ func (d *dev) touch() {
 	d.mu.Unlock()
 }
 
-// applySet 解析并写回 value / enabled，只有真实变化才产生事件。
-func (d *dev) applySet(args string) error {
+// applySet 解析并写回 value / enabled，只有真实变化才产生事件；
+// 返回写回后的真实值摘要（可读回验证，不是回显入参）。
+func (d *dev) applySet(args string) (string, error) {
 	vals, err := ParseSetArgs(args)
 	if err != nil {
-		return err
+		return "", err
 	}
 	d.mu.Lock()
 	if d.closed {
 		d.mu.Unlock()
-		return fmt.Errorf("demo: %s 已关闭", d.id)
+		return "", fmt.Errorf("demo: %s 已关闭", d.id)
 	}
 	var levelChanged, toggleChanged bool
 	if raw, ok := vals[KeyLevel]; ok {
 		next, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
 		if err != nil {
 			d.mu.Unlock()
-			return fmt.Errorf("demo: %s 须为整数，got %q", KeyLevel, raw)
+			return "", fmt.Errorf("demo: %s 须为整数，got %q", KeyLevel, raw)
 		}
 		if next != d.level {
 			d.level = next
@@ -295,7 +332,7 @@ func (d *dev) applySet(args string) error {
 		next, err := strconv.ParseBool(strings.TrimSpace(raw))
 		if err != nil {
 			d.mu.Unlock()
-			return fmt.Errorf("demo: %s 须为布尔值，got %q", KeyEnabled, raw)
+			return "", fmt.Errorf("demo: %s 须为布尔值，got %q", KeyEnabled, raw)
 		}
 		if next != d.enabled {
 			d.enabled = next
@@ -312,7 +349,8 @@ func (d *dev) applySet(args string) error {
 	if toggleChanged {
 		d.emit(EventToggled)
 	}
-	return nil
+	v := d.read()
+	return fmt.Sprintf("set %s=%d %s=%t commands=%d", KeyLevel, v.level, KeyEnabled, v.enabled, v.commands), nil
 }
 
 // ParseSetArgs 解析 set 命令参数，支持三种等价写法：

@@ -170,49 +170,35 @@ func demoDescriptor(id string) model.Descriptor {
 
 // Descriptor 返回带实时观测的完整 Descriptor（Device 级 DescriptorSource 实现）。
 //
-// 观测值全部来自本进程真实状态。刻意**不写 observed_at / received_at**：时间戳
-// 每拍都变会击穿 edge 的 Descriptor diff 抑制（与 stcb 同一约定），
-// received_at 由可信的 Edge/Core 生成。
+// 观测值全部来自本进程真实状态（与 Snapshot 同一次 read()，不会互相矛盾）。
+//
+// observed_at 填**本次采样这些进程内状态的真实时刻**：参考设备的状态是实时可读的，
+// 采样即采集，因此既不是零值也不是设备侧不可信的时钟。
+// received_at 刻意**不在适配器填**：capability-model.md §4 规定它必须由可信的
+// Edge/Core 生成，由 internal/edge 在组装上报信封时统一盖戳。
 func (d *dev) Descriptor() model.Descriptor {
 	desc := demoDescriptor(d.id)
+	v := d.read()
+	at := time.Now()
 
-	d.mu.Lock()
-	closed, closedAt := d.closed, d.closedAt
-	ticks, commands := d.ticks, d.commands
-	level, enabled := d.level, d.enabled
-	d.mu.Unlock()
-
-	end := time.Now()
-	if closed && !closedAt.IsZero() {
-		end = closedAt
-	}
-	uptime := int64(end.Sub(d.openedAt).Seconds())
-
-	switch {
-	case closed:
+	if v.closed {
 		desc.Status = model.DeviceOffline
-	default:
+	} else {
 		desc.Status = model.DeviceOnline
 	}
 
-	setObservation(&desc, entityHeartbeat, model.Observation{
-		Capability: capCounter, Property: "value", Value: ticks, Quality: model.QualityGood,
-	})
-	setObservation(&desc, entityCommands, model.Observation{
-		Capability: capCounter, Property: "value", Value: commands, Quality: model.QualityGood,
-	})
-	setObservation(&desc, entityUptime, model.Observation{
-		Capability: capUptime, Property: "seconds", Value: uptime, Unit: "s", Quality: model.QualityGood,
-	})
-	setObservation(&desc, entityLevel, model.Observation{
-		Capability: capSetpoint, Property: "value", Value: level, Quality: model.QualityGood,
-	})
-	setObservation(&desc, entitySwitch, model.Observation{
-		Capability: capToggle, Property: "state", Value: enabled, Quality: model.QualityGood,
-	})
-	setObservation(&desc, entityDiagnostics, model.Observation{
-		Capability: capDiagnostics, Property: "status", Value: Kind, Quality: model.QualityGood,
-	})
+	obs := func(capability, property string, value any, unit string) model.Observation {
+		return model.Observation{
+			Capability: capability, Property: property, Value: value, Unit: unit,
+			Quality: model.QualityGood, ObservedAt: at,
+		}
+	}
+	setObservation(&desc, entityHeartbeat, obs(capCounter, "value", v.ticks, ""))
+	setObservation(&desc, entityCommands, obs(capCounter, "value", v.commands, ""))
+	setObservation(&desc, entityUptime, obs(capUptime, "seconds", v.uptimeS, "s"))
+	setObservation(&desc, entityLevel, obs(capSetpoint, "value", v.level, ""))
+	setObservation(&desc, entitySwitch, obs(capToggle, "state", v.enabled, ""))
+	setObservation(&desc, entityDiagnostics, obs(capDiagnostics, "status", Kind, ""))
 	return desc
 }
 
