@@ -109,6 +109,41 @@ devices:
 `port` / `baud` 可以省略（`demo` 不需要端口）。一台 Edge 可挂多台 demo 设备，
 每台各自独立监督协程；配合多台电脑各自的 Edge，即可凑出跨机器的 ≥3 台设备。
 
+## 接线要求（两个二进制都要注册）
+
+适配器靠包 `init()` 注册进 `driverkit` 注册表，因此**消费它的二进制必须 blank import
+本包**，两侧作用不同：
+
+| 二进制 | import | 作用 | 现状 |
+|---|---|---|---|
+| `cmd/cloudpath-edge` | `_ ".../examples/demo"` | 真的打开设备、上报状态 | ✅ 已接线 |
+| `cmd/cloudpath-server` | `_ ".../examples/demo"` | `GET /api/adapters` 命令白名单 + `GET /api/capabilities` catalog | ⚠️ **待接线** |
+
+Server 侧缺这行 import 的后果（按代码路径核对，行号以 `main` 为准）：
+
+1. `GET /api/adapters` 只列 `stcb`（`internal/server/server.go` `handleListAdapters`
+   遍历 `device.Names()`），demo 的命令白名单不下发给前端。
+2. `GET /api/capabilities`、以及 `/api/descriptors`、`/api/devices/{e}/{d}/descriptor`
+   随附的 `capabilities` 全部来自同一个 `s.capabilityCatalog()`，因此只有 stcb 的
+   clock/alarm/contact 三项，demo 的 counter/uptime/setpoint/toggle/diagnostics 缺席。
+3. 前端 `commandActions`（`webui/src/lib/descriptor.ts`）的三条来源里，demo 的
+   Descriptor **不声明** root/entity 级 `commands`（命令按钮只由 Capability
+   `spec.actions` 生成），于是「Capability actions」与「适配器白名单回落」两条同时
+   落空 → `source='none'`，demo 设备**渲染不出任何命令按钮**，只剩状态展示。
+4. `handlePostCommand` 的白名单校验是 `if a, ok := device.Get(adapter); ok { ... }`：
+   未注册即**整段跳过**（server 侧 fail-open）。端到端仍不至于放行任意命令——Edge
+   侧 `dev.Send` 只认 `ping/set/dump/noop`，其余回 `failed`——但 server 这道闸门
+   与审计里的 `unsupported_command` 拒绝都失效了。
+
+不受影响的部分：设备在线态、`state`、`event`、Edge 上报的 Descriptor 与
+observation 时间戳（那些走 WS 上行，不依赖 server 端注册表）。
+
+一行修复：
+
+```go
+_ "github.com/DeliciousBuding/cloud-path/examples/demo" // 适配器注册（命令白名单 + capability catalog）
+```
+
 ## 拆仓红线
 
 本包只依赖 `sdk/go/driverkit` 与 `sdk/go/model`，**不 import 任何 `internal/*`**

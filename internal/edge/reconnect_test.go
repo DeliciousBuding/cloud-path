@@ -331,3 +331,102 @@ func TestOfflineDeviceCommandFailsClosed(t *testing.T) {
 	}
 	assertSanitized(t, ack.Detail)
 }
+
+// ---- command_ack 写达存疑窗口（防「ack 从缝里漏掉、命令永远停在 sent」）----
+
+// ackEnvelope 构造一条可序列化的 command_ack 信封。
+func ackEnvelope(commandID int64, status, detail string) []byte {
+	return mustJSON(api.Envelope{V: api.Version, Type: api.MsgCommandAck, Device: "e1/d1",
+		Ts: time.Now().Unix(), Data: mustJSON(api.AckData{CommandID: commandID, Status: status, Detail: detail})})
+}
+
+// TestAckWrittenOnDyingSessionIsRequeued 锁定存疑窗口的核心不变量：
+// ws.Write 返回 nil（字节进了本端 socket）但会话随即死掉时，这条 ack 必须被
+// 判定为**未写达**并退回离线缓冲，等重连重发——否则一次真实的执行结果永久丢失，
+// Server 上的命令永远停在 sent。
+func TestAckWrittenOnDyingSessionIsRequeued(t *testing.T) {
+	c := testClient()
+	sess := newWSSession()
+	ack := ackEnvelope(7001, "failed", "device offline")
+
+	sess.track(c, ack) // 模拟写泵：写「成功」了
+	if c.Buffered() != 0 {
+		t.Fatalf("会话存活时不应立刻退回缓冲，got %d", c.Buffered())
+	}
+	if sess.unconfirmed() != 1 {
+		t.Fatalf("写达未确认的 ack = %d, want 1", sess.unconfirmed())
+	}
+
+	// 会话在存疑窗口内死掉（对端电脑掉线 / server 重启）。
+	lost := sess.drain()
+	if len(lost) != 1 {
+		t.Fatalf("会话死亡时应交出未确认 ack %d 条, want 1", len(lost))
+	}
+	for _, d := range lost {
+		c.requeue(d)
+	}
+	if c.Buffered() != 1 {
+		t.Fatalf("未写达的 ack 必须回到离线缓冲，got %d", c.Buffered())
+	}
+	if n := c.flushPending(); n != 1 {
+		t.Fatalf("重连后必须重放该 ack，got %d", n)
+	}
+}
+
+// TestAckConfirmedAfterDoubtWindow 反向锁定：会话活过存疑窗口即视为真写达，
+// 不得退回缓冲重发（否则每次正常执行都会产生重复 ack）。
+func TestAckConfirmedAfterDoubtWindow(t *testing.T) {
+	c := testClient()
+	sess := newWSSession()
+	sess.track(c, ackEnvelope(7002, "ok", "dump level=1"))
+
+	time.Sleep(ackDoubtWindow + 250*time.Millisecond)
+	if got := sess.unconfirmed(); got != 0 {
+		t.Fatalf("存疑窗口后应确认写达，仍未确认 %d 条", got)
+	}
+	if c.Buffered() != 0 {
+		t.Fatalf("已写达的 ack 不得退回缓冲（会重复上报），got %d", c.Buffered())
+	}
+	if lost := sess.drain(); len(lost) != 0 {
+		t.Fatalf("会话正常结束时不应有未确认 ack，got %d", len(lost))
+	}
+}
+
+// TestTrackOnDeadSessionRequeuesImmediately 覆盖另一条时序：写完成时会话已经死了
+// （track 晚于 drain），此时必须直接退回缓冲，不得挂进已死会话的 inflight。
+func TestTrackOnDeadSessionRequeuesImmediately(t *testing.T) {
+	c := testClient()
+	sess := newWSSession()
+	if lost := sess.drain(); len(lost) != 0 {
+		t.Fatalf("空会话 drain = %d, want 0", len(lost))
+	}
+	sess.track(c, ackEnvelope(7003, "ok", "noop commands=1"))
+	if c.Buffered() != 1 {
+		t.Fatalf("已死会话上的写必须立即退回缓冲，got %d", c.Buffered())
+	}
+	if sess.unconfirmed() != 0 {
+		t.Fatalf("已死会话不得再持有 inflight，got %d", sess.unconfirmed())
+	}
+}
+
+// TestOnlyAckIsTrackedForDoubtWindow 锁定「只有 command_ack 走写前保护」：
+// event 在冻结契约里没有去重键，重放会在 server 事件流产生重复行，因此
+// 事件保持既有尽力语义（写失败才 requeue，写成功即视为写达）。
+func TestOnlyAckIsTrackedForDoubtWindow(t *testing.T) {
+	if !isAckPayload(ackEnvelope(7004, "ok", "x")) {
+		t.Fatal("command_ack 应被识别为需要写达确认")
+	}
+	event := mustJSON(api.Envelope{V: api.Version, Type: api.MsgEvent, Device: "e1/d1",
+		Ts: time.Now().Unix(), Data: mustJSON(api.EventData{Type: "REMIND"})})
+	if isAckPayload(event) {
+		t.Fatal("event 不得进入写达存疑窗口（重放会产生重复事件行）")
+	}
+	state := mustJSON(api.Envelope{V: api.Version, Type: api.MsgState, Device: "e1/d1",
+		Ts: time.Now().Unix(), Data: mustJSON(api.StateData{Online: true})})
+	if isAckPayload(state) {
+		t.Fatal("state 不得进入写达存疑窗口（幂等，重连后全量重报）")
+	}
+	if isAckPayload([]byte("not json")) {
+		t.Fatal("非法 payload 不得被当成 ack")
+	}
+}

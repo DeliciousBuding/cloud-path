@@ -1,6 +1,7 @@
 package edge
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"log/slog"
@@ -22,6 +23,17 @@ const (
 	// offlineBufferCap 是断线期间缓冲的事件条数上限：事件不可重放（丢了就没了），
 	// 状态消息幂等（下一拍会重发）所以直接丢。超上限丢最旧保最新。
 	offlineBufferCap = 512
+	// ackDoubtWindow 是 command_ack 的「写达存疑窗口」。
+	//
+	// ws.Write 返回 nil 只说明字节进了本端 socket，不代表对端收到：连接可能正在
+	// 死（FIN/RST 还没被读泵观察到），此时写仍然「成功」。会话若在写入后这段
+	// 时间内死掉，该 ack 视为**未写达**并退回离线缓冲，重连后重发——否则一次
+	// 真实的执行结果（尤其 failed）会永久丢失，命令在 Server 上永远停在 sent。
+	//
+	// 只有 command_ack 走这条写前保护：它按 command_id 幂等（server 侧是
+	// UPDATE by id），重发安全；event 在冻结契约里没有去重键，重发会在 server
+	// 事件流产生重复行，因此事件保持既有尽力语义（宁漏不重）。
+	ackDoubtWindow = 500 * time.Millisecond
 )
 
 // wsClient 维护到 server 的 WS 长连接：自动重连（指数退避+抖动）、
@@ -154,6 +166,8 @@ func (c *wsClient) session(ctx context.Context) error {
 
 	sessCtx, sessCancel := context.WithCancel(ctx)
 	defer sessCancel()
+	// 本次会话的写达存疑状态（只跟踪 command_ack）。
+	sess := newWSSession()
 
 	// 写泵
 	var wg sync.WaitGroup
@@ -174,6 +188,11 @@ func (c *wsClient) session(ctx context.Context) error {
 					// 否则一次真实的 failed ack / 事件就被静默吞掉了。
 					c.requeue(msg)
 					return
+				}
+				if isAckPayload(msg) {
+					// 写返回 nil 不等于对端收到：进入存疑窗口。会话在窗口内死掉
+					// 则由 drain 退回缓冲重发（幂等），窗口内仍存活才算真写达。
+					sess.track(c, msg)
 				}
 			}
 		}
@@ -206,6 +225,12 @@ func (c *wsClient) session(ctx context.Context) error {
 		if err != nil {
 			sessCancel()
 			wg.Wait()
+			// 写泵已停：把「写了但会话在存疑窗口内死掉」的 command_ack 退回
+			// 离线缓冲，下一次会话重连后重发。顺序必须是 sessCancel → wg.Wait
+			// → drain，否则会与写泵并发的 track 竞争。
+			for _, lost := range sess.drain() {
+				c.requeue(lost)
+			}
 			return err
 		}
 		var env api.Envelope
@@ -292,10 +317,8 @@ func isBufferable(t api.MsgType) bool {
 // 与 buffer 的区别只在调用时机：buffer 发生在入队时（已知离线），requeue 发生在
 // 出队后写失败时（连接正在死）。两者都必须存在，否则消息会从缝里漏掉。
 func (c *wsClient) requeue(data []byte) {
-	var probe struct {
-		Type api.MsgType `json:"type"`
-	}
-	if err := json.Unmarshal(data, &probe); err != nil || !isBufferable(probe.Type) {
+	typ, ok := payloadType(data)
+	if !ok || !isBufferable(typ) {
 		return
 	}
 	c.mu.Lock()
@@ -306,8 +329,88 @@ func (c *wsClient) requeue(data []byte) {
 	}
 	c.pending = append(c.pending, data)
 	c.buffered++
-	slog.Warn("write failed, message requeued for replay", "type", string(probe.Type),
+	slog.Warn("undelivered message requeued for replay", "type", string(typ),
 		"buffered", len(c.pending))
+}
+
+// payloadType 从一条已序列化信封里取出消息类型。
+func payloadType(data []byte) (api.MsgType, bool) {
+	var probe struct {
+		Type api.MsgType `json:"type"`
+	}
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return "", false
+	}
+	return probe.Type, true
+}
+
+// isAckPayload 报告一条已序列化信封是否为 command_ack（唯一需要写达确认的类型）。
+func isAckPayload(data []byte) bool {
+	typ, ok := payloadType(data)
+	return ok && typ == api.MsgCommandAck
+}
+
+// wsSession 跟踪一次连接的「写达存疑」状态。
+//
+// 存在的理由：TCP 上写成功与对端收到之间没有本地可判定的因果——连接正在死时
+// ws.Write 依然可能返回 nil。对幂等的 command_ack，我们用一段时间窗口把「写了
+// 但会话随即死掉」判定为未写达并退回缓冲重发，从而关掉「ack 从缝里漏掉、命令
+// 永远停在 sent」这条丢失路径。
+type wsSession struct {
+	mu       sync.Mutex
+	dead     bool
+	inflight [][]byte // 已写出但尚未越过存疑窗口的 command_ack
+}
+
+func newWSSession() *wsSession { return &wsSession{} }
+
+// track 记录一条已成功写出的 command_ack。会话已死则直接退回缓冲（写在了正在
+// 死的连接上）；否则挂一个存疑窗口定时器，窗口内会话仍存活才算真写达。
+func (s *wsSession) track(c *wsClient, data []byte) {
+	s.mu.Lock()
+	if s.dead {
+		s.mu.Unlock()
+		c.requeue(data)
+		return
+	}
+	s.inflight = append(s.inflight, data)
+	s.mu.Unlock()
+	time.AfterFunc(ackDoubtWindow, func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.dead {
+			return // 会话已死：drain 已接管，这里不得再移除
+		}
+		s.inflight = removeFirstEqual(s.inflight, data)
+	})
+}
+
+// drain 标记会话死亡并取出全部未确认写达的 command_ack（调用方负责退回缓冲）。
+func (s *wsSession) drain() [][]byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.dead = true
+	out := s.inflight
+	s.inflight = nil
+	return out
+}
+
+// unconfirmed 返回仍未确认写达的 ack 条数（诊断/测试用）。
+func (s *wsSession) unconfirmed() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.inflight)
+}
+
+// removeFirstEqual 按内容相等移除第一条匹配项（同一 payload 可能被重发多次，
+// 每次写达各自确认一条）。
+func removeFirstEqual(list [][]byte, data []byte) [][]byte {
+	for i, d := range list {
+		if bytes.Equal(d, data) {
+			return append(list[:i:i], list[i+1:]...)
+		}
+	}
+	return list
 }
 
 // buffer 把不可重放消息（事件 / 命令 ack）放入离线缓冲（有界，超限丢最旧）。
