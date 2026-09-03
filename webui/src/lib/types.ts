@@ -122,3 +122,19 @@ export interface EdgeUpData {
   devices: string[]
   version: string
 }
+
+/** 登录用户（docs/api.md §2.1-2.2：GET /api/auth/me → {user}） */
+export type Role = 'admin' | 'operator' | 'viewer'
+
+export interface UserView {
+  id: number
+  username: string
+  name: string
+  role: Role
+  tenant_id: number
+  tenant_slug: string
+}
+
+export interface MeResponse {
+  user: UserView
+}

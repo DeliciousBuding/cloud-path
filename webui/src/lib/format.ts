@@ -100,3 +100,14 @@ export function mergeEvents(live: EventView[], history: EventView[]): EventView[
   }
   return out.sort((a, b) => b.ts - a.ts || b.id - a.id)
 }
+
+/** 用户角色 → 中文标签（docs/api.md §2.1 role ∈ admin|operator|viewer；未知角色回落原名） */
+const ROLE_LABELS: Record<string, string> = {
+  admin: '管理员',
+  operator: '操作员',
+  viewer: '只读',
+}
+
+export function roleLabel(role: string): string {
+  return ROLE_LABELS[role] ?? role
+}

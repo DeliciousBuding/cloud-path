@@ -2,6 +2,7 @@
 // 漂移历史（会话级）、命令 ack、断线指数退避重连。
 import { create } from 'zustand'
 import { wsUrl } from '@/lib/api'
+import { authReady, useAuth } from './auth'
 import type {
   AckData, DeviceView, EdgeUpData, EdgeView, Envelope, EventData,
   EventView, SnapshotData, StateData,
@@ -36,15 +37,36 @@ let ws: WebSocket | null = null
 let retry = 0
 let liveEventId = -1
 let started = false
+/** 仅在已登录/开放访问时允许拨号：账号模式下 /ws 需要凭据（docs/api.md §1 不变量2） */
+let enabled = false
 
-/** 建立（幂等）WS 连接；断开自动指数退避重连 1s→15s。 */
+/** 建立（幂等）WS 连接；断开自动指数退避重连 1s→15s。
+ * 仅在已登录/开放访问时真正拨号；未登录期间保持关闭（见 disconnectLive）。 */
 export function connectLive() {
+  enabled = true
+  if (!authReady(useAuth.getState().status)) return
   if (started) return
   started = true
   dial()
 }
 
+/** 断开实时通道并停止自动重连（登出/未登录时调用；重新登录后 connectLive 恢复） */
+export function disconnectLive() {
+  enabled = false
+  retry = 0
+  if (!ws) {
+    if (useLive.getState().status !== 'closed') useLive.setState({ status: 'closed' })
+    return
+  }
+  const old = ws
+  ws = null
+  old.onclose = null
+  old.close()
+  useLive.setState({ status: 'closed' })
+}
+
 function dial() {
+  if (!enabled) return
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
   useLive.setState({ status: 'connecting' })
   try {
@@ -71,14 +93,16 @@ function dial() {
 }
 
 function scheduleRetry() {
+  if (!enabled) return // 登出/未登录后不再敲门（避免 401 重连风暴）
   const delay = Math.min(1000 * 2 ** retry, 15000) + Math.random() * 500
   retry++
   setTimeout(dial, delay)
 }
 
-/** token 变更后强制重连（Settings 页调用） */
+/** token 变更后强制重连（Settings 页调用）；未启用（未登录）时只复位不拨号 */
 export function reconnectLive() {
   retry = 0
+  if (!enabled) return
   if (ws) {
     const old = ws
     ws = null
