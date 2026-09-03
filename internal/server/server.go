@@ -148,9 +148,6 @@ type edgeLink struct {
 	connectedAt time.Time
 	send        chan []byte
 	cancel      context.CancelFunc
-	// pluginBootID 是本连接上已确立的 Edge 启动标识（首条被接受的 plugin_status 写入）。
-	// 同一连接出现不同 boot_id = 旧 boot 迟到消息，一律忽略（暗卷 2）。
-	pluginBootID string
 }
 
 type browserConn struct {

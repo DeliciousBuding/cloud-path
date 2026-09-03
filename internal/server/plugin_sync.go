@@ -130,19 +130,21 @@ func (s *Server) applyPluginStatus(link *edgeLink, data api.PluginStatusData) (b
 	}
 	ep := p.edgePlaneLocked(t, link.edgeID)
 
+	// boot/sequence 幂等闸门（control-plane-sync §4.1）：
+	//   - 同 boot_id：sequence 必须严格单调，重复与倒序忽略；
+	//   - 新 boot_id：Edge 进程重启，sequence 可从 1 重新开始，旧 boot 进入历史集合；
+	//   - 历史（已退役）boot_id：迟到消息一律忽略，即使 sequence 更大（暗卷 2）。
 	switch {
-	case link.pluginBootID == "":
-		// 本连接首次上报：确立 boot。同 boot 的重复/倒序仍要挡掉
-		// （WS 只重连不换进程时 Edge 会延续同一 boot_id 与 sequence）。
-		if ep.bootID == data.BootID && data.Sequence <= ep.lastSequence {
+	case ep.bootID == data.BootID:
+		if data.Sequence <= ep.lastSequence {
 			return false, "stale_sequence"
 		}
-		link.pluginBootID = data.BootID
-	case link.pluginBootID != data.BootID:
-		// 一个进程只有一个 boot id：当前连接上出现别的 boot id = 旧 boot 迟到消息。
+	case ep.hasRetiredBoot(data.BootID):
 		return false, "stale_boot"
-	case data.Sequence <= ep.lastSequence:
-		return false, "stale_sequence"
+	case data.Sequence == 0:
+		return false, "bad_sequence"
+	default:
+		ep.retireBoot()
 	}
 
 	ep.bootID = data.BootID
@@ -221,10 +223,7 @@ func (s *Server) applyPluginAck(link *edgeLink, data api.PluginAckData) (bool, s
 		return false, "store_error"
 	}
 	ep := p.edgePlaneLocked(t, link.edgeID)
-	bootID := link.pluginBootID
-	if bootID == "" {
-		bootID = ep.bootID
-	}
+	bootID := ep.bootID
 	results := sanitizeApplyResults(data.Results)
 
 	if data.Revision > ep.desiredRevision {

@@ -55,6 +55,7 @@ type pluginEdgePlane struct {
 	desiredRevision uint64
 	appliedRevision uint64
 	bootID          string
+	retiredBoots    []string
 	lastSequence    uint64
 	lastReportAt    int64
 	lastAckAt       int64
@@ -62,6 +63,31 @@ type pluginEdgePlane struct {
 	lastResults     []api.PluginApplyResultData
 	observed        map[string]api.PluginObservedInstanceData
 	installations   map[string]api.PluginInstallationStatusData
+}
+
+// maxRetiredBoots 限制每个 tenant/edge 记住的历史 boot id 数量（防无界增长）。
+const maxRetiredBoots = 16
+
+// hasRetiredBoot 报告某个 boot id 是否已被更晚的 boot 取代。
+// 旧 boot 的迟到消息即使携带更大的 sequence 也必须忽略（暗卷 2）。
+func (ep *pluginEdgePlane) hasRetiredBoot(bootID string) bool {
+	for _, old := range ep.retiredBoots {
+		if old == bootID {
+			return true
+		}
+	}
+	return false
+}
+
+// retireBoot 把当前 boot id 移入历史集合（FIFO，上限 maxRetiredBoots）。
+func (ep *pluginEdgePlane) retireBoot() {
+	if ep.bootID == "" {
+		return
+	}
+	ep.retiredBoots = append(ep.retiredBoots, ep.bootID)
+	if len(ep.retiredBoots) > maxRetiredBoots {
+		ep.retiredBoots = ep.retiredBoots[len(ep.retiredBoots)-maxRetiredBoots:]
+	}
 }
 
 // pluginTenantPlane 是单租户的插件控制面缓存（懒加载自 PluginStore）。
