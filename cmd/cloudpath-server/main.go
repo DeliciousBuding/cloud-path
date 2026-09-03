@@ -55,7 +55,7 @@ func main() {
 	sessionDays := flag.Int("session-days", envInt("CLOUDPATH_SESSION_DAYS", 7),
 		"会话有效期（天，<=0 用默认 7）")
 	setupToken := flag.String("setup-token", os.Getenv("CLOUDPATH_SETUP_TOKEN"),
-		"一次性首装令牌：非回环来源执行首次 setup 必带；成功后失效")
+		"一次性首装令牌：非本机直连来源（含经反代转发/带 X-Forwarded-* 的请求）执行首次 setup 必带；成功后失效")
 	trustedProxies := flag.String("trusted-proxies", os.Getenv("CLOUDPATH_TRUSTED_PROXIES"),
 		"可信反代 CIDR 白名单，逗号分隔（仅这些来源的 X-Forwarded-* 头被采信）")
 	flag.Parse()

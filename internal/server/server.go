@@ -68,8 +68,9 @@ type Config struct {
 	LoginRatePerMin int
 	// SessionDays 是服务端会话 TTL（天）。<=0 用默认 7。
 	SessionDays int
-	// SetupToken 是一次性首装令牌：非回环来源执行 /api/auth/setup 时必须携带；
-	// 首次成功 setup 后进程内失效。空 = 仅允许真实 TCP loopback setup。
+	// SetupToken 是一次性首装令牌：非本机直连来源执行 /api/auth/setup 时必须携带
+	// （同机反代转发的请求也算非本机直连，见 setupFromLocalClient）；
+	// 首次成功 setup 后进程内失效。空 = 仅允许本机直连 setup。
 	SetupToken string
 	// TrustedProxies 是可信反代 CIDR allowlist（已解析）；nil = 不采信任何转发头。
 	TrustedProxies *auth.TrustedProxies
@@ -133,10 +134,11 @@ type Server struct {
 	pluginCatalog plugincatalog.Catalog // 只读插件目录（注入；默认接自己的投影）
 	plugin        *pluginPlane          // 插件控制面运行态（desired 缓存 + observed 投影）
 
-	trustedProxies *auth.TrustedProxies             // 反代 allowlist（nil=不信任转发头）
-	setupTokenUsed atomic.Bool                      // 一次性 setup token 已消费
-	verifyPassword func(hash, password string) bool // 登录密码校验（测试可注入）
-	dummyVerify    func(password string)            // 未知用户 dummy 校验（测试可注入）
+	trustedProxies     *auth.TrustedProxies             // 反代 allowlist（nil=不信任转发头）
+	setupTokenUsed     atomic.Bool                      // 一次性 setup token 已消费
+	setupRejectAuditAt atomic.Int64                     // 被拒首装尝试的上次审计时刻（unix 秒，节流用）
+	verifyPassword     func(hash, password string) bool // 登录密码校验（测试可注入）
+	dummyVerify        func(password string)            // 未知用户 dummy 校验（测试可注入）
 }
 
 type edgeLink struct {
@@ -803,6 +805,11 @@ func (s *Server) authWrite(h http.HandlerFunc) http.HandlerFunc {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 			return
 		}
+		// 无凭据写操作的兜底放行只看真实 TCP 对端（不采信任何转发头）。
+		// 注意：同机反代形态下公网访客的对端同样是 127.0.0.1，因此这条路径**只**在
+		// 非账号模式（无用户且未开 -require-auth）下存在；生产必须先完成首装
+		// （setup 侧已按 trusted-proxy 感知的真实客户端 IP 收紧，见 setupFromLocalClient），
+		// 一旦进入账号模式本分支不可达。
 		if !auth.IsLoopbackRemote(r) {
 			writeJSON(w, http.StatusForbidden, map[string]string{
 				"error": "写操作需要回环来源或有效凭据"})
