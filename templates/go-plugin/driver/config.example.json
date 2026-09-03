@@ -1,0 +1,9 @@
+# Example Driver instance configuration (passed to ConfigureInstance as JSON
+# bytes). This template driver is simulated; a real driver validates this
+# against its own config schema here.
+{
+  "instance_id": "template-instance",
+  "simulated": {
+    "sample_interval_seconds": 2
+  }
+}

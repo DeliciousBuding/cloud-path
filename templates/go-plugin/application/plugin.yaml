@@ -1,0 +1,27 @@
+# CloudPath Application Plugin manifest (v1alpha1).
+# Shape follows spec/plugin-manifest.schema.json. Values below are the
+# template defaults; run scripts/rename.py to produce a real plugin manifest.
+apiVersion: plugins.cloudpath.dev/v1alpha1
+kind: Application
+id: io.github.deliciousbuding.cloud-path-app-template
+version: 0.1.0
+protocol: 1
+entrypoint: cloudpath-app-template
+compatibility:
+  # Core product compatibility range. Bump the upper bound carefully; a new Core
+  # minor must not silently break a published plugin.
+  core: ">=0.2.0 <0.4.0"
+permissions:
+  # This application is declarative over a single Capability binding. It opens
+  # no Core SQLite and requests no global token; it writes only plugin-data.
+  hardware: []
+  network: []
+  filesystem:
+    - plugin-data
+  secrets: []
+requirements:
+  # The application binds to a Capability by semantic id, never by Driver id.
+  - id: req/temperature
+    capability: cloudpath.dev/capability/drivertemplate@1
+    cardinality: one
+    min_items: 1

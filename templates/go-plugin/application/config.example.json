@@ -1,0 +1,9 @@
+# Example Application instance configuration (passed to ConfigureInstance as
+# JSON bytes). This template accepts arbitrary JSON; a real application
+# validates it against its own config schema here.
+{
+  "instance_id": "template-instance",
+  "bindings": [
+    { "requirement_id": "req/temperature", "entity_id": "temp-1" }
+  ]
+}
