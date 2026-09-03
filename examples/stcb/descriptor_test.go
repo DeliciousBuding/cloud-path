@@ -13,7 +13,8 @@ import (
 func TestSTCBDescriptorValid(t *testing.T) {
 	a := &Adapter{}
 
-	desc := a.Descriptor(driverkit.Config{ID: "d1", Name: "节点1", Port: "COM9"})
+	// Port 使用占位符：公开边界要求不出现真实串口号。
+	desc := a.Descriptor(driverkit.Config{ID: "d1", Name: "节点1", Port: "COM_PLACEHOLDER"})
 	if err := desc.Validate(); err != nil {
 		t.Fatalf("descriptor.Validate: %v", err)
 	}
