@@ -1,0 +1,8 @@
+apiVersion: plugins.cloudpath.dev/v1alpha1
+kind: Driver
+id: ../escape
+version: 0.1.0
+protocol: 1
+entrypoint: ./driver
+compatibility:
+  core: ">=0.1.0 <0.2.0"

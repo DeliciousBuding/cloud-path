@@ -16,6 +16,46 @@ type semver struct {
 	Patch int
 }
 
+// ValidateManifestContract enforces the id/version/protocol/compatibility
+// contract for a manifest before installation. Any failure is returned wrapped
+// with a sentinel so the CLI can map it to a stable error code. It deliberately
+// fails closed on malformed or unsupported values.
+func ValidateManifestContract(manifest *Manifest, coreVersion string, supportedProtocol int) error {
+	if manifest == nil {
+		return fmt.Errorf("%w: manifest is nil", ErrInvalidManifest)
+	}
+	if !validPluginID(manifest.ID) {
+		return fmt.Errorf("%w: invalid plugin id %q", ErrInvalidManifest, manifest.ID)
+	}
+	if _, err := parseSemver(manifest.Version); err != nil {
+		return fmt.Errorf("%w: invalid version %q", ErrInvalidManifest, manifest.Version)
+	}
+	if supportedProtocol > 0 && manifest.Protocol != supportedProtocol {
+		return fmt.Errorf("%w: protocol %d, want %d", ErrProtocolIncompatible, manifest.Protocol, supportedProtocol)
+	}
+	if manifest.Protocol <= 0 {
+		return fmt.Errorf("%w: protocol must be positive, got %d", ErrProtocolIncompatible, manifest.Protocol)
+	}
+	if err := CheckCoreCompatibility(manifest, coreVersion); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validPluginID reports whether id is a non-empty, filesystem-safe plugin id
+// that SafePluginID will not map onto a path-traversal or dot-relative name.
+func validPluginID(id string) bool {
+	if id == "" || id == "." || id == ".." {
+		return false
+	}
+	for _, r := range id {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && !strings.ContainsRune("._-", r) {
+			return false
+		}
+	}
+	return true
+}
+
 // CheckCoreCompatibility verifies compatibility.core against current version.
 // It supports operators >=, <=, >, <, =, ^ and ~, joined by whitespace or commas.
 func CheckCoreCompatibility(manifest *Manifest, current string) error {
