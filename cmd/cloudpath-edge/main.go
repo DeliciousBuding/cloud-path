@@ -16,7 +16,8 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/DeliciousBuding/cloud-path/examples/stcb" // 设备适配器注册
+	_ "github.com/DeliciousBuding/cloud-path/examples/demo" // 参考演示设备适配器（无硬件，见 examples/demo/README.md）
+	_ "github.com/DeliciousBuding/cloud-path/examples/stcb" // 真实 STC-B 板设备适配器
 	"github.com/DeliciousBuding/cloud-path/internal/edge"
 	"github.com/DeliciousBuding/cloud-path/internal/edgedriverhost"
 	"github.com/DeliciousBuding/cloud-path/internal/logx"
