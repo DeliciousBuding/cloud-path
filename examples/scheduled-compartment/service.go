@@ -89,7 +89,6 @@ func ApplicationID() string { return pluginIDValue }
 func Version() string { return pluginVersion }
 
 // New returns a fresh, uninitialized Scheduled Compartment service.
-// New returns a fresh, uninitialized Scheduled Compartment service.
 func New() *Service {
 	return &Service{
 		pluginID:  pluginIDValue,

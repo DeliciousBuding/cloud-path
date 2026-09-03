@@ -1,19 +1,45 @@
 # Scheduled Compartment
 
 `cloud-path-app-scheduled-compartment` is a **device-agnostic** reference
-Application plugin for CloudPath. It manages several compartments according to a
-schedule: when a schedule window starts it emits a reminder, observes contact
-opened/closed events for each compartment, records a completed or missed outcome
-per window, and keeps everything idempotent.
+Application plugin for CloudPath. It manages a set of compartments against a
+daily schedule: when a schedule window starts it emits a reminder, observes
+contact opened/closed events for each compartment, records a completed or
+missed outcome per window, and keeps everything idempotent.
 
-The application does **not** depend on any Driver ID, port or vendor field. It is
-expressed purely in terms of standard Capability requirements and stable
-`entity_id` bindings, so the same application can be deployed against any set of
-entities that expose those capabilities.
+The application does **not** depend on any Driver ID, port or vendor field. It
+is expressed purely in terms of standard Capability requirements and stable
+`entity_id` bindings, so the same application can be deployed against any set
+of entities that expose those capabilities.
 
 Only the following domain terms are used: **schedule**, **window**,
 **compartment**, **opened**, **completed**, **missed** and **reminder**. No
 industry-specific semantics are hard-coded.
+
+## Dependencies
+
+- **Go 1.26.3 or newer** (the checkout's `go.mod` declares `go 1.26.3`).
+- **Only the public CloudPath SDK and protocol schema.** The code imports
+  these packages from `github.com/DeliciousBuding/cloud-path` and nothing else
+  from the Core repository:
+
+  | Import path | Purpose |
+  |---|---|
+  | `sdk/go/cloudpath/v1/application` | Application Protocol v1 types and RPC |
+  | `sdk/go/cloudpath/v1/status` | Status codes |
+  | `sdk/go/pluginmain` | Host-injected launch identity and handshake |
+  | `sdk/go/rpc` | RPC server |
+  | `sdk/go/transport` | Host-provided transport |
+
+  There are **no imports from `internal/`** of the Core repository. Re-check
+  the boundary from this directory with:
+
+  ```bash
+  grep -R "cloud-path/internal" --include="*.go" .
+  # expected: no output
+  ```
+
+- The manifest requests **no hardware, network, filesystem or secret
+  permissions**.
 
 ## Required Capabilities
 
@@ -25,7 +51,8 @@ industry-specific semantics are hard-coded.
 
 The same declarations live in `requirements.yaml` (human review) and
 `plugin.yaml` (machine manifest). `Describe` returns the equivalent
-`ApplicationDescriptor`, so the runtime and the manifest cannot drift.
+`ApplicationDescriptor`, so the runtime and the manifest cannot drift; the
+`manifest_test.go` suite enforces that all three copies stay identical.
 
 ## Instance Configuration
 
@@ -104,70 +131,102 @@ the instance config and window state.
 
 ## Build
 
-These are the commands as they would be run from the root of the standalone
-repository. Inside the CloudPath monorepo, the package lives at
-`examples/scheduled-compartment` and the paths are prefixed accordingly.
+From a standalone checkout of this repository:
 
 ```bash
-# Application library + tests + entrypoint command
+# Application library, tests and entrypoint command
 go build ./...
 go vet ./...
 
 # Build just the entrypoint binary
-go build -o ./cloud-path-app-scheduled-compartment ./cmd/cloud-path-app-scheduled-compartment
+go build -o cloud-path-app-scheduled-compartment ./cmd/cloud-path-app-scheduled-compartment
 ```
 
 The entrypoint binary is `cloud-path-app-scheduled-compartment`, matching the
 `entrypoint` field in `plugin.yaml`.
 
+Inside the CloudPath monorepo the same code lives under
+`examples/scheduled-compartment`; prefix the package patterns with that
+directory, for example `go build ./examples/scheduled-compartment/...`.
+
 ## Test
 
 ```bash
 go test ./... -count=1
-go test ./... -count=20      # flake / idempotency soak
-python scripts/fmtcheck.py   # gofmt gate
+go test ./... -count=20   # idempotency / flake soak
 ```
-
-In the monorepo, run the same with the `./examples/scheduled-compartment/...`
-path and `go test ./... -count=1` from the repository root.
 
 The suite covers the descriptor requirements, config/binding validation, the
 window reminder effect, contact-driven completion, missed-window recording,
-duplicate-event idempotency, rejection of driver coupling, invalid config and
-graceful shutdown.
+duplicate-event idempotency, rejection of driver coupling, invalid config,
+graceful shutdown, and manifest identity / requirements drift.
 
-## Run
-
-The entrypoint is an install-style Application plugin. The A4 Plugin Host
-injects the launch identity and loopback endpoint through the environment, and
-the shared `sdk/go/pluginmain` helper emits the single handshake line, dials
-the host and serves the Application Protocol v1 over that authenticated
-transport:
+Inside the monorepo, the repository-level gates additionally cover the whole
+tree:
 
 ```bash
-go run ./cmd/cloud-path-app-scheduled-compartment
+go vet ./...
+python scripts/fmtcheck.py
+# Full binary → Host E2E (monorepo-only harness)
+go test ./testing/plugin-harness -run TestScheduledCompartmentBinaryHostE2E -count=1
 ```
 
-Run outside a host it fails fast on the missing `CLOUDPATH_*` environment; it
-is meant to be launched by the Plugin Host or the process-host E2E tests
-(`go test ./testing/plugin-harness -run TestScheduledCompartmentBinaryHostE2E`).
+## Run as an Application Plugin
+
+`cmd/cloud-path-app-scheduled-compartment` is an install-style, process-based
+Application plugin. It is launched by the CloudPath Plugin Host, never with
+manual flags: the Host injects the launch identity and a loopback endpoint
+through `CLOUDPATH_*` environment variables (the contract is defined by the
+public `pluginmain` package), the process prints the single `CP1` handshake
+line, dials back and serves Application Protocol v1 over that authenticated
+transport. Started outside a Host it exits immediately with a missing
+environment error.
+
+To attach it to a Host:
+
+1. Build the entrypoint binary (see Build).
+2. Publish `plugin.yaml` and the entrypoint binary as a release asset together
+   with its published sha256 digest.
+3. Install and enable the instance:
+
+   ```bash
+   cloudpath plugin install <repository-url-or-id> --digest sha256:<hex> --yes
+   cloudpath plugin enable io.github.deliciousbuding.cloud-path-app-scheduled-compartment
+   ```
+
+4. Start the Host, which supervises the plugin process and serves the
+   protocol:
+
+   ```bash
+   cloudpath plugin host
+   ```
+
+The runtime then delivers the instance configuration through
+`ConfigureInstance` and entity bindings through `ValidateBinding` (see
+Instance Configuration and Binding).
+
+## Disable and remove
+
+```bash
+cloudpath plugin disable io.github.deliciousbuding.cloud-path-app-scheduled-compartment
+cloudpath plugin remove  io.github.deliciousbuding.cloud-path-app-scheduled-compartment
+```
+
+`remove` keeps the instance data; add `--purge` to delete it as well.
 
 ## Repository Layout
 
 | Path | Purpose |
 |---|---|
-| `plugin.yaml` | Machine manifest (id, version, protocol, entrypoint, requirements) |
+| `plugin.yaml` | Machine manifest (id, version, protocol, entrypoint, requirements, contributions) |
 | `requirements.yaml` | Human-readable requirement mirror |
 | `config.go` | Bounded instance config schema and validation |
 | `service.go` | `ApplicationService` implementation and state machine |
 | `service_test.go` | Conformance/behaviour tests over the real wire |
+| `manifest_test.go` | Machine identity lock + manifest/requirements/descriptor drift tests |
 | `cmd/cloud-path-app-scheduled-compartment/` | Executable entrypoint |
 
 ## Status
 
-Implemented as a runnable reference application. The application is a
-process-based plugin; it does not depend on any `internal/*` package and it is
-safe to incubate here before splitting out to
-`cloud-path-app-scheduled-compartment`.
-
-
+Implemented as a runnable reference application. It is a process-based plugin
+that depends only on the public CloudPath SDK and schema.
