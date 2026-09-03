@@ -333,7 +333,9 @@ func TestStaleDisconnectCannotClearCurrentConnection(t *testing.T) {
 	if _, _, err := oldWS.Read(ctx); err == nil {
 		t.Fatal("旧连接应被挤掉")
 	}
-	// 给旧连接 defer 足够时间执行；其清理必须跳过当前（新）连接。
+	// 先条件等待新连接注册（满载下固定 sleep 会被击穿），再给旧连接 defer
+	// 留出执行窗口；其清理必须跳过当前（新）连接。
+	waitEdgeLink(t, srv, "e1", a)
 	time.Sleep(300 * time.Millisecond)
 
 	srv.mu.RLock()

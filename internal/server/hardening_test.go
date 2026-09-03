@@ -349,10 +349,23 @@ func TestEdgeReconnectEvictionKeepsState(t *testing.T) {
 	if _, _, err := old.Read(ctx); err == nil {
 		t.Fatal("旧连接应被挤掉")
 	}
+	// 先条件等待新连接注册（设备此前已在线，waitDeviceOnline 不构成注册判据；
+	// 满载下固定 sleep 会被击穿），再给旧连接 defer 留窗口，复查终态未被破坏。
+	deadline := time.Now().Add(30 * time.Second)
+	var link *edgeLink
+	for time.Now().Before(deadline) {
+		srv.mu.RLock()
+		link = srv.edges["e1"]
+		srv.mu.RUnlock()
+		if link != nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	time.Sleep(200 * time.Millisecond)
 
 	srv.mu.RLock()
-	link := srv.edges["e1"]
+	link = srv.edges["e1"]
 	v := srv.devices["e1/d1"]
 	online := v != nil && v.Online
 	srv.mu.RUnlock()

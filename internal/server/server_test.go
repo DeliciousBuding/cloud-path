@@ -265,14 +265,8 @@ func TestEdgeAuth(t *testing.T) {
 		V: api.Version, Type: api.MsgState, Device: "good/d1",
 		Data: rawData(t, api.StateData{Online: true, Raw: map[string]any{}, UpdatedAt: time.Now().Unix()}),
 	})
-	time.Sleep(200 * time.Millisecond)
-	srv.mu.RLock()
-	v, ok := srv.devices["good/d1"]
-	online := ok && v.Online
-	srv.mu.RUnlock()
-	if !ok || !online {
-		t.Fatalf("valid token edge not registered: ok=%v online=%v", ok, online)
-	}
+	// 条件等待：hello/state 在服务端异步处理，满载下固定 sleep 会被击穿。
+	waitDeviceOnline(t, srv, "good/d1")
 	ws2.CloseNow()
 }
 

@@ -477,12 +477,7 @@ func TestAccountModeRejectsUnauthenticatedEdge(t *testing.T) {
 		Data: rawData(t, api.HelloData{EdgeID: "tok", Token: plain,
 			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "stcb"}}}),
 	})
-	time.Sleep(200 * time.Millisecond)
-	srv.mu.RLock()
-	_, ok := srv.edges["tok"]
-	srv.mu.RUnlock()
-	if !ok {
-		t.Fatal("tenant token(edge) 未接入")
-	}
+	// 条件等待注册（Windows CI 满载下 200ms 固定 sleep 被击穿：hello 处理晚于断言）。
+	waitEdgeLink(t, srv, "tok", defID)
 	ws2.CloseNow()
 }
