@@ -29,6 +29,38 @@ tasks:
       - go build -tags embed_ui -trimpath -ldflags "{{.LDFLAGS}}" -o {{.BIN}}/ ./cmd/cloudpath-server
       - go build -trimpath -ldflags "{{.LDFLAGS}}" -o {{.BIN}}/ ./cmd/cloudpath-edge
 
+  build:linux-arm64:
+    desc: 生产上线物料：Linux arm64 server（内嵌 WebUI）+ 架构断言（断言不过=非零退出）
+    # 交叉编译环境放在 task 级（per-command env 不生效，实测会产出宿主架构产物并被断言拦下）。
+    env:
+      CGO_ENABLED: '0'
+      GOOS: linux
+      GOARCH: arm64
+    cmds:
+      - task: webui:build
+      - go build -tags embed_ui -trimpath -ldflags "-s -w {{.LDFLAGS}}" -o {{.BIN}}/cloudpath-server_linux_arm64 ./cmd/cloudpath-server
+      - '{{.PY}} scripts/assert_arch.py --expect-os linux --expect-arch arm64 --expect-tags embed_ui {{.BIN}}/cloudpath-server_linux_arm64'
+
+  build:matrix:
+    desc: 全平台发布矩阵（server/edge/cli × linux|windows|darwin × amd64|arm64）→ dist/ + checksums.txt
+    deps: [webui:build]
+    cmds:
+      - '{{.PY}} scripts/build_matrix.py --version {{.VERSION}} --out dist'
+
+  verify:arch:
+    desc: 不重新构建，复跑 dist/ 已有产物的 OS/架构/embed_ui 断言 + checksums 校验
+    cmds:
+      - '{{.PY}} scripts/build_matrix.py --verify-only --out dist'
+
+  release:artifacts:
+    desc: 发布物料一条龙：矩阵构建 → 架构断言 → 公开边界审计 → 链接/workflow 检查
+    cmds:
+      - task: build:matrix
+      - task: verify:arch
+      - task: audit:public
+      - task: check:links
+      - task: check:workflows
+
   webui:build:
     desc: 仅构建前端
     dir: webui
@@ -101,6 +133,18 @@ tasks:
       - go clean
       - '{{.PY}} scripts/clean.py'
 
+  selftest:scripts:
+    desc: 发布脚本自测（架构断言 + 构建矩阵，stdlib-only）
+    cmds:
+      - '{{.PY}} scripts/assert_arch.py --self-test'
+      - '{{.PY}} scripts/build_matrix.py --self-test'
+
+  check:workflows:
+    desc: GitHub Actions workflow 结构门禁（stdlib-only；本机有 PyYAML 时做真解析）
+    cmds:
+      - '{{.PY}} scripts/check_workflows.py --self-test'
+      - '{{.PY}} scripts/check_workflows.py'
+
   check:links:
     desc: Markdown 相对链接检查（stdlib-only，含自测）
     cmds:
@@ -128,7 +172,7 @@ tasks:
       - pnpm build
 
   verify:
-    desc: 聚合门禁（vet/test/web/template/audit/links），不递归调用自己
+    desc: 聚合门禁（vet/test/web/template/audit/links/workflow/脚本自测），不递归调用自己
     cmds:
       - task: vet
       - cmd: go test ./... -count=1
@@ -136,3 +180,5 @@ tasks:
       - task: test:templates
       - task: audit:public
       - task: check:links
+      - task: check:workflows
+      - task: selftest:scripts

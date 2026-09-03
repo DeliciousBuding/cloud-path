@@ -1,17 +1,34 @@
 name: CI
 
+# Versions are pinned to the repository's own declarations:
+#   Go   -> go.mod            (go 1.26.3)
+#   pnpm -> webui/package.json packageManager (pnpm@10.32.1)
+#   Node -> 24 (Vite 6 / React 19 toolchain)
+# Keep them in sync when those files change.
+
 on:
   push:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: '1.26.3'
+  NODE_VERSION: '24'
+  PNPM_VERSION: '10.32.1'
+  PYTHON_VERSION: '3.12'
+
 jobs:
   core-go:
-    name: Core Go (build / vet / test / gofmt)
+    name: Core Go (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -24,13 +41,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26.3'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Set up Python (gofmt gate)
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Build all Go packages
         run: go build ./...
@@ -40,6 +57,11 @@ jobs:
 
       - name: Test
         run: go test ./... -count=1
+
+      # The race detector needs cgo, which is not part of the Windows leg here.
+      - name: Test with race detector (Linux only)
+        if: matrix.os == 'ubuntu-latest'
+        run: go test ./... -race -count=1
 
       - name: gofmt gate
         run: python scripts/fmtcheck.py
@@ -54,13 +76,13 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: '10.32.1'
+          version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
           cache-dependency-path: webui/pnpm-lock.yaml
 
@@ -80,6 +102,62 @@ jobs:
         working-directory: webui
         run: pnpm build
 
+  artifact-arch:
+    name: Release artifact architecture gate (linux/arm64 + embed_ui)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: webui/pnpm-lock.yaml
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install frontend dependencies
+        working-directory: webui
+        run: pnpm install --frozen-lockfile
+
+      # The server embeds webui/dist, so the frontend must exist first;
+      # scripts/build_matrix.py fails hard if it does not.
+      - name: Build frontend
+        working-directory: webui
+        run: pnpm build
+
+      # Builds the arm64 server and asserts OS/arch/embed_ui on the artifact.
+      # This is the gate that keeps an amd64 binary away from the native arm64
+      # production host (where it would fail with "exec format error").
+      - name: Cross-build and assert linux/arm64 server
+        run: >-
+          python scripts/build_matrix.py
+          --version "ci-${GITHUB_SHA::7}"
+          --out dist --only server --platforms linux/arm64
+
+      - name: Re-assert artifacts without rebuilding
+        run: python scripts/build_matrix.py --verify-only --out dist
+
+      - name: Show checksums
+        run: cat dist/checksums.txt
+
   plugin-templates:
     name: Go plugin templates (${{ matrix.kind }})
     strategy:
@@ -94,13 +172,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26.3'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Build
         working-directory: templates/go-plugin/${{ matrix.kind }}
@@ -140,7 +218,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Public audit self-test
         run: python scripts/public_audit.py --self-test
@@ -155,3 +233,15 @@ jobs:
 
       - name: Markdown relative-link check
         run: python scripts/check_links.py
+
+      - name: Workflow structure self-test
+        run: python scripts/check_workflows.py --self-test
+
+      - name: Workflow structure check
+        run: python scripts/check_workflows.py
+
+      - name: Artifact arch assertion self-test
+        run: python scripts/assert_arch.py --self-test
+
+      - name: Build matrix self-test
+        run: python scripts/build_matrix.py --self-test
