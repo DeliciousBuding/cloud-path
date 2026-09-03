@@ -8,6 +8,12 @@ gofmt 递归会进入 .worktrees/（开发产物 checkout），结果里过滤�
 import subprocess
 import sys
 
+# Windows CI 控制台默认 cp1252：直接 print 中文会 UnicodeEncodeError 崩掉门禁
+# （崩溃会掩盖真正的 gofmt 结果），统一切到 UTF-8 并对不可编码字符降级替换。
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 EXCLUDE = (".worktrees", "node_modules", "dist", ".git")
 
 

@@ -1,0 +1,7 @@
+# gofmt 门禁跨平台一致性：GitHub Windows runner 默认 core.autocrlf=true，
+# 会把 LF 源码 checkout 成 CRLF，gofmt -l 随即把全部 .go 判为未格式化。
+# 强制 LF 落盘（仓库内 blob 本就是 LF，此文件只约束 checkout 形态）。
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
+*.sh text eol=lf
