@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -217,7 +218,16 @@ func (h *Host) load(ctx context.Context, states []InstanceState) (LoadResult, er
 }
 
 func (h *Host) installationPath(locked registry.LockedPlugin) string {
-	return filepath.Join(h.opts.PluginsDir, registry.SafePluginID(locked.ID), "assets", locked.Digest)
+	base := filepath.Join(h.opts.PluginsDir, registry.SafePluginID(locked.ID), "assets", locked.Digest)
+	if _, err := os.Stat(base); err == nil {
+		return base
+	}
+	// Windows 发布工件按 <digest>.exe 存放（installer 保留 .exe 后缀，否则
+	// exec 的 LookPath/PATHEXT 解析不了无扩展名文件）；精确摘要名始终优先。
+	if _, err := os.Stat(base + ".exe"); err == nil {
+		return base + ".exe"
+	}
+	return base
 }
 
 // installationKind reads the installed manifest kind so the host selects the

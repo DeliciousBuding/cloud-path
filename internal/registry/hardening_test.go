@@ -10,11 +10,75 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
 	"testing"
 )
+
+// TestInstallWindowsAssetKeepsExeSuffix 锁定跨平台可执行性：Windows 发布工件以
+// .exe 结尾，按摘要名存放时必须保留后缀（Windows exec 无法解析无扩展名文件，
+// 2026-09-04 真实 install E2E 查出）；非 .exe 工件仍存裸摘要名（其他测试锁定）。
+func TestInstallWindowsAssetKeepsExeSuffix(t *testing.T) {
+	manifest := readFixture(t, "plugin.yaml")
+	assetData := []byte("payload")
+	srv, _ := installServer(t, manifest, assetData, "driver_windows_amd64.exe")
+	defer srv.Close()
+
+	pluginsDir := t.TempDir()
+	inst := newInstaller(srv, pluginsDir, filepath.Join(pluginsDir, "plugins.lock"))
+	res, err := inst.Install(context.Background(), InstallOptions{
+		Source:       "example/driver",
+		Digest:       SHA256Bytes(assetData),
+		ConfirmPerms: true,
+	})
+	if err != nil {
+		t.Fatalf("install: %v", err)
+	}
+	digest := SHA256Bytes(assetData)
+	pluginDir := filepath.Join(pluginsDir, SafePluginID("io.github.example.driver"))
+	want := filepath.Join(pluginDir, "assets", digest+".exe")
+	if res.AssetPath != want {
+		t.Fatalf("AssetPath = %s, want %s", res.AssetPath, want)
+	}
+	if _, err := os.Stat(want); err != nil {
+		t.Fatalf(".exe asset should exist: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(pluginDir, "assets", digest)); err == nil {
+		t.Fatal("bare digest asset must not exist alongside the .exe variant")
+	}
+}
+
+// TestInstallAssetExecutableOnUnix 锁定 unix 执行位：CreateTemp 的 0600 工件
+// 若不补 +x，host 在 Linux/macOS 上 exec 会 EACCES（与 Windows .exe 同类缺陷）。
+func TestInstallAssetExecutableOnUnix(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("posix mode bits are not meaningful on Windows")
+	}
+	manifest := readFixture(t, "plugin.yaml")
+	assetData := []byte("payload")
+	srv, _ := installServer(t, manifest, assetData, "driver.bin")
+	defer srv.Close()
+
+	pluginsDir := t.TempDir()
+	inst := newInstaller(srv, pluginsDir, filepath.Join(pluginsDir, "plugins.lock"))
+	res, err := inst.Install(context.Background(), InstallOptions{
+		Source:       "example/driver",
+		Digest:       SHA256Bytes(assetData),
+		ConfirmPerms: true,
+	})
+	if err != nil {
+		t.Fatalf("install: %v", err)
+	}
+	fi, err := os.Stat(res.AssetPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm()&0o111 == 0 {
+		t.Fatalf("asset mode %v lacks the executable bit", fi.Mode())
+	}
+}
 
 func readFixture(t *testing.T, name string) []byte {
 	t.Helper()

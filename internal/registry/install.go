@@ -207,10 +207,24 @@ func (i *Installer) Install(ctx context.Context, opts InstallOptions) (*InstallR
 		_ = os.Remove(tmpName)
 		return nil, fmt.Errorf("create asset dir %s: %w", assetsDir, err)
 	}
-	assetPath := filepath.Join(assetsDir, actual)
+	// 资产按内容摘要命名。发布工件以 .exe 结尾（Windows 平台产物）时保留后缀：
+	// Windows 的 exec LookPath 按 PATHEXT 解析，无扩展名文件无法执行（host 侧
+	// installationPath 以 .exe 变体回退，精确摘要名始终优先）。
+	assetFileName := actual
+	if strings.HasSuffix(strings.ToLower(asset.Name), ".exe") {
+		assetFileName += ".exe"
+	}
+	assetPath := filepath.Join(assetsDir, assetFileName)
 	if !pathWithin(i.PluginsDir, assetPath) {
 		_ = os.Remove(tmpName)
 		return nil, fmt.Errorf("%w: asset path escapes plugins dir", ErrUnsafeArtifact)
+	}
+	if runtime.GOOS != "windows" {
+		// CreateTemp 产出 0600：unix 上必须补执行位，host 才能 exec 安装的资产。
+		if err := os.Chmod(tmpName, 0o755); err != nil {
+			_ = os.Remove(tmpName)
+			return nil, fmt.Errorf("mark asset executable: %w", err)
+		}
 	}
 	if err := renameReplace(tmpName, assetPath); err != nil {
 		_ = os.Remove(tmpName)

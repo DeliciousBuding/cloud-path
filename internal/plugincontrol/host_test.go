@@ -2,12 +2,15 @@ package plugincontrol_test
 
 import (
 	"context"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/DeliciousBuding/cloud-path/internal/plugincontrol"
 	"github.com/DeliciousBuding/cloud-path/internal/pluginhost"
+	"github.com/DeliciousBuding/cloud-path/internal/registry"
 )
 
 type fakeHostManager struct {
@@ -73,6 +76,62 @@ func (f *fakeHostManager) snapshot() (installs int, created []pluginhost.Instanc
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return len(f.installations), append([]pluginhost.InstanceSpec(nil), f.created...), append([]string(nil), f.started...), f.closed
+}
+
+// TestHostInstallationPathResolution 锁定安装物二进制解析：精确摘要名优先；
+// 只有 <digest>.exe 时（Windows 发布工件的存放形态）回退到 .exe，否则 exec 的
+// LookPath/PATHEXT 解析不了无扩展名文件（2026-09-04 真实 install E2E 查出）。
+func TestHostInstallationPathResolution(t *testing.T) {
+	digest := strings.Repeat("a", 64)
+	cases := []struct {
+		name     string
+		bare     bool
+		exe      bool
+		wantBase string
+	}{
+		{name: "bare digest wins", bare: true, exe: true, wantBase: digest},
+		{name: "exe fallback", exe: true, wantBase: digest + ".exe"},
+		{name: "neither exists keeps bare path", wantBase: digest},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			pluginsDir := filepath.Join(root, "plugins.d")
+			lockPath := filepath.Join(root, "plugins.lock")
+			store := plugincontrol.NewStore(filepath.Join(root, "state"))
+			writeTestPlugin(t, pluginsDir, lockPath, "0.1.0", nil, nil)
+			assetsDir := filepath.Join(pluginsDir, registry.SafePluginID(testPluginID), "assets")
+			if err := os.MkdirAll(assetsDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if tc.bare {
+				if err := os.WriteFile(filepath.Join(assetsDir, digest), []byte("binary"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.exe {
+				if err := os.WriteFile(filepath.Join(assetsDir, digest+".exe"), []byte("binary"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			manager := &fakeHostManager{}
+			host, err := plugincontrol.NewHost(plugincontrol.HostOptions{
+				Manager: manager, Store: store, PluginsDir: pluginsDir, LockPath: lockPath,
+			})
+			if err != nil {
+				t.Fatalf("NewHost: %v", err)
+			}
+			if _, err := host.Load(context.Background()); err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if len(manager.installations) != 1 {
+				t.Fatalf("installations = %+v, want exactly one", manager.installations)
+			}
+			if got := filepath.Base(manager.installations[0].Path); got != tc.wantBase {
+				t.Fatalf("installation binary = %q, want %q", got, tc.wantBase)
+			}
+		})
+	}
 }
 
 func TestHostLoadsEnabledInstances(t *testing.T) {
