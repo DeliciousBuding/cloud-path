@@ -45,3 +45,6 @@ Thumbs.db
 
 # CloudPath compose 私钥/证书（不进 git，防止私钥泄漏）
 deploy/compose/certs/
+
+# 本地一次性补丁/脚本暂存
+.tmp/

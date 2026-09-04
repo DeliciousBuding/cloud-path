@@ -51,6 +51,7 @@ Cloudpath 用四个统一概念对接任何设备：`Command`（下发）、`Sta
 | `plugin_status` | edge → server | 上报安装物与实例实际态全量快照 |
 | `plugin_desired` | server → edge | 下发该 tenant/edge 的期望态全量快照 |
 | `plugin_ack` | edge → server | 确认或拒绝一个期望态 revision |
+| `capabilities` | edge → server | 上报本 Edge 全部适配器自述的 Capability 文档（全量覆盖） |
 
 ### `plugin_status`
 
@@ -83,68 +84,34 @@ Edge 拒绝旧 revision。相同 revision + 相同 digest 是幂等重放；相�
 - `failed`：运行时应用失败，继续保持上一完整 revision。
 
 `results` 可按实例返回状态和经过长度限制、路径/secret 脱敏的 detail。Server 不把 ack 成功混同插件健康；健康只来自后续 `plugin_status`。
-## Reference: STC-B
 
-STC-B（IAP15F2K61S2）学习板是第一个官方适配设备，实现见独立仓库 [`cloud-path-driver-stcb`](https://github.com/DeliciousBuding/cloud-path-driver-stcb)。
+### `capabilities`
 
-### 物理层
+外部 Driver Plugin 的能力文档（Capability 标题、Property 单位/读写、Event 声明、Action
+`inputSchema`）只存在于 Edge 侧的插件进程里，而 `GET /api/capabilities` 与前端 Schema 驱动
+UI 都跑在 Server 侧。本消息就是这条通道；没有它，装了新 Driver 的设备在 WebUI 上只有裸
+观测值、没有命令面板。
 
-| 项 | 值 |
+- 载荷是 `sources[]`，每个元素为 `{source, capabilities[]}`；`source` 是声明者（外部 Driver 的
+  driver id，或进程内适配器名）；
+- **全量覆盖语义**：一次上报即本 Edge 当前全部声明者，Server 整体替换该 Edge 的文档集。
+  没有增量/删除消息，因此插件停用或卸载后不会在 catalog 里留下幽灵能力；
+- 文档随连接生命周期存在：Edge 断线即清理，重连必须重报；
+- 每条文档按 `spec/capability.schema.json` 校验，非法文档单条跳过；声明者形状/规模超限
+  （>64 声明者或单声明者 >256 条）则整批拒绝并保留旧文档（fail-closed）；
+- 同一 Capability ID 同时来自 Server 进程内适配器与 Edge 上报时，**以进程内为准**：
+  平台契约不被插件改写；
+- 不向浏览器广播：前端消费路径是 `GET /api/capabilities` 与 `/api/descriptors` 的随行
+  `capabilities` 字段，保持单一事实源。
+## Reference: 设备侧协议归属
+
+平台契约到 `capabilities` / `descriptor` / `state` / `event` / `command` 为止。**具体设备的线协议
+（串口帧、字节序、时序、板级怪癖）不属于本仓库**，由对应 Driver Plugin 仓库拥有：
+
+| 设备 | Driver 仓库 |
 |---|---|
-| 接口 | UART（USB 转串口） |
-| 波特率 | 9600 8N1 |
-| 行尾 | `\n`（可能带 `\r`） |
-| 编码 | ASCII（损坏字节可能出现 U+FFFD） |
+| STC-B（IAP15F2K61S2） | [`cloud-path-driver-stcb`](https://github.com/DeliciousBuding/cloud-path-driver-stcb)（STC-B Device Protocol v1） |
 
-### 命令
-
-| 平台命令 | 线上写入 | 说明 |
-|---|---|---|
-| `dump` | `S` | 请求状态转储 |
-| `trigger` | `R` | 触发一次提醒（联调用） |
-| `open` | `O` | 模拟一次确认动作（开盖） |
-| `sync` | `T` + 4 位 `HHMM` | 对时。**逐字节 50ms 慢发**：固件命令缓冲仅 1 字节，快发会丢字符 |
-| `isp` | `D` | 延迟 5 秒软复位进入 ISP 烧录模式（随后离线，直到重新烧录） |
-| `raw` | `args` 原样 | 高级通道：直接写串口（server 限制长度 ≤64、不含换行/NUL） |
-
-### 转储格式
-
-```
-S:<state><hour><min><slot0><slot1><slot2>
-```
-
-- `S` 与 8 位数字之间允许出现损坏字符（响铃期 UART 受干扰，`:` 可能变成 U+FFFD）；
-- 8 位均为十进制数字（BCD 风格），依次是：状态机、时、分、三个槽位；
-- 语义：`state` 0 待机 / 1 提醒中 / 2 逾期；`slot` 0 待确认 / 1 已确认 / 2 逾期；
-- 合法性校验：`hour ≤ 23`、`min ≤ 59`、`state ≤ 2`、`slot ≤ 2`，越界即视为损坏行丢弃；
-- 解析用「搜索」而非「锚定」：可以从噪声前缀中抢救出合法转储（如 `O:21S:21213120`）。
-
-示例：`S:01213120` → 待机、12:13、槽位 [已确认, 逾期, 待确认]。
-
-### 事件行
-
-固件按行输出事件标签，适配器归一化：
-
-| 线上标签 | 归一化类型 |
-|---|---|
-| `REMIND` | `REMIND` |
-| `TAKEN` | `TAKEN` |
-| `TAKEN-LATE` / `LATE` | `TAKEN-LATE` |
-| `MISSED` | `MISSED` |
-| `BOOT` / 带任意厂商前缀的 `*-BOOT` | `BOOT` |
-| `OK` | `SYNC-OK` |
-
-匹配规则：先精确匹配，再包含匹配（容忍 `[RAW-NOEOL] REMIND` 这类噪声前后缀）；
-长标签优先（`TAKEN-LATE` 不被 `TAKEN` 截胡）；以 `S` 开头的行按转储处理，不当事件。
-
-### 板级限制（适配时必须知晓）
-
-这些是硬件/固件事实，平台按此设计调度与解析：
-
-- **RTC hour 寄存器不可靠**：固件用软件 hour 补偿；上位机必须周期对时。
-- **长时间断电后 RTC 被重置**：edge 在设备打开时立即 `sync` + `dump`，随后按
-  `sync_interval_s` 周期对时。
-- **响铃与串口 TX 同拍互相干扰**：解析器容忍损坏行；edge 的轮询与对时不需要与设备动作同步。
-- **设备钟只有时/分两位**：漂移精度天然 ±1 分钟，展示与告警阈值按此设定
-  （|d| ≤ 1 优、≤ 5 良、更大差）。
-- **命令缓冲仅 1 字节**：多字节命令必须逐字节慢发（见 `sync`）。
+这样划分的直接后果：新增一种硬件不需要改 Core，也不需要改本文件；Core 只认
+Device / Entity / Capability / Observation / Event / Command 六个概念。写新 Driver 的步骤见
+[How to build a CloudPath Driver](architecture/how-to-build-driver.md)。

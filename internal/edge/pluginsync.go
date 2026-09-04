@@ -53,6 +53,9 @@ func (e *Edge) onPluginDesired(env api.Envelope) {
 		"instances", len(desired.Instances), "applied_revision", e.sync.AppliedRevision())
 	// 应用后立即上报实际态：Server/UI 不必等下一拍心跳就能看到 observed 变化。
 	e.reportPluginStatus()
+	// 新装/启用的 Driver 会带来新的 Capability 文档；停用/卸载则要从 catalog 消失。
+	// 全量覆盖语义 + 指纹抑制，因此这里无条件调用也不会刷重复消息。
+	e.reportCapabilities(false)
 }
 
 // reportPluginStatus 上报一次 plugin_status 全量快照

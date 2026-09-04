@@ -119,14 +119,17 @@ type Server struct {
 	cfg       Config
 	startedAt time.Time
 
-	mu            sync.RWMutex
-	devices       map[string]*api.DeviceView // key: "<edge>/<dev>"
-	edges         map[string]*edgeLink       // key: edge_id（在线连接）
-	browsers      map[*browserConn]struct{}
-	cmdHits       map[string][]time.Time      // 命令限流滑窗：device key → 命中时刻
-	descriptors   map[string]model.Descriptor // 最近一次 edge 上报的 Descriptor（device key → desc）
-	deviceTenants map[string]string           // device key → 租户 slug（缺省 default；REST 隔离用）
-	edgeTenants   map[string]string           // edge_id → 租户 slug（首次绑定 sticky，REST/WS 隔离用）
+	mu          sync.RWMutex
+	devices     map[string]*api.DeviceView // key: "<edge>/<dev>"
+	edges       map[string]*edgeLink       // key: edge_id（在线连接）
+	browsers    map[*browserConn]struct{}
+	cmdHits     map[string][]time.Time      // 命令限流滑窗：device key → 命中时刻
+	descriptors map[string]model.Descriptor // 最近一次 edge 上报的 Descriptor（device key → desc）
+	// edgeCapabilities 是各 Edge 上报的 Capability 文档（edge_id → 声明者列表，全量覆盖）。
+	// 外部 Driver 的能力说明只存在于 Edge 侧插件进程，必须经此进入 /api/capabilities。
+	edgeCapabilities map[string][]api.CapabilitySource
+	deviceTenants    map[string]string // device key → 租户 slug（缺省 default；REST 隔离用）
+	edgeTenants      map[string]string // edge_id → 租户 slug（首次绑定 sticky，REST/WS 隔离用）
 
 	loginLimiter  *auth.RateLimiter     // 登录限流：次/分/IP
 	authForced    atomic.Bool           // 账号模式：已有用户或 -require-auth
@@ -161,20 +164,21 @@ type browserConn struct {
 // New 创建服务并从数据库水合上次已知状态（重启后面板不空白，离线标记）。
 func New(cfg Config) *Server {
 	s := &Server{
-		cfg:            cfg,
-		startedAt:      time.Now(),
-		devices:        map[string]*api.DeviceView{},
-		edges:          map[string]*edgeLink{},
-		browsers:       map[*browserConn]struct{}{},
-		cmdHits:        map[string][]time.Time{},
-		descriptors:    map[string]model.Descriptor{},
-		deviceTenants:  map[string]string{},
-		edgeTenants:    map[string]string{},
-		loginLimiter:   auth.NewRateLimiter(cfg.loginRatePerMin()),
-		trustedProxies: cfg.TrustedProxies,
-		pluginCatalog:  cfg.PluginCatalog,
-		verifyPassword: auth.VerifyPassword,
-		dummyVerify:    auth.DummyVerify,
+		cfg:              cfg,
+		startedAt:        time.Now(),
+		devices:          map[string]*api.DeviceView{},
+		edges:            map[string]*edgeLink{},
+		browsers:         map[*browserConn]struct{}{},
+		cmdHits:          map[string][]time.Time{},
+		descriptors:      map[string]model.Descriptor{},
+		edgeCapabilities: map[string][]api.CapabilitySource{},
+		deviceTenants:    map[string]string{},
+		edgeTenants:      map[string]string{},
+		loginLimiter:     auth.NewRateLimiter(cfg.loginRatePerMin()),
+		trustedProxies:   cfg.TrustedProxies,
+		pluginCatalog:    cfg.PluginCatalog,
+		verifyPassword:   auth.VerifyPassword,
+		dummyVerify:      auth.DummyVerify,
 	}
 	s.auditWrite = s.defaultAuditWrite()
 	s.plugin = newPluginPlane(cfg.PluginStore, cfg.PluginStaleAfter)
@@ -454,7 +458,12 @@ func (s *Server) descriptorFor(key string, v *api.DeviceView) (model.Descriptor,
 	return d, true
 }
 
-// capabilityCatalog 汇总全部已注册适配器的 Capability catalog（去重、按 ID 排序）。
+// capabilityCatalog 汇总 Capability 文档 catalog（去重、按 ID 排序）：
+//  1. Server 进程内已注册适配器自带的 catalog（平台参考实现）；
+//  2. 各在线 Edge 上报的外部 Driver 文档（按 edge_id 排序，确定性）。
+//
+// 同一 ID 两边都有时以进程内为准（平台契约优先，避免插件改写平台语义）。
+// 设备无关：这里只合并文档，不认识任何具体硬件。调用方**不得**持有 s.mu。
 func (s *Server) capabilityCatalog() []model.Capability {
 	seen := map[string]bool{}
 	var out []model.Capability
@@ -475,6 +484,26 @@ func (s *Server) capabilityCatalog() []model.Capability {
 			out = append(out, c)
 		}
 	}
+
+	s.mu.RLock()
+	edgeIDs := make([]string, 0, len(s.edgeCapabilities))
+	for id := range s.edgeCapabilities {
+		edgeIDs = append(edgeIDs, id)
+	}
+	sort.Strings(edgeIDs)
+	for _, id := range edgeIDs {
+		for _, src := range s.edgeCapabilities[id] {
+			for _, c := range src.Capabilities {
+				if c.Metadata.ID == "" || seen[c.Metadata.ID] {
+					continue
+				}
+				seen[c.Metadata.ID] = true
+				out = append(out, c)
+			}
+		}
+	}
+	s.mu.RUnlock()
+
 	sort.Slice(out, func(i, j int) bool { return out[i].Metadata.ID < out[j].Metadata.ID })
 	return out
 }

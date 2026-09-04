@@ -264,6 +264,9 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 		current := s.edges[hello.EdgeID] == link && link.tenantID == tid
 		if current {
 			delete(s.edges, hello.EdgeID)
+			// Capability 文档随连接生命周期存在：离线 Edge 的插件不再可查，
+			// 留在 catalog 里会让 UI 显示当前无法下发的能力。
+			delete(s.edgeCapabilities, hello.EdgeID)
 		}
 		s.mu.Unlock()
 		if current { // 只有仍是注册连接时才标离线（被重连挤掉的旧连接不清新状态）
@@ -373,6 +376,8 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(desc)
 			s.broadcast(api.Envelope{V: api.Version, Type: api.MsgDescriptor, Device: msg.Device,
 				Ts: time.Now().Unix(), Data: data})
+		case api.MsgCapabilities:
+			s.handleCapabilitiesMsg(hello.EdgeID, &msg)
 		case api.MsgPluginStatus:
 			// 身份只取自已鉴权 link（tenant/edge），payload 不自报身份。
 			s.handlePluginStatusMsg(link, &msg)
@@ -385,6 +390,71 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 			slog.Debug("edge unhandled msg type", "type", msg.Type)
 		}
 	}
+}
+
+// Capability 文档上报的规模上限：单条 WS 消息已被 wsReadLimit 限制，这里再按语义
+// 限量，避免一个插件把 catalog 撑爆（正常 Driver 只有十几个 Capability）。
+const (
+	maxCapabilitySources     = 64
+	maxCapabilitiesPerSource = 256
+)
+
+// handleCapabilitiesMsg 接收 Edge 上报的 Capability 文档全量快照（覆盖式）。
+//
+// 设备无关：只按 capability.schema.json 校验并存储，不解释任何硬件语义；非法文档
+// 单条跳过并记 warn，不让一个坏插件拖垮整批。不向浏览器广播——前端消费路径是
+// GET /api/capabilities（与 /api/descriptors 随行字段），保持单一事实源。
+func (s *Server) handleCapabilitiesMsg(edgeID string, msg *api.Envelope) {
+	var data api.CapabilitiesData
+	if err := json.Unmarshal(msg.Data, &data); err != nil {
+		slog.Warn("edge bad capabilities payload", "edge", edgeID, "err", err)
+		return
+	}
+	if len(data.Sources) > maxCapabilitySources {
+		slog.Warn("edge capabilities payload rejected: too many sources",
+			"edge", edgeID, "sources", len(data.Sources), "limit", maxCapabilitySources)
+		return
+	}
+	// 规模/形状超限一律 **整批拒绝并保留旧文档**（fail-closed）：这是插件实现 bug，
+	// 静默跳过会让一次坏上报把之前正确的 catalog 擦空，比拒绝更难排障。
+	// 单条文档的契约校验失败则只跳过该条（数据质量问题，不影响同批其他能力）。
+	for _, src := range data.Sources {
+		if strings.TrimSpace(src.Source) == "" || len(src.Capabilities) > maxCapabilitiesPerSource {
+			slog.Warn("edge capabilities payload rejected: bad source shape",
+				"edge", edgeID, "source", src.Source, "capabilities", len(src.Capabilities),
+				"limit", maxCapabilitiesPerSource)
+			return
+		}
+	}
+
+	kept := make([]api.CapabilitySource, 0, len(data.Sources))
+	total := 0
+	for _, src := range data.Sources {
+		name := strings.TrimSpace(src.Source)
+		docs := make([]model.Capability, 0, len(src.Capabilities))
+		for _, c := range src.Capabilities {
+			if err := c.Validate(); err != nil {
+				slog.Warn("edge capability doc invalid, skipped", "edge", edgeID,
+					"source", name, "capability", c.Metadata.ID, "err", err)
+				continue
+			}
+			docs = append(docs, c)
+		}
+		if len(docs) == 0 {
+			continue
+		}
+		kept = append(kept, api.CapabilitySource{Source: name, Capabilities: docs})
+		total += len(docs)
+	}
+
+	s.mu.Lock()
+	if len(kept) == 0 {
+		delete(s.edgeCapabilities, edgeID)
+	} else {
+		s.edgeCapabilities[edgeID] = kept
+	}
+	s.mu.Unlock()
+	slog.Info("edge capabilities received", "edge", edgeID, "sources", len(kept), "capabilities", total)
 }
 
 // validEdgeID 限制 edge_id 形状：小写字母/数字/-/_，1..64 字符。

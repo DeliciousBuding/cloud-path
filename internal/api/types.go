@@ -27,6 +27,7 @@ const (
 	MsgPluginStatus  MsgType = "plugin_status"  // edge→server：插件安装/实例实际态全量快照
 	MsgPluginDesired MsgType = "plugin_desired" // server→edge：租户/edge 插件期望态全量快照
 	MsgPluginAck     MsgType = "plugin_ack"     // edge→server：期望态 revision 应用结果
+	MsgCapabilities  MsgType = "capabilities"   // edge→server：Capability 文档全量上报（外部 Driver 的能力说明）
 	MsgPing          MsgType = "ping"
 	MsgPong          MsgType = "pong"
 )
@@ -82,6 +83,24 @@ type AckData struct {
 	CommandID int64  `json:"command_id"`
 	Status    string `json:"status"`
 	Detail    string `json:"detail,omitempty"`
+}
+
+// CapabilitySource 是一个 Capability 文档声明者：外部 Driver Plugin 的 driver ID，
+// 或进程内适配器名。Server 只按声明者归组存储，不解释其中任何硬件语义。
+type CapabilitySource struct {
+	Source       string             `json:"source"`
+	Capabilities []model.Capability `json:"capabilities"`
+}
+
+// CapabilitiesData 是 edge→server 的 Capability 文档上报载荷，**全量覆盖**语义：
+// 一次上报就是本 Edge 当前全部声明者，Server 整体替换该 Edge 的文档集。
+// 没有增量/删除消息，因此插件停用或卸载后不会在 catalog 里留下幽灵能力。
+//
+// 为什么需要这条通道：外部 Driver 的能力文档（标题/属性/事件/action inputSchema）
+// 只存在于 Edge 侧插件进程里，而 /api/capabilities 与前端 Schema 驱动 UI 都跑在
+// Server 侧。缺了它，装了新 Driver 的设备在 WebUI 上只有裸观测值、没有命令面板。
+type CapabilitiesData struct {
+	Sources []CapabilitySource `json:"sources"`
 }
 
 // EdgeUpData 是 edge 上/下线广播载荷（edge_down 复用同一结构）。

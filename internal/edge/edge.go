@@ -32,6 +32,9 @@ type Edge struct {
 
 	// external 是外部 Driver Plugin Host 贡献的桥接 adapter（driver ID -> adapter）。
 	external map[string]device.Adapter
+
+	capsMu sync.Mutex
+	capsFP string // 上次上报的 Capability 文档指纹（diff 抑制，避免每次重连/期望态变更刷同一条）
 }
 
 // supervisor 监督单台设备：打开→采集→端口死→退避重开（热插拔自愈）。
@@ -573,6 +576,62 @@ func (e *Edge) onServerOnline() {
 		e.reportDescriptor(key, sup, true)
 	}
 	e.reportPluginStatus()
+	// Capability 文档随连接重建：Server 侧按 edge 存储，断线即清理，重连必须重报。
+	e.reportCapabilities(true)
+}
+
+// reportCapabilities 上报本 Edge 当前全部适配器的 Capability 文档（全量覆盖语义）。
+//
+// 设备无关：Edge 只把适配器自述的文档搬给 Server，不判断任何硬件语义。缺了这条通道，
+// 外部 Driver 设备在 WebUI 上只有裸观测值、没有命令面板（/api/capabilities 只会
+// 返回 Server 进程内适配器的 catalog）。
+func (e *Edge) reportCapabilities(force bool) {
+	if e.client == nil {
+		return
+	}
+	data := api.CapabilitiesData{Sources: e.capabilitySources()}
+	fp := string(mustJSON(data))
+	e.capsMu.Lock()
+	changed := fp != e.capsFP
+	e.capsMu.Unlock()
+	if !force && !changed {
+		return
+	}
+	env := api.Envelope{V: api.Version, Type: api.MsgCapabilities, Ts: time.Now().Unix(), Data: mustJSON(data)}
+	if e.client.enqueue(env) || force {
+		e.capsMu.Lock()
+		e.capsFP = fp
+		e.capsMu.Unlock()
+	}
+	slog.Debug("capabilities reported", "sources", len(data.Sources))
+}
+
+// capabilitySources 收集各适配器自述的 Capability 文档，按声明者去重并排序（确定性输出）。
+// 一台 Edge 上多台同型号设备共用一个声明者，只上报一份。
+func (e *Edge) capabilitySources() []api.CapabilitySource {
+	seen := map[string]bool{}
+	var out []api.CapabilitySource
+	for _, sup := range e.sups {
+		if sup == nil || sup.adapter == nil {
+			continue
+		}
+		name := sup.adapter.Name()
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		cp, ok := sup.adapter.(device.CapabilityProvider)
+		if !ok {
+			continue
+		}
+		caps := cp.Capabilities()
+		if len(caps) == 0 {
+			continue
+		}
+		out = append(out, api.CapabilitySource{Source: name, Capabilities: caps})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Source < out[j].Source })
+	return out
 }
 
 // onCommand 执行 server 下行命令并回执 ack。

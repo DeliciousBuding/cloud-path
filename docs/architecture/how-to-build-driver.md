@@ -36,6 +36,15 @@ Driver Protocol v1 的接口在
 | `Health` | 健康检查 | Host 据此判断 `plugin healthy` |
 | `Shutdown` | 优雅退出 | 释放串口/子进程，不依赖 kill |
 
+`Describe` 不只是自述给 Edge 看：Edge 会把它转成 Capability 文档并经 `capabilities` 消息上报
+Server，最终出现在 `GET /api/capabilities` 与前端 Schema 驱动 UI 上。所以这些字段是**用户可见的**，
+不是装饰：
+
+- `Title` → 能力卡片标题；
+- `Properties[].Unit` / `Access` → 观测值的单位与读写标记；
+- `Actions[].Name` → WebUI 命令面板里的按钮（命令集就来自这里，前端不硬编码任何硬件）；
+- `Actions[].InputSchemaJSON` → 命令参数表单。留空则只能下发无参命令。
+
 `pluginmain` 会负责把 `DriverServer` 发布为可被 Plugin Host 拉起的进程；入口参考
 `cloud-path-driver-stcb/cmd/cloudpath-driver-stcb/main.go`。
 

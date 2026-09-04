@@ -1,6 +1,7 @@
 package edge
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -30,6 +31,22 @@ func drain(ch chan []byte) int {
 			n++
 		default:
 			return n
+		}
+	}
+}
+
+// drainTypes 排空发送队列并返回每条信封的消息类型（断言「补报了哪些东西」用）。
+func drainTypes(ch chan []byte) []api.MsgType {
+	var out []api.MsgType
+	for {
+		select {
+		case b := <-ch:
+			var env api.Envelope
+			if err := json.Unmarshal(b, &env); err == nil {
+				out = append(out, env.Type)
+			}
+		default:
+			return out
 		}
 	}
 }
@@ -190,7 +207,20 @@ func TestOnServerOnlineForcesReport(t *testing.T) {
 
 	c.setOnline(true)
 	c.onOnline()
-	if n := drain(c.send); n != 2 {
-		t.Fatalf("重连补报 = %d, want 2", n)
+	// 2 台设备各补报一次状态（适配器不提供 Descriptor，故无 descriptor 帧），
+	// 外加一条 Capability 文档全量上报：Server 侧文档随连接生命周期存在，
+	// 重连不重报就等于重连后 WebUI 丢掉能力说明与命令面板。
+	got := drainTypes(c.send)
+	states, caps := 0, 0
+	for _, typ := range got {
+		switch typ {
+		case api.MsgState:
+			states++
+		case api.MsgCapabilities:
+			caps++
+		}
+	}
+	if states != 2 || caps != 1 {
+		t.Fatalf("重连补报 = %v（state=%d capabilities=%d）, want state=2 capabilities=1", got, states, caps)
 	}
 }

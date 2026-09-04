@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,10 +23,14 @@ type externalAdapter struct {
 	driverID string
 	launchID string
 
-	mu          sync.Mutex
-	actions     []string
-	actionsDone bool
+	mu        sync.Mutex
+	actions   []string
+	caps      []model.Capability
+	described bool
 }
+
+// describeTimeout 限定一次 Describe RPC：插件卡死时不得把 Edge 的上报回调一起挂住。
+const describeTimeout = 10 * time.Second
 
 // externalInstanceConfig 把 edge.yaml 的本地物理绑定编码为插件实例配置。
 func externalInstanceConfig(cfg device.Config) ([]byte, error) {
@@ -82,34 +87,159 @@ func externalDeviceInstanceID(driverID, deviceID string) string { return driverI
 // 外部 driver 的轮询/对时由 driver 自身在 Watch 循环内完成，因此这里不额外注入
 // 生命周期命令；失败时返回空集，edge 会按「无可轮询命令」安全降级。
 func (a *externalAdapter) SupportedCommands() []string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.actionsDone {
-		return a.actions
-	}
-	a.actionsDone = true
-	a.actions = a.resolveActions()
-	return a.actions
+	actions, _ := a.describeOnce()
+	return actions
 }
 
-func (a *externalAdapter) resolveActions() []string {
-	cli, err := a.client(context.Background())
-	if err != nil {
-		return nil
+// Capabilities 返回 Describe 里声明的 Capability 文档，由 Edge 上报给 Server
+// （/api/capabilities 与前端 Schema 驱动 UI 的事实源）。设备无关：只按 Driver
+// Protocol 契约搬运字段，Core 不认识任何具体硬件。
+func (a *externalAdapter) Capabilities() []model.Capability {
+	_, caps := a.describeOnce()
+	return caps
+}
+
+// describeOnce 缓存一次成功的 Describe 结果（命令白名单 + Capability 文档同源，
+// 避免两次 RPC）。失败**不**缓存：插件后启动时下一次调用仍会重试。
+func (a *externalAdapter) describeOnce() ([]string, []model.Capability) {
+	a.mu.Lock()
+	if a.described {
+		actions, caps := a.actions, a.caps
+		a.mu.Unlock()
+		return actions, caps
 	}
-	desc, err := cli.Describe(context.Background())
-	if err != nil {
-		return nil
+	a.mu.Unlock()
+
+	actions, caps, ok := a.resolveDescriptor()
+	if !ok {
+		return nil, nil
 	}
-	var out []string
+	a.mu.Lock()
+	a.actions, a.caps, a.described = actions, caps, true
+	a.mu.Unlock()
+	return actions, caps
+}
+
+func (a *externalAdapter) resolveDescriptor() ([]string, []model.Capability, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), describeTimeout)
+	defer cancel()
+	cli, err := a.client(ctx)
+	if err != nil {
+		return nil, nil, false
+	}
+	desc, err := cli.Describe(ctx)
+	if err != nil {
+		return nil, nil, false
+	}
+	var actions []string
 	for _, c := range desc.Capabilities {
 		for _, act := range c.Actions {
 			if strings.TrimSpace(act.Name) != "" {
-				out = append(out, act.Name)
+				actions = append(actions, act.Name)
 			}
 		}
 	}
+	return actions, capabilityDocs(a.driverID, desc.Capabilities), true
+}
+
+// capabilityDocs 把 Driver Protocol v1 的 CapabilityDescriptor 转成 Core 的
+// model.Capability 文档。契约字段一一搬运；非法文档跳过并记 warn（绝不上报脏数据，
+// 否则 Server 侧 Validate 会整批丢弃，反而更难排障）。
+func capabilityDocs(driverID string, in []driver.CapabilityDescriptor) []model.Capability {
+	out := make([]model.Capability, 0, len(in))
+	for _, c := range in {
+		id := strings.TrimSpace(c.ID)
+		if id == "" {
+			continue
+		}
+		doc := model.Capability{
+			APIVersion: model.CapabilityAPIVersion,
+			Kind:       model.CapabilityKind,
+			Metadata:   model.CapabilityMetadata{ID: id, Version: capabilityVersion(id), Title: c.Title},
+		}
+		if len(c.Properties) > 0 {
+			props := make(map[string]model.Property, len(c.Properties))
+			for _, p := range c.Properties {
+				name := strings.TrimSpace(p.Name)
+				if name == "" {
+					continue
+				}
+				props[name] = model.Property{
+					Type:    p.Type,
+					Unit:    p.Unit,
+					Access:  model.PropertyAccess(p.Access),
+					Quality: qualities(p.Quality),
+				}
+			}
+			doc.Spec.Properties = props
+		}
+		if len(c.Events) > 0 {
+			evs := make(map[string]model.EventDecl, len(c.Events))
+			for _, ev := range c.Events {
+				name := strings.TrimSpace(ev.Name)
+				if name == "" {
+					continue
+				}
+				evs[name] = model.EventDecl{PayloadSchema: schemaJSON(ev.PayloadSchemaJSON)}
+			}
+			doc.Spec.Events = evs
+		}
+		if len(c.Actions) > 0 {
+			acts := make(map[string]model.ActionDecl, len(c.Actions))
+			for _, act := range c.Actions {
+				name := strings.TrimSpace(act.Name)
+				if name == "" {
+					continue
+				}
+				acts[name] = model.ActionDecl{InputSchema: schemaJSON(act.InputSchemaJSON)}
+			}
+			doc.Spec.Actions = acts
+		}
+		if err := doc.Validate(); err != nil {
+			slog.Warn("driver capability doc invalid, skipped",
+				"driver", driverID, "capability", id, "err", err)
+			continue
+		}
+		out = append(out, doc)
+	}
 	return out
+}
+
+// capabilityVersion 从 "<publisher>/capability/<name>@<version>" 取版本号；缺失/非法为 0。
+func capabilityVersion(id string) int {
+	i := strings.LastIndex(id, "@")
+	if i < 0 || i == len(id)-1 {
+		return 0
+	}
+	v, err := strconv.Atoi(id[i+1:])
+	if err != nil || v < 0 {
+		return 0
+	}
+	return v
+}
+
+func qualities(in []string) []model.Quality {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]model.Quality, 0, len(in))
+	for _, q := range in {
+		out = append(out, model.Quality(q))
+	}
+	return out
+}
+
+// schemaJSON 解析插件给的 JSON Schema 字符串；空或非法一律 nil（文档可选字段）。
+func schemaJSON(s string) map[string]any {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	var m map[string]any
+	if err := json.Unmarshal([]byte(s), &m); err != nil {
+		return nil
+	}
+	return m
 }
 
 // Open 获取当前会话的 DriverClient，先把 edge.yaml 的本地物理绑定注入插件实例配置，
