@@ -107,6 +107,25 @@ docker compose -f docker-compose.public.yml exec server sh -c 'ls -lh /data'
 #   alpine tar czf /backup/cloudpath-$(date +%F).tgz -C /data .
 ```
 
+## CI/CD 与发布镜像（与仓库 workflows 联动）
+
+仓库的 GitHub Actions 在 `v*` tag 上一次跑完（全部免费：public 仓库标准 runner + GHCR 免费）：
+
+- `.github/workflows/ci.yml`：`webui` 构建一次 → `matrix-build` 6 平台并行（linux/amd64+arm64、windows/amd64+arm64、darwin/amd64+arm64）交叉编译并断言 → `matrix-verify` 合并校验 `checksums.txt`。每个 PR / main push 都全平台验证。
+- `.github/workflows/release.yml`：打 `v*` tag → `webui` 一次 → 6 平台并行构建 18 个二进制 → 合并校验 → 发布 GitHub Release（含 `checksums.txt`）。
+- `.github/workflows/container.yml`：main 推 `:latest`，tag 推 `:<tag>` + `:latest`；`buildx` 一次构建 `linux/amd64 + linux/arm64` 双 arch 镜像推到 GHCR（含 server + edge，WebUI 已内嵌）。
+
+**compose 拉发布镜像**（而不是每次现场构建）：
+
+```bash
+# deploy/compose/.env 里设
+CLOUDPATH_IMAGE=ghcr.io/<owner>/cloudpath:<tag>   # 例如 ghcr.io/deliciousbuding/cloudpath:v0.1.0
+# 然后去掉 compose 的 build: 块，或直接：
+docker compose -f docker-compose.public.yml up -d   # 不带 --build，优先 pull
+```
+
+公开仓库可匿名 pull，无需登录。本地演示仍可用默认 `cloudpath:local` 现场 `--build`。
+
 ## 文件清单
 
 | 文件 | 用途 |
