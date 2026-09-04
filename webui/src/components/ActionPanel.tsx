@@ -5,6 +5,8 @@ import { useState } from 'react'
 import { Command, SlidersHorizontal } from 'lucide-react'
 import { Badge, Panel } from './ui'
 import { CommandButton } from './CommandButton'
+import { cn } from '@/lib/cn'
+import { optionLabel } from '@/lib/format'
 import { humanize } from '@/lib/descriptor'
 import type { CommandAction, CommandSet } from '@/lib/descriptor'
 
@@ -61,9 +63,9 @@ export function ActionPanel({ deviceId, set, adapterName, className }: {
       className={className}
       title={<span className="flex items-center gap-1.5"><Command size={14} />命令</span>}
       right={
-        <span className="flex items-center gap-1.5">
+        <span className="flex min-w-0 items-center gap-1.5">
           <Badge tone={set.source === 'descriptor' ? 'accent' : 'idle'}>{SOURCE_LABEL[set.source]}</Badge>
-          {adapterName && <span className="text-[11px] text-ink-3">{adapterName}</span>}
+          {adapterName && <span className="min-w-0 truncate text-[11px] text-ink-3" title={adapterName}>{adapterName}</span>}
         </span>
       }
     >
@@ -74,10 +76,15 @@ export function ActionPanel({ deviceId, set, adapterName, className }: {
       ) : (
         <>
           {simple.length > 0 && (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-3">
               {simple.map((a) => (
-                <CommandButton key={a.cmd} deviceId={deviceId} action={a}
-                  className={a.variant === 'danger' ? 'col-span-2' : undefined} />
+                <div key={a.cmd} className="min-w-0">
+                  <CommandButton deviceId={deviceId} action={a}
+                    className={cn('w-full', a.variant === 'danger' ? 'col-span-2' : '')} />
+                  <p className="mt-1.5 min-w-0 text-[11px] leading-relaxed text-ink-3" title={a.hint}>
+                    {a.hint ?? `下发命令「${a.label}」`}
+                  </p>
+                </div>
               ))}
             </div>
           )}
@@ -98,7 +105,7 @@ export function ActionPanel({ deviceId, set, adapterName, className }: {
                 <select id="adv-cmd" value={advCmd} onChange={(e) => setAdvCmd(e.target.value)}
                   className="num min-w-0 shrink-0 rounded-full border border-hairline bg-surface-2 px-3 py-1.5 font-mono text-xs outline-none transition-colors focus:border-accent">
                   <option value="">选择命令</option>
-                  {advanced.map((a) => <option key={a.cmd} value={a.cmd}>{a.cmd}</option>)}
+                  {advanced.map((a) => <option key={a.cmd} value={a.cmd}>{optionLabel(a.cmd)}</option>)}
                 </select>
                 <label className="sr-only" htmlFor="adv-args">命令参数</label>
                 <input id="adv-args" value={advArgs} maxLength={64} disabled={!advAction}
@@ -121,3 +128,6 @@ export function ActionPanel({ deviceId, set, adapterName, className }: {
     </Panel>
   )
 }
+
+
+

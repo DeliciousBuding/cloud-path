@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
-  LayoutDashboard, Cpu, Activity, LogOut, Network, Settings, Monitor, Puzzle, ShieldCheck, Sun, Moon,
+  LayoutDashboard, Cpu, Activity, LogOut, Network, Settings, Monitor, Puzzle, Pill, ShieldCheck, Sun, Moon,
   UserRound, WifiOff,
 } from 'lucide-react'
 import { Logo } from './Logo'
@@ -25,6 +25,7 @@ const NAV = [
   { to: '/', label: '概览', icon: LayoutDashboard, end: true },
   { to: '/edges', label: '边缘节点', icon: Network, end: false },
   { to: '/devices', label: '设备', icon: Cpu, end: false },
+  { to: '/pillbox', label: '药盒控制', icon: Pill, end: false },
   { to: '/plugins', label: '插件', icon: Puzzle, end: false },
   { to: '/activity', label: '活动', icon: Activity, end: false },
 ]

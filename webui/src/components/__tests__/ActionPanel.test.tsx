@@ -211,3 +211,26 @@ describe('键盘与焦点', () => {
     expect(within(heading).getByText('命令')).toBeInTheDocument()
   })
 })
+
+describe('命令按钮说明（title/description）', () => {
+  it('有 description 的动作渲染可见说明；无说明的给出通用占位', () => {
+    render(<ActionPanel deviceId={KEY} set={declared} />)
+    // close 的 description 来自后端声明 → 落到 hint，渲染为按钮下可见说明
+    expect(screen.getByText('接通负载')).toBeInTheDocument()
+    // open / factory_reset 未声明描述 → 给出通用占位（不硬编码具体命令文案）
+    expect(screen.getByText('下发命令「断开」')).toBeInTheDocument()
+    expect(screen.getByText('下发命令「恢复出厂」')).toBeInTheDocument()
+  })
+
+  it('按钮 title 携带能力/实体/命令溯源（工具提示，不改按钮可读名）', () => {
+    render(<ActionPanel deviceId={KEY} set={declared} />)
+    const close = screen.getByRole('button', { name: '闭合' })
+    expect(close).toHaveAttribute('title', expect.stringContaining('cmd=relay_on'))
+    expect(close).toHaveAttribute('title', expect.stringContaining('接通负载'))
+  })
+
+  it('输入类动作的标签带说明（label + hint 一并呈现）', () => {
+    render(<ActionPanel deviceId={KEY} set={declared} />)
+    expect(screen.getByText(/点动 · 按毫秒脉冲/)).toBeInTheDocument()
+  })
+})

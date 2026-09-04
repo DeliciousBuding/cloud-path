@@ -15,6 +15,7 @@ const Setup = lazy(() => import('@/pages/Setup'))
 
 // 重路由按需加载：图表（recharts）只在设备详情用到，不拖慢首屏
 const DeviceDetail = lazy(() => import('@/pages/DeviceDetail'))
+const Pillbox = lazy(() => import('@/pages/Pillbox'))
 const Activity = lazy(() => import('@/pages/Activity'))
 const Plugins = lazy(() => import('@/pages/Plugins'))
 const PluginInstanceDetail = lazy(() => import('@/pages/PluginInstanceDetail'))
@@ -85,6 +86,8 @@ export default function App() {
               <Route index element={<Overview />} />
               <Route path="devices" element={<Devices />} />
               <Route path="devices/:edgeId/:deviceId" element={<DeviceDetail />} />
+              <Route path="pillbox" element={<Pillbox />} />
+              <Route path="pillbox/:edgeId/:deviceId" element={<Pillbox />} />
               {/* 活动（事件 + 命令历史）；/events 是旧路径，保留重定向不断链 */}
               <Route path="activity" element={<Activity />} />
               <Route path="events" element={<Navigate to="/activity" replace />} />
