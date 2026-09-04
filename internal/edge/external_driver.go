@@ -2,6 +2,7 @@ package edge
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -22,6 +23,17 @@ type externalAdapter struct {
 	mu          sync.Mutex
 	actions     []string
 	actionsDone bool
+}
+
+// externalInstanceConfig 把 edge.yaml 的本地物理绑定编码为插件实例配置。
+func externalInstanceConfig(cfg device.Config) ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"device_id": cfg.ID,
+		"name":      cfg.Name,
+		"port":      cfg.Port,
+		"baud":      cfg.Baud,
+		"extra":     cfg.Extra,
+	})
 }
 
 func newExternalAdapter(host PluginHost, driverID string) *externalAdapter {
@@ -64,11 +76,27 @@ func (a *externalAdapter) resolveActions() []string {
 	return out
 }
 
-// Open 获取当前会话的 DriverClient，打开设备并启动观测订阅。
+// Open 获取当前会话的 DriverClient，先把 edge.yaml 的本地物理绑定注入插件实例配置，
+// 再打开设备并启动观测订阅。这样干净机器只需在 edge.yaml 写 adapter/port，无需预先在
+// Server 手写插件实例 config；插件 enable/version/lock 仍由 Server desired state 权威。
 func (a *externalAdapter) Open(ctx context.Context, cfg device.Config, onEvent func(device.Event)) (device.Device, error) {
 	cli, err := a.host.DriverClient(a.driverID)
 	if err != nil {
 		return nil, fmt.Errorf("external driver %q: %w", a.driverID, err)
+	}
+	cfgJSON, err := externalInstanceConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("external driver %q encode config: %w", a.driverID, err)
+	}
+	cresp, err := cli.ConfigureInstance(ctx, &driver.ConfigureInstanceRequest{
+		PluginInstanceID: a.driverID,
+		Config:           cfgJSON,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("external driver %q configure instance: %w", a.driverID, err)
+	}
+	if cresp.Status != nil && !cresp.Status.IsOK() {
+		return nil, fmt.Errorf("external driver %q configure instance: %v", a.driverID, cresp.Status)
 	}
 	return openExternalDevice(ctx, cli, a.driverID, cfg, onEvent)
 }

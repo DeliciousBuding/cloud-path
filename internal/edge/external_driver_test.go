@@ -1,9 +1,11 @@
 package edge
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
+	"github.com/DeliciousBuding/cloud-path/internal/device"
 	"github.com/DeliciousBuding/cloud-path/internal/model"
 	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/driver"
 )
@@ -104,5 +106,30 @@ func TestExternalDeviceAccumulatesAndProjects(t *testing.T) {
 	obs, ok := e.Observations["value"]
 	if !ok || obs.Value != 25.5 || obs.Quality != model.QualityGood {
 		t.Fatalf("observation = %+v", obs)
+	}
+}
+
+func TestExternalInstanceConfigCarriesLocalBinding(t *testing.T) {
+	cfg := device.Config{
+		ID:    "stcb-1",
+		Name:  "STC-B Board",
+		Port:  "COM3",
+		Baud:  9600,
+		Extra: map[string]string{"poll_interval_s": "3"},
+	}
+	raw, err := externalInstanceConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["device_id"] != "stcb-1" || got["port"] != "COM3" {
+		t.Fatalf("config = %s", raw)
+	}
+	extra, _ := got["extra"].(map[string]any)
+	if extra["poll_interval_s"] != "3" {
+		t.Fatalf("extra = %v", got["extra"])
 	}
 }
