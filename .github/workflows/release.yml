@@ -10,6 +10,10 @@ name: release
 #   cloudpath-edge_<version>_<os>_<arch>[.exe]
 #   cloudpath_<version>_<os>_<arch>[.exe]
 #   checksums.txt
+#
+# Efficiency: the WebUI is built ONCE (webui job) and reused by every platform
+# job, so the server embed step never recompiles the frontend per runner. The
+# 6 platform jobs run in parallel on separate runners.
 
 on:
   push:
@@ -26,8 +30,47 @@ env:
   PYTHON_VERSION: '3.12'
 
 jobs:
+  webui:
+    name: Build WebUI (once)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: webui/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: webui
+        run: pnpm install --frozen-lockfile
+
+      # The server embeds webui/dist; publish it once so the matrix jobs below
+      # only have to cross-compile Go.
+      - name: Build frontend
+        working-directory: webui
+        run: pnpm build
+
+      - name: Upload WebUI build
+        uses: actions/upload-artifact@v4
+        with:
+          name: webui-dist
+          path: webui/dist
+          if-no-files-found: error
+          retention-days: 7
+
   build:
     name: build (${{ matrix.platform }})
+    needs: webui
     strategy:
       fail-fast: false
       matrix:
@@ -55,32 +98,16 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-          run_install: false
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-          cache-dependency-path: webui/pnpm-lock.yaml
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install frontend dependencies
-        working-directory: webui
-        run: pnpm install --frozen-lockfile
-
-      # The server embeds the WebUI; build_matrix.py fails hard without it.
-      - name: Build frontend
-        working-directory: webui
-        run: pnpm build
+      - name: Reuse WebUI build
+        uses: actions/download-artifact@v4
+        with:
+          name: webui-dist
+          path: webui/dist
 
       # Per-platform slice of the matrix. checksums.txt is intentionally NOT
       # written here: one authoritative file is produced by the release job so
@@ -152,7 +179,8 @@ jobs:
             The server embeds the WebUI (built with `-tags embed_ui`) and every
             artifact is `CGO_ENABLED=0 -trimpath`. `linux/arm64` is the
             production deployment target; see `deploy/README.md` for the
-            systemd + nginx SOP and the mandatory pre-upload architecture
-            assertion.
+            systemd + nginx SOP and `deploy/compose/README.md` for the
+            containerized form. A multi-arch image of the same tag is published
+            to GHCR by `.github/workflows/container.yml`.
           files: |
             dist/*

@@ -26,6 +26,12 @@ env:
   PNPM_VERSION: '10.32.1'
   PYTHON_VERSION: '3.12'
 
+# 6-platform release matrix — the only place that lists them for the binary
+# artifact jobs. `scripts/build_matrix.py` is the actual build authority and owns
+# the artifact names; keep this list in sync with its PLATFORMS tuple.
+#
+# Efficiency: `webui-dist` is built once and reused by every platform job, so the
+# server embed step never recompiles the frontend per runner.
 jobs:
   core-go:
     name: Core Go (${{ matrix.os }})
@@ -102,8 +108,35 @@ jobs:
         working-directory: webui
         run: pnpm build
 
-  artifact-arch:
-    name: Release artifact architecture gate (linux/arm64 + embed_ui)
+      # The server embeds webui/dist; publish it once so the matrix jobs below
+      # only have to cross-compile Go (no per-runner frontend rebuild).
+      - name: Upload WebUI build
+        uses: actions/upload-artifact@v4
+        with:
+          name: webui-dist
+          path: webui/dist
+          if-no-files-found: error
+          retention-days: 7
+
+  matrix-build:
+    name: Build artifacts (${{ matrix.platform }})
+    needs: webui
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: linux-arm64
+            platform: linux/arm64
+          - id: linux-amd64
+            platform: linux/amd64
+          - id: windows-amd64
+            platform: windows/amd64
+          - id: windows-arm64
+            platform: windows/arm64
+          - id: darwin-amd64
+            platform: darwin/amd64
+          - id: darwin-arm64
+            platform: darwin/arm64
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -115,44 +148,54 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          version: ${{ env.PNPM_VERSION }}
-          run_install: false
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      - name: Reuse WebUI build
+        uses: actions/download-artifact@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-          cache-dependency-path: webui/pnpm-lock.yaml
+          name: webui-dist
+          path: webui/dist
+
+      # Cross-builds this platform slice and asserts OS/arch on the artifact.
+      - name: Build and assert ${{ matrix.platform }}
+        run: >-
+          python scripts/build_matrix.py
+          --version "ci-${GITHUB_SHA::7}"
+          --out dist
+          --platforms "${{ matrix.platform }}"
+          --no-checksums
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.id }}
+          path: dist
+          if-no-files-found: error
+          retention-days: 7
+
+  matrix-verify:
+    name: Verify merged artifacts + checksums
+    needs: matrix-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install frontend dependencies
-        working-directory: webui
-        run: pnpm install --frozen-lockfile
+      - name: Collect artifacts from every platform
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
 
-      # The server embeds webui/dist, so the frontend must exist first;
-      # scripts/build_matrix.py fails hard if it does not.
-      - name: Build frontend
-        working-directory: webui
-        run: pnpm build
-
-      # Builds the arm64 server and asserts OS/arch/embed_ui on the artifact.
-      # This is the gate that keeps an amd64 binary away from the native arm64
-      # production host (where it would fail with "exec format error").
-      - name: Cross-build and assert linux/arm64 server
-        run: >-
-          python scripts/build_matrix.py
-          --version "ci-${GITHUB_SHA::7}"
-          --out dist --only server --platforms linux/arm64
-
-      - name: Re-assert artifacts without rebuilding
+      - name: Re-assert artifacts and write checksums
         run: python scripts/build_matrix.py --verify-only --out dist
 
       - name: Show checksums
@@ -194,7 +237,7 @@ jobs:
 
       - name: gofmt gate
         working-directory: templates/go-plugin/${{ matrix.kind }}
-        run: test -z "$(gofmt -l .)"
+        run: python ../../../scripts/fmtcheck.py
 
       - name: Manifest validator self-test
         working-directory: templates/go-plugin/${{ matrix.kind }}
