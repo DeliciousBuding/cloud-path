@@ -27,11 +27,17 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy: {
-      '/api': 'http://127.0.0.1:8080',
-      '/healthz': 'http://127.0.0.1:8080',
-      '/ws': { target: 'ws://127.0.0.1:8080', ws: true },
-    },
+    proxy: (() => {
+      // 开发态后端可用 CP_PROXY 覆盖（默认本地 server :8080）；指向远端时开 changeOrigin 并自动切 wss。
+      const target = process.env.CP_PROXY || 'http://127.0.0.1:8080'
+      const remote = !/^http:\/\/127\.0\.0\.1/.test(target)
+      const wsTarget = target.replace(/^http/, 'ws')
+      return {
+        '/api': { target, changeOrigin: remote },
+        '/healthz': { target, changeOrigin: remote },
+        '/ws': { target: wsTarget, ws: true, changeOrigin: remote },
+      }
+    })(),
   },
   build: {
     outDir: 'dist',

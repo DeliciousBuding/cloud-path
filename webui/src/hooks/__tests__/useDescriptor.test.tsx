@@ -36,7 +36,7 @@ describe('useDeviceDescriptor：来源优先级与回落', () => {
     expect(result.current.descriptor).toBeNull()
     expect(result.current.source).toBe('none')
     expect(result.current.capabilities).toBe(EMPTY_INDEX)
-    expect(result.current.commands).toEqual({ actions: [{ cmd: 'raw', label: 'Raw' }], source: 'adapter' })
+    expect(result.current.commands).toEqual({ actions: [{ cmd: 'raw', label: '原始命令' }], source: 'adapter' })
   })
 
   it('设备载荷内联 Descriptor → source=inline（无需额外请求）', async () => {

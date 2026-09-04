@@ -141,11 +141,25 @@ describe('Capability 引用解析与索引', () => {
     expect(resolveCapability(CAP_TEMPERATURE, EMPTY_INDEX)).toBeUndefined()
   })
 
-  it('capabilityLabel：文档 title 优先，未收录回落 humanize(能力名)，无引用给「未声明」', () => {
+  it('capabilityLabel：文档 title > 平台通用词汇 > humanize，无引用给「未声明」', () => {
     expect(capabilityLabel(CAP_TEMPERATURE, idx)).toBe('温度')
     expect(capabilityLabel(UNKNOWN_CAP, idx)).toBe('Mystery')
-    expect(capabilityLabel(CAP_CLOCK, idx)).toBe('Clock')
+    // 未收录但属通用硬件名词 → 平台词汇层命中（不再甩英文 humanize）
+    expect(capabilityLabel(CAP_CLOCK, idx)).toBe('时钟')
     expect(capabilityLabel(undefined, idx)).toBe('未声明')
+  })
+
+  it('capabilityLabel locale 匹配：英文 title 让位平台词汇，中文 title 优先', () => {
+    const enDoc = {
+      metadata: { id: 'cloudpath.dev/capability/temperature@1', version: 1, title: 'Temperature' },
+      spec: {},
+    } as unknown as CapabilityDoc
+    const zhDoc = {
+      metadata: { id: 'cloudpath.dev/capability/temperature@1', version: 1, title: '温度探针能力' },
+      spec: {},
+    } as unknown as CapabilityDoc
+    expect(capabilityLabel('cloudpath.dev/capability/temperature@1', indexCapabilities([enDoc]))).toBe('温度')
+    expect(capabilityLabel('cloudpath.dev/capability/temperature@1', indexCapabilities([zhDoc]))).toBe('温度探针能力')
   })
 
   it('humanize：kebab / snake / camel / 全大写长短词', () => {

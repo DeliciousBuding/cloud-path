@@ -32,7 +32,7 @@ export function CommandHistory({ deviceId, actions }: { deviceId: string; action
             const meta = cmdMeta(c.cmd, actions)
             return (
               // 390px：徽标与时间不收缩，命令名/参数/结果三段各自 truncate，整行不撑宽容器
-              <li key={c.id} className="flex min-w-0 items-center gap-3 py-2.5">
+              <li key={c.id} className="flex min-w-0 items-center gap-3 py-2">
                 <Badge tone={st.tone} className="shrink-0">{st.label}</Badge>
                 <span className="min-w-0 truncate text-xs font-medium" title={meta.hint || c.cmd}>{meta.label}</span>
                 {c.args && (

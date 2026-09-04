@@ -4,14 +4,17 @@
 //   - 怎么展示 = presentation.defaultWidget（UI Hint），缺席则按值类型推导
 //   - 未知 Capability = 通用表格 / JSON 回落（docs/architecture/capability-model.md §9）
 // 颜色只走设计系统 token（ui.tsx TONE_CLS / index.css），390px 下不产生横向溢出。
-import { Activity, Boxes, Braces, SlidersHorizontal, Stethoscope, Zap, type LucideIcon } from 'lucide-react'
-import { Badge, KeyValue, Panel, TONE_CLS, TONE_TEXT_CLS, type Tone } from './ui'
+import { Activity, Boxes, SlidersHorizontal, Stethoscope, Zap, type LucideIcon } from 'lucide-react'
+import { Badge, Panel, TONE_CLS, TONE_TEXT_CLS, type Tone } from './ui'
 import { cn } from '@/lib/cn'
+import { useReducedMotion } from '@/hooks/useReducedMotion'
+import { Sparkline } from './Sparkline'
+import type { SeriesPoint } from '@/store/ws'
 import {
-  CATEGORY_LABEL, CATEGORY_ORDER, EMPTY_INDEX, QUALITY_LABEL, capabilityLabel, entityTitle,
-  formatTimestamp, formatValue, humanize, isScalar, observationsOf, pickDisplayField,
-  presentationOf, primaryObservation, qualityTone, rawRows, resolveCapability, statusMeta,
-  toneFromHint, widgetFor,
+  CATEGORY_LABEL, CATEGORY_ORDER, EMPTY_INDEX, QUALITY_LABEL, capabilityLabel, commandLabel,
+  entityTitle, formatTimestamp, formatValue, humanize, isScalar, observationsOf, parseCapabilityRef,
+  pickDisplayField, propertyLabel, presentationOf, primaryObservation, qualityTone, rawRows,
+  resolveCapability, statusMeta, toneFromHint, widgetFor,
 } from '@/lib/descriptor'
 import type { CapabilityIndex, SummaryGroup, SummaryValue, WidgetKind } from '@/lib/descriptor'
 import type {
@@ -146,7 +149,7 @@ export function GenericTable({ value, className, label = '数据表（通用视�
             <th className="px-1 pb-1.5 font-medium">#</th>
             {cols.map((c) => (
               <th key={c} className="whitespace-nowrap px-1 pb-1.5 font-medium">
-                {c === 'value' ? '值' : humanize(c)}
+                {c === 'value' ? '值' : propertyLabel(c)}
               </th>
             ))}
           </tr>
@@ -234,7 +237,7 @@ export function ValueWidget({ obs, idx = EMPTY_INDEX, emphasis = false, classNam
 
   if ((widget === 'table' || widget === 'json') && !isScalar(value)) {
     if (Array.isArray(value)) {
-      return <GenericTable value={value} label={`${humanize(obs.property)} 数据表`} />
+      return <GenericTable value={value} label={`${propertyLabel(obs.property, obs.capability, idx)} 数据表`} />
     }
     if (value && typeof value === 'object') {
       const entries = Object.entries(value as Record<string, unknown>)
@@ -251,12 +254,12 @@ export function ValueWidget({ obs, idx = EMPTY_INDEX, emphasis = false, classNam
           </dl>
         )
       }
-      return <JsonBlock value={value} maxHeight="max-h-40" label={`${humanize(obs.property)} 原始 JSON`} />
+      return <JsonBlock value={value} maxHeight="max-h-40" label={`${propertyLabel(obs.property, obs.capability, idx)} 原始 JSON`} />
     }
   }
 
   if (widget === 'json') {
-    return <JsonBlock value={value} maxHeight="max-h-40" label={`${humanize(obs.property)} 原始 JSON`} />
+    return <JsonBlock value={value} maxHeight="max-h-40" label={`${propertyLabel(obs.property, obs.capability, idx)} 原始 JSON`} />
   }
 
   if (widget === 'boolean' || widget === 'badge') {
@@ -302,7 +305,7 @@ export function ObservationTable({ observations, idx = EMPTY_INDEX }: {
             <dt className="flex min-w-0 items-center gap-1.5">
               <QualityDot q={o.quality} />
               <span className="truncate" title={`${capabilityLabel(o.capability, idx)} · ${o.property}`}>
-                {humanize(o.property)}
+                {propertyLabel(o.property, o.capability, idx)}
               </span>
               {!known && <Badge tone="idle" className="shrink-0">未收录</Badge>}
             </dt>
@@ -316,120 +319,279 @@ export function ObservationTable({ observations, idx = EMPTY_INDEX }: {
   )
 }
 
-/** 单个 Entity：主观测大字 + 其余观测表 + 未收录 Capability 的 JSON 回落 */
-export function EntityPanel({ entity, idx = EMPTY_INDEX, className }: {
+/* ---------------- 实时状态矩阵（human-first 默认视图） ---------------- */
+
+/** 观测新鲜度：received_at 早于阈值（默认 60s，不猜设备周期的通用阈值）视为 stale。
+ *  只在异常 Entity 上标注；全局新鲜度由页面头部说一次，不逐卡重复。 */
+export function isStaleObs(o: Observation, nowSec: number, thresholdSec = 60): boolean {
+  const at = typeof o.received_at === 'string' ? Date.parse(o.received_at) / 1000 : Number.NaN
+  return Number.isFinite(at) && nowSec - at > thresholdSec
+}
+
+const QUALITY_RANK: ObservationQuality[] = ['bad', 'uncertain', 'unavailable', 'good']
+
+function worstQuality(os: Observation[]): ObservationQuality | undefined {
+  return QUALITY_RANK.find((q) => os.some((o) => o.quality === q))
+}
+
+/** 实时状态单格：展示名 + 当前值 + 单位；质量点/stale 只标异常格；
+ *  次级观测默认折叠（渐进披露）；机器 ID 与原始 JSON 不进这一层（去能力/诊断页）。 */
+export function StateCell({ entity, idx = EMPTY_INDEX, nowSec, series }: {
   entity: DescriptorEntity
   idx?: CapabilityIndex
-  className?: string
+  nowSec?: number
+  /** 会话数值序列（deviceKey 下的 属性键 → 点）；命中主观测键时卡片内嵌火花线 */
+  series?: Record<string, SeriesPoint[]>
 }) {
-  const Icon = CATEGORY_ICON[entity.category] ?? Boxes
   const obs = observationsOf(entity)
   const primary = primaryObservation(entity, idx)
   const rest = obs.filter((o) => o !== primary)
-  const unknown = entity.capabilities.filter((c) => !resolveCapability(c, idx))
-  const unknownObs = obs.filter((o) => !resolveCapability(o.capability, idx))
-
+  const q = worstQuality(obs)
+  const stale = nowSec !== undefined && obs.some((o) => isStaleObs(o, nowSec))
   return (
-    <Panel
-      className={className}
-      title={
-        <span className="flex min-w-0 items-center gap-1.5">
-          <Icon size={14} className="shrink-0" />
-          <span className="truncate" title={entity.name || entity.unique_key}>{entityTitle(entity)}</span>
+    <div className="card min-w-0 p-3.5">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <span className="min-w-0 truncate text-[12px] font-medium text-ink-2" title={entity.name || entity.unique_key}>
+          {entityTitle(entity)}
         </span>
-      }
-      right={<Badge tone="idle">{CATEGORY_LABEL[entity.category] ?? entity.category}</Badge>}
-    >
+        <QualityDot q={q} />
+        {stale && <Badge tone="warn" className="shrink-0"> stale</Badge>}
+      </div>
       {primary ? (
-        <div className="flex min-w-0 items-end justify-between gap-3">
-          <p className="min-w-0 flex-1 truncate text-[11px] text-ink-3"
-            title={`${primary.capability} · ${primary.property}`}>
-            {capabilityLabel(primary.capability, idx)} · {humanize(primary.property)}
+        <>
+          {(() => {
+            const text = widgetFor(primary, idx) === 'timestamp'
+              ? formatTimestamp(primary.value) : formatValue(primary.value)
+            // 序列键形态因适配器而异（entity.property 点分 / 裸属性名 / 实体名）：逐级回落
+            const pts = series?.[`${entity.entity_id}.${primary.property}`]
+              ?? series?.[primary.property]
+              ?? series?.[entity.entity_id]
+            return (
+              <>
+                <p className={cn('num mt-1.5 truncate leading-none tracking-tight',
+                  text.length > 12 ? 'text-[15px] font-medium' : 'text-[22px] font-semibold')}
+                  title={`${capabilityLabel(primary.capability, idx)} · ${primary.property}`}>
+                  {text}
+                  {primary.unit && <span className="ml-1 text-[12px] font-normal text-ink-3">{primary.unit}</span>}
+                </p>
+                {pts && pts.length >= 2 && <Sparkline points={pts} className="mt-1.5" />}
+              </>
+            )
+          })()}
+          <p className="mt-1 truncate text-[11px] text-ink-3">
+            {propertyLabel(primary.property, primary.capability, idx)}
           </p>
-          <ValueWidget obs={primary} idx={idx} emphasis />
-        </div>
+        </>
       ) : (
-        <p className="py-3 text-center text-xs text-ink-3">等待观测值…</p>
+        <p className="mt-1.5 text-[13px] text-ink-3">等待观测…</p>
       )}
-
       {rest.length > 0 && (
-        <div className="mt-4 border-t border-hairline pt-3">
-          <ObservationTable observations={rest} idx={idx} />
-        </div>
-      )}
-
-      {unknown.length > 0 && (
-        <div className="mt-4 border-t border-hairline pt-3">
-          <p className="mb-1.5 flex items-center gap-1 text-[11px] text-ink-3">
-            <Boxes size={11} /> 未收录 Capability · 通用视图
-          </p>
-          <div className="mb-2 flex flex-wrap gap-1.5">
-            {unknown.map((u) => (
-              <span key={u} className="num max-w-full truncate rounded-full bg-ink-3/10 px-2 py-0.5 font-mono text-[10px] text-ink-2"
-                title={u}>
-                {u}
-              </span>
-            ))}
+        <details className="mt-1.5">
+          <summary className="cursor-pointer select-none text-[11px] text-ink-3 transition-colors hover:text-ink-2">
+            其余 {rest.length} 项
+          </summary>
+          <div className="mt-2">
+            <ObservationTable observations={rest} idx={idx} />
           </div>
-          {unknownObs.length > 0 && (
-            <JsonBlock value={unknownObs} maxHeight="max-h-40"
-              label="未收录 Capability 的观测原始 JSON" />
-          )}
-        </div>
+        </details>
       )}
-
-      <p className="num mt-3 truncate border-t border-hairline pt-2 font-mono text-[10px] text-ink-3"
-        title={`entity_id ${entity.entity_id} · unique_key ${entity.unique_key} · capabilities ${entity.capabilities.length}`}>
-        {entity.unique_key}
-      </p>
-    </Panel>
+    </div>
   )
 }
 
-/** 整份 Descriptor：设备标识 + 按 category 分组的 Entity 面板 */
-export function DescriptorView({ descriptor, idx = EMPTY_INDEX, className }: {
+/** 实时状态矩阵：按 Descriptor category 分组（generic 顺序，不写设备特例）；
+ *  响应式 1/2/3/4 列；分区头只有组名 + 计数。 */
+export function StateMatrix({ descriptor, idx = EMPTY_INDEX, categories, nowSec, series, className }: {
   descriptor: DeviceDescriptor
   idx?: CapabilityIndex
+  categories?: EntityCategory[]
+  nowSec?: number
+  series?: Record<string, SeriesPoint[]>
   className?: string
 }) {
-  const grouped = CATEGORY_ORDER
+  const groups = (categories ?? CATEGORY_ORDER)
     .map((category) => ({ category, entities: descriptor.entities.filter((e) => e.category === category) }))
     .filter((g) => g.entities.length > 0)
-
+  if (!groups.length) {
+    return <p className="py-6 text-center text-sm text-ink-3">Descriptor 未声明 Entity</p>
+  }
   return (
     <div className={cn('space-y-5', className)}>
-      <Panel title={<span className="flex items-center gap-1.5"><Braces size={14} />Schema 描述</span>}
-        right={<StatusBadge status={descriptor.status} />}>
-        <dl className="space-y-2.5">
-          <KeyValue k="Device ID" v={descriptor.device_id} mono />
-          <KeyValue k="External ID" v={descriptor.external_id} mono />
-          {descriptor.manufacturer && <KeyValue k="厂商" v={descriptor.manufacturer} />}
-          {descriptor.model && <KeyValue k="型号" v={descriptor.model} />}
-          <KeyValue k="Entity" v={`${descriptor.entities.length} 个`} />
-          <KeyValue k="Capability 引用"
-            v={`${new Set(descriptor.entities.flatMap((e) => e.capabilities)).size} 种`} />
-        </dl>
-      </Panel>
-
-      {grouped.length === 0 && (
-        <Panel>
-          <p className="py-4 text-center text-sm text-ink-3">Descriptor 未声明 Entity</p>
-        </Panel>
-      )}
-
-      {grouped.map((g) => (
-        <section key={g.category}>
-          <h3 className="mb-2 flex items-center gap-1.5 px-1 text-[13px] font-semibold text-ink-2">
-            {CATEGORY_LABEL[g.category]}
-            <span className="num text-[11px] font-normal text-ink-3">{g.entities.length}</span>
+      {groups.map(({ category, entities }) => (
+        <section key={category}>
+          <h3 className="mb-2 flex items-center gap-1.5 px-0.5 text-[12px] font-medium text-ink-3">
+            {CATEGORY_LABEL[category]}
+            <span className="num text-[11px] font-normal">{entities.length}</span>
           </h3>
-          <div className="grid items-start gap-4 md:grid-cols-2">
-            {g.entities.map((e) => (
-              <EntityPanel key={e.entity_id || e.unique_key} entity={e} idx={idx} />
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+            {entities.map((e) => (
+              <StateCell key={e.entity_id || e.unique_key} entity={e} idx={idx} nowSec={nowSec} series={series} />
             ))}
           </div>
         </section>
       ))}
+    </div>
+  )
+}
+
+/** KPI 瓦片（设备概览首屏）：大字号只给真正的主指标；语义色只用于 warn/bad，其余保持中性 */
+export function MetricTile({ v }: { v: SummaryValue }) {
+  const reduced = useReducedMotion()
+  const valueTone = v.tone === 'bad' || v.tone === 'warn' ? TONE_TEXT_CLS[v.tone] : undefined
+  return (
+    <div className={cn('card min-w-0 p-4 fade-up', v.tone === 'bad' && !reduced && 'remind')}>
+      <p className="min-w-0 truncate text-[11px] font-medium text-ink-3" title={v.title}>{v.label}</p>
+      <p className={cn('num mt-1.5 truncate text-[24px] font-semibold leading-none tracking-tight', valueTone)}
+        title={v.title}>
+        {v.text}
+        {v.unit && <span className="ml-1 text-[12px] font-normal text-ink-3">{v.unit}</span>}
+      </p>
+    </div>
+  )
+}
+
+/* ---------------- Capability schema 浏览器（developer-facing） ---------------- */
+
+function declTitle(decl: unknown, fallback: string): string {
+  const o = decl && typeof decl === 'object' && !Array.isArray(decl) ? (decl as Record<string, unknown>) : null
+  const t = o?.title ?? o?.label
+  // locale 匹配：只有中文 title 才算已本地化的展示名，英文 title 让位给平台词汇/humanize
+  return typeof t === 'string' && t.length > 0 && /[\u3400-\u9fff]/.test(t) ? t : fallback
+}
+
+/** Capability 浏览器：每条声明 Capability 一行（展示名 +  canonical ID + 规模），
+ *  点击展开 Inspector（属性/动作/事件/schema JSON）——机器 ID 只在这一层与诊断页出现。 */
+export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: {
+  descriptor: DeviceDescriptor
+  idx?: CapabilityIndex
+  className?: string
+}) {
+  const set = new Set<string>()
+  for (const e of descriptor.entities) for (const c of e.capabilities) if (c) set.add(c)
+  const refs = [...set]
+  if (!refs.length) return <p className="py-6 text-center text-sm text-ink-3">Descriptor 未声明 Capability</p>
+  return (
+    <ul className={cn('m-0 list-none divide-y divide-hairline p-0', className)}>
+      {refs.map((ref) => {
+        const doc = resolveCapability(ref, idx)
+        const spec = (doc?.spec ?? {}) as Record<string, unknown>
+        const props = Object.entries((spec.properties ?? {}) as Record<string, unknown>)
+        const actions = Object.entries((spec.actions ?? {}) as Record<string, unknown>)
+        const events = Object.entries((spec.events ?? {}) as Record<string, unknown>)
+        const parsed = parseCapabilityRef(ref)
+        return (
+          <li key={ref}>
+            <details className="py-2.5">
+              <summary className="flex cursor-pointer select-none flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="min-w-0 truncate text-[13px] font-medium">{capabilityLabel(ref, idx)}</span>
+                {!doc && <Badge tone="idle" className="shrink-0">未收录</Badge>}
+                <span className="num min-w-0 truncate font-mono text-[11px] text-ink-3" title={ref}>{ref}</span>
+                <span className="num ml-auto shrink-0 text-[11px] text-ink-3">
+                  {props.length} 属性 · {actions.length} 动作 · {events.length} 事件
+                </span>
+              </summary>
+              <div className="mt-2.5 space-y-3 pl-0.5">
+                {props.length > 0 && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-left text-xs">
+                      <thead>
+                        <tr className="text-[11px] text-ink-3">
+                          <th className="px-1 pb-1 font-medium">属性</th>
+                          <th className="px-1 pb-1 font-medium">机器名</th>
+                          <th className="px-1 pb-1 font-medium">类型</th>
+                          <th className="px-1 pb-1 font-medium">单位</th>
+                          <th className="px-1 pb-1 font-medium">访问</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-hairline">
+                        {props.map(([name, decl]) => {
+                          const d = (decl ?? {}) as Record<string, unknown>
+                          return (
+                            <tr key={name}>
+                              <td className="max-w-[10rem] truncate px-1 py-1.5">{declTitle(d, propertyLabel(name, ref, idx))}</td>
+                              <td className="num px-1 py-1.5 font-mono text-[11px] text-ink-3">{name}</td>
+                              <td className="px-1 py-1.5 text-ink-2">{String(d.type ?? '—')}</td>
+                              <td className="num px-1 py-1.5 text-ink-2">{String(d.unit ?? '—')}</td>
+                              <td className="px-1 py-1.5 text-ink-2">{String(d.access ?? '—')}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {actions.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {actions.map(([name, decl]) => (
+                      <span key={name} className="badge bg-ink-3/10 text-ink-2" title={name}>
+                        {declTitle(decl, commandLabel(name))}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {events.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {events.map(([name, decl]) => (
+                      <span key={name} className="badge bg-ink-3/10 text-ink-2" title={name}>
+                        {declTitle(decl, humanize(name))}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {doc && (
+                  <details>
+                    <summary className="cursor-pointer select-none text-[11px] text-ink-3 transition-colors hover:text-ink-2">
+                      Schema JSON（v{parsed.version ?? doc.metadata?.version ?? '—'}）
+                    </summary>
+                    <JsonBlock className="mt-1.5" value={doc.spec} maxHeight="max-h-48" label={`${ref} schema JSON`} />
+                  </details>
+                )}
+              </div>
+            </details>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+/** Entity 清单（取证面）：entity_id / 分类 / Capability 引用，全部机器原文，只在诊断页出现 */
+export function EntityInventory({ descriptor, className }: {
+  descriptor: DeviceDescriptor
+  className?: string
+}) {
+  return (
+    <div className={cn('overflow-x-auto', className)}>
+      <table className="w-full border-collapse text-left text-xs">
+        <thead>
+          <tr className="text-[11px] text-ink-3">
+            <th className="px-1 pb-1.5 font-medium">实体</th>
+            <th className="px-1 pb-1.5 font-medium">entity_id</th>
+            <th className="px-1 pb-1.5 font-medium">分类</th>
+            <th className="px-1 pb-1.5 font-medium">Capability 引用</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-hairline">
+          {descriptor.entities.map((e) => (
+            <tr key={e.entity_id || e.unique_key}>
+              <td className="max-w-[12rem] truncate px-1 py-1.5">{entityTitle(e)}</td>
+              <td className="num px-1 py-1.5 font-mono text-[11px] text-ink-3">{e.entity_id}</td>
+              <td className="px-1 py-1.5 text-ink-2">{CATEGORY_LABEL[e.category] ?? e.category}</td>
+              <td className="px-1 py-1.5">
+                <span className="flex min-w-0 flex-wrap gap-1">
+                  {e.capabilities.length === 0
+                    ? <span className="text-ink-3">—</span>
+                    : e.capabilities.map((c) => (
+                      <span key={c} className="num max-w-[16rem] truncate font-mono text-[10px] text-ink-3" title={c}>
+                        {c}
+                      </span>
+                    ))}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

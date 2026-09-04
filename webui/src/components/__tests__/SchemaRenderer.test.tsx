@@ -6,8 +6,8 @@
 import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import {
-  DescriptorView, EntityPanel, GenericTable, JsonBlock, ObservationTable,
-  QualityDot, RawView, StatusBadge, SummaryChips, ValueWidget,
+  CapabilityBrowser, GenericTable, JsonBlock, ObservationTable,
+  QualityDot, RawView, StateMatrix, StatusBadge, SummaryChips, ValueWidget,
 } from '@/components/SchemaRenderer'
 import { indexCapabilities, normalizeCapabilityDocs, observationsOf } from '@/lib/descriptor'
 import {
@@ -26,14 +26,32 @@ function obs(capability: string, property: string, value: unknown, extra: Partia
 }
 
 describe('未知 Capability 回落', () => {
-  it('EntityPanel 标注未收录引用并给出通用 JSON 视图，原始引用串可见', () => {
-    render(<EntityPanel entity={diagEntity} idx={idx} />)
-    expect(screen.getByText('未收录 Capability · 通用视图')).toBeInTheDocument()
+  it('StateMatrix 默认视图不放未收录标注/URI/原始 JSON（human-first）', () => {
+    const { container } = render(<StateMatrix descriptor={descriptor} idx={idx} />)
+    expect(screen.queryByText('未收录 Capability · 通用视图')).toBeNull()
+    expect(screen.queryByRole('group', { name: /原始 JSON/ })).toBeNull()
+    // 机器 ID 与载荷不进入默认视图：整块文本里不允许出现 URI 或 JSON 键
+    const text = container.textContent ?? ''
+    expect(text).not.toContain('cloudpath.dev')
+    expect(text).not.toContain('"capability"')
+    // 展示名是人类可读层：实体名与属性名都在
+    expect(screen.getByText('温度探针')).toBeInTheDocument()
+  })
+
+  it('StateMatrix 有会话序列时卡片内嵌火花线，无序列不画假线', () => {
+    const series = { 'e-temp.current': [{ t: 1, v: 20 }, { t: 2, v: 22 }, { t: 3, v: 21 }] }
+    const { container, unmount } = render(<StateMatrix descriptor={descriptor} idx={idx} series={series} />)
+    expect(container.querySelector('svg[aria-hidden]')).not.toBeNull()
+    unmount()
+    const plain = render(<StateMatrix descriptor={descriptor} idx={idx} />)
+    expect(plain.container.querySelector('svg[aria-hidden]')).toBeNull()
+  })
+
+  it('CapabilityBrowser 标注未收录引用且 canonical ID 可见（机器 ID 只在开发层）', () => {
+    render(<CapabilityBrowser descriptor={descriptor} idx={idx} />)
+    expect(screen.getAllByText('未收录').length).toBeGreaterThan(0)
     expect(screen.getByText(UNKNOWN_CAP)).toBeInTheDocument()
-    const json = screen.getByRole('group', { name: '未收录 Capability 的观测原始 JSON' })
-    expect(json).toHaveAttribute('tabindex', '0')
-    expect(json.textContent).toContain('mystery_rows')
-    expect(json.textContent).toContain('row-a')
+    expect(screen.getByText(CAP_TEMPERATURE)).toBeInTheDocument()
   })
 
   it('ObservationTable 给未收录观测打「未收录」徽标，已收录的不打', () => {
@@ -143,21 +161,18 @@ describe('quality / status 状态提示', () => {
   })
 })
 
-describe('DescriptorView 分组', () => {
-  it('按平台 category 枚举分组，并给出设备标识与统计', () => {
-    render(<DescriptorView descriptor={descriptor} idx={idx} />)
-    expect(screen.getByText('Schema 描述')).toBeInTheDocument()
-    // 分组标题用 heading 定位（同名文案也出现在 Entity 的 category 徽标里）
+describe('StateMatrix 分组', () => {
+  it('按平台 category 枚举分组，分区头有组名与计数，主值可扫读', () => {
+    render(<StateMatrix descriptor={descriptor} idx={idx} />)
     expect(screen.getByRole('heading', { name: /传感器/ })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /执行器/ })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /诊断/ })).toBeInTheDocument()
-    expect(screen.getByText('edge-1/dev-9')).toBeInTheDocument()
-    expect(screen.getByText('3 个')).toBeInTheDocument()
     expect(screen.getByText('温度探针')).toBeInTheDocument()
+    expect(screen.getByText('26.5')).toBeInTheDocument()
   })
 
   it('没有 Entity 的 Descriptor 有明确空态', () => {
-    render(<DescriptorView descriptor={makeDescriptor({ entities: [] })} idx={idx} />)
+    render(<StateMatrix descriptor={makeDescriptor({ entities: [] })} idx={idx} />)
     expect(screen.getByText('Descriptor 未声明 Entity')).toBeInTheDocument()
   })
 })
@@ -176,7 +191,9 @@ describe('390px 溢出收口', () => {
   })
 
   it('组件内没有任何内联像素宽度/固定宽度（只有百分比量程条）', () => {
-    const { container } = render(<EntityPanel entity={tempEntity} idx={idx} />)
+    const { container } = render(
+      <ValueWidget obs={obs(CAP_TEMPERATURE, 'current', 26.5, { unit: 'Cel' })} idx={idx} />,
+    )
     const inline = [...container.querySelectorAll<HTMLElement>('[style]')]
     expect(inline.length).toBeGreaterThan(0)
     for (const el of inline) {

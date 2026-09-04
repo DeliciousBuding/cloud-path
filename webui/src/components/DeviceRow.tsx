@@ -3,6 +3,8 @@ import { Link } from 'react-router'
 import { Braces } from 'lucide-react'
 import { Badge, StatusDot } from './ui'
 import { useDeviceDescriptor } from '@/hooks/useDescriptor'
+import { useLive } from '@/store/ws'
+import { Sparkline } from './Sparkline'
 import { capabilityLabel, statusMeta } from '@/lib/descriptor'
 import { fmtDateTime } from '@/lib/format'
 import type { DeviceView } from '@/lib/types'
@@ -28,9 +30,15 @@ export function DeviceRow({ d }: { d: DeviceView }) {
   const st = descriptor ? statusMeta(descriptor.status) : null
   const name = d.name || devId || d.id
   const seen = d.online ? d.updated_at : d.last_seen
+  // 会话数值序列里第一条够画的序列 → 行内火花线（纯形状，不标精度）
+  const series = useLive((s) => s.series[d.id])
+  const spark = useMemo(() => {
+    for (const pts of Object.values(series ?? {})) if (pts.length >= 2) return pts
+    return null
+  }, [series])
 
   return (
-    <li className="grid gap-x-4 gap-y-1.5 border-b border-hairline px-4 py-3 last:border-b-0 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,1.6fr)_5.5rem_9.5rem] lg:items-center">
+    <li className="grid gap-x-4 gap-y-1.5 border-b border-hairline px-4 py-3 last:border-b-0 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,1.4fr)_5.5rem_6.5rem_9.5rem] lg:items-center">
       {/* Name（+ 窄屏时把状态徽标放到同一行，避免多占一行） */}
       <div className="flex min-w-0 items-center gap-2">
         <StatusDot online={d.online} />
@@ -82,6 +90,11 @@ export function DeviceRow({ d }: { d: DeviceView }) {
         )}
       </div>
 
+      {/* 会话趋势火花线（仅桌面；无序列时留空，不画假线） */}
+      <div className="hidden min-w-0 lg:block">
+        {spark && <Sparkline points={spark} height={18} />}
+      </div>
+
       {/* Online / Offline（桌面列；窄屏已在名称行呈现） */}
       <div className="hidden lg:block">
         {st
@@ -103,9 +116,9 @@ export function DeviceRowHead() {
   return (
     <li
       aria-hidden
-      className="hidden gap-x-4 px-4 pb-2 text-[11px] font-medium text-ink-3 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,1.6fr)_5.5rem_9.5rem]"
+      className="hidden gap-x-4 px-4 pb-2 text-[11px] font-medium text-ink-3 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,1.4fr)_5.5rem_6.5rem_9.5rem]"
     >
-      <span>设备</span><span>边缘节点</span><span>能力</span><span>状态</span><span>最后见</span>
+      <span>设备</span><span>边缘节点</span><span>能力</span><span>状态</span><span>趋势</span><span>最后见</span>
     </li>
   )
 }

@@ -5,7 +5,7 @@
 // （docs/architecture/capability-model.md §9）。
 import { ApiError } from './api'
 import type { Tone } from '@/components/ui'
-import { eventDecl, humanize } from './descriptor'
+import { capabilityLabel, commandLabel, eventDecl, humanize } from './descriptor'
 import type { CapabilityIndex, CommandAction } from './descriptor'
 import type { EventView } from './types'
 
@@ -48,9 +48,48 @@ export function payloadLabel(payload: string | undefined): string | undefined {
   return undefined
 }
 
-/** 事件展示名：后端 label > Capability events 声明的 title > humanize(类型名) */
+/** 事件动词平台词典（声明缺席时的回退层）：机器动词 → 中文；未知动词回落 humanize，不猜业务语义 */
+const EVENT_VERB: Record<string, string> = {
+  press: '按下', pressed: '按下', release: '释放', released: '释放',
+  quake: '振动', changed: '状态变化', close: '靠近', away: '离开',
+  direction: '方向变化', tick: '滴答', opened: '打开', closed: '关闭',
+  taken: '已取药', remind: '提醒', missed: '错过',
+}
+
+/** 脏标签判定：历史脏数据（二进制串口碎片被写成事件类型）含控制符/替换符，原样展示即乱码 */
+export function isDirtyLabel(s: string): boolean {
+  return /[\uFFFD\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(s)
+}
+
+/** 机器事件类型 → 中文组合名：`<capref>@n/<verb>`、`<capref>@n/<dir>:<verb>` → `能力 · 动词` */
+function composeEventLabel(type: string, index?: CapabilityIndex): string {
+  const m = type.match(/^(.*@\d+)(?:\/(.+))?$/)
+  if (!m) return humanize(type)
+  const cap = capabilityLabel(m[1], index)
+  const rest = m[2]
+  if (!rest) return cap
+  const dir = rest.match(/^(\d+):(.+)$/)
+  const verb = dir ? dir[2] : rest
+  const verbLabel = EVENT_VERB[verb] ?? humanize(verb)
+  return dir ? `${cap} · 方向${dir[1]}${verbLabel}` : `${cap} · ${verbLabel}`
+}
+
+/** 平台级事件类型词汇（device.* 是平台生命周期事件，非设备语义） */
+const EVENT_TYPE_LABEL: Record<string, string> = {
+  'device.boot': '设备启动', 'device-booted': '设备启动',
+  'device.online': '设备上线', 'device-online': '设备上线',
+  'device.offline': '设备离线', 'device-offline': '设备离线',
+  'device.state': '状态上报', 'device-state': '状态上报',
+  'device.descriptor': '描述更新', 'device-descriptor': '描述更新',
+}
+
+/** 事件展示名：后端 label > 脏数据降级 > 平台事件词汇 > Capability 声明 title > 组合中文名 > humanize */
 export function eventLabel(type: string, index?: CapabilityIndex, label?: string): string {
-  return label || (index ? eventDecl(type, index)?.title : undefined) || humanize(type)
+  if (label && !isDirtyLabel(label)) return label
+  if (isDirtyLabel(type)) return '无效事件（历史脏数据）'
+  return EVENT_TYPE_LABEL[type]
+    || (index ? eventDecl(type, index)?.title : undefined)
+    || composeEventLabel(type, index)
 }
 
 /** 事件语义色：只采纳 Capability 声明的 tone；未声明一律中性，不猜业务含义 */
@@ -62,7 +101,7 @@ export function eventTone(type: string, index?: CapabilityIndex): Tone {
 export function cmdMeta(cmd: string, actions?: CommandAction[]): { label: string; hint: string } {
   const a = actions?.find((x) => x.cmd === cmd)
   if (a) return { label: a.label, hint: a.hint ?? '' }
-  return { label: humanize(cmd), hint: '' }
+  return { label: commandLabel(cmd), hint: '' }
 }
 
 /** 命令生命周期状态 → 徽标语义（平台级状态机，非设备语义） */

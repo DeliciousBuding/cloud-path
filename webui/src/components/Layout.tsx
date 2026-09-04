@@ -147,13 +147,16 @@ function SidebarFooter() {
 
 /** 实时通道断开时的系统级提示条（重连由 store 自动进行）。
  *  连续失败要如实说出来：账号模式下 /ws 靠会话 cookie 鉴权，会话失效时页面若照常渲染
- *  就会变成「看着正常但没有实时数据」的假数据，因此这里给出失败次数并说明正在复核登录态。 */
+ *  就会变成「看着正常但没有实时数据」的假数据，因此这里给出失败次数并说明正在复核登录态。
+ *  层叠位置：桌面侧栏是 fixed z-40 w-60，横幅若全宽 sticky 会被侧栏盖住（且旧版
+ *  lg:pl-64 与侧栏 w-60 不等宽，视觉错位）；故横幅排在侧栏/移动顶栏之后的文档流里，
+ *  桌面用 lg:ml-60 让出侧栏宽度、lg:sticky 吸顶，移动端随内容流不吸顶。 */
 function OfflineBanner() {
   const status = useLive((s) => s.status)
   const failures = useLive((s) => s.failures)
   if (status === 'open') return null
   return (
-    <div className="banner sticky top-0 z-30 lg:pl-64" role="status">
+    <div className="banner z-30 lg:sticky lg:top-0 lg:ml-60" role="status">
       <WifiOff size={13} className="shrink-0" />
       <span className="min-w-0 break-words">
         {status === 'connecting' ? '正在连接实时通道…' : '实时通道已断开，正在自动重连（页面数据仍会定时刷新）'}
@@ -175,8 +178,6 @@ export default function Layout() {
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50 focus:rounded-full focus:bg-accent focus:px-4 focus:py-2 focus:text-xs focus:text-accent-ink">
         跳到主内容
       </a>
-
-      <OfflineBanner />
 
       {/* 桌面侧栏 */}
       <aside className="glass fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-hairline px-3 py-5 lg:flex">
@@ -210,8 +211,10 @@ export default function Layout() {
         </nav>
       </header>
 
+      <OfflineBanner />
+
       <main id="main" className="lg:pl-60">
-        <div className="mx-auto max-w-6xl px-4 py-7 sm:px-6 lg:px-10 lg:py-9">
+        <div className="mx-auto max-w-[1360px] px-4 py-7 sm:px-6 lg:px-10 lg:py-9">
           <Outlet />
         </div>
       </main>

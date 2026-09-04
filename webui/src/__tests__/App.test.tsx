@@ -117,7 +117,7 @@ describe('Schema 端点缺席时的设备详情页', () => {
     // 控制分区：命令面板回落到后端白名单，而不是前端自己编一张命令表
     await user.click(screen.getByRole('tab', { name: /控制/ }))
     expect(await screen.findByText('适配器白名单')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Raw' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '原始命令' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: '选择命令' })).toBeInTheDocument()
 
     // 能力分区：没有 Descriptor 就明说，不猜能力

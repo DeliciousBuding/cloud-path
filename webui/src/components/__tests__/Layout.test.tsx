@@ -134,7 +134,7 @@ describe('390px 溢出收口', () => {
     const main = screen.getByRole('main')
     expect(main.className).toContain('lg:pl-60')
     const box = main.firstElementChild as HTMLElement
-    expect(box.className).toContain('max-w-6xl')
+    expect(box.className).toContain('max-w-[1360px]')
     expect(box.className).toContain('px-4')
     const aside = document.querySelector('aside') as HTMLElement
     expect(aside.className).toContain('hidden')

@@ -17,8 +17,8 @@ export type WsStatus = 'connecting' | 'open' | 'closed'
 /** 会话内数值采样点（t=unix 秒，v=观测值） */
 export interface SeriesPoint { t: number; v: number }
 
-/** 每设备最多跟踪的数值属性数（防 raw 字段爆炸） */
-const MAX_SERIES_KEYS = 6
+/** 每设备最多跟踪的数值属性数（防 raw 字段爆炸；STC-B 全板 12 个数值观测需全覆盖） */
+const MAX_SERIES_KEYS = 12
 /** 每条序列最多保留点数 */
 const MAX_SERIES_POINTS = 240
 

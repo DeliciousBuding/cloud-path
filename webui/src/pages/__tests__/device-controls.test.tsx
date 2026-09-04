@@ -69,7 +69,7 @@ describe('命令集来自适配器白名单', () => {
     await gotoControls()
     expect(await screen.findByText('适配器白名单')).toBeInTheDocument()
     const names = commandButtons()
-    for (const expect0 of ['Raw', 'Identify', 'Query State']) {
+    for (const expect0 of ['原始命令', 'Identify', 'Query State']) {
       expect(names, `白名单命令 ${expect0} 没有渲染成控件`).toContain(expect0)
     }
     // 带参数下发入口的候选同样来自白名单，不多不少

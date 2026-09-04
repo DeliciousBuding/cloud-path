@@ -5,28 +5,6 @@ export function Skeleton({ className }: { className?: string }) {
   return <div className={cn('skeleton rounded-lg', className)} aria-hidden />
 }
 
-/** 设备卡骨架（概览/设备页首帧） */
-export function DeviceCardSkeleton() {
-  return (
-    <div className="card p-5">
-      <div className="flex items-center gap-2">
-        <Skeleton className="h-2 w-2 rounded-full" />
-        <Skeleton className="h-3.5 w-24" />
-        <Skeleton className="ml-auto h-4 w-12 rounded-full" />
-      </div>
-      <Skeleton className="mt-4 h-9 w-32" />
-      <div className="mt-3 flex gap-2">
-        <Skeleton className="h-4 w-16 rounded-full" />
-        <Skeleton className="ml-auto h-3 w-14" />
-      </div>
-      <div className="mt-4 flex gap-1.5">
-        <Skeleton className="h-5 flex-1 rounded-full" />
-        <Skeleton className="h-5 flex-1 rounded-full" />
-        <Skeleton className="h-5 flex-1 rounded-full" />
-      </div>
-    </div>
-  )
-}
 
 /** 列表行骨架（事件流首帧） */
 export function RowSkeleton({ rows = 5 }: { rows?: number }) {

@@ -30,7 +30,7 @@ export function EventFeed({ events, showDevice = true, limit = 30, fullTime = fa
         const [edgeId, devId] = e.device_id.split('/')
         return (
           <li key={`${e.id}-${i}`} className={i === 0 ? 'fade-up' : undefined}>
-            <div className="flex items-center gap-3 py-2.5">
+            <div className="flex items-center gap-3 py-2">
               <Badge tone={tone} className="max-w-[9rem] truncate">{label}</Badge>
               {showDevice && (
                 <Link
@@ -45,6 +45,18 @@ export function EventFeed({ events, showDevice = true, limit = 30, fullTime = fa
                 {fullTime ? fmtDateTime(e.ts) : fmtTime(e.ts)}
               </span>
             </div>
+            {/* 原始 payload 是取证面：默认折叠，不污染时间线扫读 */}
+            {e.payload && e.payload !== '{}' && (
+              <details className="pb-1.5">
+                <summary className="cursor-pointer select-none text-[11px] text-ink-3 transition-colors hover:text-ink-2">
+                  载荷
+                </summary>
+                <pre tabIndex={0} role="group" aria-label="事件原始载荷"
+                  className="num mt-1 max-h-40 overflow-auto rounded-lg bg-surface-2 p-2 font-mono text-[10px] leading-relaxed text-ink-2">
+                  {e.payload}
+                </pre>
+              </details>
+            )}
           </li>
         )
       })}

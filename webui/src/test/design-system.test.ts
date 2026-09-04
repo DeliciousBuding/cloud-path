@@ -106,7 +106,7 @@ describe('JSX children 不许写 // 行注释（会被当字面文本渲染）',
   })
 
   it('守卫不是空转：历史三处踩雷文件都在扫描面里', () => {
-    for (const p of ['components/DeviceCard.tsx', 'pages/Edges.tsx', 'pages/Settings.tsx']) {
+    for (const p of ['components/Layout.tsx', 'pages/Edges.tsx', 'pages/Settings.tsx']) {
       expect(tsx.some((f) => f.path === p), `扫描面缺少 ${p}`).toBe(true)
     }
   })
@@ -218,7 +218,7 @@ describe('390px 溢出收口（静态守卫）', () => {
 
   it('布局内容宽度是 max-w + 相对内边距，窄屏侧栏退出布局', () => {
     const layout = source('components/Layout.tsx')
-    expect(layout).toContain('mx-auto max-w-6xl px-4')
+    expect(layout).toContain('mx-auto max-w-[1360px] px-4')
     expect(layout).toContain('hidden w-60 flex-col border-r border-hairline px-3 py-5 lg:flex')
   })
 })

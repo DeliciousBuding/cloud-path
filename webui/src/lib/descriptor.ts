@@ -28,6 +28,57 @@ export function humanize(s: string): string {
   }).join(' ') || s
 }
 
+/** 平台级属性展示词典（声明驱动的回退层）：Capability 文档 spec.properties[].title 缺席时，
+ *  把常见属性机器名收敛为中文；未知属性仍回落 humanize——不猜业务语义。
+ *  机器 ID（property key）本身永不本地化，这里只是展示别名（docs/architecture/capability-model.md §9）。 */
+const PROPERTY_LABEL: Record<string, string> = {
+  raw: '原始值', value: '数值', state: '状态', time: '时间', direction: '方向',
+  mask: '掩码', mode: '模式', level: '设定值', enabled: '开关', count: '计数',
+  status: '状态',
+  commands: '命令数', pings: 'Ping 计数', ticks: '心跳计数', uptime_s: '运行时长',
+}
+
+/** 平台通用词汇表（展示回退第二层）：常见硬件名词的中文展示别名。
+ *  只收跨设备通用的硬件/能力名词，不收业务语义；声明 title 永远优先，
+ *  机器 ID 本身永不本地化（docs/architecture/capability-model.md §9）。 */
+const GENERIC_NOUN: Record<string, string> = {
+  clock: '时钟', temperature: '温度', humidity: '湿度', illuminance: '光照',
+  'analog-input': '模拟输入', navigation: '导航', hall: '霍尔', vibration: '振动',
+  key: '按键', buzzer: '蜂鸣器', led: 'LED 灯组', 'led-bank': 'LED 灯组',
+  display: '数码管', 'display-text': '数码管显示', motor: '电机',
+  diagnostics: '诊断', 'board-diagnostics': '板级诊断', relay: '继电器', switch: '开关',
+  counter: '计数器', uptime: '运行时长', setpoint: '设定值', toggle: '开关',
+}
+
+/** UI  locale 匹配：声明 title 只有含中文才视为「已本地化的展示名」；
+ *  纯英文 title（通常只是机器名的标题化）让位给平台通用词汇层——
+ *  这是 i18n 的 locale 选择，不是覆盖声明：声明者日后给出中文 title 即自动优先。 */
+const CJK_RE = /[\u3400-\u9fff]/
+function localizedTitle(t: string | undefined): string | undefined {
+  return t && CJK_RE.test(t) ? t : undefined
+}
+
+/** 属性展示名：文档声明 title > 平台词典 > humanize(机器名) */
+export function propertyLabel(name: string, ref?: string, idx: CapabilityIndex = EMPTY_INDEX): string {
+  const doc = ref ? resolveCapability(ref, idx) : undefined
+  const decl = doc?.spec?.properties?.[name] as { title?: string } | undefined
+  const title = str(decl?.title)
+  return localizedTitle(title) ?? PROPERTY_LABEL[name] ?? title ?? humanize(name)
+}
+/** 平台级命令展示词典（声明缺席时的回退层）：机器 cmd → 中文；未知命令仍回落 humanize。
+ *  命令白名单与文案的事实源始终是后端声明（Capability actions / Descriptor commands /
+ *  适配器白名单），这里只做展示别名，不猜业务语义。 */
+const CMD_LABEL: Record<string, string> = {
+  buzzer: '蜂鸣器', led: 'LED 灯组', display: '数码管显示', motor: '电机',
+  sync: '对时', sensor: '读取传感器', state: '状态读取', diag: '板级诊断',
+  isp: '进入 ISP 下载', raw: '原始命令',
+}
+
+/** 命令展示名（无声明上下文时）：平台词典 > humanize(机器名) */
+export function commandLabel(cmd: string): string {
+  return CMD_LABEL[cmd] ?? humanize(cmd)
+}
+
 function str(v: unknown): string | undefined {
   return typeof v === 'string' && v.length > 0 ? v : undefined
 }
@@ -100,7 +151,8 @@ export function capabilityLabel(ref: string | undefined, idx: CapabilityIndex = 
   if (!ref) return '未声明'
   const doc = resolveCapability(ref, idx)
   const parsed = parseCapabilityRef(ref)
-  return str(doc?.metadata?.title) ?? humanize(parsed.name || ref)
+  const title = str(doc?.metadata?.title)
+  return localizedTitle(title) ?? GENERIC_NOUN[parsed.name] ?? title ?? humanize(parsed.name || ref)
 }
 
 /* ---------------- 宽容归一化（后端形状可能演化，前端不炸） ---------------- */
@@ -529,7 +581,7 @@ function declaredCommands(container: Record<string, unknown>): CommandAction[] {
       if (!o) continue
       const cmd = str(o.command) ?? str(o.cmd) ?? str(o.id) ?? str(o.name) ?? str(o.action)
       if (!cmd) continue
-      const label = str(o.title) ?? str(o.label) ?? str(o.name) ?? humanize(cmd)
+      const label = str(o.title) ?? str(o.label) ?? str(o.name) ?? commandLabel(cmd)
       const a: CommandAction = { cmd, label, variant: variantOf(o) }
       const hint = str(o.description) ?? str(o.hint); if (hint) a.hint = hint
       const confirmText = confirmOf(o, label); if (confirmText) a.confirmText = confirmText
@@ -560,7 +612,7 @@ function actionsFromCapabilities(
       for (const [name, declRaw] of Object.entries(actions)) {
         const decl = (obj(declRaw) ?? {}) as Record<string, unknown>
         const cmd = str(decl.command) ?? str(decl.cmd) ?? name
-        const label = str(decl.title) ?? str(decl.label) ?? humanize(name)
+        const label = str(decl.title) ?? str(decl.label) ?? commandLabel(name)
         const a: CommandAction = {
           cmd, label, variant: variantOf(decl),
           capability: ref, entityId: e.entity_id, entityLabel: entityTitle(e),
@@ -608,7 +660,7 @@ export function commandActions(input: {
     if (actions.length) source = 'descriptor'
   }
   if (source === 'none') {
-    for (const c of input.adapterCommands ?? []) push({ cmd: c, label: humanize(c) })
+    for (const c of input.adapterCommands ?? []) push({ cmd: c, label: commandLabel(c) })
     if (actions.length) source = 'adapter'
   }
   return { actions, source }
@@ -712,13 +764,17 @@ export function summarizeDescriptor(d: DeviceDescriptor, idx: CapabilityIndex = 
       if (o.quality !== 'bad' && o.quality !== 'uncertain') continue
       // 告警胶囊的语义色必须由 quality 决定：presentation.tone 是能力级 UI Hint，
       // 若让它盖过 quality，就会出现「因 bad/uncertain 才上浮、却画成 ok 绿」的自相矛盾。
-      alerts.push(obsToSummary(e, o, idx, humanize(o.property), qualityTone(o.quality)))
+      alerts.push(obsToSummary(e, o, idx, propertyLabel(o.property, o.capability, idx), qualityTone(o.quality)))
     }
   }
   alerts.sort((a, b) => (ALERT_RANK[a.tone] ?? 9) - (ALERT_RANK[b.tone] ?? 9))
 
   const headlineIdx = candidates.findIndex((c) => c.headline)
-  const primary = (headlineIdx >= 0 ? candidates[headlineIdx] : candidates[0])?.v ?? null
+  // 无 presentation hint 时主值优先数值/短文本：卡片主值字号大，长文本必然截断成
+  // 「refere…」这类残字；可扫读的数值比截断长文更符合首屏信息密度。
+  const compactIdx = candidates.findIndex((c) => /^-?[\d.,]/.test(c.v.text) || c.v.text.length <= 8)
+  const pickIdx = headlineIdx >= 0 ? headlineIdx : compactIdx >= 0 ? compactIdx : 0
+  const primary = candidates[pickIdx]?.v ?? null
   const chips = candidates.filter((c) => c.v !== primary).map((c) => c.v)
   for (const a of alerts.slice(0, 2)) {
     if (chips.length >= MAX_CHIPS) chips.pop()
@@ -728,13 +784,28 @@ export function summarizeDescriptor(d: DeviceDescriptor, idx: CapabilityIndex = 
   return { primary, chips: chips.slice(0, MAX_CHIPS), groups, source }
 }
 
+/** 设备概览 KPI：按 category 序取各 Entity 主观测（仅标量），完全由 Descriptor 推导、无设备特例；
+ *  语义色/单位/标题沿用 obsToSummary（声明驱动）。 */
+export function metricTiles(d: DeviceDescriptor, idx: CapabilityIndex = EMPTY_INDEX, max = 4): SummaryValue[] {
+  const ordered = [...d.entities].sort((a, b) =>
+    CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category))
+  const out: SummaryValue[] = []
+  for (const e of ordered) {
+    if (out.length >= max) break
+    const primary = primaryObservation(e, idx)
+    if (!primary || !isScalar(primary.value)) continue
+    out.push(obsToSummary(e, primary, idx))
+  }
+  return out
+}
+
 /** legacy raw（诊断面）→ 卡片摘要：完全通用，按键顺序取标量，数组转胶囊组 */
 export function summarizeRaw(raw: DeviceRaw | undefined): DeviceSummary {
   const entries = Object.entries(raw ?? {})
   const candidates: SummaryValue[] = []
   const groups: SummaryGroup[] = []
   for (const [key, value] of entries) {
-    const label = humanize(key)
+    const label = rawKeyLabel(key)
     if (Array.isArray(value)) {
       if (groups.length >= MAX_GROUPS || !value.length) continue
       const items = value.slice(0, MAX_GROUP_ITEMS).map((item, i): SummaryValue => {
@@ -758,6 +829,16 @@ export function summarizeRaw(raw: DeviceRaw | undefined): DeviceSummary {
   }
 }
 
+/** raw 字段名 → 展示名：点分键（entity.property）拆开后逐层回落
+ *  （通用词汇 → 属性词典 → humanize）；非点分键保持 humanize，避免平台词汇猜单键语义。 */
+function rawKeyLabel(key: string): string {
+  const dot = key.lastIndexOf('.')
+  if (dot <= 0) return humanize(key)
+  const ent = key.slice(0, dot)
+  const prop = key.slice(dot + 1)
+  return `${GENERIC_NOUN[ent] ?? humanize(ent)} · ${PROPERTY_LABEL[prop] ?? GENERIC_NOUN[prop] ?? humanize(prop)}`
+}
+
 /** 详情页通用回落：raw 的每个键一行，widget 由值类型推导（未知结构 → 表格/JSON） */
 export interface RawRow {
   key: string
@@ -768,7 +849,7 @@ export interface RawRow {
 
 export function rawRows(raw: DeviceRaw | undefined): RawRow[] {
   return Object.entries(raw ?? {}).map(([key, value]) => ({
-    key, label: humanize(key), widget: inferWidget(value), value,
+    key, label: rawKeyLabel(key), widget: inferWidget(value), value,
   }))
 }
 
@@ -788,7 +869,8 @@ export function eventDecl(type: string, idx: CapabilityIndex): {
       if (!decl) continue
       const tone = str(decl.tone)
       return {
-        title: str(decl.title) ?? str(decl.label),
+        // 事件标题同样走 locale 匹配：英文 title 让位给上层中文组合名
+        title: localizedTitle(str(decl.title) ?? str(decl.label)),
         description: str(decl.description),
         tone: tone && (TONES as string[]).includes(tone) ? (tone as Tone) : undefined,
       }
