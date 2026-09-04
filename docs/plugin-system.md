@@ -40,6 +40,7 @@ CloudPath 是**设备无关**的插件化平台：核心（`internal/*`）不识
 ## 5. 拆仓为独立插件仓库
 
 STC-B Driver 已拆为独立仓库 `cloud-path-driver-stcb`（进程内参考形态已移除），只依赖公开 SDK，不 import `internal/**`。更细的插件架构：
+- `docs/architecture/how-to-build-driver.md`（新增 Driver 的完整操作入口）
 - `docs/architecture/0001-capability-centered-plugins.md`
 - `docs/architecture/0002-github-plugin-discovery.md`
 

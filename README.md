@@ -479,6 +479,7 @@ cloud-path/
 | [docs/security.md](docs/security.md) | 安全与运维基线（L0/L1/L2、令牌、检查表） |
 | [docs/deploy.md](docs/deploy.md) | 部署指南（本地/容器/反代） |
 | [docs/architecture/plugin-system.md](docs/architecture/plugin-system.md) | 插件运行时与协议契约 |
+| [docs/architecture/how-to-build-driver.md](docs/architecture/how-to-build-driver.md) | 新增 Driver 的操作入口 |
 | [docs/architecture/capability-model.md](docs/architecture/capability-model.md) | Device/Entity/Capability 模型 |
 | [docs/architecture/control-plane-sync.md](docs/architecture/control-plane-sync.md) | 声明式快照 + 单调 revision 同步语义 |
 | [docs/architecture/tenant-security-policy.md](docs/architecture/tenant-security-policy.md) | 租户配额、保留期与 secret 边界 |
