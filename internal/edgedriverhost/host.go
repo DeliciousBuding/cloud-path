@@ -1,8 +1,9 @@
 // Package edgedriverhost 把外部 Driver Plugin Host 接入 edge 进程生命周期：
 // 由 A4.5 的 desired-state + lockfile 驱动，在 edge 退出时优雅关闭、不留孤儿进程。
 //
-// 当前是 host-only 形态：外部 driver 的 handshake / descriptor / observation
-// 尚未桥接进 edge 数据流，因此外部 driver 只报告 unsupported，绝不伪装成在线设备。
+// 外部 driver 已通过 Driver Protocol v1 桥接进 edge 数据流：installed plugin 的
+// driver ID 被包装成 device.Adapter，handshake/descriptor/observation 经 DriverClient
+// 接入监督循环；命令同样走 DriverClient.Execute，不把串口写成功冒充设备执行成功。
 package edgedriverhost
 
 import (

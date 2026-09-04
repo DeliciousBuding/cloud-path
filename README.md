@@ -294,9 +294,10 @@ curl -fsS http://127.0.0.1:8080/api/edges                 # 边缘节点在线�
 | `plugin_host.lock` | 否 | `<root>/plugins.lock` | 锁文件（固定版本/digest/来源） |
 | `plugin_host.close_timeout_s` | 否 | 10 | 优雅关闭 deadline |
 
-> `plugin_host` 当前会按 desired-state 监督外部 driver 进程，但外部 driver 的
-> handshake/descriptor/observation **尚未桥接进 edge 数据流**（只上报 unsupported，
-> 不会伪装成在线设备）；内置 adapter 与外部 driver ID 冲突会拒绝启动。
+> `plugin_host` 会按 desired-state 监督外部 driver 进程，并把 driver ID 桥接成
+> Edge 的 device.Adapter（Driver Protocol v1）：打开/观测/命令均走 DriverClient；
+> 内置 adapter 与外部 driver ID 冲突会拒绝启动。外部 driver 实例的 `port` 等配置
+> 由 Server desired state（插件实例配置）注入，Edge 自身不伪造设备在线。
 
 ### CLI（`cloudpath`）：插件 Registry 控制面
 
