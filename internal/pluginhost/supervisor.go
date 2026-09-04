@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/driver"
 	"github.com/DeliciousBuding/cloud-path/sdk/go/pluginruntime"
 )
 
@@ -156,6 +157,7 @@ type Supervisor struct {
 	collector *logCollector
 
 	launchID     string
+	session      *runtimeSession
 	proof        string
 	lastEndpoint string
 	rpcConns     int
@@ -407,6 +409,7 @@ func (s *Supervisor) runOnce(ctx context.Context) runOutcome {
 		_ = listener.Close()
 		cleanup()
 		_ = sess.close()
+		s.setSession(nil)
 	}()
 
 	// 3. Inject endpoint/identity into the process environment and launch it.
@@ -494,6 +497,7 @@ func (s *Supervisor) runOnce(ctx context.Context) runOutcome {
 	s.mu.Lock()
 	s.handshaked = true
 	s.mu.Unlock()
+	s.setSession(sess)
 	return s.monitor(ctx, h, sess, launch)
 }
 
@@ -858,4 +862,22 @@ func randomHex(n int) string {
 		return fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 	return hex.EncodeToString(b)
+}
+
+func (s *Supervisor) setSession(sess *runtimeSession) {
+	s.mu.Lock()
+	s.session = sess
+	s.mu.Unlock()
+}
+
+// DriverClient returns the DriverClient of the current launch, or nil while
+// the process is starting, crashed, or disabled. The returned client is tied
+// to the current session and must be re-resolved after a restart.
+func (s *Supervisor) DriverClient() driver.DriverClient {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.session == nil {
+		return nil
+	}
+	return s.session.driverClient()
 }

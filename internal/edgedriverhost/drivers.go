@@ -66,3 +66,29 @@ func CheckConflicts(builtins, externalDriverIDs []string) error {
 	sort.Strings(conflicts)
 	return fmt.Errorf("builtin adapter conflicts with external driver id: %s", strings.Join(conflicts, ", "))
 }
+
+// driverPluginID returns the plugin id that contributes the given driver id,
+// resolved from the lockfile manifests. It fails closed when the driver id is
+// unknown or its manifest cannot be parsed.
+func driverPluginID(root, lockPath, driverID string) (string, error) {
+	lock, err := registry.LoadLockFile(lockPath)
+	if err != nil {
+		return "", err
+	}
+	for _, locked := range lock.Plugins {
+		manifestPath := filepath.Join(root, registry.SafePluginID(locked.ID), "plugin.yaml")
+		manifest, err := registry.ReadManifest(manifestPath)
+		if err != nil {
+			return "", fmt.Errorf("read manifest for %s: %w", locked.ID, err)
+		}
+		if manifest.Contributes == nil {
+			continue
+		}
+		for _, d := range manifest.Contributes.Drivers {
+			if strings.TrimSpace(d.ID) == driverID {
+				return locked.ID, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("driver id %q not contributed by any installed plugin", driverID)
+}

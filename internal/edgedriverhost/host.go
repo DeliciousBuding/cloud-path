@@ -17,6 +17,7 @@ import (
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/plugincontrol"
 	"github.com/DeliciousBuding/cloud-path/internal/pluginhost"
+	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/driver"
 )
 
 // ErrInvalidConfig 表示 edgedriverhost 配置不合法。
@@ -167,3 +168,20 @@ func (h *Host) Observe(ctx context.Context, tenant string) ([]api.PluginInstalla
 
 // Tenant 返回本 host 归属的租户（插件控制面同步按它隔离）。
 func (h *Host) Tenant() string { return plugincontrol.NormalizeTenant(h.opts.Tenant) }
+
+// DriverClient returns the live DriverClient for the installed plugin that
+// contributes driverID, or an error while the process is not yet running. The
+// client is session-scoped: callers must re-resolve it after a restart.
+func (h *Host) DriverClient(driverID string) (driver.DriverClient, error) {
+	pluginID, err := driverPluginID(h.opts.PluginsDir, h.opts.LockPath, driverID)
+	if err != nil {
+		return nil, err
+	}
+	p, ok := h.manager.(interface {
+		DriverClient(string) (driver.DriverClient, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf("edgedriverhost: manager does not expose driver clients")
+	}
+	return p.DriverClient(pluginID)
+}

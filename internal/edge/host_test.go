@@ -17,6 +17,7 @@ import (
 
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/device"
+	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/driver"
 )
 
 // fakeHost 是注入 edge.Run 的外部 Driver Plugin Host 替身。
@@ -47,6 +48,11 @@ func (h *fakeHost) Run(ctx context.Context) error {
 }
 
 func (h *fakeHost) DriverIDs() ([]string, error) { return h.driverIDs, h.idsErr }
+
+// DriverClient 在纯生命周期测试里不可用：返回错误即安全（这些测试不会真的桥接数据流）。
+func (h *fakeHost) DriverClient(string) (driver.DriverClient, error) {
+	return nil, errors.New("fakeHost: no driver client")
+}
 
 func (h *fakeHost) starts() int {
 	h.mu.Lock()

@@ -147,3 +147,12 @@ func (s *runtimeSession) close() error {
 	})
 	return nil
 }
+
+// driverClient returns the established DriverClient, or nil before the
+// handshake completes. Callers must tolerate nil and re-resolve after a
+// process restart.
+func (s *runtimeSession) driverClient() driver.DriverClient {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.driverCli
+}

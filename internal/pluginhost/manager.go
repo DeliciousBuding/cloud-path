@@ -9,6 +9,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/driver"
 )
 
 // Defaults applied when a ManagerOptions field is left zero.
@@ -794,4 +796,28 @@ func cloneMap(in map[string]string) map[string]string {
 		out[k] = v
 	}
 	return out
+}
+
+// DriverClient returns the DriverClient of the first enabled instance of the
+// given plugin, or an error when none is running or its RPC session is not
+// established yet. The returned client is tied to the current session and must
+// be re-resolved after a process restart.
+func (m *Manager) DriverClient(pluginID string) (driver.DriverClient, error) {
+	m.mu.Lock()
+	var g *procGroup
+	for _, rec := range m.instances {
+		if rec.inst.PluginID == pluginID && rec.enabled {
+			g = m.procs[rec.procKey]
+			break
+		}
+	}
+	m.mu.Unlock()
+	if g == nil || g.supervisor == nil {
+		return nil, fmt.Errorf("pluginhost: no running instance for plugin %q", pluginID)
+	}
+	cli := g.supervisor.DriverClient()
+	if cli == nil {
+		return nil, fmt.Errorf("pluginhost: no established RPC session for plugin %q", pluginID)
+	}
+	return cli, nil
 }
