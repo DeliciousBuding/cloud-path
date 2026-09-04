@@ -423,6 +423,11 @@ func (e *Edge) pollLoop(ctx context.Context, key string, sup *supervisor) {
 			time.AfterFunc(500*time.Millisecond, func() {
 				e.reportState(key, sup, false)
 				e.reportDescriptor(key, sup, false)
+				// 外部 Driver 的 Capability 文档在 driver 进程 healthy 后才可得
+				// （连接/desired 应用时刻可能早于进程就绪，首次上报的是空集，
+				// 2026-09-05 实测 sources=0 后无人再触发）。指纹抑制 + 全量覆盖：
+				// 每拍调用只在 docs 实际出现时发一次。
+				e.reportCapabilities(false)
 			})
 		case <-syncT.C:
 			syncCmd := sup.syncCommand()

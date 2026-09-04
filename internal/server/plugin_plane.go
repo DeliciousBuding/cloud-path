@@ -588,6 +588,8 @@ type pluginEdgeKey struct {
 }
 
 // pluginEdgeOnline 在 s.mu 下取一次在线 edge 快照（锁纪律：先 s.mu 后 p.mu，绝不嵌套）。
+// AppHost 伪 edge（AppHostEdgeID）是 Server 进程内的本地宿主——启用且正在承载
+// 该租户的实例即「在线」（无连接断开语义），只标事实承载的租户，不虚标。
 func (s *Server) pluginEdgeOnline() map[pluginEdgeKey]bool {
 	out := map[pluginEdgeKey]bool{}
 	s.mu.RLock()
@@ -598,5 +600,57 @@ func (s *Server) pluginEdgeOnline() map[pluginEdgeKey]bool {
 		out[pluginEdgeKey{tenantID: l.tenantID, edgeID: edgeID}] = true
 	}
 	s.mu.RUnlock()
+	if s.appHost != nil {
+		for _, tid := range s.appHost.runningTenantIDs() {
+			out[pluginEdgeKey{tenantID: tid, edgeID: AppHostEdgeID}] = true
+		}
+	}
 	return out
+}
+
+// applyAppHostObservations 把 Server 侧 AppHost 的 observed 投影并入内存 plane
+// 并持久化。Edge 路径走 WS 协议（link 身份校验 + boot/sequence 幂等闸门）；
+// AppHost 是本进程内的单写者，走同构的简化路径：自身 seq 单调、applied 恒等于
+// desired（desired 快照由本进程写入并已成功收敛）。持久化与 Edge 路径同款：
+// observations + edge applied（drift 在 DB 侧同样恒否）。
+func (p *pluginPlane) applyAppHostObservations(tenantID int64, edgeID, bootID string, sequence uint64, observed []api.PluginObservedInstanceData) {
+	if !p.enabled() {
+		return
+	}
+	now := p.now().Unix()
+
+	p.mu.Lock()
+	t, err := p.ensureLoadedLocked(tenantID, "")
+	if err != nil || t == nil {
+		p.mu.Unlock()
+		slog.Warn("apphost status: load tenant plane", "err", err, "tenant_id", tenantID)
+		return
+	}
+	ep := p.edgePlaneLocked(t, edgeID)
+	if ep.bootID != bootID {
+		ep.retireBoot()
+		ep.bootID = bootID
+	}
+	if sequence > ep.lastSequence {
+		ep.lastSequence = sequence
+	}
+	ep.lastReportAt = now
+	ep.observed = make(map[string]api.PluginObservedInstanceData, len(observed))
+	for _, o := range observed {
+		if o.InstanceID == "" {
+			continue
+		}
+		o.Detail = plugincatalog.SanitizeDetail(o.Detail)
+		ep.observed[o.InstanceID] = o
+	}
+	// AppHost 是本地宿主：desired 快照由本进程写入且已成功收敛，applied 即 desired
+	// （与 Edge 路径「applied 只由 plugin_ack 推进」的语义不同——这里没有跨进程 ack）。
+	applied := ep.desiredRevision
+	ep.appliedRevision = applied
+	p.mu.Unlock()
+
+	if err := p.store.UpsertPluginObservations(tenantID, edgeID, observed, now); err != nil {
+		slog.Warn("apphost status: persist observations", "err", err, "edge", edgeID)
+	}
+	_ = p.store.SetPluginEdgeApplied(tenantID, edgeID, bootID, sequence, applied, now)
 }

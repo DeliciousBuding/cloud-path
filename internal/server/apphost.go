@@ -74,6 +74,10 @@ type AppHostConfig struct {
 // appConfigKey 是 desired config map 中承载应用配置 JSON 字符串的键。
 const appConfigKey = "app_config"
 
+// AppHostEdgeID 是 Server 侧应用实例的部署约定 edge_id：真实 Edge 的 desired
+// 快照按 edge_id 过滤，天然不会收到它；AppHost 以该 id 上报 observed 投影。
+const AppHostEdgeID = "server"
+
 // appInstanceRun 是一个运行中的应用实例的内存投影。
 type appInstanceRun struct {
 	row         store.PluginInstanceRow
@@ -620,8 +624,7 @@ func (h *AppHost) reportObserved() {
 	if h.srv.cfg.PluginStore == nil || len(items) == 0 {
 		return
 	}
-	now := time.Now().Unix()
-	// 按 (tenant, edge_id) 聚合：observed 投影以伪 edge（约定 "server"）为键。
+	// 按 (tenant, edge_id) 聚合：observed 投影以伪 edge（约定 AppHostEdgeID）为键。
 	type groupKey struct {
 		tid    int64
 		edgeID string
@@ -637,15 +640,26 @@ func (h *AppHost) reportObserved() {
 		})
 	}
 	for k, rows := range groups {
-		if err := h.srv.cfg.PluginStore.UpsertPluginObservations(k.tid, k.edgeID, rows, now); err != nil {
-			h.logger.Warn("apphost report observed", "edge", k.edgeID, "err", err)
-			continue
-		}
-		if desired, err := h.srv.cfg.PluginStore.PluginDesiredRevision(k.tid, k.edgeID); err == nil {
-			// Server 侧同步应用期望态：applied 即 desired，drift 恒否。
-			_ = h.srv.cfg.PluginStore.SetPluginEdgeApplied(k.tid, k.edgeID, h.bootID, seq, desired, now)
+		// 事实：AppHost 是 Server 进程内的本地宿主，desired 快照由本进程写入并
+		// 已成功收敛（apply snapshot + 实例 running），applied 即 desired、drift 恒否。
+		h.srv.plugin.applyAppHostObservations(k.tid, k.edgeID, h.bootID, seq, rows)
+	}
+}
+
+// runningTenantIDs 返回当前承载着应用实例的租户（伪 edge 在线判定的事实源：
+// 只标真实承载的租户，不虚标无实例的租户）。
+func (h *AppHost) runningTenantIDs() []int64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	seen := map[int64]bool{}
+	out := make([]int64, 0, 2)
+	for _, run := range h.running {
+		if !seen[run.row.TenantID] {
+			seen[run.row.TenantID] = true
+			out = append(out, run.row.TenantID)
 		}
 	}
+	return out
 }
 
 // hasSuffix 报告 s 是否以 suffix 结尾。

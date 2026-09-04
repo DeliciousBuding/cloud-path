@@ -10,6 +10,8 @@ import (
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/appruntime"
 	"github.com/DeliciousBuding/cloud-path/internal/model"
+	"github.com/DeliciousBuding/cloud-path/internal/server/storeport"
+	"github.com/DeliciousBuding/cloud-path/internal/store"
 	sdkapplication "github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/application"
 )
 
@@ -223,6 +225,80 @@ func TestEffectFromSDKCancelJob(t *testing.T) {
 	}
 	if eff.PluginInstanceID != "box1" {
 		t.Fatalf("instance = %q", eff.PluginInstanceID)
+	}
+}
+
+// TestAppHostObservedProjectionFeedsPlane 锁定 2026-09-05 真板 E2E 发现的缺口：
+// AppHost 的 observed 投影必须并入内存 plane（此前直写 PluginStore，API/UI
+// 投影永远 has_observed=false），且伪 edge "server" 在承载实例时判在线（否则
+// instanceView 的 EdgeOnline 门把状态打成 unknown，应用明明在跑也看不见）。
+func TestAppHostObservedProjectionFeedsPlane(t *testing.T) {
+	_, srv, _, _, tid, _ := setupPluginSync(t)
+	ah, err := NewAppHost(srv, AppHostConfig{
+		Enabled:    true,
+		PluginsDir: t.TempDir(),
+		LockPath:   filepath.Join(t.TempDir(), "plugins.lock"),
+		StateDir:   t.TempDir(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(ah.Close)
+	srv.SetAppHost(ah)
+
+	// 与 API 写路径同构：storeport 行 → plane.store 落库 → remember 同步 desired revision
+	now := time.Now().Unix()
+	portRow := storeport.PluginInstanceRow{
+		TenantID: tid, EdgeID: AppHostEdgeID, InstanceID: "box-t",
+		PluginID: "app-x", Version: "1.0", Enabled: true,
+		ConfigJSON: "{}", CreatedAt: now, UpdatedAt: now,
+	}
+	rev, err := srv.plugin.store.CreatePluginInstance(portRow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	portRow.Revision = rev
+	srv.plugin.remember(portRow)
+	// 注入运行记录（真实链路由 reconcile 填充；本测试只锁投影接线）
+	runRow := store.PluginInstanceRow{
+		TenantID: tid, EdgeID: AppHostEdgeID, InstanceID: "box-t",
+		PluginID: "app-x", Version: "1.0", Enabled: true, Revision: rev,
+	}
+	ah.mu.Lock()
+	ah.running["box-t"] = &appInstanceRun{row: runRow}
+	ah.mu.Unlock()
+
+	ah.reportObserved()
+
+	// plane：observed 并入 + applied=desired（本地宿主语义）
+	srv.plugin.mu.Lock()
+	ep := srv.plugin.tenants[tid].edges[AppHostEdgeID]
+	var observedState string
+	var hostOnline bool
+	if o, ok := ep.observed["box-t"]; ok {
+		observedState, hostOnline = o.State, o.HostOnline
+	}
+	applied, desired := ep.appliedRevision, ep.desiredRevision
+	srv.plugin.mu.Unlock()
+	if observedState != string(appruntime.StateRunning) || !hostOnline {
+		t.Fatalf("observed = state:%q host_online:%v", observedState, hostOnline)
+	}
+	if applied != desired || desired == 0 {
+		t.Fatalf("applied=%d desired=%d（AppHost 本地宿主：applied 即 desired）", applied, desired)
+	}
+
+	// 伪 edge 在线判定：只标事实承载的租户
+	if online := srv.pluginEdgeOnline(); !online[pluginEdgeKey{tenantID: tid, edgeID: AppHostEdgeID}] {
+		t.Fatal("伪 edge server 应在线（AppHost 正在承载该租户实例）")
+	}
+
+	// API 读面：instance view 呈现 running（不再被 EdgeOnline 门打成 unknown）
+	view := srv.pluginInstanceView(tid, "", AppHostEdgeID, "box-t")
+	if !view.HasObserved || !view.EdgeOnline || view.Observed == nil || view.Observed.State != string(appruntime.StateRunning) {
+		t.Fatalf("view = has_observed:%v edge_online:%v observed:%+v", view.HasObserved, view.EdgeOnline, view.Observed)
+	}
+	if view.Drift || view.Stale {
+		t.Fatalf("view drift=%v stale=%v（本地宿主：applied 即 desired，observed 刚上报）", view.Drift, view.Stale)
 	}
 }
 
