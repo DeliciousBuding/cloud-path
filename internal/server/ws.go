@@ -344,6 +344,9 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 					slog.Info("event", "device", msg.Device, "type", ev.Type, "id", id)
 				}
 			}
+			// 应用事件扇入：实体级事件（如 key1 press）路由到绑定了该实体的
+			// Application 实例（AppHost 未启用时 nil 安全跳过）。
+			s.appHost.DispatchDeviceEvent(tid, msg.Device, ev.EntityID, ev.Type, msg.Ts)
 			s.broadcast(msg)
 		case api.MsgCommandAck:
 			var ack api.AckData
@@ -360,6 +363,8 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			slog.Info("command ack", "device", msg.Device, "cmd_id", ack.CommandID, "status", ack.Status)
+			// 应用发起的命令收到最终回执时通知应用（RequestCompleted）。
+			s.appHost.NotifyCommandAck(ack.CommandID, ack.Status, ack.Detail)
 			s.broadcast(msg)
 		case api.MsgDescriptor:
 			var desc model.Descriptor

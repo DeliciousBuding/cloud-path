@@ -43,6 +43,7 @@ func TestMigrationReachesCurrentVersion(t *testing.T) {
 		names = append(names, n)
 	}
 	want := []string{
+		"idx_app_domain_records_tenant",
 		"idx_audit_events_tenant_action", "idx_audit_events_tenant_created",
 		"idx_commands_device", "idx_commands_status",
 		"idx_commands_tenant_device", "idx_commands_tenant_status",

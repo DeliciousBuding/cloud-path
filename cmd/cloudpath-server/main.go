@@ -59,6 +59,14 @@ func main() {
 		"一次性首装令牌：非本机直连来源（含经反代转发/带 X-Forwarded-* 的请求）执行首次 setup 必带；成功后失效")
 	trustedProxies := flag.String("trusted-proxies", os.Getenv("CLOUDPATH_TRUSTED_PROXIES"),
 		"可信反代 CIDR 白名单，逗号分隔（仅这些来源的 X-Forwarded-* 头被采信）")
+	appHostEnabled := flag.Bool("app-host", envBool("CLOUDPATH_APP_HOST"),
+		"启用 Server 侧 Application Plugin Host（运行 box1 等应用插件实例）")
+	appPluginsDir := flag.String("app-plugins-dir", envOr("CLOUDPATH_APP_PLUGINS_DIR", "data/app-plugins.d"),
+		"Application 插件安装目录（cloudpath plugin install -plugins-dir 同款布局）")
+	appLock := flag.String("app-lock", envOr("CLOUDPATH_APP_LOCK", "data/app-plugins.lock"),
+		"Application 插件 lockfile（与安装目录配套）")
+	appState := flag.String("app-state-dir", envOr("CLOUDPATH_APP_STATE_DIR", "data/app-host-state"),
+		"Application 插件宿主本地状态目录（进程面簿记，非 desired SSOT）")
 	flag.Parse()
 	logx.Setup(*logLevel, *logFormat)
 
@@ -99,6 +107,25 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go srv.RunSweeper(ctx)
+
+	// Server 侧 Application Plugin Host：进程面 + 协议面 + 分钟调度 + 效果执行。
+	// 期望态事实源是本 Server 的 plugin_desired_instances（edge_id 约定 "server"）。
+	if *appHostEnabled {
+		ah, err := server.NewAppHost(srv, server.AppHostConfig{
+			Enabled: true, PluginsDir: *appPluginsDir, LockPath: *appLock, StateDir: *appState,
+		})
+		if err != nil {
+			slog.Error("app host init failed", "err", err)
+			os.Exit(1)
+		}
+		srv.SetAppHost(ah)
+		go func() {
+			if err := ah.Start(ctx); err != nil {
+				slog.Warn("app host stopped", "err", err)
+			}
+		}()
+		slog.Info("app host enabled", "plugins_dir", *appPluginsDir, "lock", *appLock)
+	}
 
 	httpSrv := &http.Server{
 		Addr:              *addr,

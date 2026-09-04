@@ -83,6 +83,9 @@ type Config struct {
 	PluginStore storeport.PluginStore
 	// PluginStaleAfter 是 observed 投影过期阈值；<=0 用默认 2 分钟。
 	PluginStaleAfter time.Duration
+	// AppHost 启用 Server 侧 Application Plugin Host（进程面 + 协议面 + 调度；
+	// 见 internal/server/apphost.go）。Enabled=false 时全部钩子 nil 安全跳过。
+	AppHost AppHostConfig
 }
 
 func (c Config) retentionDays() int {
@@ -142,6 +145,7 @@ type Server struct {
 	setupRejectAuditAt atomic.Int64                     // 被拒首装尝试的上次审计时刻（unix 秒，节流用）
 	verifyPassword     func(hash, password string) bool // 登录密码校验（测试可注入）
 	dummyVerify        func(password string)            // 未知用户 dummy 校验（测试可注入）
+	appHost            *AppHost                         // Server 侧 Application Plugin Host（nil=未启用）
 }
 
 type edgeLink struct {
@@ -238,6 +242,10 @@ func (s *Server) hydrate() {
 	}
 	slog.Info("hydrated devices from store", "count", len(rows))
 }
+
+// SetAppHost 注入 Application Plugin Host（main 在 -app-host 启用时调用；
+// 事件/回执钩子经 nil 安全方法分发，未注入即跳过）。
+func (s *Server) SetAppHost(h *AppHost) { s.appHost = h }
 
 // ---------- 内存态变更（锁内）与落库（锁外） ----------
 

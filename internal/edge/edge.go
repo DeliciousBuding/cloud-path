@@ -556,7 +556,7 @@ func semanticDescriptor(desc model.Descriptor) model.Descriptor {
 
 func (e *Edge) onDeviceEvent(key string, ev device.Event) {
 	slog.Info("device event", "device", key, "type", ev.Type)
-	data := mustJSON(api.EventData{Type: ev.Type})
+	data := mustJSON(api.EventData{Type: ev.Type, EntityID: ev.EntityID})
 	e.client.enqueue(api.Envelope{V: api.Version, Type: api.MsgEvent, Device: key, Ts: ev.At.Unix(), Data: data})
 	// 事件通常伴随状态机变化：延迟一拍补报状态（等固件落定）
 	time.AfterFunc(time.Second, func() {

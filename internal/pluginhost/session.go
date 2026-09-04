@@ -156,3 +156,12 @@ func (s *runtimeSession) driverClient() driver.DriverClient {
 	defer s.mu.Unlock()
 	return s.driverCli
 }
+
+// appClient returns the established ApplicationClient for application-kind
+// plugins, or nil before the handshake completes. Callers must tolerate nil
+// and re-resolve after a process restart.
+func (s *runtimeSession) appClient() application.ApplicationClient {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.appCli
+}

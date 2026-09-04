@@ -67,8 +67,11 @@ type StateData struct {
 
 // EventData 是设备事件。Type 为规范化标签（BOOT/REMIND/TAKEN/TAKEN-LATE/MISSED/SYNC-OK…）。
 type EventData struct {
-	Type  string `json:"type"`
-	Label string `json:"label,omitempty"`
+	Type string `json:"type"`
+	// EntityID 是事件归属实体（可为空：设备级事件）。Capability 绑定按它路由，
+	// 是 Application Plugin 收到正确实体事件的依据。
+	EntityID string `json:"entity_id,omitempty"`
+	Label    string `json:"label,omitempty"`
 }
 
 // CommandData 是 server→edge 命令。Cmd ∈ sync|dump|trigger|open|isp|raw。

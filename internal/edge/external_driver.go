@@ -407,7 +407,7 @@ func (d *externalDevice) applyMessage(msg *driver.DriverMessage, onEvent func(de
 			if t, err := time.Parse(time.RFC3339, u.OccurredAt); err == nil {
 				at = t
 			}
-			onEvent(device.Event{Type: u.EventType, At: at})
+			onEvent(device.Event{Type: u.EventType, EntityID: u.EntityID, At: at})
 		}
 	}
 }

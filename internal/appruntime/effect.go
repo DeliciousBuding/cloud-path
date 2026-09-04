@@ -24,6 +24,8 @@ const (
 	EffectRequestCommand EffectKind = "request_command"
 	// EffectScheduleJob asks Core to schedule a job.
 	EffectScheduleJob EffectKind = "schedule_job"
+	// EffectCancelJob asks Core to cancel a previously scheduled job.
+	EffectCancelJob EffectKind = "cancel_job"
 	// EffectSendNotification asks Core to send a notification.
 	EffectSendNotification EffectKind = "send_notification"
 )
@@ -31,7 +33,7 @@ const (
 // Valid reports whether k is one of the allowed effect kinds.
 func (k EffectKind) Valid() bool {
 	switch k {
-	case EffectCreateDomainRecord, EffectRequestCommand, EffectScheduleJob, EffectSendNotification:
+	case EffectCreateDomainRecord, EffectRequestCommand, EffectScheduleJob, EffectCancelJob, EffectSendNotification:
 		return true
 	}
 	return false
@@ -45,11 +47,15 @@ type Effect struct {
 	ID             string
 	IdempotencyKey string
 	TenantID       string
-	Kind           EffectKind
+	// PluginInstanceID 标记效果来源实例（Executor 落领域记录/审计用；
+	// 不参与授权——授权只看 TenantID 与绑定）。
+	PluginInstanceID string
+	Kind             EffectKind
 
 	CreateDomainRecord *CreateDomainRecord `json:",omitempty"`
 	RequestCommand     *RequestCommand     `json:",omitempty"`
 	ScheduleJob        *ScheduleJob        `json:",omitempty"`
+	CancelJob          *CancelJob          `json:",omitempty"`
 	SendNotification   *SendNotification   `json:",omitempty"`
 }
 
@@ -81,6 +87,11 @@ type ScheduleJob struct {
 	ScheduleID  string
 	Cron        string
 	PayloadJSON string
+}
+
+// CancelJob is the bounded payload for EffectCancelJob.
+type CancelJob struct {
+	ScheduleID string
 }
 
 // SendNotification is the bounded payload for EffectSendNotification.
@@ -140,7 +151,7 @@ func EffectFromSDK(raw *sdkapplication.ApplicationEffect, src EffectSource) (Eff
 			Version:    v.Version,
 		}
 		key := "domain:" + payload.RecordType + "/" + payload.RecordID
-		return newEffect(EffectCreateDomainRecord, key, src.TenantID, payload)
+		return newEffect(EffectCreateDomainRecord, key, src, payload)
 	case *sdkapplication.RequestCommand:
 		if !entityBound(src, v.EntityID) {
 			return Effect{}, fmt.Errorf("%w: entity %q is not bound to this instance", ErrCrossTenantEffect, v.EntityID)
@@ -156,7 +167,7 @@ func EffectFromSDK(raw *sdkapplication.ApplicationEffect, src EffectSource) (Eff
 			Deadline:       v.Deadline,
 		}
 		key := "command:" + payload.IdempotencyKey
-		return newEffect(EffectRequestCommand, key, src.TenantID, payload)
+		return newEffect(EffectRequestCommand, key, src, payload)
 	case *sdkapplication.ScheduleTask:
 		payload := &ScheduleJob{
 			ScheduleID:  v.ScheduleID,
@@ -164,7 +175,11 @@ func EffectFromSDK(raw *sdkapplication.ApplicationEffect, src EffectSource) (Eff
 			PayloadJSON: v.PayloadJSON,
 		}
 		key := "schedule:" + payload.ScheduleID
-		return newEffect(EffectScheduleJob, key, src.TenantID, payload)
+		return newEffect(EffectScheduleJob, key, src, payload)
+	case *sdkapplication.CancelScheduledTask:
+		payload := &CancelJob{ScheduleID: v.ScheduleID}
+		key := "cancel-schedule:" + payload.ScheduleID
+		return newEffect(EffectCancelJob, key, src, payload)
 	case *sdkapplication.SendNotification:
 		payload := &SendNotification{
 			Title:    v.Title,
@@ -172,7 +187,7 @@ func EffectFromSDK(raw *sdkapplication.ApplicationEffect, src EffectSource) (Eff
 			Severity: v.Severity,
 		}
 		key := "notification:" + notificationKey(payload)
-		return newEffect(EffectSendNotification, key, src.TenantID, payload)
+		return newEffect(EffectSendNotification, key, src, payload)
 	default:
 		return Effect{}, fmt.Errorf("%w: effect union %T is not in the allowed set", ErrUnknownEffect, raw.Union)
 	}
@@ -227,6 +242,16 @@ func (e Effect) Validate() error {
 		if e.CreateDomainRecord != nil || e.RequestCommand != nil || e.SendNotification != nil {
 			errs = append(errs, errors.New("schedule_job effect carries a mismatched payload"))
 		}
+	case EffectCancelJob:
+		if e.CancelJob == nil {
+			errs = append(errs, errors.New("cancel_job effect is missing its payload"))
+		} else {
+			errs = append(errs, validateCancelJob(e.CancelJob)...)
+			payloadCount++
+		}
+		if e.CreateDomainRecord != nil || e.RequestCommand != nil || e.ScheduleJob != nil || e.SendNotification != nil {
+			errs = append(errs, errors.New("cancel_job effect carries a mismatched payload"))
+		}
 	case EffectSendNotification:
 		if e.SendNotification == nil {
 			errs = append(errs, errors.New("send_notification effect is missing its payload"))
@@ -273,8 +298,8 @@ func entityInTenant(src EffectSource, entityID string) bool {
 	return false
 }
 
-func newEffect(kind EffectKind, key, tenant string, payload any) (Effect, error) {
-	e := Effect{Kind: kind, IdempotencyKey: key, TenantID: tenant}
+func newEffect(kind EffectKind, key string, src EffectSource, payload any) (Effect, error) {
+	e := Effect{Kind: kind, IdempotencyKey: key, TenantID: src.TenantID, PluginInstanceID: src.PluginInstanceID}
 	switch p := payload.(type) {
 	case *CreateDomainRecord:
 		e.CreateDomainRecord = p
@@ -282,12 +307,14 @@ func newEffect(kind EffectKind, key, tenant string, payload any) (Effect, error)
 		e.RequestCommand = p
 	case *ScheduleJob:
 		e.ScheduleJob = p
+	case *CancelJob:
+		e.CancelJob = p
 	case *SendNotification:
 		e.SendNotification = p
 	default:
 		return Effect{}, fmt.Errorf("%w: unsupported payload %T", ErrInvalidEffect, payload)
 	}
-	e.ID = effectID(kind, key, tenant, payload)
+	e.ID = effectID(kind, key, src.TenantID, payload)
 	if err := e.Validate(); err != nil {
 		return Effect{}, err
 	}
@@ -363,6 +390,14 @@ func validateScheduleJob(p *ScheduleJob) []error {
 	}
 	if len(p.PayloadJSON) > maxPayloadJSONBytes {
 		errs = append(errs, errors.New("payload_json exceeds size bound"))
+	}
+	return errs
+}
+
+func validateCancelJob(p *CancelJob) []error {
+	var errs []error
+	if strings.TrimSpace(p.ScheduleID) == "" || len(p.ScheduleID) > maxScheduleIDLen {
+		errs = append(errs, errors.New("schedule_id must be non-empty and bounded"))
 	}
 	return errs
 }

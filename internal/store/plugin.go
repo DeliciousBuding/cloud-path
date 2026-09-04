@@ -279,6 +279,26 @@ func (s *Store) ListPluginInstancesTenant(tenantID int64) ([]PluginInstanceRow, 
 	return out, rows.Err()
 }
 
+// ListPluginInstancesAll 返回全部租户的全部期望态实例（Server 侧 AppHost reconcile 用；
+// 按 tenant/edge/instance 有序）。Edge 侧读面禁止使用本方法（Edge 必须走租户过滤版本）。
+func (s *Store) ListPluginInstancesAll() ([]PluginInstanceRow, error) {
+	rows, err := s.db.Query(`SELECT ` + pluginInstanceColumns + ` FROM plugin_desired_instances
+		ORDER BY tenant_id, edge_id, instance_id`)
+	if err != nil {
+		return nil, fmt.Errorf("store: list plugin instances (all): %w", err)
+	}
+	defer rows.Close()
+	var out []PluginInstanceRow
+	for rows.Next() {
+		r, err := scanPluginInstance(rows)
+		if err != nil {
+			return nil, fmt.Errorf("store: scan plugin instance: %w", err)
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 // GetPluginInstance 读单个期望态实例；不存在返回 (zero, false, nil)。
 func (s *Store) GetPluginInstance(tenantID int64, edgeID, instanceID string) (PluginInstanceRow, bool, error) {
 	tid, err := s.normalizeTenantID(tenantID)

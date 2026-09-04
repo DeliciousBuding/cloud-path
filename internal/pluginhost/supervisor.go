@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/application"
 	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/driver"
 	"github.com/DeliciousBuding/cloud-path/sdk/go/pluginruntime"
 )
@@ -880,4 +881,17 @@ func (s *Supervisor) DriverClient() driver.DriverClient {
 		return nil
 	}
 	return s.session.driverClient()
+}
+
+// ApplicationClient returns the ApplicationClient of the current launch for
+// application-kind plugins, or nil while the process is starting, crashed, or
+// disabled. The returned client is tied to the current session and must be
+// re-resolved after a restart.
+func (s *Supervisor) ApplicationClient() application.ApplicationClient {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.session == nil {
+		return nil
+	}
+	return s.session.appClient()
 }

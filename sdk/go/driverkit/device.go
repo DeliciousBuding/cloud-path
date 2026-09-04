@@ -24,9 +24,12 @@ type Command struct {
 }
 
 // Event 是设备主动上报的事件（规范化标签由适配器负责）。
+// EntityID 是事件归属的实体（可为空：设备级事件）；Capability 绑定按它路由，
+// 例如 Application Plugin 只对绑定的 key1/key2/key3 实体事件感兴趣。
 type Event struct {
-	Type string
-	At   time.Time
+	Type     string
+	EntityID string
+	At       time.Time
 }
 
 // State 是设备状态快照。Raw 承载适配器自定义语义，原样透传到前端。
