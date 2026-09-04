@@ -56,7 +56,7 @@ func (h *Host) ApplySnapshot(ctx context.Context, tenant string, instances []api
 	return results, nil
 }
 
-// applyOne 应用单个期望实例：secret 双校验 → 持久化 desired → 收敛 Manager。
+// applyOne 应用单个期望实例：secret 双校验 → 收敛 Manager → 成功后才持久化。
 func (h *Host) applyOne(ctx context.Context, tenant string, inst api.PluginDesiredInstanceData) api.PluginApplyResultData {
 	id := strings.TrimSpace(inst.InstanceID)
 	ok := func(detail string) api.PluginApplyResultData {
@@ -96,19 +96,25 @@ func (h *Host) applyOne(ctx context.Context, tenant string, inst api.PluginDesir
 		DiscardSecrets(plain)
 	}
 
-	// 持久化期望态：Edge 进程重启且仍离线时据此续跑最后一个完整 applied revision。
+	// 持久化顺序契约：先收敛 Manager，成功后才写状态文件。状态文件是
+	// Edge 离线重启时的唯一 replay 依据（control-plane-sync.md §8「从本地
+	// applied cache 启动」），必须始终停留在最后一个可满足的配置上。
+	// 若先写 desired 再收敛，一次 installation-not-found 的失败 apply 会把
+	// 不可满足的版本留在盘上：applied_revision 不前进，但实例文件已超前，
+	// 下次进程重启 replay 即整体硬失败（2026-09-05 生产事故：desired 引用
+	// driver@0.2.1 而本地只装了 0.1.0，edge 从此无法自举）。
 	// Config 只含非敏感标量与 secret:// handle，明文永不落盘。
 	state := InstanceState{
 		Tenant: tenant, InstanceID: id, PluginID: pluginID, Version: version,
 		Enabled: inst.Enabled, Isolation: FormatIsolation(isolation),
 		Config: cloneConfig(inst.Config),
 	}
-	if err := h.opts.Store.Save(state); err != nil {
-		return bad(err.Error())
-	}
 
 	if !inst.Enabled {
 		if err := h.opts.Manager.Disable(tenant, id); err != nil && !errors.Is(err, pluginhost.ErrInstanceNotFound) {
+			return bad(err.Error())
+		}
+		if err := h.opts.Store.Save(state); err != nil {
 			return bad(err.Error())
 		}
 		return ok("disabled")
@@ -121,6 +127,9 @@ func (h *Host) applyOne(ctx context.Context, tenant string, inst api.PluginDesir
 		return bad(err.Error())
 	}
 	if err := h.opts.Manager.Start(tenant, id); err != nil {
+		return bad(err.Error())
+	}
+	if err := h.opts.Store.Save(state); err != nil {
 		return bad(err.Error())
 	}
 	return ok("enabled")

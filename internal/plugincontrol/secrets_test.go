@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -381,6 +382,81 @@ func TestApplySnapshotConvergesManagerAndStore(t *testing.T) {
 	}
 }
 
+// unsatisfiableCreateManager 对指定 plugin@version 注入 ErrInstallationNotFound，
+// 其余行为与 fakeHostManager 一致（复刻 2026-09-05 生产事故：Server desired
+// 引用了 Edge 本地未安装的插件版本）。
+type unsatisfiableCreateManager struct {
+	fakeHostManager
+	missing map[string]bool // "pluginID@version" → CreateInstance 失败
+}
+
+func (m *unsatisfiableCreateManager) CreateInstance(spec pluginhost.InstanceSpec) (pluginhost.Instance, error) {
+	if m.missing[spec.PluginID+"@"+spec.Version] {
+		return pluginhost.Instance{}, fmt.Errorf("%w: %s@%s", pluginhost.ErrInstallationNotFound, spec.PluginID, spec.Version)
+	}
+	return m.fakeHostManager.CreateInstance(spec)
+}
+
+// TestApplySnapshotFailedInstanceKeepsLastSatisfiableState 锁定 replay 依据的
+// 不变量：失败的应用不得把实例状态文件推进到不可满足的版本。
+//
+// 事故链（2026-09-05 cpwsprobe 生产 Edge）：desired 升 driver@0.2.1 → 本地
+// 只装了 0.1.0 → CreateInstance 失败 → 旧实现已把状态文件写成 0.2.1 →
+// applied_revision 不前进但实例文件超前 → 进程重启 replay 0.2.1 → host 整体
+// 失败 → edge 无法自举（配置的设备 adapter 不可用即硬退出）。修复后状态文件
+// 停留在最后可满足的 0.1.0，重启 replay 旧版本照常启动。
+func TestApplySnapshotFailedInstanceKeepsLastSatisfiableState(t *testing.T) {
+	manager := &unsatisfiableCreateManager{missing: map[string]bool{testPluginID + "@0.2.1": true}}
+	host, store, _, _ := newApplierHost(t, manager, nil)
+	ctx := context.Background()
+
+	if _, err := host.ApplySnapshot(ctx, "tenant-a", []api.PluginDesiredInstanceData{
+		{InstanceID: "stcb-driver", PluginID: testPluginID, Version: "0.1.0", Enabled: true},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	state, err := store.Load("tenant-a", "stcb-driver")
+	if err != nil || state.Version != "0.1.0" || !state.Enabled {
+		t.Fatalf("初始应用后状态文件错误: %+v %v", state, err)
+	}
+
+	// 升版快照引用未安装版本：该实例必须失败。
+	results, err := host.ApplySnapshot(ctx, "tenant-a", []api.PluginDesiredInstanceData{
+		{InstanceID: "stcb-driver", PluginID: testPluginID, Version: "0.2.1", Enabled: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || results[0].Status != api.PluginAckFailed {
+		t.Fatalf("未安装版本的实例必须失败: %+v", results)
+	}
+
+	// 回归断言：状态文件必须停留在最后可满足的 0.1.0。
+	state, err = store.Load("tenant-a", "stcb-driver")
+	if err != nil {
+		t.Fatalf("失败应用后状态文件丢失: %v", err)
+	}
+	if state.Version != "0.1.0" || !state.Enabled {
+		t.Fatalf("失败应用把状态文件推进到了不可满足版本（重启 replay 即自举失败）: %+v", state)
+	}
+
+	// disabled 期望态即使版本不可满足也必须能落地：host.load 对 disabled
+	// 实例直接跳过（不需要安装物），不会毒化重启 replay。
+	results, err = host.ApplySnapshot(ctx, "tenant-a", []api.PluginDesiredInstanceData{
+		{InstanceID: "stcb-driver", PluginID: testPluginID, Version: "0.2.1", Enabled: false},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || results[0].Status != api.PluginAckApplied {
+		t.Fatalf("disabled 期望态必须可落地: %+v", results)
+	}
+	state, err = store.Load("tenant-a", "stcb-driver")
+	if err != nil || state.Enabled || state.Version != "0.2.1" {
+		t.Fatalf("disabled 期望态未落盘: %+v %v", state, err)
+	}
+}
+
 // TestApplySnapshotRetiresAbsentInstances 验证 Server 删除的实例会被停用并移除，
 // 且默认保留插件数据（purge 是 Server 侧显式高风险选项，Edge 不自作主张）。
 func TestApplySnapshotRetiresAbsentInstances(t *testing.T) {
@@ -415,7 +491,8 @@ func TestApplySnapshotRetiresAbsentInstances(t *testing.T) {
 }
 
 // TestApplySnapshotDoesNotRetireFailedInstances 防止「应用失败」被误判成「已删除」：
-// 失败实例必须保留上一个完整已应用状态，等下一份快照再收敛。
+// 失败实例不落新状态（状态文件只代表已收敛配置），也绝不被停用/移除，
+// 等下一份快照再收敛。
 func TestApplySnapshotDoesNotRetireFailedInstances(t *testing.T) {
 	manager := &startFailingManager{fakeHostManager: fakeHostManager{}, failID: "bad"}
 	host, store, _, _ := newApplierHost(t, manager, nil)
@@ -435,8 +512,9 @@ func TestApplySnapshotDoesNotRetireFailedInstances(t *testing.T) {
 	if byID["ok"] != api.PluginAckApplied || byID["bad"] != api.PluginAckFailed {
 		t.Fatalf("逐实例结果错误: %v", byID)
 	}
-	if _, err := store.Load("tenant-a", "bad"); err != nil {
-		t.Fatalf("失败实例的期望态不得被当成已删除清掉: %v", err)
+	// 首次应用失败：没有可保留的旧状态，状态文件不落（收敛后才持久化）。
+	if _, err := store.Load("tenant-a", "bad"); !errors.Is(err, plugincontrol.ErrNotFound) {
+		t.Fatalf("首次应用失败不应落状态文件: %v", err)
 	}
 	if _, removed := manager.retired(); len(removed) != 0 {
 		t.Fatalf("失败实例不得被移除: %v", removed)
