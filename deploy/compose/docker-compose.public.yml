@@ -1,0 +1,110 @@
+# =============================================================================
+# CloudPath 部署 — compose（L2 公网形态：server + nginx TLS 反代）
+# -----------------------------------------------------------------------------
+# 用法（在 deploy/compose 目录下）：
+#   cp compose.env.example compose.env
+#   编辑 compose.env（至少改 CLOUDPATH_TOKEN / CLOUDPATH_SETUP_TOKEN /
+#                     CLOUDPATH_ALLOWED_ORIGINS / PUBLIC_SERVER_NAME）
+#   把证书放到 deploy/compose/certs/{fullchain.pem,privkey.pem}
+#   docker compose -f docker-compose.public.yml up -d --build
+#   # 首次：用一次性 setup token 在公网创建首个 admin（见下方“首装流程”）
+#
+# 架构：Internet -> [nginx :80/:443, TLS+WSS] -> server:8080 (栈内) -> /data 卷
+#
+# 安全要点（对齐 docs/security.md L2）：
+#   - server 不发布任何宿主端口：只有栈内 network 可达，端口走 nginx；
+#   - REQUIRE_AUTH 强制 true（空库也鉴权）；
+#   - TRUSTED_PROXIES 精确到 nginx 固定 IP 172.28.0.10/32（只信这一台的 XFF）；
+#   - ALLOWED_ORIGINS 由外部注入（浏览器 WS 来源白名单）；
+#   - SETUP_TOKEN 一次性首装令牌，配合“先首装再暴露”；
+#   - 持久卷 cloudpath-data:/data；server 非 root + cap_drop ALL + read_only；
+#   - nginx 仅 TLS 终止 + WSS 透传，不再叠加 CSP（应用自带，别覆盖）。
+# =============================================================================
+name: cloudpath-public
+
+services:
+  server:
+    image: ${CLOUDPATH_IMAGE:-cloudpath:local}
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${CLOUDPATH_VERSION:-dev}
+    restart: unless-stopped
+    environment:
+      CLOUDPATH_ADDR: "0.0.0.0:8080"
+      CLOUDPATH_DB: "/data/cloudpath.db"
+      CLOUDPATH_TOKEN: "${CLOUDPATH_TOKEN:-}"
+      CLOUDPATH_SETUP_TOKEN: "${CLOUDPATH_SETUP_TOKEN:-}"
+      CLOUDPATH_REQUIRE_AUTH: "true"
+      CLOUDPATH_ALLOWED_ORIGINS: "${CLOUDPATH_ALLOWED_ORIGINS:-}"
+      CLOUDPATH_TRUSTED_PROXIES: "172.28.0.10/32"
+      CLOUDPATH_RETENTION_DAYS: "${CLOUDPATH_RETENTION_DAYS:-30}"
+      CLOUDPATH_CMD_RATE: "${CLOUDPATH_CMD_RATE:-20}"
+      CLOUDPATH_LOGIN_RATE: "${CLOUDPATH_LOGIN_RATE:-5}"
+      CLOUDPATH_SESSION_DAYS: "${CLOUDPATH_SESSION_DAYS:-7}"
+      CLOUDPATH_LOG: "${CLOUDPATH_LOG:-info}"
+      CLOUDPATH_LOG_FORMAT: "${CLOUDPATH_LOG_FORMAT:-json}"
+    expose:
+      - "8080"
+    volumes:
+      - cloudpath-data:/data
+    networks:
+      public:
+        ipv4_address: 172.28.0.11
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 1g
+    pids_limit: 256
+
+  proxy:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
+    environment:
+      PUBLIC_SERVER_NAME: "${PUBLIC_SERVER_NAME:-cloudpath.example.com}"
+    ports:
+      - "${PUBLIC_HTTP_PORT:-80}:80"
+      - "${PUBLIC_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/cloudpath-site.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./certs:/etc/nginx/certs:ro
+    networks:
+      public:
+        ipv4_address: 172.28.0.10
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /var/log/nginx
+      - /tmp
+    mem_limit: 256m
+    pids_limit: 128
+
+volumes:
+  cloudpath-data:
+
+networks:
+  public:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24

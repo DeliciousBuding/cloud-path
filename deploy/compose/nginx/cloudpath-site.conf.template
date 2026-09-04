@@ -1,0 +1,112 @@
+# CloudPath public reverse proxy (containerized, nginx:1.27-alpine).
+#
+# Mounted as /etc/nginx/templates/default.conf.template so the official image
+# envsubst-renders it at startup. Only PUBLIC_SERVER_NAME is a variable here;
+# the $host / $http_upgrade / $remote_addr / $proxy_add_x_forwarded_for are
+# nginx runtime variables and are NOT environment vars, so envsubst leaves
+# them alone (the official entrypoint only substitutes defined env vars).
+#
+# TLS certs are mounted from ./certs -> /etc/nginx/certs
+#   fullchain.pem  (public + intermediates)
+#   privkey.pem    (private key, keep host-side only, never commit)
+#
+# Do NOT re-declare CSP / X-Content-Type-Options / X-Frame-Options /
+# Referrer-Policy / Permissions-Policy here: CloudPath sets them and the CSP
+# carries a build-time inline-script hash; a wrong override breaks the console.
+
+map $http_upgrade $cp_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 80;
+    server_name ${PUBLIC_SERVER_NAME};
+
+    # Keep ACME challenge path working if certs are renewed on-host.
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${PUBLIC_SERVER_NAME};
+
+    ssl_certificate     /etc/nginx/certs/fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:CloudPathSSL:10m;
+    ssl_session_timeout 1h;
+    ssl_session_tickets off;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    client_max_body_size 1m;
+    client_body_timeout 30s;
+    client_header_timeout 30s;
+
+    # Browser console realtime channel (long-lived; 60s would tear down).
+    location = /ws {
+        proxy_pass http://server:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $cp_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_connect_timeout 5s;
+        proxy_buffering off;
+        proxy_cache off;
+        gzip off;
+        tcp_nodelay on;
+    }
+
+    # Edge uplink (long-lived device state/event + command ack).
+    location = /ws/edge {
+        proxy_pass http://server:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $cp_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_connect_timeout 5s;
+        proxy_buffering off;
+        proxy_cache off;
+        gzip off;
+        tcp_nodelay on;
+    }
+
+    location / {
+        proxy_pass http://server:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $cp_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+        proxy_connect_timeout 5s;
+        proxy_redirect off;
+        proxy_buffering on;
+    }
+
+    # Never serve dotfiles / the SQLite dir (not a web root anyway).
+    location ~ /\. {
+        deny all;
+    }
+}

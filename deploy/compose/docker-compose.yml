@@ -1,0 +1,63 @@
+# =============================================================================
+# CloudPath 部署 — compose（L0 本机/单机形态）
+# -----------------------------------------------------------------------------
+# 用法（在 deploy/compose 目录下）：
+#   cp compose.env.example compose.env      # 首次：填好 CLOUDPATH_TOKEN 等
+#   docker compose -f docker-compose.yml up -d --build
+#   docker compose -f docker-compose.yml ps
+#   curl -fsS http://127.0.0.1:8080/healthz
+#
+# 安全要点（对齐 docs/security.md L0）：
+#   - 默认只绑 127.0.0.1:8080（不要改成 0.0.0.0 直出公网）；
+#   - 持久卷 cloudpath-data:/data（SQLite 不会因重建容器而丢库）；
+#   - 非 root（镜像内 USER cloudpath / uid 65532）+ cap_drop ALL + no-new-privileges
+#     + read_only 根文件系统（只有 /data 卷可写，镜像内即设置）。
+#   - 本形态不需要 nginx；如需公网（L2）用 docker-compose.public.yml。
+# =============================================================================
+name: cloudpath
+
+services:
+  server:
+    image: ${CLOUDPATH_IMAGE:-cloudpath:local}
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${CLOUDPATH_VERSION:-dev}
+    restart: unless-stopped
+    environment:
+      CLOUDPATH_ADDR: "0.0.0.0:8080"
+      CLOUDPATH_DB: "/data/cloudpath.db"
+      CLOUDPATH_TOKEN: "${CLOUDPATH_TOKEN:-}"
+      CLOUDPATH_SETUP_TOKEN: "${CLOUDPATH_SETUP_TOKEN:-}"
+      CLOUDPATH_REQUIRE_AUTH: "${CLOUDPATH_REQUIRE_AUTH:-false}"
+      CLOUDPATH_ALLOWED_ORIGINS: "${CLOUDPATH_ALLOWED_ORIGINS:-}"
+      CLOUDPATH_TRUSTED_PROXIES: "${CLOUDPATH_TRUSTED_PROXIES:-}"
+      CLOUDPATH_RETENTION_DAYS: "${CLOUDPATH_RETENTION_DAYS:-30}"
+      CLOUDPATH_CMD_RATE: "${CLOUDPATH_CMD_RATE:-20}"
+      CLOUDPATH_LOGIN_RATE: "${CLOUDPATH_LOGIN_RATE:-5}"
+      CLOUDPATH_SESSION_DAYS: "${CLOUDPATH_SESSION_DAYS:-7}"
+      CLOUDPATH_LOG: "${CLOUDPATH_LOG:-info}"
+      CLOUDPATH_LOG_FORMAT: "${CLOUDPATH_LOG_FORMAT:-json}"
+    ports:
+      - "${CLOUDPATH_BIND:-127.0.0.1:8080}:8080"
+    volumes:
+      - cloudpath-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 1g
+    pids_limit: 256
+
+volumes:
+  cloudpath-data:
