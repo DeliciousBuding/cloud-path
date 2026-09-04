@@ -51,7 +51,8 @@ Driver Protocol v1 的接口在
 - `compatibility.core`：声明支持的 Core 版本范围，避免不兼容安装。
 
 用 `scripts/validate_manifest.py plugin.yaml --dir .` 本地校验；安装时
-`cloudpath plugin inspect/install` 还会按 `spec/plugin-manifest.schema.json` 复核。
+`cloudpath plugin inspect/install` 还会按 `spec/plugin-manifest.schema.json` 复核。发布的二进制已内嵌这份
+schema（`pluginschema.go`），所以在没有仓库 checkout 的干净机器上也能直接安装；`-schema PATH` 只用于覆盖。
 
 ## 4. 配置（物理绑定）
 

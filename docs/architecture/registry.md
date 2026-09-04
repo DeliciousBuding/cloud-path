@@ -35,7 +35,8 @@ cloudpath plugin remove <id>         # 卸载（默认保留数据，purge 另�
 
 ## 3. 验证链（install 前强制，任一失败即拒绝）
 
-1. 根 `plugin.yaml` 通过 `spec/plugin-manifest.schema.json` 校验；
+1. 根 `plugin.yaml` 通过 `spec/plugin-manifest.schema.json` 校验（发布二进制内嵌同一份 schema，
+   `-schema PATH` 可覆盖；`install` 输出会打印 schema 来源 `file:<path>` 或 `embedded`）；
 2. `compatibility.core` 包含当前 Core 版本；
 3. 存在 GitHub Release 与资产摘要；
 4. sha256 匹配（可选 `gh attestation verify`）；

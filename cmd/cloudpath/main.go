@@ -26,7 +26,7 @@ const (
 	defaultPluginsDir  = "plugins.d"
 	defaultLockFile    = "plugins.lock"
 	defaultSchemaPath  = "spec/plugin-manifest.schema.json"
-	defaultCoreVersion = "0.2.0"
+	defaultCoreVersion = "0.2.1"
 	defaultStateDir    = "data/plugin-state"
 	defaultDataDir     = "data/plugin-data"
 	defaultTenant      = "default"
@@ -135,7 +135,7 @@ func runInspect(args []string) int {
 	if err != nil {
 		return reportError(err, 1)
 	}
-	schema, err := os.ReadFile(*schemaPath)
+	schema, schemaSource, err := registry.LoadManifestSchema(*schemaPath)
 	if err != nil {
 		return reportError(fmt.Errorf("read schema %s: %w", *schemaPath, err), 1)
 	}
@@ -150,7 +150,7 @@ func runInspect(args []string) int {
 	fmt.Printf("  protocol:        %d\n", manifest.Protocol)
 	fmt.Printf("  core-compat:     %s\n", manifest.Compatibility.Core)
 	fmt.Printf("  permissions:     %s\n", manifest.PermissionSummary())
-	fmt.Printf("  schema-status:   valid\n")
+	fmt.Printf("  schema-status:   valid (%s)\n", schemaSource)
 	printInstalledTrust(*lockPath, manifest.ID)
 	return 0
 }
@@ -234,6 +234,7 @@ func runInstall(args []string) int {
 	fmt.Printf("  version:   %s\n", result.LockEntry.Version)
 	fmt.Printf("  lock:      %s\n", *lockPath)
 	fmt.Printf("  permissions: %s\n", result.Manifest.PermissionSummary())
+	fmt.Printf("  schema:      %s\n", result.SchemaSource)
 	printTrust(result)
 	return 0
 }

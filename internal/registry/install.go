@@ -40,7 +40,10 @@ type InstallResult struct {
 	// Verified is true only when independent evidence authenticated the artifact.
 	Verified bool
 	// Evidence is a non-secret, human-readable reference to the trust evidence.
-	Evidence      string
+	Evidence string
+	// SchemaSource 说明 manifest schema 来自哪里（file:<path> 或 embedded），
+	// 用于验收时证明校验真的发生过，而不是被跳过。
+	SchemaSource  string
 	LockEntry     LockedPlugin
 	RegistryEntry RegistryEntry
 }
@@ -89,8 +92,8 @@ func (i *Installer) Install(ctx context.Context, opts InstallOptions) (*InstallR
 	if i.Client == nil {
 		i.Client = NewGitHubClient()
 	}
-	if i.PluginsDir == "" || i.LockPath == "" || i.SchemaPath == "" || i.CoreVersion == "" {
-		return nil, errors.New("installer is missing plugins dir, lock path, schema path or core version")
+	if i.PluginsDir == "" || i.LockPath == "" || i.CoreVersion == "" {
+		return nil, errors.New("installer is missing plugins dir, lock path or core version")
 	}
 	if i.MaxDownloadBytes <= 0 {
 		i.MaxDownloadBytes = 512 << 20
@@ -108,7 +111,7 @@ func (i *Installer) Install(ctx context.Context, opts InstallOptions) (*InstallR
 	if err != nil {
 		return nil, err
 	}
-	schemaData, err := os.ReadFile(i.SchemaPath)
+	schemaData, schemaSource, err := LoadManifestSchema(i.SchemaPath)
 	if err != nil {
 		return nil, fmt.Errorf("read manifest schema: %w", err)
 	}
@@ -285,6 +288,7 @@ func (i *Installer) Install(ctx context.Context, opts InstallOptions) (*InstallR
 		Mode:          mode,
 		Verified:      verified,
 		Evidence:      evidence,
+		SchemaSource:  schemaSource,
 		LockEntry:     locked,
 		RegistryEntry: registryEntry,
 	}, nil

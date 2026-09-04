@@ -129,7 +129,7 @@ func ValidateManifestFile(path, schemaPath string) (*Manifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read plugin.yaml %s: %w", path, err)
 	}
-	schema, err := os.ReadFile(schemaPath)
+	schema, _, err := LoadManifestSchema(schemaPath)
 	if err != nil {
 		return nil, fmt.Errorf("read manifest schema %s: %w", schemaPath, err)
 	}

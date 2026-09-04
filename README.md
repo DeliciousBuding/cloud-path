@@ -305,6 +305,8 @@ curl -fsS http://127.0.0.1:8080/api/edges                 # 边缘节点在线�
 cloudpath plugin search <关键词>          # GitHub Topic 开放通道 + Registry 精选
 cloudpath plugin inspect <id>             # manifest/兼容范围/摘要/权限披露
 cloudpath plugin install <repo-or-id> --digest sha256:<hex> --yes
+# 发布的二进制内嵌 manifest schema：干净机器上无需仓库 checkout，
+# -schema PATH 只用于覆盖；install 输出会打印 schema 来源（file:/embedded）
 cloudpath plugin enable|disable|update|remove <id>
 cloudpath plugin host                     # 把 desired-state 变成受监督的插件进程
 ```
