@@ -675,10 +675,12 @@ func (h *AppHost) managerSnapshot(row store.PluginInstanceRow) struct {
 	out := struct {
 		health       string
 		restartCount int
-	}{health: "UNKNOWN"}
+	}{health: pluginhost.HealthUnknown.String()}
 	for _, snap := range h.mgr.ListInstances(strconv.FormatInt(row.TenantID, 10)) {
 		if snap.InstanceID == row.InstanceID {
-			out.health = string(snap.Health)
+			// Health.String()（"UNKNOWN/HEALTHY/DEGRADED"）：直接 string(枚举)
+			// 会把 uint8 零值变成 "\x00" 混进 API 响应（2026-09-05 E2E 实测）
+			out.health = snap.Health.String()
 			out.restartCount = snap.Restarts
 			break
 		}
