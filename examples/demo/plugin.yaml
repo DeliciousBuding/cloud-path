@@ -18,7 +18,7 @@ version: 0.1.0
 protocol: 1
 entrypoint: cloudpath-driver-demo
 compatibility:
-  core: ">=0.1.0 <0.2.0"
+  core: ">=0.1.0 <0.3.0"
 permissions:
   # 无硬件、无网络、无文件系统、无 secret：参考设备只操作自己进程内的状态。
   hardware: []

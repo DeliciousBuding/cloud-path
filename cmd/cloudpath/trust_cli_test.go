@@ -23,7 +23,7 @@ version: 0.1.0
 protocol: 1
 entrypoint: ./driver
 compatibility:
-  core: ">=0.1.0 <0.2.0"
+  core: ">=0.1.0 <0.3.0"
 permissions:
   network: [outbound]
 `
@@ -211,7 +211,7 @@ func TestCLIInstallRegistryIndexVerified(t *testing.T) {
 		"    digest: " + registry.SHA256Bytes(asset) + "\n" +
 		"    verifiedPublisher: example-publisher\n" +
 		"    protocol: 1\n" +
-		"    compatibility: \">=0.1.0 <0.2.0\"\n"
+		"    compatibility: \">=0.1.0 <0.3.0\"\n"
 	indexPath := filepath.Join(pluginsDir, "registry-index.yaml")
 	if err := os.WriteFile(indexPath, []byte(index), 0o600); err != nil {
 		t.Fatalf("write index: %v", err)
