@@ -2,6 +2,7 @@
 // 每个用例结束后自动卸载 React 树并清空媒体查询登记与 localStorage（令牌不跨用例泄漏）。
 // 纯文件系统用例（design-system.test.ts）跑在 node 环境下，这里必须按环境降级而不是直接引用 window。
 import '@testing-library/jest-dom/vitest'
+import { configure } from '@testing-library/dom'
 import { cleanup } from '@testing-library/react'
 import { afterEach } from 'vitest'
 import { installMatchMediaStub, resetMediaQueries } from './media'
@@ -15,6 +16,9 @@ class ResizeObserverStub {
 }
 
 if (hasDom) {
+  // 并行 CI 满载时 findBy*/waitFor 默认 1000ms 过紧，会误报超时（单线程串行本可通过）。
+  // 放宽到 5000ms：只影响等待窗口，不改变断言语义。
+  configure({ asyncUtilTimeout: 5000 })
   installMatchMediaStub()
   if (typeof globalThis.ResizeObserver === 'undefined') {
     Object.defineProperty(globalThis, 'ResizeObserver', {
@@ -29,3 +33,5 @@ afterEach(() => {
   resetMediaQueries()
   localStorage.clear()
 })
+
+
