@@ -29,10 +29,10 @@ Driver Protocol v1 的接口在
 | `Describe` | 声明稳定 driver id + Capability 描述 | capability 用 `cloudpath.dev/capability/<name>@<semver>`；破坏性变化升 `@2`，不原地改 `@1` |
 | `ConfigureInstance` | 保存插件实例配置 | 物理绑定（串口/设备 ID 等）从这里进入；拒绝非法 JSON |
 | `Discover` | 上报设备 | 没有自动扫描时如实返回 0 或配置指向的那台设备 |
-| `OpenDevice` | 打开真实硬件 | 配置缺失/打开失败返回错误状态，不伪装在线 |
+| `OpenDevice` | 打开真实硬件 | 多设备 Driver 按 `device_id + connection_hints` 打开对应端口；配置缺失/打开失败不得伪装在线 |
 | `CloseDevice` | 关闭硬件 | 幂等，不泄漏句柄 |
 | `Watch` | 推送 Entity/Observation/Event/DeviceStatus | 每实例/设备用单调 sequence；观测值来源必须是真实状态 |
-| `Execute` | 执行命令 | **不把「写串口成功」当成「设备执行成功」**，按是否有真实回帧返回 SUCCEEDED/FAILED |
+| `Execute` | 执行命令 | 按请求中的 `device_id` 路由；**不把「写串口成功」当成「设备执行成功」**，按真实 ACK/ERROR 返回 SUCCEEDED/FAILED |
 | `Health` | 健康检查 | Host 据此判断 `plugin healthy` |
 | `Shutdown` | 优雅退出 | 释放串口/子进程，不依赖 kill |
 
@@ -55,12 +55,14 @@ Driver Protocol v1 的接口在
 
 ## 4. 配置（物理绑定）
 
-Driver 的物理绑定（如串口 `port`、`baud`、`device_id`）通过 **插件实例配置** 进入：
+Driver 配置分两层，避免单实例多设备时后一块板覆盖前一块板：
 
-- 插件实现里在 `ConfigureInstance` 解析并保存配置，`OpenDevice` 再使用。
-- Edge 部署中，实例配置由 **Server desired state** 注入；不要把 `edge.yaml` 的
-  `devices[].port` 当成外部 Driver 实例配置的自动来源。
-- 本地快速验证时，可用 CLI 显式配置实例后启动 host：
+- **实例默认配置**：`ConfigureInstance` 保存插件级默认值和策略。
+- **设备物理绑定**：每次 `OpenDevice` 的 `device_id + connection_hints` 携带该设备的
+  `port / baud / name / protocol`。Edge 会从自己的 `edge.yaml devices[]` 生成这些提示；
+  Server 不保存本机串口路径，也不把一个设备的端口复用给另一设备。
+- `ExecuteRequest.device_id` 是命令路由键；多设备 Driver 不得用「当前设备」全局变量。
+- 本地快速验证时，也可用 CLI 显式配置实例默认值后启动 host：
 
 ```bash
 cloudpath plugin enable <plugin-id> -config <instance-config.json> ...

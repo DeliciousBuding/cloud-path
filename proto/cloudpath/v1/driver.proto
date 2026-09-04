@@ -347,6 +347,7 @@ message ExecuteRequest {
   string deadline = 6;                         // RFC3339 绝对截止时间，双端共同强制
   string actor = 7;                            // Core 注入的 tenant/actor 上下文
   string cancel_command_id = 8;                // 非空 = 取消该 command_id 的进行中命令
+  string device_id = 9;                         // 多设备插件必填：命令目标设备
 }
 
 message ExecuteResponse {

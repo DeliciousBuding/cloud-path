@@ -133,3 +133,11 @@ func TestExternalInstanceConfigCarriesLocalBinding(t *testing.T) {
 		t.Fatalf("extra = %v", got["extra"])
 	}
 }
+
+func TestExternalConnectionHintsCarryPerDeviceBinding(t *testing.T) {
+	cfg := device.Config{ID: "board-2", Name: "Second board", Port: "COM4", Baud: 115200, Extra: map[string]string{"protocol": "v1"}}
+	got := externalConnectionHints(cfg)
+	if got["port"] != "COM4" || got["baud"] != "115200" || got["name"] != "Second board" || got["protocol"] != "v1" {
+		t.Fatalf("hints=%v", got)
+	}
+}

@@ -382,6 +382,7 @@ const (
 // both cases so Core can safely retry.
 type ExecuteRequest struct {
 	PluginInstanceID string `json:"plugin_instance_id"`
+	DeviceID         string `json:"device_id,omitempty"`
 	IdempotencyKey   string `json:"idempotency_key"`
 	EntityID         string `json:"entity_id"`
 	Action           string `json:"action"`

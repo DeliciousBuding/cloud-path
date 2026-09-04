@@ -184,3 +184,18 @@ func TestNegotiateProtocolVersion(t *testing.T) {
 		})
 	}
 }
+
+func TestExecuteRequestCarriesDeviceID(t *testing.T) {
+	want := ExecuteRequest{PluginInstanceID: "i", DeviceID: "board-2", IdempotencyKey: "k", Action: "led"}
+	b, err := json.Marshal(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got ExecuteRequest
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.DeviceID != want.DeviceID {
+		t.Fatalf("device_id=%q json=%s", got.DeviceID, b)
+	}
+}

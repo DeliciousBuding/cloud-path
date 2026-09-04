@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -152,6 +153,25 @@ type externalDevice struct {
 	cancel   context.CancelFunc
 }
 
+func externalConnectionHints(cfg device.Config) map[string]string {
+	hints := map[string]string{}
+	if cfg.Port != "" {
+		hints["port"] = cfg.Port
+	}
+	if cfg.Baud > 0 {
+		hints["baud"] = strconv.Itoa(cfg.Baud)
+	}
+	if cfg.Name != "" {
+		hints["name"] = cfg.Name
+	}
+	for k, v := range cfg.Extra {
+		if k != "" && v != "" {
+			hints[k] = v
+		}
+	}
+	return hints
+}
+
 func openExternalDevice(ctx context.Context, cli driver.DriverClient, instanceID string, cfg device.Config, onEvent func(device.Event)) (*externalDevice, error) {
 	devID := cfg.ID
 	if devID == "" {
@@ -160,6 +180,7 @@ func openExternalDevice(ctx context.Context, cli driver.DriverClient, instanceID
 	resp, err := cli.OpenDevice(ctx, &driver.OpenDeviceRequest{
 		PluginInstanceID: instanceID,
 		DeviceID:         devID,
+		ConnectionHints:  externalConnectionHints(cfg),
 	})
 	if err != nil {
 		return nil, err
@@ -338,6 +359,7 @@ func (d *externalDevice) Send(ctx context.Context, c device.Command) error {
 		PluginInstanceID: d.instanceID,
 		IdempotencyKey:   commandID(c),
 		EntityID:         "",
+		DeviceID:         d.id,
 		Action:           c.Cmd,
 		ArgsJSON:         c.Args,
 	})
