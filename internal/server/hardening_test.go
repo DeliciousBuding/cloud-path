@@ -60,7 +60,7 @@ func TestAdaptersEndpoint(t *testing.T) {
 	if len(resp.Adapters) != 1 || resp.Adapters[0].Name != "stcb" {
 		t.Fatalf("adapters = %+v", resp.Adapters)
 	}
-	want := []string{"sync", "dump", "trigger", "open", "isp", "raw"}
+	want := []string{"sync", "dump", "trigger", "open", "isp", "raw", "buzzer", "led", "display", "motor", "sensor"}
 	got := resp.Adapters[0].Commands
 	if len(got) != len(want) {
 		t.Fatalf("commands = %v, want %v", got, want)
