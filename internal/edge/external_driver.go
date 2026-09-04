@@ -19,6 +19,7 @@ import (
 type externalAdapter struct {
 	host     PluginHost
 	driverID string
+	launchID string
 
 	mu          sync.Mutex
 	actions     []string
@@ -37,7 +38,39 @@ func externalInstanceConfig(cfg device.Config) ([]byte, error) {
 }
 
 func newExternalAdapter(host PluginHost, driverID string) *externalAdapter {
-	return &externalAdapter{host: host, driverID: driverID}
+	return &externalAdapter{host: host, driverID: driverID, launchID: fmt.Sprintf("edge-ext-%d", time.Now().UnixNano())}
+}
+
+// initializeDriverClient 执行 Driver Protocol v1 的 Initialize 握手。插件 host
+// 只建立传输与 stdout/socket 握手，不代打协议层 Initialize；Watch 在插件侧要求
+// initialized 为真，因此桥接层必须在首个协议调用前完成握手。
+func initializeDriverClient(ctx context.Context, cli driver.DriverClient, launchID string) error {
+	resp, err := cli.Initialize(ctx, &driver.InitializeRequest{
+		ProtocolVersion:           driver.ProtocolVersion,
+		SupportedProtocolVersions: []uint32{driver.ProtocolVersion},
+		LaunchID:                  launchID,
+		RuntimeType:               "edge-external-driver",
+	})
+	if err != nil {
+		return err
+	}
+	if resp.Status != nil && !resp.Status.IsOK() {
+		return fmt.Errorf("driver initialize: %v", resp.Status)
+	}
+	return nil
+}
+
+// client 解析当前会话的 DriverClient 并确保完成协议层 Initialize。插件进程重启后
+// DriverClient 会指向新会话，因此每次解析都重新握手（Initialize 幂等）。
+func (a *externalAdapter) client(ctx context.Context) (driver.DriverClient, error) {
+	cli, err := a.host.DriverClient(a.driverID)
+	if err != nil {
+		return nil, fmt.Errorf("external driver %q: %w", a.driverID, err)
+	}
+	if err := initializeDriverClient(ctx, cli, a.launchID); err != nil {
+		return nil, fmt.Errorf("external driver %q initialize: %w", a.driverID, err)
+	}
+	return cli, nil
 }
 
 func (a *externalAdapter) Name() string { return a.driverID }
@@ -57,7 +90,7 @@ func (a *externalAdapter) SupportedCommands() []string {
 }
 
 func (a *externalAdapter) resolveActions() []string {
-	cli, err := a.host.DriverClient(a.driverID)
+	cli, err := a.client(context.Background())
 	if err != nil {
 		return nil
 	}
@@ -80,9 +113,9 @@ func (a *externalAdapter) resolveActions() []string {
 // 再打开设备并启动观测订阅。这样干净机器只需在 edge.yaml 写 adapter/port，无需预先在
 // Server 手写插件实例 config；插件 enable/version/lock 仍由 Server desired state 权威。
 func (a *externalAdapter) Open(ctx context.Context, cfg device.Config, onEvent func(device.Event)) (device.Device, error) {
-	cli, err := a.host.DriverClient(a.driverID)
+	cli, err := a.client(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("external driver %q: %w", a.driverID, err)
+		return nil, err
 	}
 	cfgJSON, err := externalInstanceConfig(cfg)
 	if err != nil {
