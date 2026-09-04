@@ -37,6 +37,6 @@
       }
     },
     "EventDecl": {"type": "object", "properties": {"payloadSchema": {"type": "object"}}},
-    "ActionDecl": {"type": "object", "properties": {"inputSchema": {"type": "object"}}}
+    "ActionDecl": {"type": "object", "properties": {"title": {"type": "string"}, "description": {"type": "string"}, "inputSchema": {"type": "object"}}}
   }
 }

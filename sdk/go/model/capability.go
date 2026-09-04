@@ -69,8 +69,12 @@ type EventDecl struct {
 	PayloadSchema map[string]any `json:"payloadSchema,omitempty"`
 }
 
-// ActionDecl 声明一个动作及可选 inputSchema（JSON Schema 可表达子集）。
+// ActionDecl 声明一个动作及可选 title/description/inputSchema。
+// title/description 是纯呈现提示（schema-driven UI 用它们渲染说明与参数控件），
+// 不是语义真相；前端不得因其缺失而存不到可下发命令（命令集仍以 action 键为准）。
 type ActionDecl struct {
+	Title       string         `json:"title,omitempty"`
+	Description string         `json:"description,omitempty"`
 	InputSchema map[string]any `json:"inputSchema,omitempty"`
 }
 
