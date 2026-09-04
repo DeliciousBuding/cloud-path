@@ -19,7 +19,7 @@ CloudPath 是**设备无关**的插件化平台：核心（`internal/*`）不识
   `sdk/go/rpc` / `sdk/go/transport`（进程通信）、`sdk/go/pluginmain`（入口）。
 - 实现三件事：设备**发现**、**连接与协议解析**（串口/网络）、把设备状态/事件映射为平台**模型**，
   并声明**命令白名单**。
-- 参考实现：`examples/stcb`（STC-B 学习板）——"如何写一个适配器"的官方范例，含黄金样本单测。
+- 参考实现：`cloud-path-driver-stcb`（STC-B 学习板，独立仓库）——"如何写一个 Driver Plugin"的官方范例，含黄金样本单测。
 
 ## 3. 契约（Manifest）
 
@@ -39,13 +39,12 @@ CloudPath 是**设备无关**的插件化平台：核心（`internal/*`）不识
 
 ## 5. 拆仓为独立插件仓库
 
-`examples/stcb` 当前是**进程内参考 Driver**；拆仓时生成独立仓库（如 `cloud-path-driver-stcb`），
-只依赖公开 SDK，不 import `internal/**`。更细的插件架构：
+STC-B Driver 已拆为独立仓库 `cloud-path-driver-stcb`（进程内参考形态已移除），只依赖公开 SDK，不 import `internal/**`。更细的插件架构：
 - `docs/architecture/0001-capability-centered-plugins.md`
 - `docs/architecture/0002-github-plugin-discovery.md`
 
 ## 参考
 
-- `examples/stcb/`：官方参考 Driver + 契约（`plugin.yaml`）
+- `cloud-path-driver-stcb`：官方 STC-B Driver + 契约（`plugin.yaml`）
 - `docs/protocol.md`：消息信封 / DTO 契约
 - `docs/design.md`：技术 SSOT

@@ -15,7 +15,7 @@ Edge(demo 设备) → Server → WebUI：上线/实时状态/独立命令/事件
 ```
 
 它验证的是**平台链路**（多 Edge、多设备、路由不串线、重连全量重报），
-不是物理设备行为。真实硬件验证仍然只认 `examples/stcb` + 真板。
+不是物理设备行为。真实硬件验证仍然只认真板。
 
 ## 注册的适配器
 
@@ -85,7 +85,7 @@ Capability `spec.actions` 的键**等于命令名**（`set` / `ping` / `dump` / 
 `reference demo device`——诚实标注在列表页就可见。
 
 观测值刻意不写 `observed_at` / `received_at`：时间戳每拍都变会击穿 edge 的
-Descriptor diff 抑制（与 `examples/stcb` 同一约定），`received_at` 由可信的
+Descriptor diff 抑制（与进程内参考适配器同一约定），`received_at` 由可信的
 Edge/Core 生成。
 
 ## 最小配置（无硬件）
@@ -109,7 +109,7 @@ devices:
 `port` / `baud` 可以省略（`demo` 不需要端口）。一台 Edge 可挂多台 demo 设备，
 每台各自独立监督协程；配合多台电脑各自的 Edge，即可凑出跨机器的 ≥3 台设备。
 
-## 接线要求（两个二进制都要注册）
+## 接线要求（两个二进制都已注册）
 
 适配器靠包 `init()` 注册进 `driverkit` 注册表，因此**消费它的二进制必须 blank import
 本包**，两侧作用不同：
@@ -117,34 +117,14 @@ devices:
 | 二进制 | import | 作用 | 现状 |
 |---|---|---|---|
 | `cmd/cloudpath-edge` | `_ ".../examples/demo"` | 真的打开设备、上报状态 | ✅ 已接线 |
-| `cmd/cloudpath-server` | `_ ".../examples/demo"` | `GET /api/adapters` 命令白名单 + `GET /api/capabilities` catalog | ⚠️ **待接线** |
+| `cmd/cloudpath-server` | `_ ".../examples/demo"` | `GET /api/adapters` 命令白名单 + `GET /api/capabilities` catalog | ✅ 已接线 |
 
-Server 侧缺这行 import 的后果（按代码路径核对，行号以 `main` 为准）：
-
-1. `GET /api/adapters` 只列 `stcb`（`internal/server/server.go` `handleListAdapters`
-   遍历 `device.Names()`），demo 的命令白名单不下发给前端。
-2. `GET /api/capabilities`、以及 `/api/descriptors`、`/api/devices/{e}/{d}/descriptor`
-   随附的 `capabilities` 全部来自同一个 `s.capabilityCatalog()`，因此只有 stcb 的
-   clock/alarm/contact 三项，demo 的 counter/uptime/setpoint/toggle/diagnostics 缺席。
-3. 前端 `commandActions`（`webui/src/lib/descriptor.ts`）的三条来源里，demo 的
-   Descriptor **不声明** root/entity 级 `commands`（命令按钮只由 Capability
-   `spec.actions` 生成），于是「Capability actions」与「适配器白名单回落」两条同时
-   落空 → `source='none'`，demo 设备**渲染不出任何命令按钮**，只剩状态展示。
-4. `handlePostCommand` 的白名单校验是 `if a, ok := device.Get(adapter); ok { ... }`：
-   未注册即**整段跳过**（server 侧 fail-open）。端到端仍不至于放行任意命令——Edge
-   侧 `dev.Send` 只认 `ping/set/dump/noop`，其余回 `failed`——但 server 这道闸门
-   与审计里的 `unsupported_command` 拒绝都失效了。
-
-不受影响的部分：设备在线态、`state`、`event`、Edge 上报的 Descriptor 与
-observation 时间戳（那些走 WS 上行，不依赖 server 端注册表）。
-
-一行修复：
-
-```go
-_ "github.com/DeliciousBuding/cloud-path/examples/demo" // 适配器注册（命令白名单 + capability catalog）
-```
+任一二进制缺这行 import，都会导致 `GET /api/adapters` / `GET /api/capabilities` /
+`/api/descriptors` 少列 `demo`，前端命令按钮（Capability actions 与适配器白名单回落）
+同时落空；`handlePostCommand` 的白名单校验也会整段跳过（server 侧 fail-open，仅由
+Edge 侧 `dev.Send` 的命令白名单兜底）。保持两行 blank import 与 server 端注册表同源。
 
 ## 拆仓红线
 
 本包只依赖 `sdk/go/driverkit` 与 `sdk/go/model`，**不 import 任何 `internal/*`**
-（`demo_test.go` 的导入扫描锁定该红线，与 `examples/stcb` 一致）。
+（`demo_test.go` 的导入扫描锁定该红线）。

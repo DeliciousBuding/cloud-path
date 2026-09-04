@@ -19,8 +19,7 @@
 | `DeliciousBuding/cloud-path-app-scheduled-compartment` | `github.com/DeliciousBuding/cloud-path-app-scheduled-compartment` | `examples/scheduled-compartment` |
 
 **不**为 registry / driver-stcb / plugin-template-go / docs 生成任何拆仓物料：
-STC-B Driver 与 Registry 客户端按当前决策留在主仓
-（`examples/stcb`、`internal/registry`），插件模板留在 `templates/go-plugin/`。
+STC-B Driver 已拆为独立仓 `cloud-path-driver-stcb`；Registry 客户端仍留在主仓（`internal/registry`），插件模板留在 `templates/go-plugin/`。
 
 ## 2. 硬边界（脚本自身保证，不是口头承诺）
 

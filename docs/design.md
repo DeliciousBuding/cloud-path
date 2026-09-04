@@ -97,7 +97,7 @@ type Device interface {
     Close() error
 }
 
-type Adapter interface {                              // examples/stcb 实现
+type Adapter interface {                              // examples/demo 实现
     Name() string
     SupportedCommands() []string                      // 命令白名单（server 据此拒绝未知命令）
     Open(ctx context.Context, cfg Config, onEvent func(Event)) (Device, error)
@@ -270,7 +270,7 @@ devices 为空），运行中不热加载（P1 有意为之：热加载与串口
 
 | 层 | 文件 | 覆盖 |
 |---|---|---|
-| 协议解析 | `examples/stcb/parser_test.go` | 黄金样本（真实捕获行：损坏分隔符、噪声前缀、越界值）、事件归一、漂移回绕、HHMM 校验、标签 |
+| 协议解析 | `cloud-path-driver-stcb/plugin/parser_test.go`（独立仓） | 黄金样本（真实捕获行：损坏分隔符、噪声前缀、越界值）、事件归一、漂移回绕、HHMM 校验、标签 |
 | 存储 | `internal/store/store_test.go` | 迁移到当前版本 + 幂等、设备/状态生命周期、事件过滤、命令过滤与超时、保留期清理（不误删在途命令）、统计、limit 夹取 |
 | 服务链路 | `internal/server/server_test.go` | WS 全链路（快照→hello→state fan-out+落库→REST 命令→edge 收令→ack 落库+广播→白名单拒绝）、令牌鉴权、重启水合、healthz |
 | 服务加固 | `internal/server/hardening_test.go` | 适配器/统计端点、nil-store 不 panic、命令限流、参数校验、未知设备与离线 edge、命令设备过滤、查询参数夹取、保留期、edge_id 校验、重连挤占不误标离线、安全头、SPA 回落与路径穿越 |
@@ -296,7 +296,7 @@ devices 为空），运行中不热加载（P1 有意为之：热加载与串口
 | # | 内容 | 验证门 | 状态 |
 |---|---|---|---|
 | M0 | monorepo 骨架：go.mod、cmd 双入口、Taskfile、webui scaffold、.gitignore | `task build` 出双二进制 | ✅ |
-| M1 | `internal/api` 类型 + device 抽象 + `examples/stcb` 适配器与解析器 | `go test ./...` 绿（黄金样本含损坏行） | ✅ |
+| M1 | `internal/api` 类型 + device 抽象 + 参考适配器与解析器 | `go test ./...` 绿（黄金样本含损坏行） | ✅ |
 | M2 | server（chi + hub + SQLite）+ edge（串口 + WS + 轮询/对时） | 真机接入：REST 见设备、事件落库、WS fan-out、sync 后漂移≈0 | ✅ |
 | M3 | React 管理台五页 + embed 单二进制 | 浏览器看真机实时状态；命令全链路生效 | ✅ |
 | M4 | 加固：ack 跟踪、拔插重连、slog、漂移趋势、限流、保留期、Origin 策略、README、tag v0.1.0 | `task test` 全绿 + 真机清单 | ✅ |

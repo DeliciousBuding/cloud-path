@@ -64,7 +64,7 @@ UI 贡献不是独立的可执行插件类型：插件通过 Manifest 提交声�
 
 | 位置 | 形态 | 说明 |
 |---|---|---|
-| [examples/stcb/](examples/stcb/README.md) | **进程内参考 Driver** | 通过 blank import 编译进 edge/server；`plugin.yaml` 已冻结未来独立仓的机器契约 |
+| [cloud-path-driver-stcb](https://github.com/DeliciousBuding/cloud-path-driver-stcb) | **独立 Driver Plugin** | STC-B 参考驱动；经 GitHub discover/install 由 Plugin Host 运行（v0.1.0） |
 | [examples/scheduled-compartment/](examples/scheduled-compartment/README.md) | **进程式参考 Application** | 由 Plugin Host 以独立进程拉起，只依赖公开 SDK；可用 [deploy/split/](deploy/split/README.md) 生成独立仓 |
 | [templates/go-plugin/](templates/go-plugin/README.md) | 官方 Go 插件模板 | driver / application 两套，带 CI、Release 与 manifest 校验器 |
 
@@ -139,7 +139,7 @@ cp edge.example.yaml edge.yaml    # edge.yaml 是本地私有配置，不入库
 ### 4. 看设备、下发命令、看事件
 
 设备卡片出现后，在详情页的命令面板点按钮（白名单来自适配器：
-`stcb` 为 `sync / dump / trigger / open / isp / raw`，`demo` 为 `ping / set / dump / noop`），或用 API：
+`demo` 为 `ping / set / dump / noop`；外部 Driver（如 `stcb`）的命令面由该 Driver 的 Capability actions 提供），或用 API：
 
 ```bash
 curl -fsS -X POST http://127.0.0.1:8080/api/devices/<edge_id>/<device_id>/commands \
@@ -397,7 +397,7 @@ cloud-path/
 ├── sdk/go/         公开 Go SDK：cloudpath/v1/{application,driver,status} · driverkit
 │                   model · pluginmain · pluginruntime · rpc · transport
 ├── proto/ spec/    versioned 协议与 manifest JSON Schema
-├── examples/       stcb（参考 Driver）· scheduled-compartment（参考 Application）
+├── examples/       demo（参考 Driver）· scheduled-compartment（参考 Application）
 ├── templates/      go-plugin/{driver,application} 官方模板
 ├── testing/        plugin-harness（二进制→Host E2E）· plugin-fixtures
 ├── webui/          React 19 SPA（构建产物被 server 内嵌）
@@ -430,8 +430,9 @@ cloud-path/
   （actor/tenant/action/outcome/request_id/remote_ip）。
 - 设备监督（拔插退避重开）、离线事件有界缓冲与重连回放、断线指数退避重连、
   重启后从 SQLite 水合（一律先标离线，等 edge 重新上报）。
-- 参考 Driver `stcb`（进程内 blank import，命令白名单 `sync/dump/trigger/open/isp/raw`）与内置
-  参考演示适配器 `demo`（无硬件，`ping/set/dump/noop`，server/edge 双端同源注册，`/api/adapters` 与白名单同一事实源）。
+- 参考 Driver `stcb` 已拆为独立 Driver Plugin [`cloud-path-driver-stcb`](https://github.com/DeliciousBuding/cloud-path-driver-stcb)
+  （v0.1.0 发布，Driver Protocol v1；Core 生产二进制不再 blank import STC-B，经 GitHub discover/install 由 Edge 的 Plugin Host 运行）。
+- 内置参考演示适配器 `demo`（无硬件，`ping/set/dump/noop`，server/edge 双端同源注册，`/api/adapters` 与白名单同一事实源）。
 - 参考 Application `scheduled-compartment`（进程式插件，Plugin Host 拉起，只依赖公开 SDK）
   与 [deploy/split/](deploy/split/README.md) 独立仓生成器。
 - 外部 Driver Plugin Host：desired-state + `plugins.lock` 监督插件进程；
@@ -450,9 +451,9 @@ cloud-path/
 
 **尚未实现 / 目标态（不要当现状使用）**
 
-- **外部 Driver 的 handshake/descriptor/observation 桥接进 Edge 数据流**：Plugin Host 能监督
-  外部插件进程，但外部 Driver 的设备数据流尚未桥接（上报 unsupported）；进程内参考 Driver
-  `stcb`/`demo` 不受影响。
+- **外部 Driver 的多实例多设备映射与插件实例串口配置注入**：单 Driver ID → 单实例单设备的
+  桥接已可用；把一个 Driver 插件扩展到「多实例 → 多设备」、并把插件实例的 `port` 与
+  Edge 设备配置稳定接线，仍是待收尾项（真板 E2E 前完成）。
 - **令牌会话的实时通道**：用租户服务令牌登录的 WebUI 只有 REST，无 `/ws` 实时推送
   （浏览器 WebSocket 无法携带自定义 header）；账号密码会话功能完整。v0.1 接受此限制，UI 诚实呈现。
 - **中心 Secret Store**：v0.1 明确不做（见上）；secret 一律 `secret://<name>` handle + Edge 本地
@@ -460,7 +461,7 @@ cloud-path/
 - **插件独立仓 Release**：药盒 Application 插件已拆入独立仓
   [`cloud-path-app-scheduled-compartment`](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment)
   （[deploy/split/](deploy/split/README.md) 生成器生成）；独立 Release 资产发布待执行。
-  STC-B Driver 与 Registry 客户端按当前决策**不拆仓**，留在主仓。
+  STC-B Driver 已拆为独立仓 `cloud-path-driver-stcb`；Registry 客户端仍留在主仓（`internal/registry`）。
 - MQTT/Modbus 等协议接入、远程 OTA 编排、时序聚合与业务分析（P2–P4 规划，见
   [docs/architecture.md](docs/architecture.md)）。
 

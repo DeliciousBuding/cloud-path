@@ -7,9 +7,10 @@
 # 因此 permissions.hardware 必须为空：给它加上 serial/usb/gpio 之类硬件权限，
 # 等于把演示设备伪装成真实硬件，属于必须拒绝的改动。
 #
-# Incubation status: 与 examples/stcb 相同——monorepo 内本目录是 cloud-path-edge /
-# cloud-path-server 通过 blank import 消费的进程内参考适配器；本文件冻结独立拆仓
-# （cloud-path-driver-demo）时的机器契约，发布后每个字段在该 schema 版本生命周期内稳定。
+# Incubation status: 本目录是 monorepo 内 cloud-path-edge / cloud-path-server 通过
+# blank import 消费的进程内参考适配器（STC-B 同类参考驱动已拆为独立仓
+# cloud-path-driver-stcb）；本文件冻结未来独立拆仓（cloud-path-driver-demo）时的机器契约，
+# 发布后每个字段在该 schema 版本生命周期内稳定。
 apiVersion: plugins.cloudpath.dev/v1alpha1
 kind: Driver
 id: io.github.deliciousbuding.cloud-path-driver-demo

@@ -35,7 +35,7 @@ CloudPath（云径）是**云原生、插件驱动的互联物联网控制平台
 |------|------|
 | 共享契约（信封/DTO） | `internal/api/types.go` ↔ `webui/src/lib/types.ts` |
 | 设备抽象与注册表 | `internal/device/device.go` |
-| 参考适配器（含黄金样本单测） | `examples/stcb/{stcb.go,parser.go,parser_test.go}` |
+| 参考适配器（进程内，无硬件） | `examples/demo/{demo.go,demo_test.go}` |
 | 边缘运行时（监督/轮询/离线缓冲） | `internal/edge/{edge.go,wsclient.go,config.go}` |
 | 中心服务（路由/hub/限流/保留期） | `internal/server/{server.go,ws.go}` |
 | 持久层与迁移 | `internal/store/{store.go,schema.sql,schema_v2.sql}` |

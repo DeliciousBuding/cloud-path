@@ -171,7 +171,7 @@ func (s *supervisor) snapshot() device.State {
 //   - examples/* 有「不得 import internal/*」的拆仓红线；
 //   - driverkit.Device.Send 的签名是已发布 SDK 契约，加方法会破坏全部外部适配器。
 //
-// 因此约定写在两侧文档里（本包 + examples/stcb、examples/demo），靠方法名与签名
+// 因此约定写在两侧文档里（本包 + examples/demo），靠方法名与签名
 // 对齐。未实现时 edge 回落 Device.Send + fallbackResult。
 //
 // 红线：返回的摘要必须是**短的非敏感事实**——不含明文 secret / 访问令牌 /

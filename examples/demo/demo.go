@@ -15,7 +15,7 @@
 //
 // # 拆仓红线
 //
-// 与 examples/stcb 相同：本包只依赖 sdk/go/driverkit 与 sdk/go/model，
+// 本包只依赖 sdk/go/driverkit 与 sdk/go/model，
 // 不 import 任何 internal/*（由 demo_test.go 的导入扫描锁定）。
 package demo
 

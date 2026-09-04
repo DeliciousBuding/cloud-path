@@ -85,7 +85,7 @@ Edge 拒绝旧 revision。相同 revision + 相同 digest 是幂等重放；相�
 `results` 可按实例返回状态和经过长度限制、路径/secret 脱敏的 detail。Server 不把 ack 成功混同插件健康；健康只来自后续 `plugin_status`。
 ## Reference: STC-B
 
-STC-B（IAP15F2K61S2）学习板是第一个官方适配设备，实现见 [`examples/stcb`](../examples/stcb/README.md)。
+STC-B（IAP15F2K61S2）学习板是第一个官方适配设备，实现见独立仓库 [`cloud-path-driver-stcb`](https://github.com/DeliciousBuding/cloud-path-driver-stcb)。
 
 ### 物理层
 

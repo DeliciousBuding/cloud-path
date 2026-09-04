@@ -164,7 +164,7 @@ Topic 只是候选集合，不是信任证明。CLI 搜到仓库后还必须检�
 | 设备扩展 | Go `init()` + `device.Adapter` | 外部 Driver Plugin + versioned gRPC |
 | 状态 | `State.Raw map[string]any` | Entity/Capability + typed Observation；Raw 仅兼容 |
 | UI | 部分字段与命令外观硬编码 | Descriptor/Schema 全驱动 |
-| STC-B | `examples/stcb` 编译进 Edge | 独立 `cloud-path-driver-stcb` 仓库 |
+| STC-B | ~~`examples/stcb` 编译进 Edge~~（已移除） | 独立 `cloud-path-driver-stcb` 仓库（v0.1.0 已发布） |
 | 业务应用 | 无正式 Application Runtime | Capability Binding + App Plugin |
 | 插件发现 | 无 | GitHub Topic + Registry |
 | 安装可信度 | 无 | digest、来源验证、attestation、lockfile |

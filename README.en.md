@@ -63,9 +63,9 @@ CloudPath turns **plug in a device → see it in the cloud → control it remote
 UI contributions are not a separate executable plugin type: plugins submit declarative navigation,
 forms, and page Schema via a Manifest.
 
-Current in-repo plugin flavors (incubating): `examples/stcb` (in-process reference Driver) ·
-`examples/scheduled-compartment` (process-based reference Application) · `templates/go-plugin`
-(official Go plugin template). See `docs/plugin-system.md`.
+Current plugin flavors: `examples/scheduled-compartment` (process-based reference Application) ·
+`templates/go-plugin` (official Go plugin template). The STC-B reference Driver lives in the separate
+`cloud-path-driver-stcb` repo and is installed via GitHub discover/install. See `docs/plugin-system.md`.
 
 ## Quick start (local)
 
@@ -79,7 +79,8 @@ task setup && task build       # → bin/cloudpath-server + bin/cloudpath-edge
 curl -fsS http://127.0.0.1:8080/healthz
 ```
 
-Then set up an admin account (`POST /api/auth/setup`) and run an edge
+Then set up an admin account (`POST /api/auth/setup`), install the STC-B Driver plugin
+(`cloudpath plugin install github.com/DeliciousBuding/cloud-path-driver-stcb`), and run an edge
 (`cp edge.example.yaml edge.yaml; ./bin/cloudpath-edge`) with `adapter: stcb` for real devices.
 
 ## Docs & architecture
