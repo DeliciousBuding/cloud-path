@@ -14,6 +14,7 @@ import (
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/audit"
 	"github.com/DeliciousBuding/cloud-path/internal/auth"
+	"github.com/DeliciousBuding/cloud-path/internal/device"
 	"github.com/DeliciousBuding/cloud-path/internal/model"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
 )
@@ -427,6 +428,11 @@ func (s *Server) handleCapabilitiesMsg(edgeID string, msg *api.Envelope) {
 		}
 	}
 
+	// 与进程内 catalog 同 ID 的文档会被顶掉（平台契约优先）。必须显式记 warn 而不是
+	// 静默丢弃：真机事故是参考 demo 适配器的 diagnostics@1（action 为 dump/noop/ping）
+	// 顶掉了 Driver 的 diag，设备页因此出现别人的按钮、丢掉自己的命令。
+	platform := inProcessCapabilityIDs()
+
 	kept := make([]api.CapabilitySource, 0, len(data.Sources))
 	total := 0
 	for _, src := range data.Sources {
@@ -437,6 +443,11 @@ func (s *Server) handleCapabilitiesMsg(edgeID string, msg *api.Envelope) {
 				slog.Warn("edge capability doc invalid, skipped", "edge", edgeID,
 					"source", name, "capability", c.Metadata.ID, "err", err)
 				continue
+			}
+			if platform[c.Metadata.ID] {
+				slog.Warn("edge capability doc shadowed by server in-process catalog",
+					"edge", edgeID, "source", name, "capability", c.Metadata.ID,
+					"hint", "该 ID 属于平台进程内词汇；专有语义请改用发布者命名空间")
 			}
 			docs = append(docs, c)
 		}
@@ -455,6 +466,25 @@ func (s *Server) handleCapabilitiesMsg(edgeID string, msg *api.Envelope) {
 	}
 	s.mu.Unlock()
 	slog.Info("edge capabilities received", "edge", edgeID, "sources", len(kept), "capabilities", total)
+}
+
+// inProcessCapabilityIDs 返回 Server 进程内已注册适配器自带的 Capability ID 集合。
+func inProcessCapabilityIDs() map[string]bool {
+	out := map[string]bool{}
+	for _, name := range device.Names() {
+		a, ok := device.Get(name)
+		if !ok {
+			continue
+		}
+		cp, ok := a.(device.CapabilityProvider)
+		if !ok {
+			continue
+		}
+		for _, c := range cp.Capabilities() {
+			out[c.Metadata.ID] = true
+		}
+	}
+	return out
 }
 
 // validEdgeID 限制 edge_id 形状：小写字母/数字/-/_，1..64 字符。
