@@ -59,7 +59,7 @@ export default function Devices() {
           <span className="relative min-w-0 flex-1">
             <Search size={14} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3" />
             <input
-              id="dev-search" type="search" value={q} placeholder="按名称、设备键、边缘节点或适配器搜索"
+              id="dev-search" type="search" value={q} placeholder="按名称、ID、边缘节点或适配器搜索"
               onChange={(e) => setQ(e.target.value)}
               className="input max-w-full pl-9 text-[13px]"
             />
@@ -96,7 +96,7 @@ export default function Devices() {
           )}
           <p className="flex items-center gap-1.5 border-t border-hairline px-4 py-2.5 text-[11px] text-ink-3">
             <Cpu size={11} className="shrink-0" />
-            能力来自设备上报的 Descriptor 声明；「能力未知」表示该设备还没有提供 Descriptor。
+            能力清单来自设备主动上报的声明；「能力未知」表示设备尚未上报自己的能力。
           </p>
         </Panel>
       )}

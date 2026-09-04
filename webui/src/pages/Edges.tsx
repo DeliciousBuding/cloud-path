@@ -70,7 +70,7 @@ export default function Edges() {
             ? '全部节点都已离线。检查各主机的 cloudpath-edge 进程与网络后会自动重连。'
             : '所有节点都在线。'} />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
           {shown.map((f) => {
             const e = f.edge
             return (

@@ -40,7 +40,6 @@ export default function Plugins() {
   const { instances, loading: insLoading, error: insError, refetch: refetchIns } = usePluginInstances()
   const catalogIndex = useMemo(() => indexCatalog(plugins), [plugins])
   const byEdge = useMemo(() => groupByEdge(instances), [instances])
-  const reported = instances.filter((v) => v.has_observed).length
 
   const tabs: TabItem<Tab>[] = [
     { value: 'catalog', label: '目录', icon: <Puzzle size={13} />, count: plugins.length },
@@ -55,7 +54,7 @@ export default function Plugins() {
         subtitle={
           catLoading || insLoading
             ? '正在加载插件面…'
-            : `目录 ${plugins.length} 个插件 · ${instances.length} 个实例（${reported} 个有 Edge 上报的实际态）`
+            : `目录 ${plugins.length} 个 · 运行实例 ${instances.length} 个`
         }
         actions={
           <button type="button" className="btn btn-primary" onClick={() => { setCreating(true); setTab('instances') }}>

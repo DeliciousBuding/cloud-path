@@ -93,9 +93,9 @@ export default function Overview() {
         title="概览"
         subtitle={
           data?.server_time
-            ? <>服务端聚合于 <span className="num">{fmtDateTime(data.server_time)}</span></>
+            ? <>更新于 <span className="num">{fmtDateTime(data.server_time)}</span></>
             : health
-              ? <>server {health.version} · <span className="num">运行 {Math.floor(health.uptime_s / 60)} 分钟</span></>
+              ? <>服务已运行 <span className="num">{Math.floor(health.uptime_s / 60)}</span> 分钟</>
               : '设备、边缘节点与插件的实时总览'
         }
         actions={

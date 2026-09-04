@@ -226,7 +226,6 @@ export default function DeviceDetail() {
                     v={<span className="num">{fmtDateTime(d.online ? d.updated_at : d.last_seen)}</span>} />
                   <KeyValue k="声明能力" v={descriptor ? `${capRefs.length} 种` : '无 Descriptor'} />
                   <KeyValue k="可下发命令" v={`${commands.actions.length} 条`} />
-                  <KeyValue k="Descriptor 来源" v={source} mono />
                 </dl>
               </Panel>
             </div>
@@ -306,7 +305,7 @@ export default function DeviceDetail() {
                     </div>
                   )}
                   <p className="mt-3 px-0.5 text-[11px] leading-relaxed text-ink-3">
-                    趋势仅采样当前页面会话（最多 240 点）；历史数值请查事件与命令记录。
+                    趋势只记录本页打开期间的数据（最多 240 点）；更早的数值请查事件与命令记录。
                   </p>
                 </div>
               )}
@@ -343,7 +342,7 @@ export default function DeviceDetail() {
         <TabPanel value={tab}>
           <Panel
             title={<span className="flex items-center gap-1.5"><History size={14} />事件时间线</span>}
-            right={<span className="num text-[11px] text-ink-3">{shownEvents.length} / {events.length} 条</span>}>
+            right={<span className="num text-[11px] text-ink-3">{shownEvents.length === events.length ? `${events.length} 条` : `${shownEvents.length} / ${events.length} 条`}</span>}>
             {eventKinds.length > 1 && (
               <div className="mb-3 flex items-center gap-2">
                 <label htmlFor="ev-kind" className="shrink-0 text-[11px] text-ink-3">筛选</label>
