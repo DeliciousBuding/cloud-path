@@ -207,3 +207,24 @@ Capability v1 一旦发布，不原地改变字段语义；破坏性变化发布
 - Driver 不能直接操作 Application 存储。
 - UI label 可本地化；机器 ID、Capability ID、Event Type 不本地化。
 - 未知 Capability 仍可保存和转发，只是 Core UI 回落为通用 JSON/表格视图。
+
+## 10. 展示层（WebUI 呈现契约）
+
+WebUI 的默认视图是「人先看值，机器细节按需」：展示名 / 当前值 / 单位 / 状态 / 新鲜度进默认视图；
+entity_id、capability URI、property key、raw JSON 只进能力 Inspector 与诊断页。
+
+文本三层归属：
+
+| 层 | 例子 | 归属 |
+|---|---|---|
+| 平台 UI 词 | 概览 / 保存 / 事件 / 载荷 | WebUI 自身（薄词典，暂不引 i18n 框架） |
+| 声明展示元数据 | 温度 / 蜂鸣器 / 按下 | Descriptor / Capability declaration 的 title/description |
+| 机器身份 | `temperature`、`cloudpath.dev/capability/...` | 永远 canonical，不翻译 |
+
+展示名解析优先级（`webui/src/lib/descriptor.ts`）：
+声明 localized title → 平台通用词汇（PROPERTY_LABEL / GENERIC_NOUN / CMD_LABEL / EVENT_VERB 等）
+→ humanize → canonical machine name。
+locale 匹配规则：声明 title 含 CJK 时优先采用；纯英文 title 让位平台通用词汇，
+避免中文界面漏出英文机器术语（driver 声明改中文才是根修，见 Dev Agent 移交清单）。
+
+resolver 均为纯函数并有确定性单测（fallback 顺序、脏数据降级）；UI 不写设备特例。
