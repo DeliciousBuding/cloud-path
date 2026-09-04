@@ -299,6 +299,63 @@ func TestEffectIdempotency(t *testing.T) {
 	}
 }
 
+// TestDomainRecordUpsertKeyIsContentAddressed 锁定 upsert 去重语义：
+// 同 (record_type, record_id) 不同内容 = 不同幂等键（更新必须执行）；
+// 同内容重放 = 同键（崩溃重投仍幂等）。
+//
+// 回归背景（2026-09-05 真板实测）：键只含 record_type/record_id 时，
+// UpsertDomainRecord 被降级成一次性 create——窗口记录 opened→completed/
+// missed、提醒回执落痕的全部更新都被 Duplicate 静默吞掉。
+func TestDomainRecordUpsertKeyIsContentAddressed(t *testing.T) {
+	src := EffectSource{PluginInstanceID: "inst-1", TenantID: "tenant-a"}
+	mk := func(data string) Effect {
+		raw := &sdkapplication.ApplicationEffect{
+			PluginInstanceID: "inst-1",
+			Union: &sdkapplication.UpsertDomainRecord{
+				RecordType: "window", RecordID: "w-1", DataJSON: data, Version: "1",
+			},
+		}
+		e, err := EffectFromSDK(raw, src)
+		if err != nil {
+			t.Fatalf("EffectFromSDK: %v", err)
+		}
+		return e
+	}
+	opened := mk(`{"state":"opened"}`)
+	openedReplay := mk(`{"state":"opened"}`)
+	completed := mk(`{"state":"completed","closed_at":"..."}`)
+	if opened.IdempotencyKey != openedReplay.IdempotencyKey {
+		t.Fatalf("同内容重放必须同键（幂等）: %q vs %q", opened.IdempotencyKey, openedReplay.IdempotencyKey)
+	}
+	if opened.IdempotencyKey == completed.IdempotencyKey {
+		t.Fatalf("不同内容必须不同键（upsert 更新会被去重吞掉）: %q", opened.IdempotencyKey)
+	}
+
+	// 端到端：同一实例先后执行 opened 与 completed，两个都必须真正执行。
+	exec := &fakeExecutor{}
+	stream := newFakeStream()
+	cli := newFakeClient(testDescriptor(), stream)
+	rt := newTestRuntime(t, cli, exec, 0)
+	defer rt.Close(context.Background())
+	startTestInstance(t, rt, testSpec())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	res, err := rt.ExecuteEffects(ctx, "inst-1", []Effect{opened, completed})
+	if err != nil {
+		t.Fatalf("ExecuteEffects: %v", err)
+	}
+	if res.Executed != 2 {
+		t.Fatalf("executed = %d, want 2（状态更新不得被去重）", res.Executed)
+	}
+	res, err = rt.ExecuteEffects(ctx, "inst-1", []Effect{openedReplay})
+	if err != nil {
+		t.Fatalf("ExecuteEffects replay: %v", err)
+	}
+	if res.Executed != 0 || len(res.Results) != 1 || !res.Results[0].Duplicate {
+		t.Fatalf("同内容重放必须被识别为 Duplicate: %+v", res)
+	}
+}
+
 func TestRejectUnknownEffect(t *testing.T) {
 	exec := &fakeExecutor{}
 	stream := newFakeStream()

@@ -150,7 +150,15 @@ func EffectFromSDK(raw *sdkapplication.ApplicationEffect, src EffectSource) (Eff
 			DataJSON:   v.DataJSON,
 			Version:    v.Version,
 		}
-		key := "domain:" + payload.RecordType + "/" + payload.RecordID
+		// 去重键必须内容化：UpsertDomainRecord 的语义是「最终态收敛」，
+		// 同一记录会被应用多次改写（opened→completed/missed、回执落痕）。
+		// 只按 (record_type, record_id) 去重会把 upsert 降级成一次性 create
+		// ——首次落盘后的所有更新都被 Duplicate 静默吞掉（2026-09-05 真板
+		// 实测：reminder_state 永远为空，窗口状态永远停在 opened）。内容
+		// 摘要入键后：同内容重放仍幂等（崩溃重投安全），新内容必执行。
+		contentDigest := sha256.Sum256([]byte(v.DataJSON))
+		key := "domain:" + payload.RecordType + "/" + payload.RecordID +
+			":" + hex.EncodeToString(contentDigest[:8])
 		return newEffect(EffectCreateDomainRecord, key, src, payload)
 	case *sdkapplication.RequestCommand:
 		if !entityBound(src, v.EntityID) {
