@@ -23,6 +23,7 @@ type fakePort struct {
 	rx       []byte
 	tx       []byte
 	reply    string // 收到 'S' 时回复的帧；空串 = 从不回复（模拟哑板/未接线）
+	replyV   string // 收到 'V' 时回复的 V 帧；空串 = 从不回复
 	closed   bool
 	writeErr error
 }
@@ -60,6 +61,9 @@ func (p *fakePort) Write(b []byte) (int, error) {
 	p.tx = append(p.tx, b...)
 	if p.reply != "" && bytes.Contains(b, []byte("S")) {
 		p.rx = append(p.rx, []byte(p.reply)...)
+	}
+	if p.replyV != "" && bytes.Contains(b, []byte("V")) {
+		p.rx = append(p.rx, []byte(p.replyV)...)
 	}
 	return len(b), nil
 }
@@ -306,7 +310,12 @@ func TestDescriptorObservationsCarryRealObservedAt(t *testing.T) {
 	if err := desc.Validate(); err != nil {
 		t.Fatalf("descriptor.Validate: %v", err)
 	}
-	wantEntities := []string{"clock", "alarm", "compartment-1", "compartment-2", "compartment-3"}
+	wantEntities := []string{
+		"clock", "alarm",
+		"compartment-1", "compartment-2", "compartment-3",
+		"temperature", "illuminance", "hall", "vibration", "key",
+		"buzzer", "led", "display", "motor",
+	}
 	if len(desc.Entities) != len(wantEntities) {
 		t.Fatalf("entity 数 = %d, want %d", len(desc.Entities), len(wantEntities))
 	}
@@ -331,7 +340,18 @@ func TestDescriptorObservationsCarryRealObservedAt(t *testing.T) {
 		}
 	}
 	if checked != 5 {
-		t.Fatalf("5 个 entity 都应有一条带时间戳的观测，实际 %d 条", checked)
+		t.Fatalf("仅转储帧时 5 个 entity 应有观测，实际 %d 条", checked)
+	}
+	// 只有转储帧（无 V 帧）时，9 个新传感器/执行器 entity 不得凭空合成观测。
+	for _, id := range []string{"temperature", "illuminance", "hall", "vibration", "key", "buzzer", "led", "display", "motor"} {
+		for _, e := range desc.Entities {
+			if e.EntityID != id {
+				continue
+			}
+			if len(e.Observations) != 0 {
+				t.Errorf("无 V 帧时 entity %q 不得带观测: %+v", id, e.Observations)
+			}
+		}
 	}
 	if desc.Status != model.DeviceOnline {
 		t.Fatalf("有帧时 status = %q, want online", desc.Status)
@@ -349,6 +369,80 @@ func TestDescriptorWithoutDumpHasNoFakeObservations(t *testing.T) {
 	for _, e := range desc.Entities {
 		if len(e.Observations) != 0 {
 			t.Errorf("entity %q 无帧却带了观测值: %+v", e.EntityID, e.Observations)
+		}
+	}
+}
+
+// ---- 固件 v2：V 帧全量传感器快照 + B/L/N/M 执行器命令 ----
+
+func TestSendWithResultSensorReportsRealFrame(t *testing.T) {
+	d, fp, _ := newTestDev(t, frame0148)
+	fp.replyV = frameSensorV + "\n"
+	detail, err := d.SendWithResult(context.Background(), driverkit.Command{Cmd: "sensor"})
+	if err != nil {
+		t.Fatalf("sensor: %v", err)
+	}
+	assertDetailShape(t, detail)
+	for _, want := range []string{
+		"sensor_raw=" + frameSensorV, "clock=09:30:55", "state=逾期", "temp_c=", "rop=", "hall=1", "vib=0", "key=0",
+	} {
+		if !strings.Contains(detail, want) {
+			t.Errorf("sensor 摘要缺少 %q: %q", want, detail)
+		}
+	}
+	if w := fp.written(); w != "V" {
+		t.Fatalf("sensor 应写单字节 V, got %q", w)
+	}
+}
+
+func TestSendWithResultSensorWithoutReplyIsHonest(t *testing.T) {
+	d, _, _ := newTestDev(t, "") // 哑板：从不回任何帧
+	detail, err := d.SendWithResult(context.Background(), driverkit.Command{Cmd: "sensor"})
+	if err != nil {
+		t.Fatalf("sensor: %v", err)
+	}
+	assertDetailShape(t, detail)
+	if !strings.Contains(detail, "未收到回帧") {
+		t.Fatalf("无 V 帧回帧时必须诚实说明（不伪造传感器值）: %q", detail)
+	}
+	if strings.Contains(detail, "temp_c=") {
+		t.Fatalf("未收到回帧却报了温度值（拿旧帧冒充）: %q", detail)
+	}
+}
+
+func TestSendWithResultActuatorCommandsV2(t *testing.T) {
+	for _, tc := range []struct{ cmd, args, wire, want string }{
+		{"buzzer", `{"freq":4,"duration":3}`, "B43", "buzzer(B)"},
+		{"led", `{"pattern":9}`, "L90", "led(L)"},
+		{"display", `{"digits":[1,2,3,4,5,6,7,8]}`, "N12345678", "display(N)"},
+		{"motor", `{"steps":2}`, "M2", "motor(M)"},
+	} {
+		d, fp, _ := newTestDev(t, frame0148)
+		detail, err := d.SendWithResult(context.Background(), driverkit.Command{Cmd: tc.cmd, Args: tc.args})
+		if err != nil {
+			t.Fatalf("%s: %v", tc.cmd, err)
+		}
+		assertDetailShape(t, detail)
+		if !strings.HasPrefix(detail, tc.want) {
+			t.Errorf("%s 摘要前缀 = %q, want %q", tc.cmd, detail, tc.want)
+		}
+		if w := fp.written(); w != tc.wire {
+			t.Errorf("%s 写入字节 = %q, want %q", tc.cmd, w, tc.wire)
+		}
+	}
+}
+
+func TestSendWithResultActuatorInvalidArgs(t *testing.T) {
+	d, _, _ := newTestDev(t, frame0148)
+	for _, c := range []driverkit.Command{
+		{Cmd: "buzzer", Args: `{"freq":10,"duration":3}`},
+		{Cmd: "led", Args: `{"pattern":10}`},
+		{Cmd: "display", Args: `{"digits":[1,2,3]}`},
+		{Cmd: "motor", Args: `{"steps":9}`},
+		{Cmd: "led", Args: ""},
+	} {
+		if _, err := d.SendWithResult(context.Background(), c); err == nil {
+			t.Errorf("命令 %s args=%q 越界/非法必须被拒绝", c.Cmd, c.Args)
 		}
 	}
 }

@@ -1,6 +1,7 @@
 package stcb
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -122,5 +123,62 @@ func TestValidHHMM(t *testing.T) {
 		if validHHMM(s) {
 			t.Errorf("validHHMM(%q) = true, want false", s)
 		}
+	}
+}
+
+// frameSensorV 是一条合法 V 帧（hh=09 mm=30 ss=55 st=2 rt=0x080 rop=0x1CC nav=0x1E0
+// ext0=0x2A0 ext1=0x100 hall=1 vib=0 key=0）。ADC 值全部在 0x000-0x3FF 内。
+const frameSensorV = "V:09305520801CC1E02A0100100"
+
+func TestParseSensor(t *testing.T) {
+	cases := []struct {
+		name   string
+		line   string
+		want   bool
+		sensor Sensor
+	}{
+		{"标准帧", frameSensorV, true, Sensor{Hour: 9, Min: 30, Sec: 55, State: 2, Rt: 0x080, Rop: 0x1CC, Nav: 0x1E0, Ext0: 0x2A0, Ext1: 0x100, Hall: 1, Vib: 0, Key: 0}},
+		{"损坏分隔符", "V\ufffd09305520801CC1E02A0100100", true, Sensor{Hour: 9, Min: 30, Sec: 55, State: 2, Rt: 0x080, Rop: 0x1CC, Nav: 0x1E0, Ext0: 0x2A0, Ext1: 0x100, Hall: 1, Vib: 0, Key: 0}},
+		{"噪声前缀 salvage", "O:21" + frameSensorV, true, Sensor{Hour: 9, Min: 30, Sec: 55, State: 2, Rt: 0x080, Rop: 0x1CC, Nav: 0x1E0, Ext0: 0x2A0, Ext1: 0x100, Hall: 1, Vib: 0, Key: 0}},
+		{"小写hex", "V:09305520801cc1e02a0100100", true, Sensor{Hour: 9, Min: 30, Sec: 55, State: 2, Rt: 0x080, Rop: 0x1CC, Nav: 0x1E0, Ext0: 0x2A0, Ext1: 0x100, Hall: 1, Vib: 0, Key: 0}},
+		{"hour越界(0x92垃圾)", "V:24305520801CC1E02A0100100", false, Sensor{}},
+		{"ADC越界(>0x3FF)", "V:0930552FF11CC1E02A0100100", false, Sensor{}},
+		{"hall越界(=2)", "V:09305520801CC1E02A010200", false, Sensor{}},
+		{"转储行不误判", "S:01213120", false, Sensor{}},
+		{"事件行不误判", "REMIND", false, Sensor{}},
+		{"太短", "V:0930552", false, Sensor{}},
+		{"空行", "", false, Sensor{}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, ok := ParseSensor(c.line)
+			if ok != c.want {
+				t.Fatalf("ParseSensor(%q) ok=%v want %v", c.line, ok, c.want)
+			}
+			if ok {
+				c.sensor.Raw = got.Raw
+				if got != c.sensor {
+					t.Fatalf("ParseSensor(%q) = %+v, want %+v", c.line, got, c.sensor)
+				}
+			}
+		})
+	}
+}
+
+func TestTempC(t *testing.T) {
+	if v := TempC(128); v < 75 || v > 78 {
+		t.Errorf("TempC(128) = %v, want ~76.3C", v)
+	}
+	if v := TempC(511); v < 24 || v > 26 {
+		t.Errorf("TempC(511) = %v, want ~25C", v)
+	}
+	if v := TempC(1023); v > -20 {
+		t.Errorf("TempC(1023) = %v, want 很冷（< -20C）", v)
+	}
+	if v := TempC(-1); !math.IsNaN(v) {
+		t.Errorf("TempC(-1) = %v, want NaN", v)
+	}
+	if v := TempC(1024); !math.IsNaN(v) {
+		t.Errorf("TempC(1024) = %v, want NaN", v)
 	}
 }

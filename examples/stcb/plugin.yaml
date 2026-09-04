@@ -26,6 +26,15 @@ capabilities:
   - cloudpath.dev/capability/clock@1
   - cloudpath.dev/capability/alarm@1
   - cloudpath.dev/capability/contact@1
+  - cloudpath.dev/capability/temperature@1
+  - cloudpath.dev/capability/illuminance@1
+  - cloudpath.dev/capability/hall@1
+  - cloudpath.dev/capability/vibration@1
+  - cloudpath.dev/capability/key@1
+  - cloudpath.dev/capability/buzzer@1
+  - cloudpath.dev/capability/led@1
+  - cloudpath.dev/capability/display-text@1
+  - cloudpath.dev/capability/motor@1
 contributes:
   # The contribution id is stable and distinct from the plugin id; it equals
   # the registered adapter name (Adapter.Name() == "stcb").
