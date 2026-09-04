@@ -27,6 +27,8 @@ Registry 记录已审查插件，字段固定：
 cloudpath plugin search <query>      # GitHub topic cloudpath-plugin 搜索
 cloudpath plugin inspect <id|url>    # 读根 plugin.yaml + Release/摘要，输出验证结论
 cloudpath plugin install <id|url>    # 下载 → 校验 digest → 落 plugins.d/ + 写 plugins.lock
+# 匿名 GitHub API 限额 60 次/小时：设置 GITHUB_TOKEN（或 GH_TOKEN）走认证额度，
+# 否则 discover/install 可能返回 ERR_RATE_LIMITED。令牌只从环境读取，不写入 lock/日志。
 cloudpath plugin enable <id>         # 启动实例
 cloudpath plugin disable <id>        # 停用实例
 cloudpath plugin update <id>         # 升级（走 PlanMigration）

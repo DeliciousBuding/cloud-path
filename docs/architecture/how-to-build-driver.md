@@ -83,6 +83,10 @@ python scripts/validate_manifest.py plugin.yaml --dir .
 
 推送 `v*` tag 触发 Release；给仓库加 GitHub topic `cloudpath-plugin` 后，
 `cloudpath plugin search` 能发现，`cloudpath plugin install <repo> --digest sha256:<hex>` 可安装。
+
+匿名 GitHub API 只有 60 次/小时（按出口 IP），discover/install 很容易撞 `ERR_RATE_LIMITED`。
+设置 `GITHUB_TOKEN`（或 `GH_TOKEN`）后 CLI 会带 `Authorization: Bearer` 走认证额度；令牌只从环境读，
+不落 lock、不落日志、不进安装证据。
 真板验证必须走：
 
 ```text
