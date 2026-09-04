@@ -141,3 +141,9 @@ func TestExternalConnectionHintsCarryPerDeviceBinding(t *testing.T) {
 		t.Fatalf("hints=%v", got)
 	}
 }
+
+func TestExternalDeviceInstanceIDIsPerDevice(t *testing.T) {
+	if got := externalDeviceInstanceID("stcb", "board-2"); got != "stcb/board-2" {
+		t.Fatalf("instance id=%q", got)
+	}
+}

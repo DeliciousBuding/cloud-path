@@ -76,6 +76,8 @@ func (a *externalAdapter) client(ctx context.Context) (driver.DriverClient, erro
 
 func (a *externalAdapter) Name() string { return a.driverID }
 
+func externalDeviceInstanceID(driverID, deviceID string) string { return driverID + "/" + deviceID }
+
 // SupportedCommands 返回 Describe 里声明的全部 action 名（命令白名单）。
 // 外部 driver 的轮询/对时由 driver 自身在 Watch 循环内完成，因此这里不额外注入
 // 生命周期命令；失败时返回空集，edge 会按「无可轮询命令」安全降级。
@@ -122,8 +124,9 @@ func (a *externalAdapter) Open(ctx context.Context, cfg device.Config, onEvent f
 	if err != nil {
 		return nil, fmt.Errorf("external driver %q encode config: %w", a.driverID, err)
 	}
+	instanceID := externalDeviceInstanceID(a.driverID, cfg.ID)
 	cresp, err := cli.ConfigureInstance(ctx, &driver.ConfigureInstanceRequest{
-		PluginInstanceID: a.driverID,
+		PluginInstanceID: instanceID,
 		Config:           cfgJSON,
 	})
 	if err != nil {
@@ -132,7 +135,7 @@ func (a *externalAdapter) Open(ctx context.Context, cfg device.Config, onEvent f
 	if cresp.Status != nil && !cresp.Status.IsOK() {
 		return nil, fmt.Errorf("external driver %q configure instance: %v", a.driverID, cresp.Status)
 	}
-	return openExternalDevice(ctx, cli, a.driverID, cfg, onEvent)
+	return openExternalDevice(ctx, cli, instanceID, cfg, onEvent)
 }
 
 // externalDevice 是桥接后的单台外部设备：维护 Watch 流累积的实体与观测，
@@ -353,26 +356,32 @@ func (d *externalDevice) Descriptor() model.Descriptor {
 	return desc
 }
 
-// Send 执行命令：cmd.Cmd 即 Driver Protocol v1 的 action。
+// Send 执行命令；成功只来自 Driver 返回的真实设备 ACK 结果。
 func (d *externalDevice) Send(ctx context.Context, c device.Command) error {
+	_, err := d.SendWithResult(ctx, c)
+	return err
+}
+
+// SendWithResult 把 Driver 已确认的设备结果返回给 Edge command ACK。
+func (d *externalDevice) SendWithResult(ctx context.Context, c device.Command) (string, error) {
 	resp, err := d.cli.Execute(ctx, &driver.ExecuteRequest{
 		PluginInstanceID: d.instanceID,
+		DeviceID:         d.id,
 		IdempotencyKey:   commandID(c),
 		EntityID:         "",
-		DeviceID:         d.id,
 		Action:           c.Cmd,
 		ArgsJSON:         c.Args,
 	})
 	if err != nil {
-		return err
+		return "", err
 	}
 	if resp.Status != nil && !resp.Status.IsOK() {
-		return fmt.Errorf("external driver execute %q: %v", c.Cmd, resp.Status)
+		return "", fmt.Errorf("external driver execute %q: %v", c.Cmd, resp.Status)
 	}
-	if resp.State == driver.CommandStateFailed {
-		return fmt.Errorf("external driver execute %q: state FAILED", c.Cmd)
+	if resp.State != driver.CommandStateSucceeded {
+		return "", fmt.Errorf("external driver execute %q: state %v", c.Cmd, resp.State)
 	}
-	return nil
+	return fmt.Sprintf("device ACK action=%s command_id=%s", c.Cmd, resp.CommandID), nil
 }
 
 func commandID(c device.Command) string {
