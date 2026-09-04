@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/DeliciousBuding/cloud-path/examples/stcb"
+	_ "github.com/DeliciousBuding/cloud-path/examples/demo"
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 )
 
@@ -30,7 +30,7 @@ func TestPluginPlaneRecoversAfterRestart(t *testing.T) {
 	}
 
 	// 2) Edge 接入、上报 observed 并 ack applied（真实推进 applied_revision）。
-	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	ch := edgeReader(ews)
 	waitEdgeLink(t, srv, "e1", a)
 	env, ok := waitEnv(t, ch, api.MsgPluginDesired, 30*time.Second)
@@ -103,7 +103,7 @@ func TestPluginPlaneRecoversAfterRestart(t *testing.T) {
 	}
 
 	// 4) Edge 重连到新进程：拿到当前完整快照（revision 2，最终 payload）。
-	ews2 := dialEdgeHello(t, ts2, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	ews2 := dialEdgeHello(t, ts2, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	defer ews2.CloseNow()
 	ch2 := edgeReader(ews2)
 	waitEdgeLink(t, srv2, "e1", a)

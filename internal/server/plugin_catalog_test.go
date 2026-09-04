@@ -51,7 +51,7 @@ func TestPluginsAPIFromProjection(t *testing.T) {
 		VerifiedPublisher: "acme",
 		Permissions:       api.PluginPermissionsData{Secrets: []string{"api_token"}, Hardware: []string{"serial"}},
 		Contributions: api.PluginContributionsData{Drivers: []api.PluginDriverContributionData{
-			{ID: "stcb", Title: "STC-B Driver", Discovery: "manual"},
+			{ID: "demo", Title: "STC-B Driver", Discovery: "manual"},
 		}},
 		Capabilities: []string{"cloudpath.dev/capability/clock@1"},
 	}})
@@ -74,7 +74,7 @@ func TestPluginsAPIFromProjection(t *testing.T) {
 		len(list.Plugins[0].Permissions.Secrets) != 1 || list.Plugins[0].Permissions.Secrets[0] != "api_token" {
 		t.Fatalf("插件视图字段错误: %+v", list.Plugins[0])
 	}
-	if len(list.Plugins[0].Contributes.Drivers) != 1 || list.Plugins[0].Contributes.Drivers[0].ID != "stcb" {
+	if len(list.Plugins[0].Contributes.Drivers) != 1 || list.Plugins[0].Contributes.Drivers[0].ID != "demo" {
 		t.Fatalf("贡献字段错误: %+v", list.Plugins[0].Contributes)
 	}
 	raw := rec.Body.String()

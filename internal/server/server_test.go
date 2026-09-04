@@ -13,7 +13,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	_ "github.com/DeliciousBuding/cloud-path/examples/stcb" // 注册 stcb 适配器（命令白名单）
+	_ "github.com/DeliciousBuding/cloud-path/examples/demo" // 注册 stcb 适配器（命令白名单）
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
 )
@@ -125,7 +125,7 @@ func TestWSFullLoop(t *testing.T) {
 		V: api.Version, Type: api.MsgHello, Ts: time.Now().Unix(),
 		Data: rawData(t, api.HelloData{
 			EdgeID: "e1", Version: "test",
-			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "stcb", Name: "节点1", Port: "COM9"}},
+			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "demo", Name: "节点1", Port: "COM9"}},
 		}),
 	})
 
@@ -156,7 +156,7 @@ func TestWSFullLoop(t *testing.T) {
 		t.Fatalf("REST devices = %d", len(devResp.Devices))
 	}
 	dv := devResp.Devices[0]
-	if dv.ID != "e1/d1" || !dv.Online || dv.Adapter != "stcb" || dv.State["clock"] != "12:34" {
+	if dv.ID != "e1/d1" || !dv.Online || dv.Adapter != "demo" || dv.State["clock"] != "12:34" {
 		t.Fatalf("bad device view: %+v", dv)
 	}
 
@@ -245,7 +245,7 @@ func TestEdgeAuth(t *testing.T) {
 	writeEnv(t, ws, api.Envelope{
 		V: api.Version, Type: api.MsgHello,
 		Data: rawData(t, api.HelloData{EdgeID: "bad", Token: "wrong",
-			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "stcb"}}}),
+			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "demo"}}}),
 	})
 	_, _, err = ws.Read(ctx)
 	if err == nil {
@@ -258,7 +258,7 @@ func TestEdgeAuth(t *testing.T) {
 	writeEnv(t, ws2, api.Envelope{
 		V: api.Version, Type: api.MsgHello,
 		Data: rawData(t, api.HelloData{EdgeID: "good", Token: "sekret",
-			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "stcb"}}}),
+			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "demo"}}}),
 	})
 	// 存活证明：发一条 state 不会被打断（能继续读写即通过）
 	writeEnv(t, ws2, api.Envelope{
@@ -278,7 +278,7 @@ func TestHydrate(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv1 := New(Config{Store: st, Version: "test"})
-	if err := st.UpsertDevice("e1/d1", "e1", "stcb", "节点1", "COM9"); err != nil {
+	if err := st.UpsertDevice("e1/d1", "e1", "demo", "节点1", "COM9"); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.SetState("e1/d1", `{"clock":"08:00"}`, true, time.Now().Unix()); err != nil {

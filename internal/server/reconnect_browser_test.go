@@ -9,7 +9,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	_ "github.com/DeliciousBuding/cloud-path/examples/stcb"
+	_ "github.com/DeliciousBuding/cloud-path/examples/demo"
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 )
 
@@ -60,8 +60,8 @@ func TestBrowserSeesReconnectAsOnline(t *testing.T) {
 		t.Fatal("浏览器未收到首帧快照")
 	}
 
-	ws1 := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
-	ws2 := dialEdgeHello(t, ts, "e2", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	ws1 := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"})
+	ws2 := dialEdgeHello(t, ts, "e2", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	defer ws2.CloseNow()
 	waitEdgeLink(t, srv, "e1", a)
 	waitEdgeLink(t, srv, "e2", a)
@@ -107,7 +107,7 @@ func TestBrowserSeesReconnectAsOnline(t *testing.T) {
 	}
 
 	// e1 重连：浏览器必须重新看到 edge_up 与 e1/d1 在线。
-	ws1b := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	ws1b := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	defer ws1b.CloseNow()
 	waitEdgeLink(t, srv, "e1", a)
 	upSeen, onlineSeen := false, false

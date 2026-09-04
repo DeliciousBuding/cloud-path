@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/DeliciousBuding/cloud-path/examples/stcb"
+	_ "github.com/DeliciousBuding/cloud-path/examples/demo"
 
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/audit"
@@ -185,19 +185,19 @@ func TestCommandAuditDoesNotStoreArgs(t *testing.T) {
 	srv, ts, st := setupUsersTokens(t)
 	key := "e/d1"
 	srv.mu.Lock()
-	srv.devices[key] = &api.DeviceView{ID: key, EdgeID: "e", Adapter: "stcb", Online: true, State: map[string]any{}}
+	srv.devices[key] = &api.DeviceView{ID: key, EdgeID: "e", Adapter: "demo", Online: true, State: map[string]any{}}
 	srv.deviceTenants[key] = "default"
 	srv.edges["e"] = &edgeLink{edgeID: "e", tenant: "default", devices: []string{key}, send: make(chan []byte, 8), cancel: func() {}}
 	srv.mu.Unlock()
 
 	secret := "args-super-secret-42"
 	if resp := doJSON(t, http.MethodPost, ts.URL+"/api/devices/e/d1/commands",
-		`{"cmd":"sync","args":"`+secret+`"}`, jsonHeaders(), nil); resp.StatusCode != http.StatusOK {
+		`{"cmd":"ping","args":"`+secret+`"}`, jsonHeaders(), nil); resp.StatusCode != http.StatusOK {
 		t.Fatalf("下发命令 = %d", resp.StatusCode)
 	}
 	// 被拒路径同样不落 args。
 	if resp := doJSON(t, http.MethodPost, ts.URL+"/api/devices/e/ghost/commands",
-		`{"cmd":"sync","args":"`+secret+`"}`, jsonHeaders(), nil); resp.StatusCode != http.StatusNotFound {
+		`{"cmd":"ping","args":"`+secret+`"}`, jsonHeaders(), nil); resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("未知设备命令 = %d, want 404", resp.StatusCode)
 	}
 
@@ -237,7 +237,7 @@ func TestEdgeAuthAudited(t *testing.T) {
 	good := dial(t, wsURL(ts.URL, "/ws/edge"))
 	writeEnv(t, good, api.Envelope{V: api.Version, Type: api.MsgHello,
 		Data: rawData(t, api.HelloData{EdgeID: "edge-good", Token: tokenSecret, Version: "v1",
-			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "stcb"}}})})
+			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "demo"}}})})
 
 	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {

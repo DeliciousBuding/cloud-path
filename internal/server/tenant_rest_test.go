@@ -35,10 +35,10 @@ func setupTenantREST(t *testing.T) (*Server, int64, int64) {
 	}
 	a := insertTenant("tenant-a")
 	b := insertTenant("tenant-b")
-	if err := st.UpsertDeviceTenant("a/d1", "a", "stcb", "A", "COM1", a); err != nil {
+	if err := st.UpsertDeviceTenant("a/d1", "a", "demo", "A", "COM1", a); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.UpsertDeviceTenant("b/d2", "b", "stcb", "B", "COM2", b); err != nil {
+	if err := st.UpsertDeviceTenant("b/d2", "b", "demo", "B", "COM2", b); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.SetState("a/d1", `{"x":1}`, true, 1); err != nil {
@@ -53,7 +53,7 @@ func setupTenantREST(t *testing.T) (*Server, int64, int64) {
 	if _, err := st.AddEvent("b/d2", "MISSED", "{}", 2); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CreateCommandTenant("a/d1", "sync", "", a); err != nil {
+	if _, err := st.CreateCommandTenant("a/d1", "ping", "", a); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := st.CreateCommandTenant("b/d2", "dump", "", b); err != nil {
@@ -192,7 +192,7 @@ func TestRESTTenantCommandIsolation(t *testing.T) {
 // TestCrossTenantCommandReturns404 锁定跨租户命令下发与不存在同语义（404）。
 func TestCrossTenantCommandReturns404(t *testing.T) {
 	srv, _, b := setupTenantREST(t)
-	rec := serveTenant(t, srv, http.MethodPost, "/api/devices/a/d1/commands", `{"cmd":"sync"}`, b, "tenant-b")
+	rec := serveTenant(t, srv, http.MethodPost, "/api/devices/a/d1/commands", `{"cmd":"ping"}`, b, "tenant-b")
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("cross-tenant command = %d, want 404", rec.Code)
 	}
@@ -222,7 +222,7 @@ func TestStoreNilTenantPath(t *testing.T) {
 			t.Fatalf("nil store GET %s = %d, want 200", path, resp.StatusCode)
 		}
 	}
-	resp, err := http.Post(ts.URL+"/api/devices/e1/d1/commands", "application/json", strings.NewReader(`{"cmd":"sync"}`))
+	resp, err := http.Post(ts.URL+"/api/devices/e1/d1/commands", "application/json", strings.NewReader(`{"cmd":"ping"}`))
 	if err != nil {
 		t.Fatal(err)
 	}

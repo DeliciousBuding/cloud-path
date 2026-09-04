@@ -13,7 +13,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	_ "github.com/DeliciousBuding/cloud-path/examples/stcb"
+	_ "github.com/DeliciousBuding/cloud-path/examples/demo"
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
 )
@@ -57,10 +57,10 @@ func TestAdaptersEndpoint(t *testing.T) {
 		Adapters []api.AdapterView `json:"adapters"`
 	}
 	getJSON(t, ts.URL+"/api/adapters", &resp)
-	if len(resp.Adapters) != 1 || resp.Adapters[0].Name != "stcb" {
+	if len(resp.Adapters) != 1 || resp.Adapters[0].Name != "demo" {
 		t.Fatalf("adapters = %+v", resp.Adapters)
 	}
-	want := []string{"sync", "dump", "trigger", "open", "isp", "raw", "buzzer", "led", "display", "motor", "sensor"}
+	want := []string{"ping", "set", "dump", "noop"}
 	got := resp.Adapters[0].Commands
 	if len(got) != len(want) {
 		t.Fatalf("commands = %v, want %v", got, want)
@@ -74,7 +74,7 @@ func TestAdaptersEndpoint(t *testing.T) {
 
 func TestStatsEndpoint(t *testing.T) {
 	srv, ts := setup(t)
-	registerEdge(t, ts, "e1", api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	registerEdge(t, ts, "e1", api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	if _, err := srv.cfg.Store.AddEvent("e1/d1", "BOOT", "{}", time.Now().Unix()); err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestNilStoreModeDoesNotPanic(t *testing.T) {
 	writeEnv(t, ews, api.Envelope{
 		V: api.Version, Type: api.MsgHello, Ts: time.Now().Unix(),
 		Data: rawData(t, api.HelloData{EdgeID: "e1", Version: "test",
-			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "stcb"}}}),
+			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "demo"}}}),
 	})
 	writeEnv(t, ews, api.Envelope{
 		V: api.Version, Type: api.MsgState, Device: "e1/d1", Ts: time.Now().Unix(),
@@ -156,7 +156,7 @@ func TestCommandRateLimit(t *testing.T) {
 	ts := httptest.NewServer(srv.Routes())
 	defer ts.Close()
 	defer srv.CloseAll()
-	registerEdge(t, ts, "e1", api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	registerEdge(t, ts, "e1", api.DeviceMeta{ID: "d1", Adapter: "demo"})
 
 	url := ts.URL + "/api/devices/e1/d1/commands"
 	for i := 0; i < 3; i++ {
@@ -183,7 +183,7 @@ func TestCommandRateLimit(t *testing.T) {
 
 func TestCommandArgsValidation(t *testing.T) {
 	_, ts := setup(t)
-	registerEdge(t, ts, "e1", api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	registerEdge(t, ts, "e1", api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	url := ts.URL + "/api/devices/e1/d1/commands"
 
 	cases := []struct {
@@ -194,11 +194,11 @@ func TestCommandArgsValidation(t *testing.T) {
 		{"空 body", ``, http.StatusBadRequest},
 		{"坏 json", `{`, http.StatusBadRequest},
 		{"缺 cmd", `{"args":"x"}`, http.StatusBadRequest},
-		{"args 带换行", `{"cmd":"raw","args":"S\n"}`, http.StatusBadRequest},
+		{"args 带换行", `{"cmd":"set","args":"S\n"}`, http.StatusBadRequest},
 		{"args 带 NUL", "{\"cmd\":\"raw\",\"args\":\"S\x00\"}", http.StatusBadRequest},
-		{"args 过长", `{"cmd":"raw","args":"` + strings.Repeat("A", 65) + `"}`, http.StatusBadRequest},
+		{"args 过长", `{"cmd":"set","args":"` + strings.Repeat("A", 65) + `"}`, http.StatusBadRequest},
 		{"未知命令", `{"cmd":"reboot"}`, http.StatusBadRequest},
-		{"合法 raw", `{"cmd":"raw","args":"S"}`, http.StatusOK},
+		{"合法 raw", `{"cmd":"set","args":"S"}`, http.StatusOK},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -216,7 +216,7 @@ func TestCommandUnknownDeviceAndOfflineEdge(t *testing.T) {
 		t.Fatalf("未注册设备 = %d, want 404", code)
 	}
 	// 注册后 edge 断开 → 409
-	ews := registerEdge(t, ts, "e1", api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	ews := registerEdge(t, ts, "e1", api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	ews.CloseNow()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
@@ -231,8 +231,8 @@ func TestCommandUnknownDeviceAndOfflineEdge(t *testing.T) {
 func TestCommandsDeviceFilter(t *testing.T) {
 	srv, ts := setup(t)
 	registerEdge(t, ts, "e1",
-		api.DeviceMeta{ID: "d1", Adapter: "stcb"},
-		api.DeviceMeta{ID: "d2", Adapter: "stcb"})
+		api.DeviceMeta{ID: "d1", Adapter: "demo"},
+		api.DeviceMeta{ID: "d2", Adapter: "demo"})
 	for _, k := range []string{"e1/d1", "e1/d2"} {
 		if _, err := srv.cfg.Store.CreateCommand(k, "dump", ""); err != nil {
 			t.Fatal(err)
@@ -329,7 +329,7 @@ func TestEdgeReconnectEvictionKeepsState(t *testing.T) {
 	defer cancel()
 
 	bws := dial(t, wsURL(ts.URL, "/ws"))
-	old := registerEdge(t, ts, "e1", api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	old := registerEdge(t, ts, "e1", api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	writeEnv(t, old, api.Envelope{
 		V: api.Version, Type: api.MsgState, Device: "e1/d1", Ts: time.Now().Unix(),
 		Data: rawData(t, api.StateData{Online: true, Raw: map[string]any{"clock": "10:00"}, UpdatedAt: time.Now().Unix()}),
@@ -343,7 +343,7 @@ func TestEdgeReconnectEvictionKeepsState(t *testing.T) {
 	writeEnv(t, neu, api.Envelope{
 		V: api.Version, Type: api.MsgHello, Ts: time.Now().Unix(),
 		Data: rawData(t, api.HelloData{EdgeID: "e1", Version: "test",
-			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "stcb"}}}),
+			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "demo"}}}),
 	})
 	// 旧连接应被服务端主动关闭
 	if _, _, err := old.Read(ctx); err == nil {

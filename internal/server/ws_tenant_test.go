@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/DeliciousBuding/cloud-path/examples/stcb"
+	_ "github.com/DeliciousBuding/cloud-path/examples/demo"
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/model"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
@@ -54,8 +54,8 @@ func TestBrowserWSTenantIsolation(t *testing.T) {
 	bB := &browserConn{send: make(chan []byte, 16), tenant: "tenant-b"}
 
 	srv.mu.Lock()
-	srv.devices["a/d1"] = &api.DeviceView{ID: "a/d1", EdgeID: "a", Adapter: "stcb", Online: true, State: map[string]any{}}
-	srv.devices["b/d2"] = &api.DeviceView{ID: "b/d2", EdgeID: "b", Adapter: "stcb", Online: true, State: map[string]any{}}
+	srv.devices["a/d1"] = &api.DeviceView{ID: "a/d1", EdgeID: "a", Adapter: "demo", Online: true, State: map[string]any{}}
+	srv.devices["b/d2"] = &api.DeviceView{ID: "b/d2", EdgeID: "b", Adapter: "demo", Online: true, State: map[string]any{}}
 	srv.deviceTenants = map[string]string{"a/d1": "tenant-a", "b/d2": "tenant-b"}
 	srv.descriptors = map[string]model.Descriptor{
 		"a/d1": {DeviceID: "a/d1", ExternalID: "d1", Status: model.DeviceOnline, Entities: entities()},

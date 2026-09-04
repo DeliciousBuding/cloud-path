@@ -269,7 +269,7 @@ func TestLoginRateLimit(t *testing.T) {
 // 无凭据回环 200、非回环 403；服务令牌非回环 200；-token 下回环仍放行。
 func TestCommandWriteAuth(t *testing.T) {
 	srv, ts := setup(t)
-	registerEdge(t, ts, "e1", api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	registerEdge(t, ts, "e1", api.DeviceMeta{ID: "d1", Adapter: "demo"})
 
 	// 回环（真实 httptest 客户端）+ 无凭据 → 200
 	if code := postCommand(t, ts.URL+"/api/devices/e1/d1/commands", `{"cmd":"dump"}`); code != http.StatusOK {
@@ -301,7 +301,7 @@ func TestCommandWriteAuth(t *testing.T) {
 	writeEnv(t, ews, api.Envelope{
 		V: api.Version, Type: api.MsgHello, Ts: time.Now().Unix(),
 		Data: rawData(t, api.HelloData{EdgeID: "e1", Token: "sekret",
-			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "stcb"}}}),
+			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "demo"}}}),
 	})
 	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {

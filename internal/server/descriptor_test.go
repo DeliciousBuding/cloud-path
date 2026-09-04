@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	_ "github.com/DeliciousBuding/cloud-path/examples/stcb"
+	_ "github.com/DeliciousBuding/cloud-path/examples/demo"
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/auth"
 	"github.com/DeliciousBuding/cloud-path/internal/model"
@@ -30,9 +30,9 @@ func TestCapabilitiesAPI(t *testing.T) {
 		ids[c.Metadata.ID] = true
 	}
 	for _, want := range []string{
-		"cloudpath.dev/capability/clock@1",
-		"cloudpath.dev/capability/alarm@1",
-		"cloudpath.dev/capability/contact@1",
+		"cloudpath.dev/capability/counter@1",
+		"cloudpath.dev/capability/uptime@1",
+		"cloudpath.dev/capability/setpoint@1",
 	} {
 		if !ids[want] {
 			t.Fatalf("missing capability %q in %v", want, ids)
@@ -44,8 +44,8 @@ func TestCapabilitiesAPI(t *testing.T) {
 func TestDescriptorsAPI(t *testing.T) {
 	_, ts := setup(t)
 	registerEdge(t, ts, "e1",
-		api.DeviceMeta{ID: "d1", Adapter: "stcb", Name: "节点1", Port: "COM9"},
-		api.DeviceMeta{ID: "d2", Adapter: "stcb", Name: "节点2", Port: "COM10"},
+		api.DeviceMeta{ID: "d1", Adapter: "demo", Name: "节点1", Port: "COM9"},
+		api.DeviceMeta{ID: "d2", Adapter: "demo", Name: "节点2", Port: "COM10"},
 	)
 
 	var resp struct {
@@ -75,7 +75,7 @@ func TestDescriptorsAPI(t *testing.T) {
 // TestDeviceDescriptorAPI 锁定单设备端点：返回 device_id 为稳定键 "<edge>/<dev>"。
 func TestDeviceDescriptorAPI(t *testing.T) {
 	_, ts := setup(t)
-	registerEdge(t, ts, "e1", api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	registerEdge(t, ts, "e1", api.DeviceMeta{ID: "d1", Adapter: "demo"})
 
 	var resp struct {
 		Descriptor   model.Descriptor   `json:"descriptor"`
@@ -116,8 +116,8 @@ func TestDescriptorTenantIsolation(t *testing.T) {
 		}}
 	}
 	srv.mu.Lock()
-	srv.devices["a/d1"] = &api.DeviceView{ID: "a/d1", EdgeID: "a", Adapter: "stcb", Online: true, State: map[string]any{}}
-	srv.devices["b/d2"] = &api.DeviceView{ID: "b/d2", EdgeID: "b", Adapter: "stcb", Online: true, State: map[string]any{}}
+	srv.devices["a/d1"] = &api.DeviceView{ID: "a/d1", EdgeID: "a", Adapter: "demo", Online: true, State: map[string]any{}}
+	srv.devices["b/d2"] = &api.DeviceView{ID: "b/d2", EdgeID: "b", Adapter: "demo", Online: true, State: map[string]any{}}
 	srv.deviceTenants = map[string]string{"a/d1": "tenant-a", "b/d2": "tenant-b"}
 	srv.descriptors = map[string]model.Descriptor{
 		"a/d1": {DeviceID: "a/d1", ExternalID: "d1", Status: model.DeviceOnline, Entities: clockEntities()},

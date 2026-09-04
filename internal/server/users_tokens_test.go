@@ -448,7 +448,7 @@ func TestAccountModeRejectsUnauthenticatedEdge(t *testing.T) {
 	writeEnv(t, ws, api.Envelope{
 		V: api.Version, Type: api.MsgHello,
 		Data: rawData(t, api.HelloData{EdgeID: "anon",
-			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "stcb"}}}),
+			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "demo"}}}),
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -475,7 +475,7 @@ func TestAccountModeRejectsUnauthenticatedEdge(t *testing.T) {
 	writeEnv(t, ws2, api.Envelope{
 		V: api.Version, Type: api.MsgHello,
 		Data: rawData(t, api.HelloData{EdgeID: "tok", Token: plain,
-			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "stcb"}}}),
+			Devices: []api.DeviceMeta{{ID: "d1", Adapter: "demo"}}}),
 	})
 	// 条件等待注册（Windows CI 满载下 200ms 固定 sleep 被击穿：hello 处理晚于断言）。
 	waitEdgeLink(t, srv, "tok", defID)

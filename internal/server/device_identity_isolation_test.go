@@ -12,7 +12,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	_ "github.com/DeliciousBuding/cloud-path/examples/stcb"
+	_ "github.com/DeliciousBuding/cloud-path/examples/demo"
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/auth"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
@@ -123,7 +123,7 @@ func TestRejectCrossTenantEdgeIDCollision(t *testing.T) {
 	st, srv, ts, a, b := setupIdentityTenants(t)
 	tokenA := issueTenantToken(t, st, a, `["edge"]`)
 	tokenB := issueTenantToken(t, st, b, `["edge"]`)
-	devs := []api.DeviceMeta{{ID: "d1", Adapter: "stcb", Name: "A", Port: "COM1"}}
+	devs := []api.DeviceMeta{{ID: "d1", Adapter: "demo", Name: "A", Port: "COM1"}}
 
 	aWS := dialEdgeHello(t, ts, "e1", tokenA, devs...)
 	waitEdgeLink(t, srv, "e1", a)
@@ -164,7 +164,7 @@ func TestCrossTenantCollisionCannotEvictEdge(t *testing.T) {
 	st, srv, ts, a, b := setupIdentityTenants(t)
 	tokenA := issueTenantToken(t, st, a, `["edge"]`)
 	tokenB := issueTenantToken(t, st, b, `["edge"]`)
-	devs := []api.DeviceMeta{{ID: "d1", Adapter: "stcb"}}
+	devs := []api.DeviceMeta{{ID: "d1", Adapter: "demo"}}
 
 	aWS := dialEdgeHello(t, ts, "e1", tokenA, devs...)
 	linkA := waitEdgeLink(t, srv, "e1", a)
@@ -195,7 +195,7 @@ func TestCrossTenantCollisionCannotEvictEdge(t *testing.T) {
 
 	writeTokenA := issueTenantToken(t, st, a, `["write"]`)
 	if resp := doJSON(t, http.MethodPost, ts.URL+"/api/devices/e1/d1/commands",
-		`{"cmd":"sync"}`, bearerJSON(writeTokenA), nil); resp.StatusCode != http.StatusOK {
+		`{"cmd":"ping"}`, bearerJSON(writeTokenA), nil); resp.StatusCode != http.StatusOK {
 		t.Fatalf("tenant-a 下发命令 = %d, want 200", resp.StatusCode)
 	}
 	if _, err := readEnvUntil(ctx, aWS, api.MsgCommand); err != nil {
@@ -211,10 +211,10 @@ func TestDeviceTenantCannotBeReassigned(t *testing.T) {
 	tokenB := issueTenantToken(t, st, b, `["edge"]`)
 
 	// 1) store 单设备 upsert：跨租户报错且原行不变。
-	if err := st.UpsertDeviceTenant("e1/d1", "e1", "stcb", "A", "COM1", a); err != nil {
+	if err := st.UpsertDeviceTenant("e1/d1", "e1", "demo", "A", "COM1", a); err != nil {
 		t.Fatal(err)
 	}
-	err := st.UpsertDeviceTenant("e1/d1", "e1", "stcb", "B", "COM2", b)
+	err := st.UpsertDeviceTenant("e1/d1", "e1", "demo", "B", "COM2", b)
 	if !errors.Is(err, store.ErrDeviceTenantMismatch) {
 		t.Fatalf("跨租户 upsert err = %v, want ErrDeviceTenantMismatch", err)
 	}
@@ -235,7 +235,7 @@ func TestDeviceTenantCannotBeReassigned(t *testing.T) {
 
 	// 2) 批量事务：edge 身份冲突必须整体回滚（不得留下 e1/d2 半绑定行）。
 	err = st.UpsertDevicesTenant("e1", []store.DeviceMetaInput{
-		{ID: "e1/d2", Adapter: "stcb", Name: "B2"},
+		{ID: "e1/d2", Adapter: "demo", Name: "B2"},
 	}, b)
 	if !errors.Is(err, store.ErrEdgeTenantMismatch) {
 		t.Fatalf("跨租户 edge 批量 upsert err = %v, want ErrEdgeTenantMismatch", err)
@@ -245,9 +245,9 @@ func TestDeviceTenantCannotBeReassigned(t *testing.T) {
 	}
 
 	// 3) server/WS：tenant-b 同名 edge 注册被拒；tenant-a 同租户注册仍成功且归属不变。
-	bWS := dialEdgeHello(t, ts, "e1", tokenB, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	bWS := dialEdgeHello(t, ts, "e1", tokenB, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	expectEdgeRejected(t, bWS)
-	aWS := dialEdgeHello(t, ts, "e1", tokenA, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	aWS := dialEdgeHello(t, ts, "e1", tokenA, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	waitEdgeLink(t, srv, "e1", a)
 	aWS.CloseNow()
 	srv.mu.RLock()
@@ -263,7 +263,7 @@ func TestDeviceTenantCannotBeReassigned(t *testing.T) {
 func TestCrossTenantCollisionCannotCommandDevice(t *testing.T) {
 	st, srv, ts, a, b := setupIdentityTenants(t)
 	tokenA := issueTenantToken(t, st, a, `["edge"]`)
-	devs := []api.DeviceMeta{{ID: "d1", Adapter: "stcb"}}
+	devs := []api.DeviceMeta{{ID: "d1", Adapter: "demo"}}
 
 	aWS := dialEdgeHello(t, ts, "e1", tokenA, devs...)
 	waitEdgeLink(t, srv, "e1", a)
@@ -271,7 +271,7 @@ func TestCrossTenantCollisionCannotCommandDevice(t *testing.T) {
 
 	writeTokenB := issueTenantToken(t, st, b, `["write"]`)
 	if resp := doJSON(t, http.MethodPost, ts.URL+"/api/devices/e1/d1/commands",
-		`{"cmd":"sync"}`, bearerJSON(writeTokenB), nil); resp.StatusCode != http.StatusNotFound {
+		`{"cmd":"ping"}`, bearerJSON(writeTokenB), nil); resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("跨租户命令 = %d, want 404", resp.StatusCode)
 	}
 
@@ -300,7 +300,7 @@ func TestCrossTenantCollisionCannotCommandDevice(t *testing.T) {
 	// tenant-a 自己下发命令正常送达。
 	writeTokenA := issueTenantToken(t, st, a, `["write"]`)
 	if resp := doJSON(t, http.MethodPost, ts.URL+"/api/devices/e1/d1/commands",
-		`{"cmd":"sync"}`, bearerJSON(writeTokenA), nil); resp.StatusCode != http.StatusOK {
+		`{"cmd":"ping"}`, bearerJSON(writeTokenA), nil); resp.StatusCode != http.StatusOK {
 		t.Fatalf("tenant-a 下发命令 = %d, want 200", resp.StatusCode)
 	}
 	select {
@@ -315,7 +315,7 @@ func TestCrossTenantCollisionCannotCommandDevice(t *testing.T) {
 func TestStaleDisconnectCannotClearCurrentConnection(t *testing.T) {
 	st, srv, ts, a, _ := setupIdentityTenants(t)
 	tokenA := issueTenantToken(t, st, a, `["edge"]`)
-	devs := []api.DeviceMeta{{ID: "d1", Adapter: "stcb"}}
+	devs := []api.DeviceMeta{{ID: "d1", Adapter: "demo"}}
 
 	oldWS := dialEdgeHello(t, ts, "e1", tokenA, devs...)
 	waitEdgeLink(t, srv, "e1", a)
@@ -353,7 +353,7 @@ func TestStaleDisconnectCannotClearCurrentConnection(t *testing.T) {
 	// 命令仍投递给当前（新）连接。
 	writeTokenA := issueTenantToken(t, st, a, `["write"]`)
 	if resp := doJSON(t, http.MethodPost, ts.URL+"/api/devices/e1/d1/commands",
-		`{"cmd":"sync"}`, bearerJSON(writeTokenA), nil); resp.StatusCode != http.StatusOK {
+		`{"cmd":"ping"}`, bearerJSON(writeTokenA), nil); resp.StatusCode != http.StatusOK {
 		t.Fatalf("命令下发 = %d, want 200", resp.StatusCode)
 	}
 	if _, err := readEnvUntil(ctx, newWS, api.MsgCommand); err != nil {

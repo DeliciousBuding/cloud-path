@@ -13,7 +13,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	_ "github.com/DeliciousBuding/cloud-path/examples/stcb"
+	_ "github.com/DeliciousBuding/cloud-path/examples/demo"
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 )
 
@@ -56,7 +56,7 @@ func TestConcurrentMultiEdgeCommandRouting(t *testing.T) {
 		idx := i
 		edgeIDs[i] = fmt.Sprintf("ce%d", i+1)
 		conns[i] = dialEdgeHello(t, ts, edgeIDs[i], edgeTok,
-			api.DeviceMeta{ID: "d1", Adapter: "stcb"}, api.DeviceMeta{ID: "d2", Adapter: "stcb"})
+			api.DeviceMeta{ID: "d1", Adapter: "demo"}, api.DeviceMeta{ID: "d2", Adapter: "demo"})
 		t.Cleanup(func() { conns[idx].CloseNow() })
 		chans[i] = edgeReader(conns[i])
 		waitEdgeLink(t, srv, edgeIDs[i], a)
@@ -104,7 +104,7 @@ func TestConcurrentMultiEdgeCommandRouting(t *testing.T) {
 			go func(key string) {
 				defer wg2.Done()
 				req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/devices/"+key+"/commands",
-					strings.NewReader(`{"cmd":"sync"}`))
+					strings.NewReader(`{"cmd":"ping"}`))
 				if err != nil {
 					results <- postResult{key: key, code: -1, body: err.Error()}
 					return

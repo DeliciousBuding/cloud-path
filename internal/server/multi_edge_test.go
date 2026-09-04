@@ -10,7 +10,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	_ "github.com/DeliciousBuding/cloud-path/examples/stcb"
+	_ "github.com/DeliciousBuding/cloud-path/examples/demo"
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/model"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
@@ -96,10 +96,10 @@ func TestTwoEdgesIndependentCommandRouting(t *testing.T) {
 	readTok := issueTenantToken(t, st, a, `["read"]`)
 
 	// 两台 Edge 都用短名 d1：路由键必须是 "<edge_id>/<device_id>"，不得串线。
-	ws1 := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"}, api.DeviceMeta{ID: "d2", Adapter: "stcb"})
+	ws1 := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"}, api.DeviceMeta{ID: "d2", Adapter: "demo"})
 	defer ws1.CloseNow()
 	ch1 := edgeReader(ws1)
-	ws2 := dialEdgeHello(t, ts, "e2", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"}, api.DeviceMeta{ID: "d2", Adapter: "stcb"})
+	ws2 := dialEdgeHello(t, ts, "e2", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"}, api.DeviceMeta{ID: "d2", Adapter: "demo"})
 	defer ws2.CloseNow()
 	ch2 := edgeReader(ws2)
 	waitEdgeLink(t, srv, "e1", a)
@@ -112,7 +112,7 @@ func TestTwoEdgesIndependentCommandRouting(t *testing.T) {
 	waitDeviceOnline(t, srv, "e2/d2")
 
 	// 1) 下发到 e1/d1：只有 e1 收到。
-	resp := doJSON(t, http.MethodPost, ts.URL+"/api/devices/e1/d1/commands", `{"cmd":"sync"}`, bearerJSON(writeTok), nil)
+	resp := doJSON(t, http.MethodPost, ts.URL+"/api/devices/e1/d1/commands", `{"cmd":"ping"}`, bearerJSON(writeTok), nil)
 	raw := readBody(t, resp)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("command e1/d1 = %d body=%s", resp.StatusCode, raw)
@@ -203,9 +203,9 @@ func TestOneEdgeDisconnectDoesNotAffectOther(t *testing.T) {
 	writeTok := issueTenantToken(t, st, a, `["write"]`)
 	readTok := issueTenantToken(t, st, a, `["read"]`)
 
-	ws1 := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb", Name: "节点1"})
+	ws1 := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo", Name: "节点1"})
 	ch1 := edgeReader(ws1)
-	ws2 := dialEdgeHello(t, ts, "e2", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb", Name: "节点2"})
+	ws2 := dialEdgeHello(t, ts, "e2", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo", Name: "节点2"})
 	defer ws2.CloseNow()
 	ch2 := edgeReader(ws2)
 	waitEdgeLink(t, srv, "e1", a)
@@ -237,7 +237,7 @@ func TestOneEdgeDisconnectDoesNotAffectOther(t *testing.T) {
 		t.Fatal("e1 断线把 e2 的设备标成了离线")
 	}
 	if resp := doJSON(t, http.MethodPost, ts.URL+"/api/devices/e2/d1/commands",
-		`{"cmd":"sync"}`, bearerJSON(writeTok), nil); resp.StatusCode != http.StatusOK {
+		`{"cmd":"ping"}`, bearerJSON(writeTok), nil); resp.StatusCode != http.StatusOK {
 		t.Fatalf("e1 断线后 e2 命令下发 = %d", resp.StatusCode)
 	}
 	if _, ok := waitEnv(t, ch2, api.MsgCommand, 30*time.Second); !ok {
@@ -266,7 +266,7 @@ func TestOneEdgeDisconnectDoesNotAffectOther(t *testing.T) {
 	}
 
 	// e1 重连（新 WS、同 edge_id）：在线态/设备列表/descriptor/状态真实恢复。
-	ws1b := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb", Name: "节点1"})
+	ws1b := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo", Name: "节点1"})
 	defer ws1b.CloseNow()
 	ch1b := edgeReader(ws1b)
 	waitEdgeLink(t, srv, "e1", a)
@@ -335,16 +335,16 @@ func TestCommandOfflineEdgeFailsExplicitly(t *testing.T) {
 
 	// 从未接入过的设备 → 404（不得凭空创建命令）。
 	if resp := doJSON(t, http.MethodPost, ts.URL+"/api/devices/nope/d1/commands",
-		`{"cmd":"sync"}`, bearerJSON(writeTok), nil); resp.StatusCode != http.StatusNotFound {
+		`{"cmd":"ping"}`, bearerJSON(writeTok), nil); resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("未知设备命令 = %d, want 404", resp.StatusCode)
 	}
 
-	ws1 := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	ws1 := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	waitEdgeLink(t, srv, "e1", a)
 	reportOnline(t, ws1, "e1/d1", map[string]any{"clock": "10:00"})
 	waitDeviceOnline(t, srv, "e1/d1")
 
-	resp := doJSON(t, http.MethodPost, ts.URL+"/api/devices/e1/d1/commands", `{"cmd":"sync"}`, bearerJSON(writeTok), nil)
+	resp := doJSON(t, http.MethodPost, ts.URL+"/api/devices/e1/d1/commands", `{"cmd":"ping"}`, bearerJSON(writeTok), nil)
 	raw := readBody(t, resp)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("命令下发 = %d body=%s", resp.StatusCode, raw)
@@ -375,7 +375,7 @@ func TestCommandOfflineEdgeFailsExplicitly(t *testing.T) {
 	// Edge 断线后命令必须明确失败（409），且不产生新的命令行。
 	ws1.CloseNow()
 	waitEdgeOffline(t, srv, "e1")
-	resp = doJSON(t, http.MethodPost, ts.URL+"/api/devices/e1/d1/commands", `{"cmd":"sync"}`, bearerJSON(writeTok), nil)
+	resp = doJSON(t, http.MethodPost, ts.URL+"/api/devices/e1/d1/commands", `{"cmd":"ping"}`, bearerJSON(writeTok), nil)
 	body = readBody(t, resp)
 	if resp.StatusCode != http.StatusConflict {
 		t.Fatalf("离线命令 = %d, want 409 body=%s", resp.StatusCode, body)
@@ -401,9 +401,9 @@ func TestEdgeCommandRateIsolation(t *testing.T) {
 	writeTok := issueTenantToken(t, st, a, `["write"]`)
 	srv.cfg.CmdRatePerMin = 2
 
-	ws1 := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	ws1 := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	defer ws1.CloseNow()
-	ws2 := dialEdgeHello(t, ts, "e2", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	ws2 := dialEdgeHello(t, ts, "e2", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	defer ws2.CloseNow()
 	edgeReader(ws1)
 	edgeReader(ws2)
@@ -417,7 +417,7 @@ func TestEdgeCommandRateIsolation(t *testing.T) {
 	codes := make([]int, 0, 3)
 	for i := 0; i < 3; i++ {
 		resp := doJSON(t, http.MethodPost, ts.URL+"/api/devices/e1/d1/commands",
-			`{"cmd":"sync"}`, bearerJSON(writeTok), nil)
+			`{"cmd":"ping"}`, bearerJSON(writeTok), nil)
 		readBody(t, resp)
 		codes = append(codes, resp.StatusCode)
 	}
@@ -426,7 +426,7 @@ func TestEdgeCommandRateIsolation(t *testing.T) {
 	}
 	// 另一台 Edge 的设备不受该限流影响。
 	if resp := doJSON(t, http.MethodPost, ts.URL+"/api/devices/e2/d1/commands",
-		`{"cmd":"sync"}`, bearerJSON(writeTok), nil); resp.StatusCode != http.StatusOK {
+		`{"cmd":"ping"}`, bearerJSON(writeTok), nil); resp.StatusCode != http.StatusOK {
 		t.Fatalf("e2/d1 被 e1/d1 的限流牵连 = %d", resp.StatusCode)
 	}
 }

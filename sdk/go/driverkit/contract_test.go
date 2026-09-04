@@ -56,14 +56,14 @@ func findInternalImports(dir string) ([]string, error) {
 	return hits, nil
 }
 
-// TestSTCBHasNoInternalImports 锁定 examples/stcb 的非测试与测试源码都不 import internal/*。
-func TestSTCBHasNoInternalImports(t *testing.T) {
-	hits, err := findInternalImports(filepath.Join(repoRoot(t), "examples", "stcb"))
+// TestDemoHasNoInternalImports 锁定 examples/demo 的非测试与测试源码都不 import internal/*。
+func TestDemoHasNoInternalImports(t *testing.T) {
+	hits, err := findInternalImports(filepath.Join(repoRoot(t), "examples", "demo"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(hits) != 0 {
-		t.Fatalf("examples/stcb 仍依赖 internal/*: %v", hits)
+		t.Fatalf("examples/demo 仍依赖 internal/*: %v", hits)
 	}
 }
 

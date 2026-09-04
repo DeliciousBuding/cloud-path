@@ -12,7 +12,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	_ "github.com/DeliciousBuding/cloud-path/examples/stcb"
+	_ "github.com/DeliciousBuding/cloud-path/examples/demo"
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/server/storeport"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
@@ -124,7 +124,7 @@ func TestPluginDesiredPushedOnHello(t *testing.T) {
 		t.Fatalf("首个 revision = %d, want 1", rev)
 	}
 
-	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	defer ews.CloseNow()
 	ch := edgeReader(ews)
 	env, ok := waitEnv(t, ch, api.MsgPluginDesired, 30*time.Second)
@@ -175,7 +175,7 @@ func TestOfflineDesiredChangesConvergeOnce(t *testing.T) {
 	}
 
 	// 离线期间不得有任何下发目标；重连后只收到一份最终快照。
-	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	defer ews.CloseNow()
 	ch := edgeReader(ews)
 	env, ok := waitEnv(t, ch, api.MsgPluginDesired, 30*time.Second)
@@ -202,7 +202,7 @@ func TestPluginDesiredRepushedOnChange(t *testing.T) {
 	admin := issueTenantToken(t, st, a, `["admin"]`)
 	edgeTok := issueTenantToken(t, st, a, `["edge"]`)
 
-	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	defer ews.CloseNow()
 	ch := edgeReader(ews)
 	waitEdgeLink(t, srv, "e1", a)
@@ -238,7 +238,7 @@ func TestPluginDesiredCarriesOnlySecretHandles(t *testing.T) {
 		t.Fatalf("create = %d body=%s", resp.StatusCode, raw)
 	}
 
-	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	defer ews.CloseNow()
 	ch := edgeReader(ews)
 	env, ok := waitEnv(t, ch, api.MsgPluginDesired, 30*time.Second)
@@ -264,7 +264,7 @@ func TestPluginStatusSequenceGating(t *testing.T) {
 		t.Fatalf("revision = %d", rev)
 	}
 
-	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	defer ews.CloseNow()
 	ch := edgeReader(ews)
 	waitEdgeLink(t, srv, "e1", a)
@@ -356,7 +356,7 @@ func TestPluginStatusRejectedFromEvictedLink(t *testing.T) {
 	if rev := createInstance(t, ts, admin, "e1", "box1"); rev != 1 {
 		t.Fatalf("revision = %d", rev)
 	}
-	old := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	old := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	oldCh := edgeReader(old)
 	waitEdgeLink(t, srv, "e1", a)
 	if _, ok := waitEnv(t, oldCh, api.MsgPluginDesired, 30*time.Second); !ok {
@@ -384,7 +384,7 @@ func TestPluginStatusRejectedFromEvictedLink(t *testing.T) {
 	}
 
 	// 同租户新连接挤掉旧连接；旧连接随后的高 sequence 上报不得写入投影。
-	fresh := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	fresh := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	defer fresh.CloseNow()
 	freshCh := edgeReader(fresh)
 	if _, _, err := old.Read(context.Background()); err == nil {
@@ -440,7 +440,7 @@ func TestPluginStatusCrossTenantFailClosed(t *testing.T) {
 		t.Fatalf("revision = %d", rev)
 	}
 
-	aWS := dialEdgeHello(t, ts, "ea", edgeA, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	aWS := dialEdgeHello(t, ts, "ea", edgeA, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	defer aWS.CloseNow()
 	aCh := edgeReader(aWS)
 	linkA := waitEdgeLink(t, srv, "ea", a)
@@ -453,7 +453,7 @@ func TestPluginStatusCrossTenantFailClosed(t *testing.T) {
 				InstanceID: "boxA", PluginID: "p1", Version: "1.0.0", State: "HEALTHY", Health: "HEALTHY"}}})})
 
 	// tenant-b 伪造 tenant-a 的 edge id：hello 阶段 fail-closed，不驱逐 a。
-	forged := dialEdgeHello(t, ts, "ea", edgeB, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	forged := dialEdgeHello(t, ts, "ea", edgeB, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	expectEdgeRejected(t, forged)
 	srv.mu.RLock()
 	stillA := srv.edges["ea"] == linkA
@@ -463,7 +463,7 @@ func TestPluginStatusCrossTenantFailClosed(t *testing.T) {
 	}
 
 	// tenant-b 用自己的 edge 上报：只能写进 b 的投影。
-	bWS := dialEdgeHello(t, ts, "eb", edgeB, api.DeviceMeta{ID: "d2", Adapter: "stcb"})
+	bWS := dialEdgeHello(t, ts, "eb", edgeB, api.DeviceMeta{ID: "d2", Adapter: "demo"})
 	defer bWS.CloseNow()
 	bCh := edgeReader(bWS)
 	waitEdgeLink(t, srv, "eb", b)
@@ -521,7 +521,7 @@ func TestPluginAckAdvancesOnlyOnApplied(t *testing.T) {
 	if rev := createInstance(t, ts, admin, "e1", "box1"); rev != 1 {
 		t.Fatalf("revision = %d", rev)
 	}
-	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	defer ews.CloseNow()
 	ch := edgeReader(ews)
 	waitEdgeLink(t, srv, "e1", a)
@@ -642,7 +642,7 @@ func TestPluginMessagesIgnoredWhenStoreUnwired(t *testing.T) {
 	if srv.PluginControlPlaneWired() {
 		t.Fatal("未注入 PluginStore 却报告已接线")
 	}
-	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	defer ews.CloseNow()
 	ch := edgeReader(ews)
 	waitEdgeLink(t, srv, "e1", a)

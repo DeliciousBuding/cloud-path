@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/DeliciousBuding/cloud-path/examples/stcb"
+	_ "github.com/DeliciousBuding/cloud-path/examples/demo"
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 )
 
@@ -21,7 +21,7 @@ func TestPluginReconcileRepushesToOnlineEdge(t *testing.T) {
 		t.Fatalf("revision = %d, want 1", rev)
 	}
 
-	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	ews := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	defer ews.CloseNow()
 	ch := edgeReader(ews)
 	waitEdgeLink(t, srv, "e1", a)

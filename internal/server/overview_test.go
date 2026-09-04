@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/DeliciousBuding/cloud-path/examples/stcb"
+	_ "github.com/DeliciousBuding/cloud-path/examples/demo"
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/server/storeport"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
@@ -82,10 +82,10 @@ func TestOverviewTenantIsolation(t *testing.T) {
 
 	// tenant-a：e1(d1 在线, d2 在线) + e2(d3 离线)
 	wsA1 := dialEdgeHello(t, ts, "ea1", edgeA,
-		api.DeviceMeta{ID: "d1", Adapter: "stcb"}, api.DeviceMeta{ID: "d2", Adapter: "stcb"})
+		api.DeviceMeta{ID: "d1", Adapter: "demo"}, api.DeviceMeta{ID: "d2", Adapter: "demo"})
 	defer wsA1.CloseNow()
 	chA1 := edgeReader(wsA1)
-	wsA2 := dialEdgeHello(t, ts, "ea2", edgeA, api.DeviceMeta{ID: "d3", Adapter: "stcb"})
+	wsA2 := dialEdgeHello(t, ts, "ea2", edgeA, api.DeviceMeta{ID: "d3", Adapter: "demo"})
 	defer wsA2.CloseNow()
 	waitEdgeLink(t, srv, "ea1", a)
 	waitEdgeLink(t, srv, "ea2", a)
@@ -97,7 +97,7 @@ func TestOverviewTenantIsolation(t *testing.T) {
 	waitDeviceOnline(t, srv, "ea1/d2")
 
 	// tenant-b：一台在线设备 + 一个事件
-	wsB := dialEdgeHello(t, ts, "eb1", edgeB, api.DeviceMeta{ID: "d9", Adapter: "stcb"})
+	wsB := dialEdgeHello(t, ts, "eb1", edgeB, api.DeviceMeta{ID: "d9", Adapter: "demo"})
 	defer wsB.CloseNow()
 	waitEdgeLink(t, srv, "eb1", b)
 	reportOnline(t, wsB, "eb1/d9", map[string]any{"clock": "12:00"})
@@ -109,7 +109,7 @@ func TestOverviewTenantIsolation(t *testing.T) {
 
 	// tenant-a 的一条失败命令（真实 ack 回执）。
 	resp := doJSON(t, http.MethodPost, ts.URL+"/api/devices/ea1/d1/commands",
-		`{"cmd":"sync"}`, bearerJSON(writeA), nil)
+		`{"cmd":"ping"}`, bearerJSON(writeA), nil)
 	raw := readBody(t, resp)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("command = %d body=%s", resp.StatusCode, raw)
@@ -188,7 +188,7 @@ func TestOverviewPluginsDesiredNeverCountsAsActive(t *testing.T) {
 		t.Fatalf("离线时 desired/active = %d/%d, want 1/0", view.PluginsDesired, view.PluginsActive)
 	}
 
-	ws := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "stcb"})
+	ws := dialEdgeHello(t, ts, "e1", edgeTok, api.DeviceMeta{ID: "d1", Adapter: "demo"})
 	ch := edgeReader(ws)
 	waitEdgeLink(t, srv, "e1", a)
 	if _, ok := waitEnv(t, ch, api.MsgPluginDesired, 30*time.Second); !ok {
