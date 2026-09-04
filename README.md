@@ -2,9 +2,9 @@
 
 # CloudPath · 云径
 
-**设备无关的 IoT Edge + Control Plane + Plugin Platform**：
-边缘代理聚合本地设备，中心服务作为期望态与租户/审计的唯一权威，
-管理台通过 WebSocket 实时可视化与下发控制。
+**云原生、插件驱动的互联物联网控制平台（Cloud-Native IoT Control Plane）**：
+以「中心控制面 + 边缘代理」的边云协同一体化架构，将任意设备接入云端、实时可视化并远程控制；
+设备无关、边缘自治，新设备 = 一个 Driver 插件。
 
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
@@ -17,17 +17,16 @@
 
 ## 这是什么
 
-CloudPath 把「插上一台设备 → 上云看到它 → 远程控制它」做成基础设施，而不是某块开发板的上位机：
+CloudPath 把「插上一台设备 → 上云看到它 → 远程控制它」做成**可开箱即用的云原生基础设施**，
+而非某块开发板的上位机。
 
-- **设备无关**：核心（`internal/*`）不认识任何具体硬件。新设备 = 一个 Driver 插件或一个进程内
-  参考适配器；命令白名单由适配器声明，前端命令面板自动跟随。
-- **两个权威，一条同步链**：**Server 是 desired（期望态）、租户与审计的唯一权威**；
-  **Edge 是 observed（实际运行）的唯一权威**，并保存最后一次成功 applied 的快照，
-  断网时本地继续运行、重连后只应用最终完整快照而不回放中间副作用。
-- **设备身份** = `(tenant_id, edge_id, device_id)`；线上传输的设备键是 `<edge_id>/<device_id>`。
-- **全链路实时**：edge → server → 浏览器都是 WebSocket 长连接；REST 只承担历史查询与管理操作。
-- **单二进制**：WebUI 构建产物 `go:embed` 进 server（构建标签 `embed_ui`），一个可执行文件即可运行。
-- **零 CGO**：SQLite 用 `modernc.org/sqlite`，交叉编译到 Linux/arm64 无需任何工具链。
+- **云原生 · 边云协同**：中心控制面（Server）是 **期望态 / 租户 / 审计的唯一权威**；边缘代理（Edge）是
+  **观测态的唯一权威**并保存最后成功 applied 快照。边缘自治：断网继续运行，重连仅应用最终快照、不回放中间副作用。
+- **设备无关 · 插件驱动**：核心（`internal/*`）不识别任何具体硬件；新设备 = 一个 Driver 插件。
+- **分布式 Hub-Spoke**：多边缘节点 + 单中心控制面，天然中心-边缘拓扑，可横向扩展。
+- **设备身份** = `(tenant_id, edge_id, device_id)`；线上传输键 `<edge_id>/<device_id>`。
+- **全链路实时**：edge → server → 浏览器全程 WebSocket；REST 只承担历史查询与管理操作。
+- **单二进制 · 零 CGO**：WebUI `go:embed` 进 server；SQLite 用 `modernc.org/sqlite`，交叉编译 Linux/arm64 无需工具链。
 
 ```text
         ┌──────────────────────────────────────────────────────────┐

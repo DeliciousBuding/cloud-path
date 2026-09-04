@@ -6,7 +6,7 @@
 
 ## 项目是什么
 
-Cloudpath（云径）是**设备无关**的 IoT 接入与管理平台 monorepo：
+CloudPath（云径）是**云原生、插件驱动的互联物联网控制平台** monorepo：
 
 - `cloudpath-edge`：边缘代理，管理本机串口设备，WS 长连接上报状态/事件、接收命令。
 - `cloudpath-server`：中心服务，chi REST + WS hub + SQLite 持久化 + 内嵌 React 管理台，单二进制发布。
