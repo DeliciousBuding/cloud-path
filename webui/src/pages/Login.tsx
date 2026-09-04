@@ -100,7 +100,7 @@ export default function Login() {
   return (
     <AuthCard
       title="登录 Cloudpath"
-      subtitle="设备无关的 IoT 接入与管理平台"
+      subtitle="通用 IoT 设备接入与管理平台"
       footer={<Link to="/setup" className="link">首次部署？运行设置向导</Link>}
     >
       <form onSubmit={onSubmit} noValidate className="space-y-4">
@@ -179,7 +179,7 @@ export default function Login() {
               spellCheck={false}
               value={token}
               error={tokenError}
-              hint="令牌仅保存在本机浏览器，用于 REST 与实时通道鉴权；明文不会被再次显示"
+              hint="令牌仅保存在本机浏览器，用于接口与实时通道鉴权；明文不会被再次显示"
               disabled={tokenBusy}
               onChange={(e) => { setTokenInput(e.target.value); setTokenError('') }}
             />

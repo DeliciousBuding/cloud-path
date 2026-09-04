@@ -57,7 +57,7 @@ export default function Settings() {
           <dl className="space-y-2.5">
             <KeyValue k="WS 端点" v={wsUrl()} mono />
             <KeyValue k="服务健康" v={isFetching ? '检查中…' : health?.ok ? '正常' : '异常'} />
-            <KeyValue k="自动重连" v="指数退避 1–15 秒" />
+            <KeyValue k="自动重连" v="断线后自动重试（1–15 秒）" />
             <KeyValue k="鉴权" v={stats?.auth_enabled ? '已启用账号鉴权' : '未启用（本机模式）'} />
           </dl>
           <button type="button" className="btn btn-ghost mt-4"
@@ -81,7 +81,7 @@ export default function Settings() {
                 <KeyValue k="租户" v={<span className="num min-w-0 truncate" title={user.tenant_slug}>{user.tenant_slug || '—'}</span>} />
               </dl>
               <p className="mt-3 border-t border-hairline pt-3 text-[11px] leading-relaxed text-ink-3">
-                登录态由会话 cookie 承载，REST 与实时通道都用它鉴权。共用机器请记得登出。
+                登录态由浏览器会话承载；共用机器请记得登出。
               </p>
               <button type="button" className="btn btn-danger-ghost mt-3" disabled={signingOut}
                 onClick={() => void signOut()}>
@@ -157,9 +157,7 @@ export default function Settings() {
                 </div>
               ))}
               <p className="border-t border-hairline pt-3 text-[11px] leading-relaxed text-ink-3">
-                新增设备只需实现 <code className="font-mono">device.Adapter</code> 并在包
-                <code className="font-mono"> init()</code> 中注册；命令白名单由适配器声明，
-                server 拒绝白名单外的命令，前端命令面板自动跟随。
+                命令白名单由适配器声明，server 拒绝白名单外的命令；前端命令面板自动跟随。
               </p>
             </div>
           )}
@@ -167,7 +165,7 @@ export default function Settings() {
 
         <Panel title={<span className="flex items-center gap-1.5"><Boxes size={14} />关于</span>} className="lg:col-span-2">
           <p className="text-sm leading-relaxed text-ink-2">
-            <span className="font-semibold text-ink">Cloudpath（云径）</span> 是设备无关的 IoT 接入与管理平台：
+            <span className="font-semibold text-ink">Cloudpath（云径）</span> 是通用 IoT 接入与管理平台：
             边缘代理把本地串口设备聚合上云，中心服务统一监控、下发命令并持久化事件，
             管理台通过 WebSocket 实时可视化。核心不绑定任何具体硬件或行业语义——
             设备语义由适配器插件提供。

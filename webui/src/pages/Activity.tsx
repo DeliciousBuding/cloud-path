@@ -99,7 +99,7 @@ export default function Activity() {
     <>
       <PageHeader
         title="活动"
-        subtitle={`事件与命令历史 · 当前视图 ${rows} 条`}
+        subtitle={`事件与命令历史 · 显示最近 ${rows} 条`}
         actions={
           <button type="button" className="btn btn-ghost" onClick={() => { void query.refetch() }} title="立即刷新">
             {active ? <Spinner size={13} /> : <RefreshCw size={13} />} 刷新
@@ -108,8 +108,8 @@ export default function Activity() {
       />
 
       <Panel className="mb-5">
-        <div className="flex flex-col gap-3.5">
-          <div className="overflow-x-auto pb-0.5">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <Segmented
               label="活动类型"
               value={tab}
@@ -119,9 +119,6 @@ export default function Activity() {
                 { value: 'commands', label: '命令历史', icon: <Terminal size={12} /> },
               ]}
             />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
             <label className="sr-only" htmlFor="act-device">按设备筛选</label>
             <select id="act-device" value={device} onChange={(e) => setDevice(e.target.value)} className={SELECT_CLS}>
               <option value="">全部设备</option>

@@ -34,7 +34,7 @@ function SlotCard({ entity, idx }: { entity: DescriptorEntity; idx: CapabilityIn
   const primary = primaryObservation(entity, idx)
   const value = primary ? formatValue(primary.value) : '—'
   const tone = primary ? qualityTone(primary.quality) : 'idle'
-  const cap = primary ? `${capabilityLabel(primary.capability, idx)} · ${primary.property}` : '等待观测'
+  const cap = primary ? capabilityLabel(primary.capability, idx) : '等待观测'
   return (
     <div className="card min-w-0 p-4" data-testid="slot-card">
       <div className="flex min-w-0 items-center gap-2">
@@ -108,7 +108,7 @@ function DevicePicker({ devices, value, onChange, loading, error, onRetry }: {
         ))}
       </select>
       <p className="mt-2 text-[11px] leading-relaxed text-ink-3">
-        选择要控制的设备；面板会读取该设备的 Descriptor 声明来展示药格与命令。
+        选择要控制的设备；面板按设备自身声明展示药格与命令。
       </p>
     </Panel>
   )
@@ -273,7 +273,7 @@ export default function Pillbox() {
 
       <p className="mt-5 flex items-center gap-1.5 text-[11px] text-ink-3">
         <RefreshCw size={11} className="shrink-0" />
-        数据来自设备 Descriptor / Capability 声明与实时通道；药格与命令均由后端声明，前端不写死。
+        药格与命令清单来自设备自身声明，当前值走实时通道；前端不写死设备字段。
       </p>
     </>
   )
