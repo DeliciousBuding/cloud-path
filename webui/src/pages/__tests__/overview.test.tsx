@@ -148,10 +148,10 @@ describe('概览：加载与错误态（不得白屏）', () => {
       port: 'COM3', online: true, state: {}, updated_at: 1, last_seen: 1,
     }])
     renderWithProviders(<Overview />)
-    expect(await screen.findByText(/服务端聚合通道不可用/)).toBeInTheDocument()
+    expect(await screen.findByText(/聚合通道不可用/)).toBeInTheDocument()
     // 降级统计来自设备列表通道的真实字段
     expect(await screen.findByText('仍在上报的设备')).toBeInTheDocument()
-    expect(screen.getByText('设备舰队')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '设备' })).toBeInTheDocument()
 
     const before = stub.to('/api/overview').length
     await userEvent.click(screen.getByRole('button', { name: /重试聚合/ }))
@@ -167,7 +167,7 @@ describe('概览：加载与错误态（不得白屏）', () => {
     expect(screen.getByText('设备状态加载失败')).toBeInTheDocument()
     // 失败 ≠ 空：不许出现「还没有设备接入」这种假空态
     expect(screen.queryByText('还没有设备接入')).not.toBeInTheDocument()
-    expect(screen.getByText('设备舰队')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '设备' })).toBeInTheDocument()
   })
 
   it('响应体畸形（字段全缺）→ 归一化成安全空值，不抛未捕获异常', () => {

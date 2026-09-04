@@ -45,7 +45,7 @@ export function Panel({ title, right, className, children }: {
     <section className={cn('card p-4', className)}>
       {(title || right) && (
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
+          <h2 className="text-[14px] font-semibold tracking-tight">{title}</h2>
           {right}
         </div>
       )}
@@ -60,7 +60,7 @@ export function PageHeader({ title, subtitle, actions }: {
   return (
     <header className="mb-8 flex flex-wrap items-end justify-between gap-4 fade-up">
       <div>
-        <h1 className="text-[28px] font-bold tracking-tight leading-tight">{title}</h1>
+        <h1 className="text-[24px] font-semibold tracking-tight leading-tight">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-ink-2">{subtitle}</p>}
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}
@@ -202,7 +202,7 @@ export function TabBar<T extends string>({ items, value, onChange, label = 'åˆ†é
     <div className="-mx-1 overflow-x-auto px-1 pb-1">
       <div
         role="tablist" aria-label={label}
-        className="flex min-w-max gap-1 rounded-full bg-ink-3/10 p-1"
+        className="flex min-w-max gap-5 border-b border-hairline"
         onKeyDown={(e) => {
           if (e.key === 'ArrowRight') { e.preventDefault(); move(1) }
           else if (e.key === 'ArrowLeft') { e.preventDefault(); move(-1) }
@@ -226,14 +226,14 @@ export function TabBar<T extends string>({ items, value, onChange, label = 'åˆ†é
               tabIndex={selected ? 0 : -1}
               onClick={() => onChange(it.value)}
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-medium whitespace-nowrap transition-all',
-                selected ? 'bg-surface text-ink shadow-sm' : 'text-ink-2 hover:text-ink',
+                '-mb-px inline-flex items-center gap-1.5 border-b-2 px-0.5 pb-2 text-[13px] font-medium whitespace-nowrap transition-colors',
+                selected ? 'border-ink text-ink' : 'border-transparent text-ink-3 hover:text-ink-2',
               )}
             >
               {it.icon}
               {it.label}
               {typeof it.count === 'number' && (
-                <span className={cn('num text-[11px]', selected ? 'text-ink-3' : 'text-ink-3')}>
+                <span className="num text-[11px] text-ink-3">
                   {it.count}
                 </span>
               )}

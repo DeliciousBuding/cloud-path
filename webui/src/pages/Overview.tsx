@@ -133,7 +133,7 @@ export default function Overview() {
           {!serverOk && (
             <p className="mt-2 flex items-center gap-1 px-0.5 text-[11px] text-ink-3">
               <AlertTriangle size={11} className="shrink-0" />
-              服务端聚合通道不可用（GET /api/overview），以上计数由设备/边缘列表通道实时计算
+              聚合通道不可用，以上计数由设备/边缘列表实时计算
               <button type="button" className="link ml-1 text-[11px]" onClick={() => void refetch()}>重试聚合</button>
             </p>
           )}
@@ -148,10 +148,10 @@ export default function Overview() {
         />
       )}
 
-      {/* ---- 主体：fleet（左）+ 关注/事件（右） ---- */}
-      <div className="mt-7 grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+      {/* ---- 主体：fleet + 关注并排；事件条通栏在下（宽屏不留死角） ---- */}
+      <div className="mt-7 grid items-stretch gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <Panel
-          title={<span className="flex items-center gap-1.5"><Cpu size={14} />设备舰队</span>}
+          title={<span className="flex items-center gap-1.5"><Cpu size={14} />设备</span>}
           right={
             <Link to="/devices" className="link flex items-center gap-0.5 text-xs">
               全部设备 <ArrowRight size={12} />
@@ -182,70 +182,69 @@ export default function Overview() {
           )}
         </Panel>
 
-        <div className="min-w-0 space-y-5">
-          <Panel
-            title={<span className="flex items-center gap-1.5"><AlertTriangle size={14} className="text-warn" />需要关注</span>}
-            right={attention > 0
-              ? <Badge tone="warn">{attention} 项</Badge>
-              : <Badge tone="ok"><CheckCircle2 size={11} />无异常</Badge>}>
-            {attentionRows.length === 0 ? (
-              <p className="py-6 text-center text-sm text-ink-3">
-                {serverOk || !loading ? '暂无异常' : '正在检查…'}
-              </p>
-            ) : (
-              <ul className="divide-y divide-hairline">
-                {attentionRows.map((a) => (
-                  <li key={a.id} className="py-2">
-                    <Link to={a.to} className="flex min-w-0 items-center gap-2 no-underline transition-colors hover:text-accent"
-                      title={a.hint}>
-                      <Badge tone={a.tone} className="num shrink-0">{a.count}</Badge>
-                      <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{a.title}</span>
-                      <ArrowRight size={12} className="shrink-0 text-ink-3" />
-                    </Link>
+        <Panel
+          title={<span className="flex items-center gap-1.5"><AlertTriangle size={14} className="text-warn" />需要关注</span>}
+          right={attention > 0
+            ? <Badge tone="warn">{attention} 项</Badge>
+            : <Badge tone="ok"><CheckCircle2 size={11} />无异常</Badge>}>
+          {attentionRows.length === 0 ? (
+            <p className="py-6 text-center text-sm text-ink-3">
+              {serverOk || !loading ? '暂无异常' : '正在检查…'}
+            </p>
+          ) : (
+            <ul className="divide-y divide-hairline">
+              {attentionRows.map((a) => (
+                <li key={a.id} className="py-2">
+                  <Link to={a.to} className="flex min-w-0 items-center gap-2 no-underline transition-colors hover:text-accent"
+                    title={a.hint}>
+                    <Badge tone={a.tone} className="num shrink-0">{a.count}</Badge>
+                    <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{a.title}</span>
+                    <ArrowRight size={12} className="shrink-0 text-ink-3" />
+                  </Link>
+                </li>
+              ))}
+              {serverOk && failed.slice(0, 4).map((c) => {
+                const meta = cmdStatusMeta(c.status)
+                const cmd = cmdMeta(c.cmd)
+                return (
+                  <li key={c.id} className="flex min-w-0 items-center gap-2 py-2">
+                    <Badge tone={meta.tone} className="shrink-0">{meta.label}</Badge>
+                    <span className="min-w-0 flex-1 truncate text-[12px]" title={c.args ? `${c.cmd} ${c.args}` : c.cmd}>
+                      {cmd.label}
+                    </span>
+                    <span className="num shrink-0 text-[11px] text-ink-3" title={c.device_id}>
+                      {c.created_at ? fmtDateTime(c.created_at) : '—'}
+                    </span>
                   </li>
-                ))}
-                {serverOk && failed.slice(0, 4).map((c) => {
-                  const meta = cmdStatusMeta(c.status)
-                  const cmd = cmdMeta(c.cmd)
-                  return (
-                    <li key={c.id} className="flex min-w-0 items-center gap-2 py-2">
-                      <Badge tone={meta.tone} className="shrink-0">{meta.label}</Badge>
-                      <span className="min-w-0 flex-1 truncate text-[12px]" title={c.args ? `${c.cmd} ${c.args}` : c.cmd}>
-                        {cmd.label}
-                      </span>
-                      <span className="num shrink-0 text-[11px] text-ink-3" title={c.device_id}>
-                        {c.created_at ? fmtDateTime(c.created_at) : '—'}
-                      </span>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-            {serverOk && offline.length > 0 && (
-              <Link to="/devices" className="link mt-3 flex items-center gap-0.5 border-t border-hairline pt-3 text-xs">
-                {offline.length} 台离线设备明细 <ArrowRight size={12} />
-              </Link>
-            )}
-          </Panel>
+                )
+              })}
+            </ul>
+          )}
+          {serverOk && offline.length > 0 && (
+            <Link to="/devices" className="link mt-3 flex items-center gap-0.5 border-t border-hairline pt-3 text-xs">
+              {offline.length} 台离线设备明细 <ArrowRight size={12} />
+            </Link>
+          )}
+        </Panel>
 
-          <Panel
-            title={<span className="flex items-center gap-1.5"><Activity size={14} />近期事件</span>}
-            right={
-              <Link to="/activity" className="link flex items-center gap-0.5 text-xs">
-                全部 <ArrowRight size={12} />
-              </Link>
-            }
-            className="xl:sticky xl:top-4">
-            {loading && feed.length === 0
-              ? <RowSkeleton rows={6} />
-              : feed.length === 0
-                ? <p className="flex flex-col items-center gap-2 py-10 text-center text-sm text-ink-3">
-                  <History size={20} /> 还没有事件上报
-                </p>
-                : <EventFeed events={feed} limit={10} />}
-          </Panel>
-        </div>
       </div>
+
+      <Panel
+        title={<span className="flex items-center gap-1.5"><Activity size={14} />近期事件</span>}
+        right={
+          <Link to="/activity" className="link flex items-center gap-0.5 text-xs">
+            全部 <ArrowRight size={12} />
+          </Link>
+        }
+        className="mt-5">
+        {loading && feed.length === 0
+          ? <RowSkeleton rows={6} />
+          : feed.length === 0
+            ? <p className="flex flex-col items-center gap-2 py-10 text-center text-sm text-ink-3">
+              <History size={20} /> 还没有事件上报
+            </p>
+            : <EventFeed events={feed} limit={10} />}
+      </Panel>
     </>
   )
 }

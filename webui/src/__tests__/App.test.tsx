@@ -99,8 +99,8 @@ describe('Schema 端点缺席时的设备详情页', () => {
     })
     renderApp('/devices/edge-1/dev-9')
 
-    // 详情页改成六个分区（概览/实时状态/控制/事件/能力/诊断），头部徽标仍先落地
-    expect(await screen.findByText('通用视图')).toBeInTheDocument()
+    // 详情页改成六个分区（概览/实时状态/控制/事件/能力/诊断），头部标题先落地
+    expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument()
     const user = userEvent.setup()
     for (const name of ['概览', '实时状态', '控制', '事件', '能力', '诊断']) {
       expect(screen.getByRole('tab', { name: new RegExp(name) })).toBeInTheDocument()

@@ -76,14 +76,16 @@ export function ActionPanel({ deviceId, set, adapterName, className }: {
       ) : (
         <>
           {simple.length > 0 && (
-            <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               {simple.map((a) => (
                 <div key={a.cmd} className="min-w-0">
                   <CommandButton deviceId={deviceId} action={a}
                     className={cn('w-full', a.variant === 'danger' ? 'col-span-2' : '')} />
-                  <p className="mt-1.5 min-w-0 text-[11px] leading-relaxed text-ink-3" title={a.hint}>
-                    {a.hint ?? `下发命令「${a.label}」`}
-                  </p>
+                  {a.hint && (
+                    <p className="mt-1.5 min-w-0 text-[11px] leading-relaxed text-ink-3" title={a.hint}>
+                      {a.hint}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

@@ -30,7 +30,7 @@
   --color-idle: #8e8e93;
 
   --radius-card: 12px;
-  --radius-tile: 10px;
+  --radius-tile: 8px;
 
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.04);
   --shadow-lift: 0 2px 8px rgba(0, 0, 0, 0.06), 0 16px 40px rgba(0, 0, 0, 0.10);
@@ -113,7 +113,7 @@ body {
 /* 按钮基类 */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 500;
+  padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 500;
   border: 1px solid transparent; cursor: pointer; user-select: none;
   transition: all .18s ease;
 }

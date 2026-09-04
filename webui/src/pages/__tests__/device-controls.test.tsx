@@ -47,7 +47,7 @@ function route(o: Opts = {}) {
 
 async function gotoControls() {
   const user = userEvent.setup()
-  await screen.findByText('通用视图').catch(() => screen.findByRole('heading', { level: 1 }))
+  await screen.findByRole('heading', { level: 1 })
   await user.click(screen.getByRole('tab', { name: /控制/ }))
   return user
 }

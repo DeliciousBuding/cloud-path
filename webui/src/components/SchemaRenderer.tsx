@@ -4,6 +4,7 @@
 //   - 怎么展示 = presentation.defaultWidget（UI Hint），缺席则按值类型推导
 //   - 未知 Capability = 通用表格 / JSON 回落（docs/architecture/capability-model.md §9）
 // 颜色只走设计系统 token（ui.tsx TONE_CLS / index.css），390px 下不产生横向溢出。
+import { Fragment } from 'react'
 import { Activity, Boxes, SlidersHorizontal, Stethoscope, Zap, type LucideIcon } from 'lucide-react'
 import { Badge, Panel, TONE_CLS, TONE_TEXT_CLS, type Tone } from './ui'
 import { cn } from '@/lib/cn'
@@ -16,7 +17,7 @@ import {
   pickDisplayField, propertyLabel, presentationOf, primaryObservation, qualityTone, rawRows,
   resolveCapability, statusMeta, toneFromHint, widgetFor,
 } from '@/lib/descriptor'
-import type { CapabilityIndex, SummaryGroup, SummaryValue, WidgetKind } from '@/lib/descriptor'
+import type { CapabilityIndex, SummaryValue, WidgetKind } from '@/lib/descriptor'
 import type {
   DescriptorEntity, DeviceDescriptor, DeviceRaw, DeviceStatus, EntityCategory,
   Observation, ObservationQuality,
@@ -32,52 +33,6 @@ const QUALITY_DOT: Record<ObservationQuality, string> = {
 }
 
 /* ---------------- 原子件 ---------------- */
-
-/** 通用胶囊：tone 只来自 observation.quality 或 presentation 提示 */
-export function Chip({ v, className }: { v: SummaryValue; className?: string }) {
-  return (
-    <span
-      title={v.title}
-      className={cn('inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
-        TONE_CLS[v.tone], className)}
-    >
-      <span className="truncate opacity-70">{v.label}</span>
-      <span className="num truncate">{v.text}</span>
-      {v.unit && <span className="num opacity-60">{v.unit}</span>}
-    </span>
-  )
-}
-
-export function SummaryChips({ chips, className }: { chips: SummaryValue[]; className?: string }) {
-  if (!chips.length) return null
-  return (
-    <div className={cn('flex min-w-0 flex-wrap gap-1.5', className)}>
-      {chips.map((c, i) => <Chip key={`${c.label}-${c.title ?? ''}-${i}`} v={c} />)}
-    </div>
-  )
-}
-
-/** 数组型观测（列表/分格类）→ 分组胶囊，标签与条目全部来自数据 */
-export function SummaryGroups({ groups, className }: { groups: SummaryGroup[]; className?: string }) {
-  if (!groups.length) return null
-  return (
-    <div className={cn('space-y-2', className)}>
-      {groups.map((g) => (
-        <div key={g.label} className="min-w-0">
-          <p className="mb-1 truncate text-[11px] text-ink-3">{g.label}</p>
-          <div className="flex flex-wrap gap-1.5">
-            {g.items.map((it, i) => (
-              <span key={`${it.label}-${i}`} title={it.title}
-                className={cn('max-w-full truncate rounded-full px-2 py-0.5 text-[11px] font-medium', TONE_CLS[it.tone])}>
-                {it.text}
-              </span>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
 
 /** 质量指示点：good 不打扰（不渲染），其余按语义色标注 */
 export function QualityDot({ q }: { q?: ObservationQuality }) {
@@ -349,7 +304,7 @@ export function StateCell({ entity, idx = EMPTY_INDEX, nowSec, series }: {
   const q = worstQuality(obs)
   const stale = nowSec !== undefined && obs.some((o) => isStaleObs(o, nowSec))
   return (
-    <div className="card min-w-0 p-3.5">
+    <div className="card min-w-0 p-3">
       <div className="flex min-w-0 items-center gap-1.5">
         <span className="min-w-0 truncate text-[12px] font-medium text-ink-2" title={entity.name || entity.unique_key}>
           {entityTitle(entity)}
@@ -378,12 +333,14 @@ export function StateCell({ entity, idx = EMPTY_INDEX, nowSec, series }: {
               </>
             )
           })()}
-          <p className="mt-1 truncate text-[11px] text-ink-3">
-            {propertyLabel(primary.property, primary.capability, idx)}
-          </p>
+          {rest.length > 0 && (
+            <p className="mt-1 truncate text-[11px] text-ink-3">
+              {propertyLabel(primary.property, primary.capability, idx)}
+            </p>
+          )}
         </>
       ) : (
-        <p className="mt-1.5 text-[13px] text-ink-3">等待观测…</p>
+        <p className="mt-1.5 text-[13px] text-ink-3">暂无数据</p>
       )}
       {rest.length > 0 && (
         <details className="mt-1.5">
@@ -399,8 +356,9 @@ export function StateCell({ entity, idx = EMPTY_INDEX, nowSec, series }: {
   )
 }
 
-/** 实时状态矩阵：按 Descriptor category 分组（generic 顺序，不写设备特例）；
- *  响应式 1/2/3/4 列；分区头只有组名 + 计数。 */
+/** 实时状态矩阵：按 Descriptor category 分组（generic 顺序，不写设备特例）。
+ *  所有组共享一张 auto-fill 网格、组头跨行——Entity 连续流式排布，稀疏组不留空轨；
+ *  列数随容器宽度自适应（约 210px 起）。 */
 export function StateMatrix({ descriptor, idx = EMPTY_INDEX, categories, nowSec, series, className }: {
   descriptor: DeviceDescriptor
   idx?: CapabilityIndex
@@ -416,19 +374,18 @@ export function StateMatrix({ descriptor, idx = EMPTY_INDEX, categories, nowSec,
     return <p className="py-6 text-center text-sm text-ink-3">Descriptor 未声明 Entity</p>
   }
   return (
-    <div className={cn('space-y-5', className)}>
-      {groups.map(({ category, entities }) => (
-        <section key={category}>
-          <h3 className="mb-2 flex items-center gap-1.5 px-0.5 text-[12px] font-medium text-ink-3">
+    <div className={cn('grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(210px,1fr))]', className)}>
+      {groups.map(({ category, entities }, gi) => (
+        <Fragment key={category}>
+          <h3 className={cn('col-span-full flex items-center gap-1.5 px-0.5 text-[12px] font-medium text-ink-3',
+            gi > 0 && 'pt-2')}>
             {CATEGORY_LABEL[category]}
             <span className="num text-[11px] font-normal">{entities.length}</span>
           </h3>
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-            {entities.map((e) => (
-              <StateCell key={e.entity_id || e.unique_key} entity={e} idx={idx} nowSec={nowSec} series={series} />
-            ))}
-          </div>
-        </section>
+          {entities.map((e) => (
+            <StateCell key={e.entity_id || e.unique_key} entity={e} idx={idx} nowSec={nowSec} series={series} />
+          ))}
+        </Fragment>
       ))}
     </div>
   )

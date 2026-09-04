@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Activity, ArrowLeft, ArrowRight, Braces, Command, Gauge, Grid3x3, History, LayoutDashboard,
+  Activity, ArrowLeft, ArrowRight, Braces, Command, Grid3x3, History, LayoutDashboard,
   Radio, RadioTower, Sparkles, Terminal, Zap,
 } from 'lucide-react'
 import {
@@ -22,7 +22,8 @@ import { useLive } from '@/store/ws'
 import { useNow } from '@/hooks/useNow'
 import { useDeviceDescriptor } from '@/hooks/useDescriptor'
 import {
-  entityTitle, formatTimestamp, formatValue, metricTiles, observationsOf, propertyLabel,
+  entityTitle, formatTimestamp, formatValue, metricTiles, observationsOf, primaryObservation,
+  propertyLabel,
   qualityTone, summarizeRaw, widgetFor, QUALITY_LABEL,
 } from '@/lib/descriptor'
 import type { SummaryValue } from '@/lib/descriptor'
@@ -45,7 +46,6 @@ export default function DeviceDetail() {
   const now = useNow()
   const nowSec = Math.floor(now.getTime() / 1000)
   const [tab, setTab] = useState<Tab>('overview')
-  const [seriesKey, setSeriesKey] = useState('')
   const [kindFilter, setKindFilter] = useState('')
   const [stateView, setStateView] = useState<'cards' | 'table' | 'trend'>('cards')
   const [rangeMin, setRangeMin] = useState(0)
@@ -123,8 +123,6 @@ export default function DeviceDetail() {
     }
     return keys.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
   }, [series, descriptor])
-  const activeSeries = seriesKey && series[seriesKey] ? seriesKey : (seriesKeys[0] ?? '')
-  const activePoints = activeSeries ? (series[activeSeries] ?? []) : []
 
   /** 序列键展示名：实体中文名 · 属性中文名；Descriptor 缺席时回落属性词典/humanize */
   const seriesLabel = (k: string): string => {
@@ -170,7 +168,7 @@ export default function DeviceDetail() {
 
       <header className="mb-5 flex flex-wrap items-center gap-3 fade-up">
         <StatusDot online={d.online} />
-        <h1 className="min-w-0 max-w-full truncate text-[26px] font-bold tracking-tight" title={d.id}>
+        <h1 className="min-w-0 max-w-full truncate text-[22px] font-semibold tracking-tight" title={d.id}>
           {d.name || deviceId}
         </h1>
         <Badge tone="accent" className="max-w-full truncate">{d.adapter || '未知适配器'}</Badge>
@@ -184,9 +182,6 @@ export default function DeviceDetail() {
           <RadioTower size={11} className="shrink-0" />
           <span className="min-w-0 truncate">{d.edge_id}</span>
         </Link>
-        <Badge tone={source === 'none' ? 'idle' : 'accent'}>
-          <Sparkles size={11} />{source === 'none' ? '通用视图' : 'Schema 驱动'}
-        </Badge>
         <span className="num ml-auto text-xs text-ink-3" title={`设备键 ${d.id}`}>
           {d.online ? `更新于 ${timeAgo(d.updated_at)}` : `最后见 ${timeAgo(d.last_seen)}`}
         </span>
@@ -241,18 +236,14 @@ export default function DeviceDetail() {
 
       {tab === 'state' && (
         <TabPanel value={tab}>
-          <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="min-w-0">
-              {/* 全局新鲜度只说一次；stale/离线只标异常格 */}
-              <div className="mb-3 flex flex-wrap items-center gap-2 px-0.5">
+          <div className="min-w-0">
+            {/* 连接态一行说清；绝对新鲜度在页头只说一次 */}
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-0.5">
+              <span className="flex items-center gap-2">
                 <StatusDot online={d.online} />
                 <span className="text-[12px] font-medium text-ink-2">{d.online ? '实时' : '离线'}</span>
-                <span className="num text-[11px] text-ink-3">
-                  {d.online ? `更新于 ${timeAgo(d.updated_at)}` : `最后见 ${timeAgo(d.last_seen)}`}
-                </span>
-                {!d.online && <Badge tone="warn">下面是最后一次上报的内容</Badge>}
-              </div>
-              <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+                {!d.online && <Badge tone="warn">展示最后一次上报的内容</Badge>}
+              </span>
                 <Segmented
                   label="状态视图"
                   options={[
@@ -292,10 +283,10 @@ export default function DeviceDetail() {
                   </div>
                   {seriesKeys.length === 0 ? (
                     <p className="py-8 text-center text-xs text-ink-3">
-                      本次会话还没有数值观测（实时通道连接后开始采样）
+                      暂无趋势数据——设备上报数值后会自动开始采样
                     </p>
                   ) : (
-                    <div className="grid gap-2.5 md:grid-cols-2">
+                    <div className="grid gap-2.5 md:grid-cols-2 2xl:grid-cols-3">
                       {seriesKeys.map((k) => {
                         const pts = rangeMin > 0
                           ? (series[k] ?? []).filter((pt) => pt.t >= nowSec - rangeMin * 60)
@@ -314,30 +305,11 @@ export default function DeviceDetail() {
                       })}
                     </div>
                   )}
+                  <p className="mt-3 px-0.5 text-[11px] leading-relaxed text-ink-3">
+                    趋势仅采样当前页面会话（最多 240 点）；历史数值请查事件与命令记录。
+                  </p>
                 </div>
               )}
-            </div>
-            <Panel
-              title={<span className="flex items-center gap-1.5"><Gauge size={14} />会话数值趋势</span>}
-              right={<span className="num text-[11px] text-ink-3">{activePoints.length} 点</span>}
-              className="xl:sticky xl:top-4">
-              {seriesKeys.length > 1 && (
-                <div className="mb-3 overflow-x-auto pb-1">
-                  <Segmented
-                    label="数值序列"
-                    options={seriesKeys.map((k) => ({ value: k, label: seriesLabel(k) }))}
-                    value={activeSeries}
-                    onChange={setSeriesKey}
-                  />
-                </div>
-              )}
-              {seriesKeys.length === 0
-                ? <p className="py-8 text-center text-xs text-ink-3">本次会话还没有数值观测</p>
-                : <TrendChart points={activePoints} />}
-              <p className="mt-3 border-t border-hairline pt-3 text-[11px] leading-relaxed text-ink-3">
-                趋势是本次浏览器会话内采样得到的（最多 240 点），刷新页面即重新开始；历史数值请查事件与命令记录。
-              </p>
-            </Panel>
           </div>
         </TabPanel>
       )}
@@ -351,12 +323,17 @@ export default function DeviceDetail() {
             </div>
             {/* 观测值与命令输入分离：右侧只读呈现执行器现状，避免「看着像已执行」 */}
             {descriptor && descriptor.entities.some((e) => e.category === 'actuator') && (
-              <div className="min-w-0">
-                <h3 className="mb-2 flex items-center gap-1.5 px-0.5 text-[12px] font-medium text-ink-3">
-                  <Zap size={12} className="shrink-0" /> 执行器现状（只读观测）
-                </h3>
-                <StateMatrix descriptor={descriptor} idx={capabilities} categories={['actuator']} nowSec={nowSec} />
-              </div>
+              <Panel title={<span className="flex items-center gap-1.5"><Zap size={14} />当前状态（只读）</span>}>
+                <dl className="space-y-2.5">
+                  {descriptor.entities.filter((e) => e.category === 'actuator').map((e) => {
+                    const o = primaryObservation(e, capabilities)
+                    const v = !o ? '暂无数据'
+                      : widgetFor(o, capabilities) === 'timestamp' ? formatTimestamp(o.value)
+                        : `${formatValue(o.value)}${o.unit ? ` ${o.unit}` : ''}`
+                    return <KeyValue key={e.unique_key} k={entityTitle(e)} v={v} />
+                  })}
+                </dl>
+              </Panel>
             )}
           </div>
         </TabPanel>
@@ -398,7 +375,7 @@ export default function DeviceDetail() {
               right={<span className="num text-[11px] text-ink-3">{capRefs.length} 种 · catalog 收录 {capabilities.docs.length} 份</span>}>
               <CapabilityBrowser descriptor={descriptor} idx={capabilities} />
               <p className="mt-3 border-t border-hairline pt-3 text-[11px] leading-relaxed text-ink-3">
-                Capability ID 永不本地化；显示名取自 catalog 的 title，缺席时回落平台词汇/可读化 ID 尾段。点击行展开 Inspector（属性/动作/事件/schema）。
+                点击行展开 Inspector（属性/动作/事件/schema）；显示名优先取声明的中文标题。
               </p>
             </Panel>
           )}
@@ -409,7 +386,7 @@ export default function DeviceDetail() {
         <TabPanel value={tab}>
           <div className="space-y-5">
             <Panel
-              title={<span className="flex items-center gap-1.5"><Braces size={14} />身份与原始状态（取证用）</span>}
+              title={<span className="flex items-center gap-1.5"><Braces size={14} />身份与原始状态</span>}
               right={<span className="num text-[11px] text-ink-3">
                 参考时间 {now.toLocaleTimeString('zh-CN', { hour12: false })}
               </span>}>

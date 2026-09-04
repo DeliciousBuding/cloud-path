@@ -213,13 +213,12 @@ describe('键盘与焦点', () => {
 })
 
 describe('命令按钮说明（title/description）', () => {
-  it('有 description 的动作渲染可见说明；无说明的给出通用占位', () => {
+  it('有 description 的动作渲染可见说明；无说明的不加冗余题注', () => {
     render(<ActionPanel deviceId={KEY} set={declared} />)
     // close 的 description 来自后端声明 → 落到 hint，渲染为按钮下可见说明
     expect(screen.getByText('接通负载')).toBeInTheDocument()
-    // open / factory_reset 未声明描述 → 给出通用占位（不硬编码具体命令文案）
-    expect(screen.getByText('下发命令「断开」')).toBeInTheDocument()
-    expect(screen.getByText('下发命令「恢复出厂」')).toBeInTheDocument()
+    // open / factory_reset 未声明描述 → 按钮文案自足，不编造题注占位
+    expect(screen.queryByText(/下发命令「/)).not.toBeInTheDocument()
   })
 
   it('按钮 title 携带能力/实体/命令溯源（工具提示，不改按钮可读名）', () => {

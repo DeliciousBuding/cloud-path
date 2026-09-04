@@ -38,7 +38,7 @@ export function DeviceRow({ d }: { d: DeviceView }) {
   }, [series])
 
   return (
-    <li className="grid gap-x-4 gap-y-1.5 border-b border-hairline px-4 py-3 last:border-b-0 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,1.4fr)_5.5rem_6.5rem_9.5rem] lg:items-center">
+    <li className="grid gap-x-4 gap-y-1.5 border-b border-hairline px-4 py-2.5 last:border-b-0 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,1.4fr)_5.5rem_6.5rem_9.5rem] lg:items-center">
       {/* Name（+ 窄屏时把状态徽标放到同一行，避免多占一行） */}
       <div className="flex min-w-0 items-center gap-2">
         <StatusDot online={d.online} />

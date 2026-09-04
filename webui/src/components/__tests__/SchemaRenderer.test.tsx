@@ -7,7 +7,7 @@ import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import {
   CapabilityBrowser, GenericTable, JsonBlock, ObservationTable,
-  QualityDot, RawView, StateMatrix, StatusBadge, SummaryChips, ValueWidget,
+  MetricTile, QualityDot, RawView, StateMatrix, StatusBadge, ValueWidget,
 } from '@/components/SchemaRenderer'
 import { indexCapabilities, normalizeCapabilityDocs, observationsOf } from '@/lib/descriptor'
 import {
@@ -153,11 +153,11 @@ describe('quality / status 状态提示', () => {
     }
   })
 
-  it('摘要胶囊带 tone 语义色类（颜色只走 token 类，不是内联色值）', () => {
-    render(<SummaryChips chips={[{ label: '偏差', text: '0.4', tone: 'warn' }]} />)
-    const chip = screen.getByText('偏差').parentElement
-    expect(chip?.className).toContain('text-warn')
-    expect(chip?.getAttribute('style')).toBeNull()
+  it('MetricTile 告警 tone 走 token 文字色类（颜色只走 token 类，不是内联色值）', () => {
+    const { container } = render(<MetricTile v={{ label: '偏差', text: '0.4', tone: 'warn', title: 'drift' }} />)
+    const value = container.querySelector('p.num')
+    expect(value?.className).toContain('text-warn')
+    expect(value?.getAttribute('style')).toBeNull()
   })
 })
 

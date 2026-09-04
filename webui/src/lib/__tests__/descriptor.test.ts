@@ -7,7 +7,7 @@ import {
   humanize, indexCapabilities, inferWidget, isScalar, normalizeCapabilityDocs,
   normalizeDescriptor, observationsOf, parseCapabilityRef, pickDescriptorFor,
   presentationOf, primaryObservation, qualityTone, rawRows, readInlineDescriptor,
-  resolveCapability, statusMeta, summarizeDescriptor, summarizeRaw, toneFromHint, widgetFor,
+  resolveCapability, statusMeta, summarizeRaw, toneFromHint, widgetFor,
 } from '@/lib/descriptor'
 import {
   CAP_CLOCK, CAP_RELAY, CAP_TEMPERATURE, UNKNOWN_CAP,
@@ -374,24 +374,6 @@ describe('commandActions：命令集只来自声明', () => {
 })
 
 describe('摘要与通用回落（Descriptor 缺席时不白屏）', () => {
-  it('summarizeDescriptor：主值来自声明主属性，质量告警上浮为胶囊，数组观测成分组', () => {
-    const s = summarizeDescriptor(makeDescriptor(), idx)
-    expect(s.source).toBe('descriptor')
-    expect(s.primary).toMatchObject({ text: '26.5', unit: 'Cel', tone: 'ok' })
-    expect(s.primary?.title).toContain('温度')
-    expect(s.chips.map((c) => c.text)).toContain('否')
-    const alert = s.chips.find((c) => c.text === '0.4')
-    expect(alert?.tone).toBe('warn')
-    expect(s.groups).toHaveLength(1)
-    expect(s.groups[0]?.items.map((i) => i.text)).toEqual(['row-a', 'row-b'])
-  })
-
-  it('summarizeDescriptor：空 Descriptor → source=none（卡片走 raw 回落）', () => {
-    expect(summarizeDescriptor(makeDescriptor({ entities: [] }), idx)).toEqual({
-      primary: null, chips: [], groups: [], source: 'none',
-    })
-  })
-
   it('summarizeRaw：标量成主值/胶囊，对象数组成分组，嵌套对象被跳过', () => {
     const s = summarizeRaw(makeDeviceView().state)
     expect(s.source).toBe('raw')
