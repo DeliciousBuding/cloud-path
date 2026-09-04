@@ -8,28 +8,28 @@ import (
 )
 
 const (
-	capAlarm      = "cloudpath.dev/capability/alarm@1"
-	capContact    = "cloudpath.dev/capability/contact@1"
-	capDisplay    = "cloudpath.dev/capability/display-text@1"
-	capAlarmV2    = "cloudpath.dev/capability/alarm@2"
-	capContactOld = "cloudpath.dev/capability/contact@0"
+	capBuzzer   = "cloudpath.dev/capability/buzzer@1"
+	capKey      = "cloudpath.dev/capability/key@1"
+	capDisplay  = "cloudpath.dev/capability/display-text@1"
+	capBuzzerV2 = "cloudpath.dev/capability/buzzer@2"
+	capKeyOld   = "cloudpath.dev/capability/key@0"
 )
 
 func scRequirements() []Requirement {
 	return []Requirement{
-		{ID: "reminder-output", Capability: capAlarm, Cardinality: CardinalityOne},
-		{ID: "compartments", Capability: capContact, Cardinality: CardinalityOneOrMore, MinItems: 3},
+		{ID: "reminder-output", Capability: capBuzzer, Cardinality: CardinalityOne},
+		{ID: "compartments", Capability: capKey, Cardinality: CardinalityOneOrMore, MinItems: 3},
 		{ID: "local-display", Capability: capDisplay, Cardinality: CardinalityZeroOrOne},
 	}
 }
 
 func scCandidates() []Candidate {
 	return []Candidate{
-		{EntityID: "compartment-1", TenantID: "tenant-a", Capabilities: []string{capContact}},
-		{EntityID: "compartment-2", TenantID: "tenant-a", Capabilities: []string{capContact}},
-		{EntityID: "compartment-3", TenantID: "tenant-a", Capabilities: []string{capContact}},
-		{EntityID: "alarm-1", TenantID: "tenant-a", Capabilities: []string{capAlarm}},
-		{EntityID: "display-1", TenantID: "tenant-a", Capabilities: []string{capDisplay}},
+		{EntityID: "key1", TenantID: "tenant-a", Capabilities: []string{capKey}},
+		{EntityID: "key2", TenantID: "tenant-a", Capabilities: []string{capKey}},
+		{EntityID: "key3", TenantID: "tenant-a", Capabilities: []string{capKey}},
+		{EntityID: "buzzer", TenantID: "tenant-a", Capabilities: []string{capBuzzer}},
+		{EntityID: "display", TenantID: "tenant-a", Capabilities: []string{capDisplay}},
 	}
 }
 
@@ -45,14 +45,14 @@ func TestMatchRequirements(t *testing.T) {
 		byReq[b.RequirementID] = append(byReq[b.RequirementID], b.EntityID)
 	}
 
-	if got := byReq["reminder-output"]; len(got) != 1 || got[0] != "alarm-1" {
-		t.Fatalf("reminder-output = %v, want [alarm-1]", got)
+	if got := byReq["reminder-output"]; len(got) != 1 || got[0] != "buzzer" {
+		t.Fatalf("reminder-output = %v, want [buzzer]", got)
 	}
 	if got := byReq["compartments"]; len(got) != 3 {
 		t.Fatalf("compartments = %v, want 3 entities", got)
 	}
-	if got := byReq["local-display"]; len(got) != 1 || got[0] != "display-1" {
-		t.Fatalf("local-display = %v, want [display-1]", got)
+	if got := byReq["local-display"]; len(got) != 1 || got[0] != "display" {
+		t.Fatalf("local-display = %v, want [display]", got)
 	}
 
 	res := binder.Validate(scRequirements(), scCandidates(), bs.Bindings)
@@ -68,11 +68,11 @@ func TestMatchRequirements(t *testing.T) {
 func TestMinimumCardinality(t *testing.T) {
 	binder := Binder{TenantID: "tenant-a"}
 	reqs := []Requirement{
-		{ID: "compartments", Capability: capContact, Cardinality: CardinalityOneOrMore, MinItems: 3},
+		{ID: "compartments", Capability: capKey, Cardinality: CardinalityOneOrMore, MinItems: 3},
 	}
 	candidates := []Candidate{
-		{EntityID: "c1", TenantID: "tenant-a", Capabilities: []string{capContact}},
-		{EntityID: "c2", TenantID: "tenant-a", Capabilities: []string{capContact}},
+		{EntityID: "c1", TenantID: "tenant-a", Capabilities: []string{capKey}},
+		{EntityID: "c2", TenantID: "tenant-a", Capabilities: []string{capKey}},
 	}
 
 	_, err := binder.Match(reqs, candidates)
@@ -105,17 +105,17 @@ func TestOptionalRequirement(t *testing.T) {
 	}
 
 	// Present: the optional requirement binds it.
-	withDisplay := []Candidate{{EntityID: "display-1", TenantID: "tenant-a", Capabilities: []string{capDisplay}}}
+	withDisplay := []Candidate{{EntityID: "display", TenantID: "tenant-a", Capabilities: []string{capDisplay}}}
 	bs, err := binder.Match(reqs, withDisplay)
 	if err != nil {
 		t.Fatalf("Match with display returned error: %v", err)
 	}
-	if len(bs.Bindings) != 1 || bs.Bindings[0].EntityID != "display-1" {
-		t.Fatalf("optional bindings = %+v, want [display-1]", bs.Bindings)
+	if len(bs.Bindings) != 1 || bs.Bindings[0].EntityID != "display" {
+		t.Fatalf("optional bindings = %+v, want [display]", bs.Bindings)
 	}
 
 	// Absent: zero-or-one stays unbound and the set is still valid.
-	noDisplay := []Candidate{{EntityID: "alarm-1", TenantID: "tenant-a", Capabilities: []string{capAlarm}}}
+	noDisplay := []Candidate{{EntityID: "buzzer", TenantID: "tenant-a", Capabilities: []string{capBuzzer}}}
 	bs2, err := binder.Match(reqs, noDisplay)
 	if err != nil {
 		t.Fatalf("Match without display returned error: %v", err)
@@ -131,28 +131,28 @@ func TestOptionalRequirement(t *testing.T) {
 func TestStableEntityBinding(t *testing.T) {
 	ctx := context.Background()
 	reqs := []Requirement{
-		{ID: "reminder-output", Capability: capAlarm, Cardinality: CardinalityOne},
+		{ID: "reminder-output", Capability: capBuzzer, Cardinality: CardinalityOne},
 	}
 	binder := Binder{ApplicationID: "app", PluginInstanceID: "inst", TenantID: "tenant-a"}
 
-	c1 := Candidate{EntityID: "alarm-1", Name: "Alarm", TenantID: "tenant-a", Capabilities: []string{capAlarm}, DeviceID: "dev-1", DriverID: "stcb"}
+	c1 := Candidate{EntityID: "buzzer", Name: "Buzzer", TenantID: "tenant-a", Capabilities: []string{capBuzzer}, DeviceID: "dev-1", DriverID: "stcb"}
 	bs, err := binder.Match(reqs, []Candidate{c1})
 	if err != nil {
 		t.Fatalf("first Match error: %v", err)
 	}
-	if got := bs.Bindings[0].EntityID; got != "alarm-1" {
-		t.Fatalf("binding entity = %q, want alarm-1", got)
+	if got := bs.Bindings[0].EntityID; got != "buzzer" {
+		t.Fatalf("binding entity = %q, want buzzer", got)
 	}
 
 	// The same physical entity, after a rename and an Edge reconnection on a
 	// different device/driver, must produce the same stable entity binding.
-	c2 := Candidate{EntityID: "alarm-1", Name: "Renamed Alarm", TenantID: "tenant-a", Capabilities: []string{capAlarm}, DeviceID: "dev-2", DriverID: "other"}
+	c2 := Candidate{EntityID: "buzzer", Name: "Renamed Buzzer", TenantID: "tenant-a", Capabilities: []string{capBuzzer}, DeviceID: "dev-2", DriverID: "other"}
 	bs2, err := binder.Match(reqs, []Candidate{c2})
 	if err != nil {
 		t.Fatalf("second Match error: %v", err)
 	}
-	if got := bs2.Bindings[0].EntityID; got != "alarm-1" {
-		t.Fatalf("binding changed after rename/reconnect: got %q, want alarm-1", got)
+	if got := bs2.Bindings[0].EntityID; got != "buzzer" {
+		t.Fatalf("binding changed after rename/reconnect: got %q, want buzzer", got)
 	}
 
 	// Repository persists only the stable entity_id.
@@ -164,20 +164,20 @@ func TestStableEntityBinding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadBindingSet error: %v", err)
 	}
-	if len(got.Bindings) != 1 || got.Bindings[0].EntityID != "alarm-1" {
-		t.Fatalf("repo binding = %+v, want stable entity alarm-1", got.Bindings)
+	if len(got.Bindings) != 1 || got.Bindings[0].EntityID != "buzzer" {
+		t.Fatalf("repo binding = %+v, want stable entity buzzer", got.Bindings)
 	}
 }
 
 func TestRejectDriverCoupling(t *testing.T) {
 	binder := Binder{TenantID: "tenant-t"}
-	req := Requirement{ID: "r", Capability: capAlarm, Cardinality: CardinalityOne}
+	req := Requirement{ID: "r", Capability: capBuzzer, Cardinality: CardinalityOne}
 
 	// Same capability, different Driver and Device: matching must select purely
 	// on capability and tenant, not on driver/device.
 	candidates := []Candidate{
-		{EntityID: "a", TenantID: "tenant-t", Capabilities: []string{capAlarm}, DriverID: "stcb", DeviceID: "dev-1"},
-		{EntityID: "b", TenantID: "tenant-t", Capabilities: []string{capAlarm}, DriverID: "other", DeviceID: "dev-2"},
+		{EntityID: "a", TenantID: "tenant-t", Capabilities: []string{capBuzzer}, DriverID: "stcb", DeviceID: "dev-1"},
+		{EntityID: "b", TenantID: "tenant-t", Capabilities: []string{capBuzzer}, DriverID: "other", DeviceID: "dev-2"},
 	}
 	bs, err := binder.Match([]Requirement{req}, candidates)
 	if err != nil {
@@ -189,7 +189,7 @@ func TestRejectDriverCoupling(t *testing.T) {
 
 	// A candidate with the "right" driver but the wrong capability must NOT match.
 	wrongCap := []Candidate{
-		{EntityID: "c", TenantID: "tenant-t", Capabilities: []string{capContact}, DriverID: "stcb", DeviceID: "dev-1"},
+		{EntityID: "c", TenantID: "tenant-t", Capabilities: []string{capKey}, DriverID: "stcb", DeviceID: "dev-1"},
 	}
 	_, err = binder.Match([]Requirement{req}, wrongCap)
 	var berr *BindingError
@@ -203,10 +203,10 @@ func TestRejectDriverCoupling(t *testing.T) {
 
 func TestRejectCrossTenantBinding(t *testing.T) {
 	binder := Binder{TenantID: "tenant-a"}
-	req := Requirement{ID: "r", Capability: capAlarm, Cardinality: CardinalityOne}
+	req := Requirement{ID: "r", Capability: capBuzzer, Cardinality: CardinalityOne}
 
 	// A candidate that belongs to another tenant must not be matched.
-	foreignCandidate := Candidate{EntityID: "alarm-b", TenantID: "tenant-b", Capabilities: []string{capAlarm}}
+	foreignCandidate := Candidate{EntityID: "buzzer-b", TenantID: "tenant-b", Capabilities: []string{capBuzzer}}
 	_, err := binder.Match([]Requirement{req}, []Candidate{foreignCandidate})
 	var berr *BindingError
 	if !errors.As(err, &berr) {
@@ -218,7 +218,7 @@ func TestRejectCrossTenantBinding(t *testing.T) {
 
 	// Explicit validation: a binding that references the cross-tenant entity
 	// must fail with CodeCrossTenant.
-	bindings := []Binding{{RequirementID: "r", EntityID: "alarm-b"}}
+	bindings := []Binding{{RequirementID: "r", EntityID: "buzzer-b"}}
 	res := binder.Validate([]Requirement{req}, []Candidate{foreignCandidate}, bindings)
 	if res.Valid {
 		t.Fatalf("cross-tenant binding must be invalid")
@@ -270,15 +270,15 @@ func TestVersionCompatibility(t *testing.T) {
 	binder := Binder{TenantID: "tenant-a"}
 
 	// A newer capability version satisfies an older requirement.
-	req1 := Requirement{ID: "r", Capability: capAlarm, Cardinality: CardinalityOne}
-	newer := Candidate{EntityID: "e", TenantID: "tenant-a", Capabilities: []string{capAlarmV2}}
+	req1 := Requirement{ID: "r", Capability: capBuzzer, Cardinality: CardinalityOne}
+	newer := Candidate{EntityID: "e", TenantID: "tenant-a", Capabilities: []string{capBuzzerV2}}
 	if _, err := binder.Match([]Requirement{req1}, []Candidate{newer}); err != nil {
-		t.Fatalf("requiring alarm@1 should accept alarm@2, got error: %v", err)
+		t.Fatalf("requiring buzzer@1 should accept buzzer@2, got error: %v", err)
 	}
 
 	// An older capability version is incompatible.
-	req2 := Requirement{ID: "r", Capability: capAlarmV2, Cardinality: CardinalityOne}
-	older := Candidate{EntityID: "e", TenantID: "tenant-a", Capabilities: []string{capAlarm}}
+	req2 := Requirement{ID: "r", Capability: capBuzzerV2, Cardinality: CardinalityOne}
+	older := Candidate{EntityID: "e", TenantID: "tenant-a", Capabilities: []string{capBuzzer}}
 	_, err := binder.Match([]Requirement{req2}, []Candidate{older})
 	var berr *BindingError
 	if !errors.As(err, &berr) {
@@ -296,7 +296,7 @@ func TestVersionCompatibility(t *testing.T) {
 	}
 
 	// A wrong capability family is a distinct mismatch, not a version problem.
-	wrongFamily := Candidate{EntityID: "e", TenantID: "tenant-a", Capabilities: []string{capContactOld}}
+	wrongFamily := Candidate{EntityID: "e", TenantID: "tenant-a", Capabilities: []string{capKeyOld}}
 	val2 := binder.Validate([]Requirement{req1}, []Candidate{wrongFamily}, []Binding{{RequirementID: "r", EntityID: "e"}})
 	if !val2.HasCode(CodeCapabilityMismatch) {
 		t.Fatalf("expected CodeCapabilityMismatch, got %+v", val2.Issues)
@@ -305,12 +305,12 @@ func TestVersionCompatibility(t *testing.T) {
 
 func TestCandidateWithMixedCapabilityVersions(t *testing.T) {
 	binder := Binder{TenantID: "tenant-a"}
-	req := Requirement{ID: "r", Capability: capAlarmV2, Cardinality: CardinalityOne}
+	req := Requirement{ID: "r", Capability: capBuzzerV2, Cardinality: CardinalityOne}
 
 	// The entity provides an old (incompatible) and a new (compatible) version;
 	// the compatible one must win.
-	candidate := Candidate{EntityID: "e", TenantID: "tenant-a", Capabilities: []string{capAlarm, capAlarmV2}}
+	candidate := Candidate{EntityID: "e", TenantID: "tenant-a", Capabilities: []string{capBuzzer, capBuzzerV2}}
 	if _, err := binder.Match([]Requirement{req}, []Candidate{candidate}); err != nil {
-		t.Fatalf("a compatible alarm@2 capability must win over alarm@1, got error: %v", err)
+		t.Fatalf("a compatible buzzer@2 capability must win over buzzer@1, got error: %v", err)
 	}
 }
