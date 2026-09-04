@@ -306,3 +306,62 @@ func TestAppHostObservedProjectionFeedsPlane(t *testing.T) {
 func onlineDevice(id, edgeID string) *api.DeviceView {
 	return &api.DeviceView{ID: id, EdgeID: edgeID, Online: true, State: map[string]any{}}
 }
+
+// TestRouteDeviceEventIsolation 锁定设备事件扇入的路由内核（P5 软件层）：
+// 同租户 + 实体绑定的实例才收到事件；跨租户设备事件绝不路由给其他租户的
+// 应用；未绑定实体不投递；空实体 no-op；nil 接收者安全。
+// 物理按键（key@1/press）无法自动化——这是它全部软件路径的可测边界。
+func TestRouteDeviceEventIsolation(t *testing.T) {
+	_, srv, _, _, tid, _ := setupPluginSync(t)
+	ah, err := NewAppHost(srv, AppHostConfig{
+		Enabled:    true,
+		PluginsDir: t.TempDir(),
+		LockPath:   filepath.Join(t.TempDir(), "plugins.lock"),
+		StateDir:   t.TempDir(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(ah.Close)
+	srv.SetAppHost(ah)
+
+	mkRun := func(tenant int64, instance string, entities map[string]string) {
+		t.Helper()
+		ah.mu.Lock()
+		defer ah.mu.Unlock()
+		ah.running[instance] = &appInstanceRun{
+			row:         store.PluginInstanceRow{TenantID: tenant, InstanceID: instance},
+			reqByEntity: entities,
+		}
+	}
+	mkRun(tid, "box-a", map[string]string{"key1": "compartments", "buzz": "reminder-output"})
+	mkRun(tid, "box-b", map[string]string{"key2": "compartments"})
+	mkRun(tid+1, "box-foreign", map[string]string{"key1": "compartments"})
+
+	// 同租户 + 已绑定：只路由到绑定该实体的实例
+	routes := ah.routeDeviceEvent(tid, "key1")
+	if len(routes) != 1 || routes[0].run.row.InstanceID != "box-a" || routes[0].req != "compartments" {
+		t.Fatalf("key1 路由 = %+v（want 仅 box-a/compartments）", routes)
+	}
+	// 另一实体路由到另一实例（绑定映射按实体区分）
+	routes = ah.routeDeviceEvent(tid, "key2")
+	if len(routes) != 1 || routes[0].run.row.InstanceID != "box-b" {
+		t.Fatalf("key2 路由 = %+v（want 仅 box-b）", routes)
+	}
+	// 未绑定实体：不投递
+	if routes := ah.routeDeviceEvent(tid, "key9-unbound"); len(routes) != 0 {
+		t.Fatalf("未绑定实体不得投递: %+v", routes)
+	}
+	// 跨租户：其他租户的事件只路由到该租户自己的实例
+	routes = ah.routeDeviceEvent(tid+1, "key1")
+	if len(routes) != 1 || routes[0].run.row.InstanceID != "box-foreign" {
+		t.Fatalf("跨租户事件路由 = %+v（want 仅 box-foreign，绝不进 box-a）", routes)
+	}
+	// 空实体：no-op
+	if routes := ah.routeDeviceEvent(tid, ""); len(routes) != 0 {
+		t.Fatalf("空实体 = %+v", routes)
+	}
+	// nil 接收者安全（未启用 AppHost 的 Server 直接调用路径）
+	var nilHost *AppHost
+	nilHost.DispatchDeviceEvent(tid, "e1/d1", "key1", "cloudpath.dev/capability/key@1/press", 0)
+}

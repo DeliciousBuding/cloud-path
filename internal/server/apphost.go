@@ -404,35 +404,49 @@ func appConfigBytes(configJSON string) []byte {
 
 // ---- 事件扇入（Server ws.go MsgEvent → 这里 → appruntime.DispatchEvent）----
 
+// routedEvent 是一条设备事件路由结果：哪个实例、经哪个 requirement 收到该实体。
+type routedEvent struct {
+	run *appInstanceRun
+	req string
+}
+
+// routeDeviceEvent 返回应收到该设备事件的应用路由：同租户且绑定该实体的实例。
+// 隔离在此层强制——跨租户设备的 event 绝不路由给其他租户的应用，未绑定实体
+// 不投递。纯函数（只读 h.running 快照），是 DispatchDeviceEvent 的可测内核。
+func (h *AppHost) routeDeviceEvent(deviceTenantID int64, entityID string) []routedEvent {
+	if entityID == "" {
+		return nil
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var out []routedEvent
+	for _, r := range h.running {
+		if r.row.TenantID != deviceTenantID {
+			continue
+		}
+		if req, ok := r.reqByEntity[entityID]; ok {
+			out = append(out, routedEvent{run: r, req: req})
+		}
+	}
+	return out
+}
+
 // DispatchDeviceEvent 把一条设备事件路由到绑定了该实体的应用实例。
 // nil 接收者安全（未启用 AppHost 时 Server 直接调用）。
 func (h *AppHost) DispatchDeviceEvent(deviceTenantID int64, deviceKey, entityID, eventType string, ts int64) {
 	if h == nil || entityID == "" {
 		return
 	}
-	h.mu.Lock()
-	runs := make([]*appInstanceRun, 0, len(h.running))
-	for _, r := range h.running {
-		if r.row.TenantID == deviceTenantID {
-			runs = append(runs, r)
-		}
-	}
-	h.mu.Unlock()
-
 	occurred := time.Unix(ts, 0).UTC().Format(time.RFC3339)
-	for _, run := range runs {
-		req, ok := run.reqByEntity[entityID]
-		if !ok {
-			continue
-		}
-		err := h.rt.DispatchEvent(h.ctxOrBackground(), run.row.InstanceID, &sdkapplication.ApplicationEvent{
+	for _, route := range h.routeDeviceEvent(deviceTenantID, entityID) {
+		err := h.rt.DispatchEvent(h.ctxOrBackground(), route.run.row.InstanceID, &sdkapplication.ApplicationEvent{
 			Union: &sdkapplication.CapabilityEvent{
-				RequirementID: req, EntityID: entityID, EventType: eventType,
+				RequirementID: route.req, EntityID: entityID, EventType: eventType,
 				PayloadJSON: "{}", OccurredAt: occurred,
 			},
 		})
 		if err != nil {
-			h.logger.Warn("apphost dispatch event", "instance", run.row.InstanceID, "entity", entityID, "err", err)
+			h.logger.Warn("apphost dispatch event", "instance", route.run.row.InstanceID, "entity", entityID, "err", err)
 		}
 	}
 }
