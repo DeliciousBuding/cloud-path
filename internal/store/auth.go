@@ -43,7 +43,7 @@ type SessionRow struct {
 
 // EnsureDefaultTenant 幂等创建 default 租户（首装自动创建），返回其 id。
 func (s *Store) EnsureDefaultTenant() (int64, error) {
-	if _, err := s.db.Exec(
+	if _, err := s.exec(
 		`INSERT OR IGNORE INTO tenant(slug,name,created_at) VALUES('default','default',?)`, now()); err != nil {
 		return 0, fmt.Errorf("store: ensure default tenant: %w", err)
 	}
@@ -56,7 +56,7 @@ func (s *Store) EnsureDefaultTenant() (int64, error) {
 
 // CreateTenant 创建新租户（P2 测试/后续租户管理使用），返回其 id。
 func (s *Store) CreateTenant(slug, name string) (int64, error) {
-	res, err := s.db.Exec(`INSERT INTO tenant(slug,name,created_at) VALUES(?,?,?)`, slug, name, now())
+	res, err := s.exec(`INSERT INTO tenant(slug,name,created_at) VALUES(?,?,?)`, slug, name, now())
 	if err != nil {
 		return 0, fmt.Errorf("store: create tenant: %w", err)
 	}
@@ -161,7 +161,7 @@ func (s *Store) GetUserByUsername(username string) (AuthUser, error) {
 // CreateSession 落一条服务端会话（登录成功调用；每次登录都新 ID，天然防会话固定）。
 func (s *Store) CreateSession(id string, userID, expiresAt int64) error {
 	ts := now()
-	_, err := s.db.Exec(`
+	_, err := s.exec(`
 		INSERT INTO sessions(id,user_id,created_at,expires_at,last_seen_at) VALUES(?,?,?,?,?)`,
 		id, userID, ts, expiresAt, ts)
 	if err != nil {
@@ -192,7 +192,7 @@ func (s *Store) UserBySession(id string, at int64) (AuthUser, error) {
 
 // TouchSession 刷新会话最近活跃时间（节流调用，避免每请求一次写）。
 func (s *Store) TouchSession(id string, lastSeen int64) error {
-	_, err := s.db.Exec(
+	_, err := s.exec(
 		`UPDATE sessions SET last_seen_at=? WHERE id=? AND expires_at>?`, lastSeen, id, lastSeen)
 	if err != nil {
 		return fmt.Errorf("store: touch session: %w", err)
@@ -202,7 +202,7 @@ func (s *Store) TouchSession(id string, lastSeen int64) error {
 
 // DeleteSession 删除会话（登出；幂等，不存在也返回 nil）。
 func (s *Store) DeleteSession(id string) error {
-	if _, err := s.db.Exec(`DELETE FROM sessions WHERE id=?`, id); err != nil {
+	if _, err := s.exec(`DELETE FROM sessions WHERE id=?`, id); err != nil {
 		return fmt.Errorf("store: delete session: %w", err)
 	}
 	return nil
@@ -210,7 +210,7 @@ func (s *Store) DeleteSession(id string) error {
 
 // PruneSessions 删除过期会话，返回删除行数（保留期维护复用）。
 func (s *Store) PruneSessions(before int64) (int64, error) {
-	res, err := s.db.Exec(`DELETE FROM sessions WHERE expires_at <= ?`, before)
+	res, err := s.exec(`DELETE FROM sessions WHERE expires_at <= ?`, before)
 	if err != nil {
 		return 0, fmt.Errorf("store: prune sessions: %w", err)
 	}

@@ -22,7 +22,7 @@ type AuditEvent struct {
 
 // InsertAuditEvent 追加一条审计事件。写失败由调用方消化（audit 失败不得改变业务结果）。
 func (s *Store) InsertAuditEvent(ev AuditEvent) error {
-	res, err := s.db.Exec(`
+	res, err := s.exec(`
 		INSERT INTO audit_events(tenant_id, actor_type, actor_id, actor_name, action,
 			target_type, target_id, outcome, request_id, remote_ip, metadata_json, created_at)
 		VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,

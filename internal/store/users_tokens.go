@@ -92,7 +92,7 @@ func (s *Store) CreateUser(tenantID int64, username, name, role, passwordHash st
 	if !validRole(role) {
 		return AuthUser{}, ErrInvalidRole
 	}
-	res, err := s.db.Exec(`
+	res, err := s.exec(`
 		INSERT INTO users(tenant_id,username,name,role,password_hash,created_at,disabled)
 		VALUES(?,?,?,?,?,?,0)`,
 		tenantID, username, name, role, passwordHash, now())
@@ -192,7 +192,7 @@ func (s *Store) CountEnabledAdmins(tenantID int64) (int64, error) {
 
 // DeleteSessionsByUser 撤销用户全部会话，返回删除行数（幂等）。
 func (s *Store) DeleteSessionsByUser(userID int64) (int64, error) {
-	res, err := s.db.Exec(`DELETE FROM sessions WHERE user_id=?`, userID)
+	res, err := s.exec(`DELETE FROM sessions WHERE user_id=?`, userID)
 	if err != nil {
 		return 0, fmt.Errorf("store: revoke sessions: %w", err)
 	}
@@ -205,7 +205,7 @@ func (s *Store) CreateTenantToken(tenantID int64, name, hash, prefix, scopesJSON
 	if expiresAt != nil {
 		exp = *expiresAt
 	}
-	res, err := s.db.Exec(`
+	res, err := s.exec(`
 		INSERT INTO tenant_tokens(tenant_id,name,prefix,hash,scopes,expires_at,created_at)
 		VALUES(?,?,?,?,?,?,?)`,
 		tenantID, name, prefix, hash, scopesJSON, exp, now())
@@ -255,7 +255,7 @@ func (s *Store) GetTenantTokenByHash(hash string) (TokenRow, error) {
 
 // RevokeTenantToken 吊销租户内令牌（幂等语义由 handler 决定 404/204），返回是否命中。
 func (s *Store) RevokeTenantToken(id, tenantID int64) (bool, error) {
-	res, err := s.db.Exec(
+	res, err := s.exec(
 		`UPDATE tenant_tokens SET revoked_at=? WHERE id=? AND tenant_id=? AND revoked_at IS NULL`,
 		now(), id, tenantID)
 	if err != nil {
@@ -278,7 +278,7 @@ func (s *Store) RevokeTenantToken(id, tenantID int64) (bool, error) {
 
 // TouchTenantToken 节流刷新 last_used_at（避免每请求一次写库）。
 func (s *Store) TouchTenantToken(id, at int64) error {
-	_, err := s.db.Exec(
+	_, err := s.exec(
 		`UPDATE tenant_tokens SET last_used_at=? WHERE id=? AND (last_used_at IS NULL OR last_used_at < ?)`,
 		at, id, at-60)
 	if err != nil {

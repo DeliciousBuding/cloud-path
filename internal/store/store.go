@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -118,6 +119,33 @@ func (s *Store) Version() int { return schemaVersion }
 
 // Close 关闭数据库。
 func (s *Store) Close() error { return s.db.Close() }
+
+// busyRetryAttempts 是 SQLITE_BUSY/database is locked 的有界重试次数。
+// busy_timeout 先等 5s；此处再做小步重试，覆盖短暂写锁尖峰（例如重连风暴）。
+const busyRetryAttempts = 5
+
+// isBusyErr 判断 err 是否属于可安全重试的 SQLite 写锁错误。
+func isBusyErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "SQLITE_BUSY") || strings.Contains(s, "database is locked")
+}
+
+// exec 是 s.db.Exec 的写锁重试包装：普通错误原样返回，写锁错误有界退避重试。
+func (s *Store) exec(query string, args ...any) (sql.Result, error) {
+	var res sql.Result
+	var err error
+	for attempt := 0; attempt < busyRetryAttempts; attempt++ {
+		res, err = s.db.Exec(query, args...)
+		if !isBusyErr(err) {
+			return res, err
+		}
+		time.Sleep(time.Duration(attempt+1) * 20 * time.Millisecond)
+	}
+	return res, err
+}
 
 func now() int64 { return time.Now().Unix() }
 
@@ -233,7 +261,7 @@ func (s *Store) upsertDevice(id, edgeID, adapter, name, port string, tenantID in
 		return err
 	}
 	ts := now()
-	res, err := s.db.Exec(`
+	res, err := s.exec(`
 		INSERT INTO devices(id, edge_id, adapter, name, port, first_seen, last_seen, tenant_id)
 		VALUES(?,?,?,?,?,?,?,?)
 		ON CONFLICT(id) DO UPDATE SET
@@ -315,7 +343,7 @@ func (s *Store) SetState(deviceID, stateJSON string, online bool, updatedAt int6
 	if online {
 		o = 1
 	}
-	_, err := s.db.Exec(`
+	_, err := s.exec(`
 		INSERT INTO device_state(device_id, tenant_id, state, online, updated_at)
 		SELECT id, tenant_id, ?, ?, ? FROM devices WHERE id=?
 		ON CONFLICT(device_id) DO UPDATE SET
@@ -325,7 +353,7 @@ func (s *Store) SetState(deviceID, stateJSON string, online bool, updatedAt int6
 	if err != nil {
 		return err
 	}
-	_, err = s.db.Exec(`UPDATE devices SET last_seen=? WHERE id=?`, updatedAt, deviceID)
+	_, err = s.exec(`UPDATE devices SET last_seen=? WHERE id=?`, updatedAt, deviceID)
 	return err
 }
 
@@ -359,7 +387,7 @@ func (s *Store) GetStates() (map[string]StateRow, error) {
 
 // AddEvent 写入一条事件，返回行 ID；tenant_id 由 devices 表继承，设备缺失时回落 default。
 func (s *Store) AddEvent(deviceID, typ, payload string, ts int64) (int64, error) {
-	res, err := s.db.Exec(`
+	res, err := s.exec(`
 		INSERT INTO events(device_id, tenant_id, ts, type, payload)
 		VALUES(?, COALESCE((SELECT tenant_id FROM devices WHERE id=?), (SELECT id FROM tenant WHERE slug='default')), ?, ?, ?)`,
 		deviceID, deviceID, ts, typ, payload)
@@ -375,7 +403,7 @@ func (s *Store) AddEventTenant(tenantID int64, deviceID, typ, payload string, ts
 	if err != nil {
 		return 0, err
 	}
-	res, err := s.db.Exec(`
+	res, err := s.exec(`
 		INSERT INTO events(device_id, tenant_id, ts, type, payload)
 		SELECT id, tenant_id, ?, ?, ? FROM devices WHERE id=? AND tenant_id=?`,
 		ts, typ, payload, deviceID, tid)
@@ -443,7 +471,7 @@ func (s *Store) listEvents(tenantID int64, deviceID string, since int64, limit i
 
 // PruneEvents 删除 ts < before 的事件（保留期清理），返回删除行数。
 func (s *Store) PruneEvents(before int64) (int64, error) {
-	res, err := s.db.Exec(`DELETE FROM events WHERE ts < ?`, before)
+	res, err := s.exec(`DELETE FROM events WHERE ts < ?`, before)
 	if err != nil {
 		return 0, err
 	}
@@ -453,7 +481,7 @@ func (s *Store) PruneEvents(before int64) (int64, error) {
 // PruneCommands 删除 ts < before 的终态命令（保留期清理），返回删除行数。
 // 仅清理已结算状态，避免误删仍在等待回执的命令行。
 func (s *Store) PruneCommands(before int64) (int64, error) {
-	res, err := s.db.Exec(`DELETE FROM commands WHERE created_at < ? AND status IN ('ok','failed','timeout')`, before)
+	res, err := s.exec(`DELETE FROM commands WHERE created_at < ? AND status IN ('ok','failed','timeout')`, before)
 	if err != nil {
 		return 0, err
 	}
@@ -507,7 +535,7 @@ func (s *Store) stats(tenantID int64) (Stats, error) {
 
 // CreateCommand 建命令行（pending），返回命令 ID；tenant_id 由 devices 表继承，设备缺失时回落 default。
 func (s *Store) CreateCommand(deviceID, cmd, args string) (int64, error) {
-	res, err := s.db.Exec(`
+	res, err := s.exec(`
 		INSERT INTO commands(device_id, tenant_id, cmd, args, status, created_at)
 		VALUES(?, COALESCE((SELECT tenant_id FROM devices WHERE id=?), (SELECT id FROM tenant WHERE slug='default')), ?, ?, 'pending', ?)`,
 		deviceID, deviceID, cmd, args, now())
@@ -523,7 +551,7 @@ func (s *Store) CreateCommandTenant(deviceID, cmd, args string, tenantID int64) 
 	if err != nil {
 		return 0, err
 	}
-	res, err := s.db.Exec(`
+	res, err := s.exec(`
 		INSERT INTO commands(device_id, tenant_id, cmd, args, status, created_at)
 		SELECT id, tenant_id, ?, ?, 'pending', ? FROM devices WHERE id=? AND tenant_id=?`,
 		cmd, args, now(), deviceID, tid)
@@ -542,7 +570,7 @@ func (s *Store) CreateCommandTenant(deviceID, cmd, args string, tenantID int64) 
 
 // UpdateCommandStatus 更新命令状态与回执（default 兼容包装）。
 func (s *Store) UpdateCommandStatus(id int64, status, result string) error {
-	_, err := s.db.Exec(`UPDATE commands SET status=?, result=?, acked_at=? WHERE id=?`,
+	_, err := s.exec(`UPDATE commands SET status=?, result=?, acked_at=? WHERE id=?`,
 		status, result, now(), id)
 	return err
 }
@@ -553,7 +581,7 @@ func (s *Store) UpdateCommandStatusScoped(id int64, deviceID string, tenantID in
 	if err != nil {
 		return false, err
 	}
-	res, err := s.db.Exec(`
+	res, err := s.exec(`
 		UPDATE commands SET status=?, result=?, acked_at=?
 		WHERE id=? AND device_id=? AND tenant_id=?`,
 		status, result, now(), id, deviceID, tid)
@@ -626,7 +654,7 @@ func (s *Store) listCommands(tenantID int64, deviceID, status string, limit int)
 // TimeoutStaleCommands 把超过 ttl 仍 pending/sent 的命令标记 timeout，返回受影响行。
 func (s *Store) TimeoutStaleCommands(ttl time.Duration) (int64, error) {
 	cutoff := time.Now().Add(-ttl).Unix()
-	res, err := s.db.Exec(`UPDATE commands SET status='timeout', acked_at=?, result='edge 未回执'
+	res, err := s.exec(`UPDATE commands SET status='timeout', acked_at=?, result='edge 未回执'
 		WHERE status IN ('pending','sent') AND created_at < ?`, now(), cutoff)
 	if err != nil {
 		return 0, err

@@ -165,7 +165,7 @@ func (s *Store) SetTenantPolicy(tenantID int64, p TenantPolicyRow) error {
 	if updated <= 0 {
 		updated = now()
 	}
-	_, err = s.db.Exec(`
+	_, err = s.exec(`
 		INSERT INTO tenant_policies(tenant_id,
 			retention_events_days, retention_commands_days, retention_audit_days,
 			retention_revoked_tokens_days, retention_plugin_observed_days,
@@ -241,7 +241,7 @@ func (s *Store) PrunePluginObservations(tenantID int64, before int64) (int64, er
 	if before <= 0 {
 		return 0, fmt.Errorf("store: prune plugin observations: before 必须为正")
 	}
-	res, err := s.db.Exec(
+	res, err := s.exec(
 		`DELETE FROM plugin_observations WHERE tenant_id=? AND reported_at < ?`, tid, before)
 	if err != nil {
 		return 0, fmt.Errorf("store: prune plugin observations: %w", err)
