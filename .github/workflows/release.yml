@@ -150,6 +150,7 @@ jobs:
       - name: Collect artifacts from every platform
         uses: actions/download-artifact@v4
         with:
+          pattern: dist-*
           path: dist
           merge-multiple: true
 
