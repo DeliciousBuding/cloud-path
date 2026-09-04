@@ -62,11 +62,16 @@ cfg := driverkit.Config{
 
 | 命令 | 线上写入 | 说明 |
 |---|---|---|
+| `sensor` | `V` | 请求 V 帧全量传感器快照（温度/光照/导航/扩展/霍尔/振动/按键/秒） |
 | `dump` | `S` | 请求一次状态转储 |
 | `trigger` | `R` | 触发提醒（联调用） |
 | `open` | `O` | 模拟一次确认动作 |
 | `sync` | `T` + `HHMM` | 对时。逐字节 50ms 慢发（固件命令缓冲只有 1 字节，快发会丢） |
 | `isp` | `D` | 延迟 5 秒软复位进入 ISP 烧录模式（设备随后离线） |
+| `buzzer` | `B` + 2 数字 | 蜂鸣：频率档 + 时长档（各 0-9，`{"freq":4,"duration":3}`） |
+| `led` | `L` + 2 数字 | LED 档 0-9（0=灭 1-8=对应 LED 9=全亮），第二字节保留 0 |
+| `display` | `N` + 8 数字 | 2 位数码管 8 格数字（每格 0-9，`{"digits":[1,2,3,4,5,6,7,8]}`） |
+| `motor` | `M` + 1 数字 | 步进电机档 0-4（0=停，`{"steps":2}`） |
 | `raw` | `args` 原样 | 高级：直接写串口（server 侧限制长度 ≤64、不含换行/NUL） |
 
 命令集由 `SupportedCommands()` 声明；server 拒绝白名单外的命令。
@@ -80,10 +85,17 @@ cfg := driverkit.Config{
 | `state` | int | 状态机：0 待机 / 1 提醒中 / 2 逾期 |
 | `state_label` | string | 状态中文标签 |
 | `hour` `min` | int | 设备钟（时/分） |
-| `clock` | string | `"HH:MM"` |
+| `clock` | string | `"HH:MM"`（有 V 帧时 `"HH:MM:SS"`） |
 | `slots` | array | 三个槽位 `{index, code, label}`，code：0 待确认 / 1 已确认 / 2 逾期 |
 | `drift_min` | number | 设备钟与参考时间（Asia/Shanghai）的偏差分钟数 |
 | `dump_raw` | string | 原始转储行（取证/排障） |
+| `sec` | int | 设备钟秒（来自 V 帧，0-59） |
+| `temp_c` | number | 热敏温度（℃，Rt ADC 换算） |
+| `illuminance` | int | 光敏原始 ADC（相对光强） |
+| `hall` | int | 霍尔：0=无磁场 1=触发 |
+| `vibration` | int | 振动：0=静止 1=触发 |
+| `key` | int | 按键 K1：0=未按 1=按下 |
+| `sensor_raw` | string | 原始 V 帧行（取证/排障） |
 
 ## 板级限制（适配时必须知道）
 
@@ -128,8 +140,8 @@ go vet ./examples/stcb/...
 | version / protocol | `0.1.0` / `1` |
 | entrypoint（拆仓后二进制） | `cloudpath-driver-stcb` |
 | driver contribution id | `stcb` |
-| capability | `cloudpath.dev/capability/clock@1`、`cloudpath.dev/capability/alarm@1`、`cloudpath.dev/capability/contact@1` |
-| entity | `clock`、`alarm`、`compartment-1..3` |
+| capability | `clock@1`、`alarm@1`、`contact@1`、`temperature@1`、`illuminance@1`、`hall@1`、`vibration@1`、`key@1`、`buzzer@1`、`led@1`、`display-text@1`、`motor@1`（`cloudpath.dev/capability/` 前缀） |
+| entity | `clock`、`alarm`、`compartment-1..3`、`temperature`、`illuminance`、`hall`、`vibration`、`key`、`buzzer`、`led`、`display`、`motor` |
 
 `plugin.yaml` 与代码常量的交叉锁定见 `manifest_test.go`。
 

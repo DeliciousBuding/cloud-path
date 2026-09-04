@@ -27,6 +27,25 @@ const (
 // 本机绝对路径（端口名 COM3 属公开的 DeviceMeta.Port，不在此列），
 // 也不回传任何 stdout/stderr 原文。edge 出网前还会再过一次 SanitizeDetail。
 func (d *dev) SendWithResult(ctx context.Context, c driverkit.Command) (string, error) {
+	// 传感器全量快照 V：主动取帧等回包，无回帧诚实报超时（不伪造值）。
+	// 执行器命令 B/L/N/M：固件 1S 拍执行、无独立回帧，返回下发事实摘要即可。
+	switch c.Cmd {
+	case "sensor":
+		before := d.sensorAt()
+		if err := d.Send(ctx, c); err != nil {
+			return "", err
+		}
+		if d.waitSensorAfter(before, dumpResultWindow, ctx) {
+			return d.sensorSummary("sensor"), nil
+		}
+		return d.staleSensorSummary("sensor(V) 已下发，" + fmtWindow(dumpResultWindow) + "内未收到回帧"), nil
+	case "buzzer", "led", "display", "motor":
+		if err := d.Send(ctx, c); err != nil {
+			return "", err
+		}
+		return d.actuatorSummary(c.Cmd, c.Args), nil
+	}
+
 	before := d.dumpAt()
 	if err := d.Send(ctx, c); err != nil {
 		return "", err
@@ -82,6 +101,16 @@ func wireByte(cmd string) string {
 		return "O"
 	case "isp":
 		return "D"
+	case "buzzer":
+		return "B"
+	case "led":
+		return "L"
+	case "display":
+		return "N"
+	case "motor":
+		return "M"
+	case "sensor":
+		return "V"
 	default:
 		return "?"
 	}
@@ -178,4 +207,66 @@ func (d *dev) syncSummary() (string, bool) {
 	}
 	return fmt.Sprintf("clock=%02d:%02d drift_min=%g state=%s",
 		dump.Hour, dump.Min, DriftMin(dump.Hour, dump.Min, BeijingNow()), StateLabel(dump.State)), true
+}
+
+// actuatorSummary 返回执行器命令的下发事实摘要（固件无独立回帧，诚实说明执行时机）。
+func (d *dev) actuatorSummary(cmd, args string) string {
+	return fmt.Sprintf("%s(%s) 已下发，args=%s（固件 1S 拍执行，无独立回帧）", cmd, wireByte(cmd), args)
+}
+
+// sensorAt 返回最近一帧 V 帧快照的解析时刻（零值表示从未收到）。
+func (d *dev) sensorAt() time.Time {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.lastSensor
+}
+
+// hasFreshSensor 报告是否已收到比 before 更新的 V 帧。
+func (d *dev) hasFreshSensor(before time.Time) bool {
+	last := d.sensorAt()
+	return !last.IsZero() && last.After(before)
+}
+
+// waitSensorAfter 在 window 内轮询等待一帧比 before 更新的 V 帧。
+// ctx 取消或端口死亡立即返回 false（不阻塞命令超时预算）。
+func (d *dev) waitSensorAfter(before time.Time, window time.Duration, ctx context.Context) bool {
+	deadline := time.Now().Add(window)
+	for time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-d.done:
+			return false
+		default:
+		}
+		if d.hasFreshSensor(before) {
+			return true
+		}
+		time.Sleep(frameWaitPollDelay)
+	}
+	return d.hasFreshSensor(before)
+}
+
+// sensorSummary 用当前真实 V 帧组装一行摘要（prefix 标明是哪条命令的结果）。
+func (d *dev) sensorSummary(prefix string) string {
+	d.mu.Lock()
+	s := d.sensor
+	d.mu.Unlock()
+	if s == nil {
+		return prefix + " 已下发（暂无传感器帧）"
+	}
+	return fmt.Sprintf("%s sensor_raw=%s clock=%02d:%02d:%02d state=%s temp_c=%g rop=%d hall=%d vib=%d key=%d",
+		prefix, s.Raw, s.Hour, s.Min, s.Sec, StateLabel(s.State), TempC(s.Rt), s.Rop, s.Hall, s.Vib, s.Key)
+}
+
+// staleSensorSummary 在未收到新 V 帧时诚实报告：说明未回帧，并附最近已知帧与其年龄。
+func (d *dev) staleSensorSummary(prefix string) string {
+	d.mu.Lock()
+	s, last := d.sensor, d.lastSensor
+	d.mu.Unlock()
+	if s == nil || last.IsZero() {
+		return prefix + "（尚无历史传感器帧）"
+	}
+	return fmt.Sprintf("%s；last clock=%02d:%02d:%02d state=%s age=%s",
+		prefix, s.Hour, s.Min, s.Sec, StateLabel(s.State), time.Since(last).Round(time.Second).String())
 }
