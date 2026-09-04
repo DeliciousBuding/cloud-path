@@ -76,4 +76,5 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 | 版本 | 状态 | 说明 |
 |---|---|---|
 | `v0.1.0` | 已发布（2026-09-04） | 首个公开版本；release workflow 自动产出 18 二进制 + checksums.txt |
+| `v0.2.3` | 已发布（2026-09-05） | AppHost 接线完成（Server 侧 Application Plugin Host + app_domain_records schema v9）；外部 Driver capability 迟到重报；Scheduled Compartment 迁移通用 Capability；真板七阶段 E2E 全绿（Reference Rig） |
 | `dev` | 本地 | `task build` / `task build:matrix` 的未打标产物（`git describe` 兜底） |
