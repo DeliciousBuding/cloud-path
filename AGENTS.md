@@ -40,6 +40,8 @@ CloudPath（云径）是**云原生、插件驱动的互联物联网控制平台
 | 中心服务（路由/hub/限流/保留期） | `internal/server/{server.go,ws.go}` |
 | 持久层与迁移 | `internal/store/{store.go,schema.sql,schema_v2.sql}` |
 | 前端页面/组件/store | `webui/src/{pages,components,store,hooks,lib}` |
+| 容器化部署（L0/L2 + TLS） | `deploy/compose/{docker-compose.yml,docker-compose.public.yml}` |
+| CI/CD 发版（6 平台二进制 + GHCR 多 arch 镜像） | `.github/workflows/{ci,release,container}.yml` |
 | 设计系统（CSS 变量/动效/骨架） | `webui/src/index.css` |
 | 一键任务 | `Taskfile.yml` |
 | 技术设计 SSOT | `docs/design.md` |
@@ -58,6 +60,8 @@ task dev:web      # :5173 Vite dev server
 task dev:edge     # 读 ./edge.yaml
 task run          # 生产模式本地全栈（内嵌 UI）
 ```
+
+# 发布矩阵（6 平台二进制 + 架构断言 + checksums）：task build:matrix；复跑校验：task verify:arch；发布前聚合门禁：task verify
 
 无 task 时：`go build -tags embed_ui -o bin/ ./cmd/cloudpath-server`、
 `go test ./... -count=1`、`cd webui && pnpm build`。

@@ -69,20 +69,26 @@ docker run --rm --name cloudpath-server \
   cloudpath:local
 ```
 
-用 compose（推荐）：
+用 compose（推荐；容器形态参考 `deploy/compose/`）：
 
 ```bash
-cd deploy
-cp config.env.example .env
-# 编辑 .env，至少替换 CLOUDPATH_TOKEN 和 CLOUDPATH_ALLOWED_ORIGINS
+cd deploy/compose
+cp .env.example .env
+# 编辑 .env，至少替换 CLOUDPATH_TOKEN / CLOUDPATH_SETUP_TOKEN / CLOUDPATH_ALLOWED_ORIGINS
+# L0 本机（只绑 127.0.0.1:8080）：
 docker compose -f docker-compose.yml up -d --build
-docker compose -f docker-compose.yml ps
+# L2 公网（server + nginx TLS/WSS 反代，见 deploy/compose/README.md）：
+docker compose -f docker-compose.public.yml up -d --build
 curl -fsS http://127.0.0.1:8080/healthz
 ```
 
-`deploy/docker-compose.yml` 已提供启动参数、`/data` 持久卷和健康检查。
-`CLOUDPATH_BIND` 默认 `127.0.0.1:8080`（只暴露本机），公网部署不要把它改成
-`0.0.0.0:8080` 直出版口；TLS 交给反向代理。
+`deploy/compose/` 提供两套形态：`docker-compose.yml`（L0 本机）与
+`docker-compose.public.yml`（L2 公网，含 nginx TLS）。`CLOUDPATH_BIND` 默认
+`127.0.0.1:8080`（只暴露本机），公网不要改成 `0.0.0.0:8080` 直出；TLS 交给反代。
+
+> ⚠️ **容器首装**：Docker 端口映射后 server 进程看到的源 IP 是网关（非回环），所以从宿主
+> `POST /api/auth/setup` 会 403。应在 server 容器内走回环，或设 `CLOUDPATH_SETUP_TOKEN`
+> 后带 `X-Cloudpath-Setup-Token` 头首装（详见 `deploy/compose/README.md`）。
 
 ## 4. edge 容器（可选）
 

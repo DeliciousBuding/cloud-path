@@ -187,7 +187,7 @@ curl -fsS http://127.0.0.1:8080/api/edges                 # 边缘节点在线�
    不要再挂一层 auth_request/basic auth。
 5. **先首装账号，再放开公网入口**：`POST /api/auth/setup` 的放行判据是真实 TCP 对端是否回环，
    同机反代转发过来的请求对端就是回环——所以必须在启用 nginx 站点之前，从主机本机完成首装。
-6. 容器/compose 形态仍可用（[deploy/docker-compose.yml](deploy/docker-compose.yml)），
+6. 容器/compose 形态仍可用（[deploy/compose/](deploy/compose/README.md)），
    但注意**宿主架构必须与镜像架构一致**，否则同样是 `exec format error`。
 
 健康检查 `GET /healthz`；日志走 journald（JSON 结构化）；备份与保留期策略见
