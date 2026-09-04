@@ -42,7 +42,7 @@ export function Panel({ title, right, className, children }: {
   title?: ReactNode; right?: ReactNode; className?: string; children: ReactNode
 }) {
   return (
-    <section className={cn('card p-5', className)}>
+    <section className={cn('card p-4', className)}>
       {(title || right) && (
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
@@ -73,7 +73,7 @@ export function StatTile({ icon, label, value, unit, sub }: {
 }) {
   return (
     // 390px：两列统计瓦片内宽仅约 8rem，长版本号等不可断字符串必须换行，否则撑出横向滚动
-    <div className="card min-w-0 p-5 fade-up">
+    <div className="card min-w-0 p-4 fade-up">
       <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-ink-2">
         {icon}<span className="truncate">{label}</span>
       </div>
