@@ -26,7 +26,7 @@ const (
 	defaultPluginsDir  = "plugins.d"
 	defaultLockFile    = "plugins.lock"
 	defaultSchemaPath  = "spec/plugin-manifest.schema.json"
-	defaultCoreVersion = "0.2.7"
+	defaultCoreVersion = "0.2.8"
 	defaultStateDir    = "data/plugin-state"
 	defaultDataDir     = "data/plugin-data"
 	defaultTenant      = "default"
