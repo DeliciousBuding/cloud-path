@@ -31,7 +31,7 @@ export function SyncBanner({ v }: { v: PluginInstanceView }) {
         <span className="mt-0.5 block text-[12px] leading-relaxed break-words text-ink-2">{s.hint}</span>
       </span>
       <Badge tone={s.tone} className="num shrink-0">
-        rev {v.desired_revision}/{v.applied_revision}
+        修订 {v.desired_revision}/{v.applied_revision}
       </Badge>
     </div>
   )
@@ -68,11 +68,11 @@ function UnreportedBlock({ v }: { v: PluginInstanceView }) {
       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-3/12 text-ink-2">
         {v.edge_online ? <RadioTower size={16} /> : <CloudOff size={16} />}
       </span>
-      <p className="mt-2.5 text-[13px] font-semibold">Edge 未上报</p>
+      <p className="mt-2.5 text-[13px] font-semibold">边缘节点未上报</p>
       <p className="mt-1 text-[12px] leading-relaxed break-words text-ink-2">
         {v.edge_online
           ? '该 Edge 在线，但还没有回过这个实例的实际态。左栏只是期望，不能据此判断插件是否在运行。'
-          : '该 Edge 离线，因此没有实际态。它重连并应用快照后，这里才会出现运行事实。'}
+          : '该边缘节点离线，因此没有实际态。它重连并应用快照后，这里才会出现运行事实。'}
       </p>
     </div>
   )
@@ -90,28 +90,28 @@ export function DesiredObserved({ v }: { v: PluginInstanceView }) {
   return (
     <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
       <div className="min-w-0 rounded-xl bg-surface-2 p-3 sm:p-3.5">
-        <ColumnHead note="Server 权威">期望态 · Desired</ColumnHead>
+        <ColumnHead note="服务器权威">期望态</ColumnHead>
         <dl className="m-0">
           <Row k="启用" v={v.desired.enabled ? '已启用' : '已停用'}
             tone={v.desired.enabled ? 'accent' : 'idle'} />
           <Row k="版本" v={v.desired.version || '—'} />
-          <Row k="revision" v={v.desired_revision} />
+          <Row k="修订版" v={v.desired_revision} />
           <Row k="隔离" v={isolationLabel(v.desired.isolation)} />
           <Row k="更新于" v={v.desired.updated_at ? fmtDateTime(v.desired.updated_at) : '—'} />
         </dl>
         <p className="mt-2 text-[11px] leading-relaxed text-ink-3">
-          这一栏是「希望它变成什么样」，不代表 Edge 已经执行。
+          这一栏是「希望它变成什么样」，不代表边缘节点已经执行。
         </p>
       </div>
 
       <div className="min-w-0 rounded-xl bg-surface-2 p-3 sm:p-3.5">
-        <ColumnHead note="Edge 上报">实际态 · Observed</ColumnHead>
+        <ColumnHead note="边缘节点上报">实际态</ColumnHead>
         {v.has_observed ? (
           <>
             <dl className="m-0">
               <Row k="运行" v={st.label} tone={st.tone === 'idle' ? undefined : st.tone} />
               <Row k="版本" v={v.observed?.version || '未给出'} />
-              <Row k="applied" v={v.applied_revision} />
+              <Row k="已应用修订" v={v.applied_revision} />
               <Row k="健康" v={hl.label} tone={hl.tone === 'idle' ? undefined : hl.tone} />
               <Row k="重启" v={`${v.observed?.restart_count ?? 0} 次`}
                 tone={(v.observed?.restart_count ?? 0) > 0 ? 'warn' : undefined} />

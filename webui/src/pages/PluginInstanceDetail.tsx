@@ -74,7 +74,7 @@ export default function PluginInstanceDetail() {
           <span className="num min-w-0 truncate">{instance.edge_id || '—'}</span>
         </Link>
         <Badge tone={instance.edge_online ? 'ok' : 'idle'}>
-          {instance.edge_online ? 'Edge 在线' : 'Edge 离线'}
+          {instance.edge_online ? '边缘节点在线' : '边缘节点离线'}
         </Badge>
         <span className="ml-auto shrink-0"><Badge tone={s.tone}>{s.label}</Badge></span>
       </header>
@@ -111,14 +111,14 @@ export default function PluginInstanceDetail() {
               )}
             </Panel>
 
-            <Panel title={<span className="flex items-center gap-1.5"><KeyRound size={14} />Secret handle</span>}>
+            <Panel title={<span className="flex items-center gap-1.5"><KeyRound size={14} />密钥引用</span>}>
               <SecretRefList refs={instance.desired.secret_refs} />
             </Panel>
 
             <Panel title={<span className="flex items-center gap-1.5"><SlidersHorizontal size={14} />配置（非敏感）</span>}>
               <ConfigTable config={instance.desired.config} />
               <p className="mt-3 border-t border-hairline pt-3 text-[11px] leading-relaxed text-ink-3">
-                配置里若出现 secret:// 引用，这里只显示 handle 名。插件的运行日志与本机路径不会出现在这一页。
+                配置里若出现 secret:// 引用，这里只显示引用名。插件的运行日志与本机路径不会出现在这一页。
               </p>
             </Panel>
           </div>
@@ -127,7 +127,7 @@ export default function PluginInstanceDetail() {
             <InstanceControls v={instance} catalog={catalog} showEdit={false}
               onEdit={() => setEditing(true)} />
             <button type="button" className="btn btn-ghost mt-3" onClick={() => setEditing(true)}>
-              <SlidersHorizontal size={13} /> 编辑期望态（版本 / 隔离 / 配置 / secret handle）
+              <SlidersHorizontal size={13} /> 编辑期望态（版本 / 隔离 / 配置 / 密钥引用）
             </button>
           </Panel>
         </>

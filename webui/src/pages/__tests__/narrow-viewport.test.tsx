@@ -162,7 +162,7 @@ describe('Plugins 页（三分都要过）', () => {
     expectContained(LONG)
     expectNoInlinePixelWidth()
     // 双栏并排是这个分区的价值所在：390px 也不许塌成一栏
-    const grid = screen.getByText('期望态 · Desired').closest('.grid') as HTMLElement
+    const grid = screen.getByText('期望态').closest('.grid') as HTMLElement
     expect(grid.className).toContain('grid-cols-2')
   })
 })

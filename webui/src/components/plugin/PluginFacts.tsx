@@ -72,14 +72,14 @@ export function SecretRefList({ refs }: { refs: string[] | undefined }) {
   // 只取 handle 名；去重后排序，避免同一 handle 重复占位
   const entries = [...new Set((refs ?? []).map(secretHandleName))].sort()
   if (entries.length === 0) {
-    return <p className="py-1 text-[12px] text-ink-3">未引用任何 secret</p>
+    return <p className="py-1 text-[12px] text-ink-3">未引用任何密钥</p>
   }
   return (
     <div>
       <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
         {entries.map((name) => (
           <li key={name} className="min-w-0 max-w-full">
-            <span className="badge max-w-full bg-ink-3/10 text-ink-2" title={`secret handle：${name}`}>
+            <span className="badge max-w-full bg-ink-3/10 text-ink-2" title={`密钥引用：${name}`}>
               <Lock size={10} className="shrink-0" />
               <span className="min-w-0 truncate break-all">{name}</span>
             </span>
@@ -118,19 +118,19 @@ export function InstanceFacts({ v, catalog }: { v: PluginInstanceView; catalog?:
   const rows: { k: string; node: ReactNode }[] = [
     { k: '实例 ID', node: <span className="num min-w-0 truncate font-mono" title={v.id}>{v.id}</span> },
     { k: '插件', node: <span className="num min-w-0 truncate font-mono" title={v.desired.plugin_id}>{v.desired.plugin_id || '—'}</span> },
-    { k: 'Edge', node: <span className="num min-w-0 truncate font-mono" title={v.edge_id}>{v.edge_id || '—'}</span> },
-    { k: 'Edge 在线', node: v.edge_online ? '是' : '否' },
+    { k: '边缘节点', node: <span className="num min-w-0 truncate font-mono" title={v.edge_id}>{v.edge_id || '—'}</span> },
+    { k: '边缘节点在线', node: v.edge_online ? '是' : '否' },
     { k: '期望版本', node: v.desired.version || '—' },
     { k: '实际版本', node: v.has_observed ? (v.observed?.version || '未给出') : '未上报' },
-    { k: '期望 revision', node: String(v.desired_revision) },
-    { k: '已应用 revision', node: String(v.applied_revision) },
-    { k: 'Last ACK', node: v.last_ack_at ? fmtDateTime(v.last_ack_at) : '尚无回执' },
+    { k: '期望修订版', node: String(v.desired_revision) },
+    { k: '已应用修订版', node: String(v.applied_revision) },
+    { k: '最后回执', node: v.last_ack_at ? fmtDateTime(v.last_ack_at) : '尚无回执' },
   ]
   return (
     <dl className="m-0 space-y-2.5">
       {rows.map((r) => <KeyValue key={r.k} k={r.k} v={r.node} />)}
       <div className="flex min-w-0 items-baseline justify-between gap-2 border-t border-hairline pt-2.5">
-        <dt className="shrink-0 text-[13px] text-ink-2">Trust</dt>
+        <dt className="shrink-0 text-[13px] text-ink-2">信任目录</dt>
         <dd className="min-w-0 truncate text-right">
           {trust
             ? <Badge tone={trust.tone}>{trust.label}</Badge>

@@ -119,14 +119,14 @@ describe('desired / observed 永远分别呈现', () => {
     expect(d.tone).toBe('warn')
     expect(d.hint).toMatch(/42/)
     expect(d.hint).toMatch(/41/)
-    expect(d.hint).toMatch(/reconcile/)
+    expect(d.hint).toMatch(/重新下发/)
   })
 
   it('stale 优先于 drift（过期数据谈一致性没有意义）', () => {
     expect(syncState(instance({ stale: true, drift: true })).key).toBe('stale')
   })
 
-  it('applied < desired 但未标 drift → 「等待 Edge 应用」，不是成功', () => {
+  it('applied < desired 但未标 drift → 「等待边缘节点应用」，不是成功', () => {
     const p = syncState(instance({ applied_revision: 41, desired_revision: 42 }))
     expect(p.key).toBe('pending')
     expect(p.tone).not.toBe('ok')

@@ -131,7 +131,7 @@ describe('已安装分区：只认 Edge 上报', () => {
     const user = await gotoTab(/已安装/)
     expect(user).toBeDefined()
     expect(await screen.findByText('edge-a')).toBeInTheDocument()
-    expect(screen.getByText('Edge 在线')).toBeInTheDocument()
+    expect(screen.getByText('边缘节点在线')).toBeInTheDocument()
     expect(screen.getByText('运行中')).toBeInTheDocument()
     // 实际版本 v1.1.0 与期望版本 v1.2.0 同时可见，说明两栏没有互相顶替
     expect(screen.getAllByText('v1.1.0').length).toBeGreaterThan(0)
@@ -139,15 +139,15 @@ describe('已安装分区：只认 Edge 上报', () => {
     expect(screen.getByText(/重启 0 次/)).toBeInTheDocument()
   })
 
-  it('has_observed=false → 明确「Edge 未上报」，不拿期望态顶替', async () => {
+  it('has_observed=false → 明确「边缘节点未上报」，不拿期望态顶替', async () => {
     route({ instances: [instance({ has_observed: false, observed: undefined })] })
     renderWithProviders(<Plugins />)
     await gotoTab(/已安装/)
-    expect(await screen.findByText('Edge 未上报')).toBeInTheDocument()
+    expect(await screen.findByText('边缘节点未上报')).toBeInTheDocument()
     expect(screen.queryByText('运行中')).not.toBeInTheDocument()
   })
 
-  it('Edge 离线时如实说明「下面是最后一次上报」，且不影响其他 Edge', async () => {
+  it('边缘节点离线时如实说明「下面是最后一次上报」，且不影响其他节点', async () => {
     route({
       instances: [
         instance({ id: 'edge-a/inst-1', edge_id: 'edge-a', edge_online: false }),
@@ -160,9 +160,9 @@ describe('已安装分区：只认 Edge 上报', () => {
     renderWithProviders(<Plugins />)
     await gotoTab(/已安装/)
     expect(await screen.findByText(/最后一次上报的实际态/)).toBeInTheDocument()
-    expect(screen.getByText('Edge 离线')).toBeInTheDocument()
+    expect(screen.getByText('边缘节点离线')).toBeInTheDocument()
     // 另一台 Edge 照常呈现在线
-    expect(screen.getByText('Edge 在线')).toBeInTheDocument()
+    expect(screen.getByText('边缘节点在线')).toBeInTheDocument()
     expect(screen.getByText('edge-b')).toBeInTheDocument()
   })
 })
@@ -177,12 +177,12 @@ describe('实例分区：desired 与 observed 永远分别渲染', () => {
     })
     renderWithProviders(<Plugins />)
     await gotoTab(/实例/)
-    expect(await screen.findByText('期望态 · Desired')).toBeInTheDocument()
-    expect(screen.getByText('实际态 · Observed')).toBeInTheDocument()
+    expect(await screen.findByText('期望态')).toBeInTheDocument()
+    expect(screen.getByText('实际态')).toBeInTheDocument()
     expect(screen.getByText('v1.2.0')).toBeInTheDocument()
     expect(screen.getByText('v1.1.0')).toBeInTheDocument()
-    expect(screen.getByText(/rev 42/)).toBeInTheDocument()
-    expect(screen.getByText(/applied 41/)).toBeInTheDocument()
+    expect(screen.getByText(/修订 42/)).toBeInTheDocument()
+    expect(screen.getByText(/已应用 41/)).toBeInTheDocument()
     // drift 有独立视觉状态
     expect(screen.getByText('期望与实际不一致')).toBeInTheDocument()
   })
@@ -191,7 +191,7 @@ describe('实例分区：desired 与 observed 永远分别渲染', () => {
     route({ instances: [instance({ has_observed: false, observed: undefined })] })
     renderWithProviders(<Plugins />)
     await gotoTab(/实例/)
-    expect((await screen.findAllByText('Edge 未上报')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('边缘节点未上报')).length).toBeGreaterThan(0)
     expect(screen.getByText('已启用')).toBeInTheDocument()
     expect(screen.queryByText('运行中')).not.toBeInTheDocument()
     expect(screen.queryByText('已收敛')).not.toBeInTheDocument()
@@ -213,10 +213,10 @@ describe('实例分区：desired 与 observed 永远分别渲染', () => {
     expect(await screen.findByText(/已超出新鲜期/)).toBeInTheDocument()
     expect(screen.getByText(/stale · 上报于/)).toBeInTheDocument()
     // 期望态与实际态两栏都在，且各自标注来源
-    expect(screen.getByText('期望态 · Desired')).toBeInTheDocument()
-    expect(screen.getByText('实际态 · Observed')).toBeInTheDocument()
-    expect(screen.getByText('Server 权威')).toBeInTheDocument()
-    expect(screen.getByText('Edge 上报')).toBeInTheDocument()
+    expect(screen.getByText('期望态')).toBeInTheDocument()
+    expect(screen.getByText('实际态')).toBeInTheDocument()
+    expect(screen.getByText('服务器权威')).toBeInTheDocument()
+    expect(screen.getByText('边缘节点上报')).toBeInTheDocument()
   })
 
   it('详情页同时给出 Version/Edge/Trust/Permissions/Health/Revision/Last ACK', async () => {
@@ -224,7 +224,7 @@ describe('实例分区：desired 与 observed 永远分别渲染', () => {
     renderDetail()
     expect(await screen.findByText('事实一览')).toBeInTheDocument()
     // 'Edge 在线' 在头部徽标与事实一览里各出现一次，故按「至少一处」断言
-    for (const label of ['期望版本', '实际版本', 'Edge', 'Edge 在线', '期望 revision', '已应用 revision', 'Last ACK', 'Trust']) {
+    for (const label of ['期望版本', '实际版本', '边缘节点', '边缘节点在线', '期望修订版', '已应用修订版', '最后回执', '信任目录']) {
       expect(screen.getAllByText(label).length, `${label} 缺席`).toBeGreaterThan(0)
     }
     expect(screen.getByText('已验证')).toBeInTheDocument()
@@ -262,7 +262,7 @@ describe('写操作按稳定错误码呈现', () => {
     renderWithProviders(<Plugins />)
     await gotoTab(/实例/)
     await user.click(await screen.findByRole('button', { name: /停用/ }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('目标 Edge 离线')
+    expect(await screen.findByRole('alert')).toHaveTextContent('目标边缘节点离线')
     expect(screen.getByText(/重连后会自动收敛/)).toBeInTheDocument()
   })
 
@@ -306,7 +306,7 @@ describe('写操作按稳定错误码呈现', () => {
     const patch = http.to('/api/plugin-instances/').filter((c) => c.method === 'PATCH')
     expect(patch).toHaveLength(1)
     expect(patch[0]?.body).toEqual({ enabled: false })
-    expect(screen.getAllByText('Edge 未上报').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('边缘节点未上报').length).toBeGreaterThan(0)
     expect(screen.queryByText('运行中')).not.toBeInTheDocument()
   })
 
@@ -346,9 +346,9 @@ describe('写操作按稳定错误码呈现', () => {
     const user = userEvent.setup()
     renderWithProviders(<Plugins />)
     await gotoTab(/实例/)
-    await user.click(await screen.findByRole('button', { name: /Reconcile/ }))
+    await user.click(await screen.findByRole('button', { name: /重新下发/ }))
     const dialog = await screen.findByRole('dialog')
-    expect(dialog).toHaveTextContent('期望 revision 42')
+    expect(dialog).toHaveTextContent('期望修订版 42')
     expect(dialog).toHaveTextContent('已应用 41')
     await user.click(within(dialog).getByRole('checkbox', { name: /强制/ }))
     await user.click(within(dialog).getByRole('button', { name: '下发' }))

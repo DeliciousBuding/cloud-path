@@ -69,7 +69,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
           title="让 Edge 重新收敛到最新期望快照"
         >
           <RefreshCw size={13} className="shrink-0" />
-          {reconcile.isPending ? '下发中…' : 'Reconcile'}
+          {reconcile.isPending ? '下发中…' : '重新下发'}
         </button>
 
         {showEdit && onEdit && (
@@ -127,11 +127,11 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
         body={
           <>
             <p>
-              当前期望 revision {v.desired_revision}，Edge 已应用 {v.applied_revision}。
-              reconcile 会让 Edge 重新收敛到最新完整快照。
+              当前期望修订版 {v.desired_revision}，边缘节点已应用 {v.applied_revision}。
+              重新下发会让边缘节点重新收敛到最新完整快照。
             </p>
             <p className="mt-2 text-xs text-ink-2">
-              {!v.edge_online && '注意：该 Edge 当前离线，快照会在它重连后才被应用。'}
+              {!v.edge_online && '注意：该边缘节点当前离线，快照会在它重连后才被应用。'}
               {v.edge_online && '该 Edge 在线，通常会立即开始应用。'}
             </p>
           </>

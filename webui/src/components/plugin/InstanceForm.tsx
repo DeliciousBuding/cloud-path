@@ -198,7 +198,7 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
           </Button>
         </div>
         {rows.length === 0 ? (
-          <p className="text-xs text-ink-3">没有配置项。需要敏感值请改用下面的 secret handle。</p>
+          <p className="text-xs text-ink-3">没有配置项。需要敏感值请改用下面的密钥引用。</p>
         ) : (
           <div className="space-y-2">
             {rows.map((r, i) => (
@@ -225,7 +225,7 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
       {/* ---- secret handle ---- */}
       <div>
         <label htmlFor="pi-refs" className="mb-1.5 flex items-center gap-1.5 text-[13px] font-medium">
-          <KeyRound size={13} className="shrink-0" /> Secret handle（一行一个）
+          <KeyRound size={13} className="shrink-0" /> 密钥引用（一行一个）
         </label>
         <textarea
           id="pi-refs" rows={3} value={refsText} autoComplete="off" spellCheck={false}
@@ -234,8 +234,8 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
           className="input num resize-y font-mono text-[12px]"
         />
         <p className="mt-1.5 text-[12px] leading-relaxed text-ink-3">
-          只填 handle 名（<span className="num">secret://</span> 前缀可省略）。明文只存在于 Edge 本地 provider
-          与插件进程内存中，Server 与浏览器都不会看到，也不会被记录。
+          只填引用名（<span className="num">secret://</span> 前缀可省略）。明文只存在于边缘节点本地的密钥提供方
+          与插件进程内存中，服务器与浏览器都不会看到，也不会被记录。
         </p>
         {secretRefs.length > 0 && (
           <ul className="mt-2 flex list-none flex-wrap gap-1.5 p-0">

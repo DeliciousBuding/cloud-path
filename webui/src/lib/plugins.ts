@@ -38,7 +38,7 @@ const ERR_COPY: Record<PluginErrCode, Omit<PluginErrorCopy, 'code'>> = {
   },
   [PluginErr.Conflict]: {
     title: '实例已存在或版本冲突',
-    hint: '同一 Edge 上已有同名实例，或期望态版本与当前记录冲突。改用另一个实例 ID，或先更新既有实例。',
+    hint: '同一边缘节点上已有同名实例，或期望态版本与当前记录冲突。改用另一个实例 ID，或先更新既有实例。',
     tone: 'warn', needsPermissionConfirm: false, retryable: false,
   },
   [PluginErr.Quota]: {
@@ -52,8 +52,8 @@ const ERR_COPY: Record<PluginErrCode, Omit<PluginErrorCopy, 'code'>> = {
     tone: 'warn', needsPermissionConfirm: true, retryable: true,
   },
   [PluginErr.EdgeOffline]: {
-    title: '目标 Edge 离线',
-    hint: '期望态已可写入，但该 Edge 当前不在线，无法立即应用。Edge 重连后会自动收敛到最新快照。',
+    title: '目标边缘节点离线',
+    hint: '期望态已可写入，但该边缘节点当前不在线，无法立即应用。边缘节点重连后会自动收敛到最新快照。',
     tone: 'warn', needsPermissionConfirm: false, retryable: true,
   },
   [PluginErr.SecretForbidden]: {
@@ -135,11 +135,11 @@ export function syncState(v: PluginInstanceView): SyncState {
   if (!v.has_observed) {
     return {
       key: 'unreported',
-      label: 'Edge 未上报',
+      label: '边缘节点未上报',
       tone: 'idle',
       hint: v.edge_online
-        ? '期望态已下发，但该 Edge 还没有回过实际态。不能据此判断插件是否在运行。'
-        : 'Edge 离线，尚未回过实际态。Edge 重连并应用快照后这里才会出现运行事实。',
+        ? '期望态已下发，但该边缘节点还没有回过实际态。不能据此判断插件是否在运行。'
+        : '边缘节点离线，尚未回过实际态。边缘节点重连并应用快照后这里才会出现运行事实。',
     }
   }
   if (v.stale) {
@@ -147,7 +147,7 @@ export function syncState(v: PluginInstanceView): SyncState {
       key: 'stale',
       label: '实际态已过期',
       tone: 'warn',
-      hint: 'Edge 的上报已超过新鲜期，下面的实际态是历史事实，不代表当前运行状况。',
+      hint: '边缘节点的上报已超过新鲜期，下面的实际态是历史事实，不代表当前运行状况。',
     }
   }
   if (v.drift) {
@@ -155,22 +155,22 @@ export function syncState(v: PluginInstanceView): SyncState {
       key: 'drift',
       label: '期望与实际不一致',
       tone: 'warn',
-      hint: `期望 revision ${v.desired_revision}，Edge 已应用 ${v.applied_revision}。可触发一次 reconcile 让 Edge 重新收敛。`,
+      hint: `期望修订版 ${v.desired_revision}，边缘节点已应用 ${v.applied_revision}。可触发一次重新下发让边缘节点重新收敛。`,
     }
   }
   if (v.applied_revision < v.desired_revision) {
     return {
       key: 'pending',
-      label: '等待 Edge 应用',
+      label: '等待边缘节点应用',
       tone: 'accent',
-      hint: `期望 revision ${v.desired_revision} 已提交，Edge 当前应用到 ${v.applied_revision}。`,
+      hint: `期望修订版 ${v.desired_revision} 已提交，边缘节点当前应用到 ${v.applied_revision}`,
     }
   }
   return {
     key: 'synced',
     label: '已收敛',
     tone: 'ok',
-    hint: `Edge 已应用期望 revision ${v.applied_revision}。`,
+    hint: `边缘节点已应用期望修订版 ${v.applied_revision}`,
   }
 }
 

@@ -179,12 +179,12 @@ export default function Plugins() {
                       </span>
                     }
                     right={
-                      <Badge tone={edgeOnline ? 'ok' : 'idle'}>{edgeOnline ? 'Edge 在线' : 'Edge 离线'}</Badge>
+                      <Badge tone={edgeOnline ? 'ok' : 'idle'}>{edgeOnline ? '边缘节点在线' : '边缘节点离线'}</Badge>
                     }>
                     {!edgeOnline && (
                       <p className="mb-3 flex items-start gap-1.5 rounded-xl bg-ink-3/10 px-3 py-2.5 text-[12px] leading-relaxed text-ink-2">
                         <CloudOff size={12} className="mt-0.5 shrink-0" />
-                        <span className="min-w-0">该 Edge 离线：下面是它最后一次上报的实际态，不代表当前运行状况。其他 Edge 不受影响。</span>
+                        <span className="min-w-0">该边缘节点离线：下面是它最后一次上报的实际态，不代表当前运行状况。其他节点不受影响。</span>
                       </p>
                     )}
                     <ul className="m-0 list-none divide-y divide-hairline p-0">
@@ -219,7 +219,7 @@ export default function Plugins() {
                               </>
                             ) : (
                               <>
-                                <Badge tone="idle">Edge 未上报</Badge>
+                                <Badge tone="idle">边缘节点未上报</Badge>
                                 <span className="ml-auto shrink-0 text-[11px] text-ink-3">
                                   {v.edge_online ? '节点在线但还没回过' : '节点离线'}
                                 </span>
