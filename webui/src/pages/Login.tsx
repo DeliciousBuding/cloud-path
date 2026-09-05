@@ -188,7 +188,7 @@ export default function Login() {
               {tokenBusy ? '校验中…' : '用令牌登录'}
             </Button>
             {getToken() && (
-              <p className="text-[11px] text-ink-3">
+              <p className="text-[12px] text-ink-3">
                 本机已保存一个令牌；提交新令牌会覆盖它。
               </p>
             )}

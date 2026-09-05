@@ -120,13 +120,13 @@ export default function Plugins() {
                     </dl>
 
                     <div className="mt-3.5 border-t border-hairline pt-3">
-                      <p className="mb-2 text-[11px] font-medium text-ink-3">声明权限</p>
+                      <p className="mb-2 text-[12px] font-medium text-ink-3">声明权限</p>
                       <PermissionList permissions={p.permissions} />
                     </div>
 
                     {contributes.length > 0 && (
                       <div className="mt-3.5 border-t border-hairline pt-3">
-                        <p className="mb-2 text-[11px] font-medium text-ink-3">贡献</p>
+                        <p className="mb-2 text-[12px] font-medium text-ink-3">贡献</p>
                         <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
                           {contributes.map((c) => (
                             <li key={`${c.kind}-${c.id}`} className="min-w-0 max-w-full">
@@ -140,7 +140,7 @@ export default function Plugins() {
                       </div>
                     )}
 
-                    <p className="mt-3 border-t border-hairline pt-2.5 text-[11px] leading-relaxed text-ink-3">
+                    <p className="mt-3 border-t border-hairline pt-2.5 text-[12px] leading-relaxed text-ink-3">
                       以上是插件的**声明**，不代表任何 Edge 上正在运行；运行事实见「已安装」与「实例」分区。
                     </p>
                   </Panel>
@@ -149,7 +149,7 @@ export default function Plugins() {
             </div>
           )}
           {plugins.length > LIST_CAP && (
-            <p className="mt-4 text-center text-[11px] text-ink-3">
+            <p className="mt-4 text-center text-[12px] text-ink-3">
               仅显示前 {LIST_CAP} 个插件（目录共 {plugins.length} 个）
             </p>
           )}
@@ -198,7 +198,7 @@ export default function Plugins() {
                               title={v.id}>
                               {v.desired.instance_id || v.id}
                             </Link>
-                            <span className="num min-w-0 max-w-full truncate text-[11px] text-ink-3" title={v.desired.plugin_id}>
+                            <span className="num min-w-0 max-w-full truncate text-[12px] text-ink-3" title={v.desired.plugin_id}>
                               {v.desired.plugin_id}
                             </span>
                             {v.has_observed ? (
@@ -206,13 +206,13 @@ export default function Plugins() {
                                 <Badge tone={st.tone === 'idle' ? 'idle' : st.tone} className="max-w-full">
                                   <span className="min-w-0 truncate">{st.label}</span>
                                 </Badge>
-                                <span className="num truncate text-[11px] text-ink-2">{v.observed?.version || '未给出版本'}</span>
-                                <span className="truncate text-[11px] text-ink-3">健康 {hl.label}</span>
-                                <span className="num truncate text-[11px] text-ink-3">
+                                <span className="num truncate text-[12px] text-ink-2">{v.observed?.version || '未给出版本'}</span>
+                                <span className="truncate text-[12px] text-ink-3">健康 {hl.label}</span>
+                                <span className="num truncate text-[12px] text-ink-3">
                                   重启 {v.observed?.restart_count ?? 0} 次
                                 </span>
                                 {v.stale && <Badge tone="warn" className="shrink-0">stale</Badge>}
-                                <span className="num ml-auto shrink-0 text-[11px] text-ink-3"
+                                <span className="num ml-auto shrink-0 text-[12px] text-ink-3"
                                   title={v.observed?.reported_at ? fmtDateTime(v.observed.reported_at) : '未给出上报时间'}>
                                   {v.observed?.reported_at ? fmtDateTime(v.observed.reported_at) : '—'}
                                 </span>
@@ -220,7 +220,7 @@ export default function Plugins() {
                             ) : (
                               <>
                                 <Badge tone="idle">边缘节点未上报</Badge>
-                                <span className="ml-auto shrink-0 text-[11px] text-ink-3">
+                                <span className="ml-auto shrink-0 text-[12px] text-ink-3">
                                   {v.edge_online ? '节点在线但还没回过' : '节点离线'}
                                 </span>
                               </>
@@ -232,7 +232,7 @@ export default function Plugins() {
                   </Panel>
                 )
               })}
-              <p className="text-[11px] leading-relaxed text-ink-3">
+              <p className="text-[12px] leading-relaxed text-ink-3">
                 「已安装」只呈现 Edge 上报的实际态；没有上报就写「Edge 未上报」，不用期望态顶替。
               </p>
             </div>
@@ -266,11 +266,11 @@ export default function Plugins() {
                   onEdit={() => setEditing(v)} />
               ))}
               {instances.length > LIST_CAP && (
-                <p className="text-center text-[11px] text-ink-3">
+                <p className="text-center text-[12px] text-ink-3">
                   仅显示前 {LIST_CAP} 个实例（共 {instances.length} 个）
                 </p>
               )}
-              <p className="text-[11px] leading-relaxed text-ink-3">
+              <p className="text-[12px] leading-relaxed text-ink-3">
                 每行都分开写「期望态」与「实际态」：期望已启用不等于 Edge 已经运行。实际态缺席时明确显示「Edge 未上报」。
               </p>
             </div>

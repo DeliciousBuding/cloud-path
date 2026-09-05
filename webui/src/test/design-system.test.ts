@@ -196,6 +196,21 @@ describe('字距纪律（CJK 安全：负字距止于 -0.01em；mono 零字距�
   })
 })
 
+describe('字号下限（Vercel：不用 tiny gray copy 挤密度）', () => {
+  it('全仓灭 10px（micro mono 也自 11px 起）', () => {
+    const offenders = tsx.flatMap((f) => [...f.text.matchAll(/text-\[10px\]/g)].map((m) => `${f.path}: ${m[0]}`))
+    expect(offenders).toEqual([])
+  })
+
+  it('11px 只留给 mono 微文本（标识/raw JSON/版本号）；其余文字下限 12px', () => {
+    const offenders = tsx.flatMap((f) =>
+      [...f.text.matchAll(/(['"])([^'"\n]*)\1/g)]
+        .filter((m) => m[2].includes('text-[11px]') && !m[2].includes('font-mono'))
+        .map((m) => `${f.path}: ${m[2]}`))
+    expect(offenders).toEqual([])
+  })
+})
+
 describe('减少动效偏好的 CSS 兜底', () => {
   const reduced = blockOf(css, '@media (prefers-reduced-motion: reduce)')
 

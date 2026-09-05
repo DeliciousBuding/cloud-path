@@ -136,10 +136,10 @@ export default function Overview() {
             ))}
           </div>
           {!serverOk && (
-            <p className="mt-2 flex items-center gap-1 px-0.5 text-[11px] text-ink-3">
+            <p className="mt-2 flex items-center gap-1 px-0.5 text-[12px] text-ink-3">
               <AlertTriangle size={11} className="shrink-0" />
               聚合通道不可用，以上计数由设备/边缘列表实时计算
-              <button type="button" className="link ml-1 text-[11px]" onClick={() => void refetch()}>重试聚合</button>
+              <button type="button" className="link ml-1 text-[12px]" onClick={() => void refetch()}>重试聚合</button>
             </p>
           )}
         </>
@@ -217,7 +217,7 @@ export default function Overview() {
                     <span className="min-w-0 flex-1 truncate text-[12px]" title={c.args ? `${c.cmd} ${c.args}` : c.cmd}>
                       {cmd.label}
                     </span>
-                    <span className="num shrink-0 text-[11px] text-ink-3" title={c.device_id}>
+                    <span className="num shrink-0 text-[12px] text-ink-3" title={c.device_id}>
                       {c.created_at ? fmtDateTime(c.created_at) : '—'}
                     </span>
                   </li>

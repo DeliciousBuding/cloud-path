@@ -65,14 +65,14 @@ export function DeviceRow({ d }: { d: DeviceView }) {
 
       {/* 关键读数（声明主观测；能力全量事实面在详情页「能力」tab） */}
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 lg:hidden 2xl:flex">
-        <span className="text-[11px] text-ink-3 lg:hidden">读数 </span>
+        <span className="text-[12px] text-ink-3 lg:hidden">读数 </span>
         {!descriptor ? (
-          <span className="text-[11px] text-ink-3" title="设备尚未上报声明，读数未知">等待声明</span>
+          <span className="text-[12px] text-ink-3" title="设备尚未上报声明，读数未知">等待声明</span>
         ) : metrics.length === 0 ? (
-          <span className="text-[11px] text-ink-3" title="声明里没有标量主观测">暂无可读数值</span>
+          <span className="text-[12px] text-ink-3" title="声明里没有标量主观测">暂无可读数值</span>
         ) : (
           metrics.map((m, i) => (
-            <span key={`${m.label}-${i}`} className="num flex min-w-0 items-baseline gap-1 text-[11px]" title={m.title}>
+            <span key={`${m.label}-${i}`} className="num flex min-w-0 items-baseline gap-1 text-[12px]" title={m.title}>
               <span className="min-w-0 truncate text-ink-3">{m.label}</span>
               <span className="min-w-0 truncate font-medium text-ink-2">
                 {m.text}{m.unit ? ` ${m.unit}` : ''}
@@ -108,7 +108,7 @@ export function DeviceRowHead() {
   return (
     <li
       aria-hidden
-      className="hidden gap-x-4 px-4 pb-2 text-[11px] font-medium text-ink-3 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_5.5rem_6.5rem_9.5rem] 2xl:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,1.4fr)_5.5rem_6.5rem_9.5rem]"
+      className="hidden gap-x-4 px-4 pb-2 text-[12px] font-medium text-ink-3 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_5.5rem_6.5rem_9.5rem] 2xl:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,1.4fr)_5.5rem_6.5rem_9.5rem]"
     >
       <span>设备</span><span>边缘节点</span><span className="hidden 2xl:inline">关键读数</span><span>状态</span><span>趋势</span><span className="text-right">最后见</span>
     </li>

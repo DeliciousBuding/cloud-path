@@ -24,7 +24,7 @@ export function PluginErrorNote({ error, className }: { error: unknown; classNam
       <p className="text-[13px] font-semibold break-words">{copy.title}</p>
       <p className="mt-0.5 text-[12px] leading-relaxed break-words opacity-90">{copy.hint}</p>
       {copy.code && (
-        <p className="num mt-1.5 text-[10px] opacity-70">错误码 {copy.code}</p>
+        <p className="num mt-1.5 text-[12px] opacity-70">错误码 {copy.code}</p>
       )}
     </div>
   )
@@ -43,7 +43,7 @@ export function PermissionList({ permissions, emptyHint }: {
     <div className="space-y-2.5">
       {groups.map((g) => (
         <div key={g.key} className="min-w-0">
-          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-ink-2">
+          <p className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-ink-2">
             {g.key === 'secrets'
               ? <KeyRound size={11} className="shrink-0" />
               : g.key === 'network'
@@ -86,7 +86,7 @@ export function SecretRefList({ refs }: { refs: string[] | undefined }) {
           </li>
         ))}
       </ul>
-      <p className="mt-1.5 text-[11px] leading-relaxed text-ink-3">
+      <p className="mt-1.5 text-[12px] leading-relaxed text-ink-3">
         只显示 handle 名。明文只在 Edge 本地的 secret provider 与插件进程内存中，Server 与浏览器都拿不到。
       </p>
     </div>

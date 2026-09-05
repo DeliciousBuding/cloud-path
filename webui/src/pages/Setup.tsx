@@ -117,7 +117,7 @@ export default function Setup() {
             <span
               aria-current={i === step ? 'step' : undefined}
               className={cn(
-                'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold',
+                'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold',
                 i < step ? 'bg-accent text-accent-ink'
                   : i === step ? 'bg-accent/15 text-accent'
                     : 'bg-ink-3/12 text-ink-3',

@@ -37,13 +37,13 @@ function SlotCard({ entity, idx }: { entity: DescriptorEntity; idx: CapabilityIn
   return (
     <div className="card min-w-0 p-4" data-testid="slot-card">
       <div className="flex min-w-0 items-center gap-2">
-        <Badge tone="idle" className="shrink-0">{CATEGORY_LABEL[entity.category] ?? entity.category}</Badge>
+        <span className="shrink-0 text-[12px] text-ink-3">{CATEGORY_LABEL[entity.category] ?? entity.category}</span>
         <span className="min-w-0 truncate text-[13px] font-medium" title={entity.name || entity.unique_key}>
           {entityTitle(entity)}
         </span>
       </div>
       <div className="mt-3 flex min-w-0 items-end justify-between gap-3">
-        <span className="min-w-0 flex-1 truncate text-[11px] text-ink-3"
+        <span className="min-w-0 flex-1 truncate text-[12px] text-ink-3"
           title={primary ? `${primary.capability} · ${primary.property}` : ''}>
           {cap}
         </span>
@@ -81,7 +81,7 @@ function DevicePicker({ devices, value, onChange, loading, error, onRetry }: {
   return (
     <Panel
       title={<span className="flex items-center gap-1.5"><Pill size={14} />选择设备</span>}
-      right={<Badge tone="idle">{devices.length} 台</Badge>}
+      right={<span className="text-[12px] text-ink-3">{devices.length} 台</span>}
     >
       <label className="sr-only" htmlFor="pillbox-device">选择设备</label>
       <select
@@ -96,7 +96,7 @@ function DevicePicker({ devices, value, onChange, loading, error, onRetry }: {
           </option>
         ))}
       </select>
-      <p className="mt-2 text-[11px] leading-relaxed text-ink-3">
+      <p className="mt-2 text-[12px] leading-relaxed text-ink-3">
         选择要控制的设备；面板按设备自身声明展示药格与命令。
       </p>
     </Panel>
@@ -145,14 +145,14 @@ function PillboxPanel({ deviceKey, dev, adapterCommands }: {
             {dev.online ? '在线' : '离线'}
           </Badge>
           {!dev.online && (
-            <span className="text-[11px] text-ink-3">以下是最后一次上报的内容，不代表当前状态</span>
+            <span className="text-[12px] text-ink-3">以下是最后一次上报的内容，不代表当前状态</span>
           )}
-          <span className="num ml-auto text-[11px] text-ink-3"
+          <span className="num ml-auto text-[12px] text-ink-3"
             title={`更新 ${fmtDateTime(dev.updated_at)} · 最后见 ${fmtDateTime(dev.last_seen)}`}>
             {dev.online ? `更新于 ${timeAgo(dev.updated_at)}` : `最后见 ${timeAgo(dev.last_seen)}`}
           </span>
         </div>
-        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 border-t border-hairline pt-3 text-[11px] text-ink-3 sm:grid-cols-4">
+        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 border-t border-hairline pt-3 text-[12px] text-ink-3 sm:grid-cols-4">
           <div className="min-w-0"><dt className="truncate">边缘节点</dt><dd className="num truncate font-mono">{dev.edge_id || '—'}</dd></div>
           <div className="min-w-0"><dt className="truncate">适配器</dt><dd className="num truncate font-mono">{dev.adapter || '—'}</dd></div>
           <div className="min-w-0"><dt className="truncate">声明实体</dt><dd className="num truncate">{descriptor ? `${descriptor.entities.length} 个` : '无声明'}</dd></div>
@@ -163,7 +163,7 @@ function PillboxPanel({ deviceKey, dev, adapterCommands }: {
       {/* 药格/实体状态 */}
       <Panel
         title={<span className="flex items-center gap-1.5"><Pill size={14} />药格与设备状态</span>}
-        right={<span className="text-[11px] text-ink-3">{descriptor ? `${slotEntities.length} 个实体` : '等待声明'}</span>}
+        right={<span className="text-[12px] text-ink-3">{descriptor ? `${slotEntities.length} 个实体` : '等待声明'}</span>}
       >
         {!descriptor ? (
           <p className="py-8 text-center text-sm text-ink-3">
@@ -186,7 +186,7 @@ function PillboxPanel({ deviceKey, dev, adapterCommands }: {
         </div>
         <Panel
           title={<span className="flex items-center gap-1.5"><History size={14} />提醒与漏服</span>}
-          right={<span className="text-[11px] text-ink-3">{events.length} 条</span>}
+          right={<span className="text-[12px] text-ink-3">{events.length} 条</span>}
         >
           {evLoading && events.length === 0 ? (
             <RowSkeleton rows={3} />
@@ -267,7 +267,7 @@ export default function Pillbox() {
         <PillboxPanel deviceKey={key} dev={dev} adapterCommands={adapterCommands} />
       )}
 
-      <p className="mt-5 flex items-center gap-1.5 text-[11px] text-ink-3">
+      <p className="mt-5 flex items-center gap-1.5 text-[12px] text-ink-3">
         <RefreshCw size={11} className="shrink-0" />
         药格与命令清单来自设备自身声明，当前值走实时通道；前端不写死设备字段。
       </p>

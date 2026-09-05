@@ -42,7 +42,7 @@ export function UserManager() {
         </ul>
       )}
 
-      <p className="mt-4 border-t border-hairline pt-3 text-[11px] leading-relaxed text-ink-3 break-words">
+      <p className="mt-4 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3 break-words">
         列表永不包含密码哈希；角色为 admin &gt; operator &gt; viewer 层级，跨租户用户统一不可见。
       </p>
     </Panel>

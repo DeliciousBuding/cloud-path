@@ -27,7 +27,7 @@ export function CommandHistory({ deviceId, actions, limit, footer }: {
   return (
     <Panel
       title={<span className="flex items-center gap-1.5"><History size={14} />命令历史</span>}
-      right={<span className="text-[11px] text-ink-3">最近 {rows.length} 条</span>}
+      right={<span className="text-[12px] text-ink-3">最近 {rows.length} 条</span>}
     >
       {isLoading ? (
         <RowSkeleton rows={3} />
@@ -49,7 +49,7 @@ export function CommandHistory({ deviceId, actions, limit, footer }: {
                 </span>
                 {/* 回执原文是机器噪音：成功收进 title；失败原因才是人话信息，行内红字呈现 */}
                 {c.result && st.tone !== 'ok' && (
-                  <span className="min-w-0 truncate text-[11px] text-bad" title={c.result}>
+                  <span className="min-w-0 truncate text-[12px] text-bad" title={c.result}>
                     {c.result}
                   </span>
                 )}

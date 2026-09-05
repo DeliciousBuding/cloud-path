@@ -197,6 +197,9 @@ body {
 .kv dt { color: var(--color-ink-2); font-size: 14px; }
 .kv dd { margin: 0; font-size: 14px; font-weight: 500; text-align: right; }
 
+/* 表格：体单元格对齐行首基线（多行表头才底对齐）；Vercel 表格纪律 */
+table td, table th { vertical-align: baseline; }
+
 /* 尊重系统"减少动效"偏好 */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

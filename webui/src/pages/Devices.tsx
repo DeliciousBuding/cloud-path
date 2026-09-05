@@ -90,11 +90,11 @@ export default function Devices() {
             {shown.slice(0, 300).map((d) => <DeviceRow key={d.id} d={d} />)}
           </ul>
           {shown.length > 300 && (
-            <p className="border-t border-hairline px-4 py-3 text-center text-[11px] text-ink-3">
+            <p className="border-t border-hairline px-4 py-3 text-center text-[12px] text-ink-3">
               仅显示前 300 台（共 {shown.length} 台匹配）；请用搜索或在线状态筛选缩小范围
             </p>
           )}
-          <p className="flex items-center gap-1.5 border-t border-hairline px-4 py-2.5 text-[11px] text-ink-3">
+          <p className="flex items-center gap-1.5 border-t border-hairline px-4 py-2.5 text-[12px] text-ink-3">
             <Cpu size={11} className="shrink-0" />
             关键读数取自设备主动上报声明里的主观测；「等待声明」表示设备尚未上报自己的能力声明。
           </p>

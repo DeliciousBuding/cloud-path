@@ -25,7 +25,7 @@ function InputAction({ deviceId, action }: { deviceId: string; action: CommandAc
   const err = argsError(args, max)
   return (
     <div className="border-t border-hairline pt-3">
-      <label htmlFor={id} className="mb-1.5 block text-[11px] leading-relaxed text-ink-3">
+      <label htmlFor={id} className="mb-1.5 block text-[12px] leading-relaxed text-ink-3">
         {action.label}
         {action.hint ? ` · ${action.hint}` : ''}
         <span className="num"> （≤{max} 字符，不含换行）</span>
@@ -39,7 +39,7 @@ function InputAction({ deviceId, action }: { deviceId: string; action: CommandAc
         />
         <CommandButton deviceId={deviceId} action={action} args={args} disabled={!!err} className="shrink-0" />
       </div>
-      {err && <p className="mt-1 text-[11px] text-bad">{err}</p>}
+      {err && <p className="mt-1 text-[12px] text-bad">{err}</p>}
     </div>
   )
 }
@@ -70,7 +70,7 @@ export function ActionPanel({ deviceId, set, adapterName, className }: {
         <span className="flex min-w-0 items-center gap-1.5">
           <Badge tone={set.source === 'descriptor' ? 'accent' : 'idle'}>{SOURCE_LABEL[set.source]}</Badge>
           {adapterName && (
-            <span className="min-w-0 truncate text-[11px] text-ink-3" title={`适配器 ${adapterName}`}>
+            <span className="min-w-0 truncate text-[12px] text-ink-3" title={`适配器 ${adapterName}`}>
               {adapterName} 适配器
             </span>
           )}
@@ -90,7 +90,7 @@ export function ActionPanel({ deviceId, set, adapterName, className }: {
                   <CommandButton deviceId={deviceId} action={a}
                     className={cn('w-full', a.variant === 'danger' ? 'col-span-2' : '')} />
                   {a.hint && (
-                    <p className="mt-1.5 min-w-0 text-[11px] leading-relaxed text-ink-3" title={a.hint}>
+                    <p className="mt-1.5 min-w-0 text-[12px] leading-relaxed text-ink-3" title={a.hint}>
                       {a.hint}
                     </p>
                   )}
@@ -107,7 +107,7 @@ export function ActionPanel({ deviceId, set, adapterName, className }: {
 
           {advanced.length > 0 && (
             <div className="mt-3 border-t border-hairline pt-3">
-              <p className="mb-1.5 flex items-center gap-1 text-[11px] text-ink-3">
+              <p className="mb-1.5 flex items-center gap-1 text-[12px] text-ink-3">
                 <SlidersHorizontal size={11} /> 带参数下发（命令集来自后端白名单）
               </p>
               <div className="flex gap-2">
@@ -128,13 +128,13 @@ export function ActionPanel({ deviceId, set, adapterName, className }: {
                   <CommandButton deviceId={deviceId} action={advAction} args={advArgs} disabled={!!advErr} className="shrink-0" />
                 )}
               </div>
-              {advErr && <p className="mt-1 text-[11px] text-bad">{advErr}</p>}
+              {advErr && <p className="mt-1 text-[12px] text-bad">{advErr}</p>}
             </div>
           )}
         </>
       )}
 
-      <p className="mt-3 text-[11px] leading-relaxed text-ink-3">
+      <p className="mt-3 text-[12px] leading-relaxed text-ink-3">
         命令经 server → 边缘节点 → 设备下发，回执通过实时通道返回并落库。
       </p>
     </Panel>

@@ -74,7 +74,7 @@ function ConnPill() {
   const status = useLive((s) => s.status)
   const text = status === 'open' ? '已连接' : status === 'connecting' ? '连接中' : '已断开'
   return (
-    <span className="flex items-center gap-1.5 text-[11px] text-ink-2" title={`实时通道：${text}`}>
+    <span className="flex items-center gap-1.5 text-[12px] text-ink-2" title={`实时通道：${text}`}>
       <StatusDot online={status === 'open'} />
       {text}
     </span>
@@ -87,7 +87,7 @@ function Brand() {
       <Logo size={26} />
       <span className="leading-tight">
         <span className="block text-[15px] font-semibold tracking-[-0.01em] text-ink">Cloudpath</span>
-        <span className="block text-[11px] text-ink-3">云径 · 设备接入平台</span>
+        <span className="block text-[12px] text-ink-3">云径 · 设备接入平台</span>
       </span>
     </NavLink>
   )
@@ -116,7 +116,7 @@ function AccountPill() {
         <span className="block truncate text-[12px] font-medium" title={user.name || user.username}>
           {user.name || user.username}
         </span>
-        <span className="block truncate text-[10px] text-ink-3" title={`${user.username} · ${roleLabel(user.role)}`}>
+        <span className="block truncate text-[12px] text-ink-3" title={`${user.username} · ${roleLabel(user.role)}`}>
           {roleLabel(user.role)}
         </span>
       </span>
@@ -140,7 +140,7 @@ function SidebarFooter() {
         <ConnPill />
         <ThemeControl />
       </div>
-      {data && <p className="num text-[10px] text-ink-3">server {data.version}</p>}
+      {data && <p className="num font-mono text-[11px] text-ink-3">server {data.version}</p>}
     </div>
   )
 }

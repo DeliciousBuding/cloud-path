@@ -91,10 +91,8 @@ export function StatTile({ icon, label, value, unit, sub }: {
 export function EmptyState({ icon, title, hint }: { icon?: ReactNode; title: string; hint?: string }) {
   return (
     <div className="card flex flex-col items-center justify-center px-6 py-16 text-center fade-up">
-      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/10 text-accent">
-        {icon}
-      </div>
-      <p className="mt-4 text-[15px] font-semibold">{title}</p>
+      <span className="text-ink-3">{icon}</span>
+      <p className="mt-3 text-[15px] font-semibold">{title}</p>
       {hint && <p className="mt-1 max-w-sm text-sm text-ink-2">{hint}</p>}
     </div>
   )
@@ -114,10 +112,8 @@ export function ErrorState({ icon, title, hint, onRetry, retrying, compact }: {
       className={cn('card flex flex-col items-center justify-center px-6 text-center fade-up',
         compact ? 'py-9' : 'py-14')}
     >
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-bad/10 text-bad">
-        {icon ?? <RefreshCw size={20} />}
-      </div>
-      <p className="mt-3.5 text-[15px] font-semibold">{title}</p>
+      <span className="text-bad">{icon ?? <RefreshCw size={22} />}</span>
+      <p className="mt-3 text-[15px] font-semibold">{title}</p>
       {hint && <p className="mt-1 max-w-md text-sm break-words text-ink-2">{hint}</p>}
       {onRetry && (
         <button type="button" className="btn btn-ghost mt-5" onClick={onRetry} disabled={retrying}>
@@ -235,7 +231,7 @@ export function TabBar<T extends string>({ items, value, onChange, label = 'åˆ†é
               {it.icon}
               {it.label}
               {typeof it.count === 'number' && (
-                <span className="num text-[11px] text-ink-3">
+                <span className="num text-[12px] text-ink-3">
                   {it.count}
                 </span>
               )}

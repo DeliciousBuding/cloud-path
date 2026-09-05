@@ -106,7 +106,7 @@ export default function EdgeDetail() {
             <KeyValue k="接入时声明" v={`${f.declared.length} 台`} />
           </dl>
           {f.declared.length !== f.devices.length && (
-            <p className="mt-3 border-t border-hairline pt-3 text-[11px] leading-relaxed text-ink-3">
+            <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
               声明设备数与当前实际归属不一致：可能设备在节点重启后未再被发现，或有设备被移到别的节点。
             </p>
           )}
@@ -114,7 +114,7 @@ export default function EdgeDetail() {
 
         <Panel className="lg:col-span-2"
           title={<span className="flex items-center gap-1.5"><Cpu size={14} />所辖设备</span>}
-          right={<span className="text-[11px] text-ink-3">{f.onlineDevices}/{f.devices.length} 在线</span>}>
+          right={<span className="text-[12px] text-ink-3">{f.onlineDevices}/{f.devices.length} 在线</span>}>
           {f.devices.length === 0 ? (
             <p className="py-8 text-center text-sm text-ink-3">该节点还没有注册设备</p>
           ) : (
@@ -147,7 +147,7 @@ export default function EdgeDetail() {
 
         <Panel className="lg:col-span-3"
           title={<span className="flex items-center gap-1.5"><History size={14} />该节点近期事件</span>}
-          right={<span className="num text-[11px] text-ink-3">{events.length} 条</span>}>
+          right={<span className="num text-[12px] text-ink-3">{events.length} 条</span>}>
           {evLoading && events.length === 0 ? (
             <RowSkeleton rows={5} />
           ) : events.length === 0 ? (

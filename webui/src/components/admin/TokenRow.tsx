@@ -71,7 +71,7 @@ export function TokenRow({ token: t }: { token: TokenView }) {
       )}
 
       {revoked && (
-        <p className="mt-3 border-t border-hairline pt-3 text-[11px] leading-relaxed text-ink-3 break-words">
+        <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3 break-words">
           已吊销的令牌保留元数据用于审计，不能恢复；需要时请新建一个。
         </p>
       )}

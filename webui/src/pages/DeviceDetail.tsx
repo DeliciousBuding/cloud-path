@@ -189,7 +189,7 @@ export default function DeviceDetail() {
           </span>
         )}
         <Link to={`/edges/${encodeURIComponent(d.edge_id)}`}
-          className="flex min-w-0 max-w-full items-center gap-1 text-[11px] text-ink-3 no-underline transition-colors hover:text-accent"
+          className="flex min-w-0 max-w-full items-center gap-1 text-[12px] text-ink-3 no-underline transition-colors hover:text-accent"
           title={`边缘节点 ${d.edge_id}`}>
           <RadioTower size={11} className="shrink-0" />
           <span className="min-w-0 truncate">{d.edge_id}</span>
@@ -321,7 +321,7 @@ export default function DeviceDetail() {
                                 <span className="num text-[13px] font-semibold tracking-[-0.01em]">
                                   {pts.length ? formatValue(pts[pts.length - 1].v) : '—'}
                                 </span>
-                                <span className="num text-[11px] text-ink-3">{pts.length} 点</span>
+                                <span className="num text-[12px] text-ink-3">{pts.length} 点</span>
                               </span>
                             </div>
                             <TrendChart points={pts} kind={chartKind} height={104} />
@@ -330,7 +330,7 @@ export default function DeviceDetail() {
                       })}
                     </div>
                   )}
-                  <p className="mt-3 px-0.5 text-[11px] leading-relaxed text-ink-3">
+                  <p className="mt-3 px-0.5 text-[12px] leading-relaxed text-ink-3">
                     趋势只记录本页打开期间的数据（最多 240 点）；更早的数值请查事件与命令记录。
                   </p>
                 </div>
@@ -369,10 +369,10 @@ export default function DeviceDetail() {
         <TabPanel value={tab}>
           <Panel
             title={<span className="flex items-center gap-1.5"><History size={14} />事件时间线</span>}
-            right={<span className="num text-[11px] text-ink-3">{shownEvents.length === events.length ? `${events.length} 条` : `${shownEvents.length} / ${events.length} 条`}</span>}>
+            right={<span className="num text-[12px] text-ink-3">{shownEvents.length === events.length ? `${events.length} 条` : `${shownEvents.length} / ${events.length} 条`}</span>}>
             {eventKinds.length > 1 && (
               <div className="mb-3 flex items-center gap-2">
-                <label htmlFor="ev-kind" className="shrink-0 text-[11px] text-ink-3">筛选</label>
+                <label htmlFor="ev-kind" className="shrink-0 text-[12px] text-ink-3">筛选</label>
                 <select id="ev-kind" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}
                   className="input input-sm min-w-0 max-w-[18rem]">
                   <option value="">全部事件</option>
@@ -407,9 +407,9 @@ export default function DeviceDetail() {
           ) : (
             <Panel
               title={<span className="flex items-center gap-1.5"><Sparkles size={14} />声明的能力</span>}
-              right={<span className="num text-[11px] text-ink-3">{capRefs.length} 种 · catalog 收录 {capabilities.docs.length} 份</span>}>
+              right={<span className="num text-[12px] text-ink-3">{capRefs.length} 种 · catalog 收录 {capabilities.docs.length} 份</span>}>
               <CapabilityBrowser descriptor={descriptor} idx={capabilities} />
-              <p className="mt-3 border-t border-hairline pt-3 text-[11px] leading-relaxed text-ink-3">
+              <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
                 点击行展开 Inspector（属性/动作/事件/schema）；显示名优先取声明的中文标题。
               </p>
             </Panel>
@@ -422,7 +422,7 @@ export default function DeviceDetail() {
           <div className="space-y-5">
             <Panel
               title={<span className="flex items-center gap-1.5"><Braces size={14} />身份与原始状态</span>}
-              right={<span className="num text-[11px] text-ink-3">
+              right={<span className="num text-[12px] text-ink-3">
                 参考时间 {now.toLocaleTimeString('zh-CN', { hour12: false })}
               </span>}>
               <div className="grid gap-5 md:grid-cols-2">
@@ -443,13 +443,13 @@ export default function DeviceDetail() {
               </div>
               {descriptor && (
                 <details className="mt-3">
-                  <summary className="cursor-pointer select-none text-[11px] text-ink-3 transition-colors hover:text-ink-2">
+                  <summary className="cursor-pointer select-none text-[12px] text-ink-3 transition-colors hover:text-ink-2">
                     Descriptor 原始 JSON
                   </summary>
                   <JsonBlock className="mt-1.5" value={descriptor} maxHeight="max-h-56" label="Descriptor 原始 JSON" />
                 </details>
               )}
-              <p className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-0.5 border-t border-hairline pt-3 text-[11px] text-ink-3">
+              <p className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-0.5 border-t border-hairline pt-3 text-[12px] text-ink-3">
                 <Grid3x3 size={11} className="shrink-0" />
                 Entity {descriptor ? descriptor.entities.length : 0} 个 ·
                 Capability 引用 {capRefs.length} 种 ·
@@ -482,7 +482,7 @@ function StateTable({ descriptor, idx, nowSec }: {
     <div className="card overflow-x-auto">
       <table className="w-full border-collapse text-left text-xs">
         <thead>
-          <tr className="border-b border-hairline text-[11px] text-ink-3">
+          <tr className="border-b border-hairline text-[12px] text-ink-3">
             <th className="px-3 py-2 font-medium">实体</th>
             <th className="px-3 py-2 font-medium">属性</th>
             <th className="px-3 py-2 text-right font-medium">当前值</th>

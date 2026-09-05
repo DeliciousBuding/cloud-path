@@ -119,10 +119,10 @@ function EdgeRow({ f }: { f: EdgeFacts }) {
           <Badge tone={e.online ? 'ok' : 'idle'}>{e.online ? '在线' : '离线'}</Badge>
         </span>
         {f.devices.length === 0 ? (
-          <span className="text-[11px] text-ink-3">还没有注册设备</span>
+          <span className="text-[12px] text-ink-3">还没有注册设备</span>
         ) : (
           <>
-            <span className="num shrink-0 text-[11px] text-ink-2"
+            <span className="num shrink-0 text-[12px] text-ink-2"
               title={`${f.devices.length} 台 · ${f.onlineDevices} 台在线${e.online ? '' : '（暂停上报）'}`}>
               {f.devices.length} 台 · {f.onlineDevices} 在线
             </span>

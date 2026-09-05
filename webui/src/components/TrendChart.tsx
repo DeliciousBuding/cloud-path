@@ -15,7 +15,7 @@ function ChartTooltip({ active, payload, unit }: {
   const p = payload?.[0]
   if (!active || !p || p.value === undefined) return null
   return (
-    <div className="card num px-2 py-1 text-[11px] text-ink-2 shadow-lg">
+    <div className="card num px-2 py-1 text-[12px] text-ink-2 shadow-lg">
       {p.payload?.t !== undefined && <span className="text-ink-3">{timeTick(p.payload.t)} · </span>}
       <span className="font-medium text-ink">{p.value}</span>
       {unit && <span className="text-ink-3"> {unit}</span>}

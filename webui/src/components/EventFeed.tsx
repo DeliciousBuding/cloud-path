@@ -52,7 +52,7 @@ export function EventFeed({ events, showDevice = true, limit = 30, dayGrouped = 
     <div className="space-y-4">
       {groups.map((g, gi) => (
         <section key={`${g.day}-${gi}`}>
-          <h4 className="mb-1 px-0.5 text-[11px] font-medium text-ink-3">{g.day}</h4>
+          <h4 className="mb-1 px-0.5 text-[12px] font-medium text-ink-3">{g.day}</h4>
           <ul className="divide-y divide-hairline">
             {g.items.map((e, i) => (
               <EventRow key={`${e.id}-${gi}-${i}`} e={e} first={gi === 0 && i === 0} showDevice={showDevice} name={names.get(e.device_id)} />
@@ -82,7 +82,7 @@ function EventRow({ e, first, showDevice, name }: {
         {showDevice && (
           <Link
             to={`/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`}
-            className={cn('min-w-0 max-w-[10rem] truncate text-[11px] text-ink-3 transition-colors hover:text-accent',
+            className={cn('min-w-0 max-w-[10rem] truncate text-[12px] text-ink-3 transition-colors hover:text-accent',
               !name && 'num font-mono')}
             title={`${e.device_id} · 查看设备`}
           >
@@ -108,7 +108,7 @@ function EventRow({ e, first, showDevice, name }: {
       </div>
       {open && (
         <pre tabIndex={0} role="group" aria-label="事件原始载荷"
-          className="num mb-2 max-h-40 overflow-auto rounded-lg bg-surface-2 p-2 font-mono text-[10px] leading-relaxed text-ink-2">
+          className="num mb-2 max-h-40 overflow-auto rounded-lg bg-surface-2 p-2 font-mono text-[11px] leading-relaxed text-ink-2">
           {e.payload}
         </pre>
       )}

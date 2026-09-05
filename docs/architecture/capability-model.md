@@ -281,3 +281,8 @@ tracking-tight 等负字距是拉丁刻度，中文显示文本不超 -0.01em，
 - 阅读字号下限：键值行 / 按钮 / 侧栏导航 14px（13px 中文正文在暗画布显细显挤）；12px 只给元数据。
 - 主值渲染单一出口 `ObsValue`（webui SchemaRenderer）：布尔→状态胶囊、机器串→mono 降级、数值→tabular、单位经 `unitLabel` 人话化；实时状态瓦片 / 状态表行 / 药盒槽位复用同一出口，`size` 区分 tile/row/slot。页面内复制这套纪律即漂移开始。
 - 字符串型 KPI（版本号等）用 mono medium 渲染，不用 sans semibold：字符串不是量级。
+- 字号下限：非 mono 文字 ≥12px（CJK 元数据 11px 属 tiny gray copy，Vercel 明确拒绝）；mono 微文本（标识/raw JSON/版本号）11px；10px 全仓灭绝（design-system 守卫）。
+- 胶囊只承载状态/语义；分类、计数等普通元数据用纯文本（`text-[12px] text-ink-3`）。
+- 空态/错误态不用装饰性图标瓷砖（彩色圆底）：plain 语义色图标即可。
+- 散文行宽 ≤62ch：全宽长行是布局失败（About 等通栏段落加 max-w）。
+- 表格体单元格 `vertical-align: baseline`（对齐行首基线；多行表头才底对齐）。

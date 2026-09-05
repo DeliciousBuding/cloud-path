@@ -31,7 +31,7 @@ export function SyncBanner({ v }: { v: PluginInstanceView }) {
         <span className="block text-[13px] font-semibold break-words">{s.label}</span>
         <span className="mt-0.5 block text-[12px] leading-relaxed break-words text-ink-2">{s.hint}</span>
       </span>
-      <span className={cn('num shrink-0 text-[11px] font-medium', TONE_TEXT_CLS[s.tone])}
+      <span className={cn('num shrink-0 text-[12px] font-medium', TONE_TEXT_CLS[s.tone])}
         title={`期望修订 ${v.desired_revision} / 已应用 ${v.applied_revision}`}>
         修订 {v.desired_revision}/{v.applied_revision}
       </span>
@@ -45,7 +45,7 @@ function Row({ k, v, tone, wrap }: { k: string; v: ReactNode; tone?: 'ok' | 'war
     : tone === 'bad' ? 'text-bad' : tone === 'accent' ? 'text-accent' : undefined
   return (
     <div className="flex min-w-0 items-baseline justify-between gap-2 border-b border-hairline py-1.5 last:border-b-0">
-      <dt className="shrink-0 text-[11px] text-ink-3">{k}</dt>
+      <dt className="shrink-0 text-[12px] text-ink-3">{k}</dt>
       <dd className={`num min-w-0 text-[12px] font-medium ${wrap ? 'break-words' : 'truncate'} ${cls ?? ''}`}
         title={typeof v === 'string' ? v : undefined}>
         {v}
@@ -58,7 +58,7 @@ function ColumnHead({ children, note }: { children: ReactNode; note: string }) {
   return (
     <div className="mb-1.5 flex min-w-0 items-baseline justify-between gap-2">
       <h3 className="min-w-0 truncate text-[12px] font-semibold tracking-[-0.01em]">{children}</h3>
-      <span className="shrink-0 text-[10px] text-ink-3">{note}</span>
+      <span className="shrink-0 text-[12px] text-ink-3">{note}</span>
     </div>
   )
 }
@@ -101,7 +101,7 @@ export function DesiredObserved({ v }: { v: PluginInstanceView }) {
           <Row k="隔离" v={isolationLabel(v.desired.isolation)} />
           <Row wrap k="更新于" v={v.desired.updated_at ? fmtDateTime(v.desired.updated_at) : '—'} />
         </dl>
-        <p className="mt-2 text-[11px] leading-relaxed text-ink-3">
+        <p className="mt-2 text-[12px] leading-relaxed text-ink-3">
           这一栏是「希望它变成什么样」，不代表边缘节点已经执行。
         </p>
       </div>
@@ -120,7 +120,7 @@ export function DesiredObserved({ v }: { v: PluginInstanceView }) {
               <Row wrap k="上报于" v={reportedAt ? fmtDateTime(reportedAt) : '—'} />
             </dl>
             {v.stale && (
-              <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-warn/12 px-2.5 py-2 text-[11px] leading-relaxed text-warn">
+              <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-warn/12 px-2.5 py-2 text-[12px] leading-relaxed text-warn">
                 <AlertTriangle size={12} className="mt-0.5 shrink-0" />
                 <span className="min-w-0 break-words">
                   stale · 上报于 {reportedAt ? fmtDateTime(reportedAt) : '未知时间'}
@@ -130,7 +130,7 @@ export function DesiredObserved({ v }: { v: PluginInstanceView }) {
             )}
             {v.observed?.detail && (
               // detail 已由 server 限长并脱敏；仍然截断呈现，且不当成 stdout 原文
-              <p className="mt-2 truncate text-[11px] text-ink-3" title={v.observed.detail}>
+              <p className="mt-2 truncate text-[12px] text-ink-3" title={v.observed.detail}>
                 摘要：{hostDetailLabel(v.observed.detail)}
               </p>
             )}

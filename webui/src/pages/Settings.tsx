@@ -81,7 +81,7 @@ export default function Settings() {
                 <KeyValue k="角色" v={roleLabel(user.role)} />
                 <KeyValue k="租户" v={<span className="min-w-0 truncate font-mono" title={user.tenant_slug}>{user.tenant_slug || '—'}</span>} />
               </dl>
-              <p className="mt-3 border-t border-hairline pt-3 text-[11px] leading-relaxed text-ink-3">
+              <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
                 登录态由浏览器会话承载；共用机器请记得登出。
               </p>
               <button type="button" className="btn btn-danger-ghost mt-3" disabled={signingOut}
@@ -123,7 +123,7 @@ export default function Settings() {
         </Panel>
 
         <Panel title={<span className="flex items-center gap-1.5"><Database size={14} />存储</span>}
-          right={<span className="text-[11px] text-ink-3">SQLite</span>}>
+          right={<span className="text-[12px] text-ink-3">SQLite</span>}>
           <dl className="space-y-2.5">
             <KeyValue k="事件总数" v={<span className="num">{stats?.events ?? '—'}</span>} />
             <KeyValue k="命令总数" v={<span className="num">{stats?.commands ?? '—'}</span>} />
@@ -135,7 +135,7 @@ export default function Settings() {
         </Panel>
 
         <Panel title={<span className="flex items-center gap-1.5"><Plug size={14} />设备适配器</span>}
-          right={<span className="text-[11px] text-ink-3">{adapters?.adapters.length ?? 0} 个已注册</span>}>
+          right={<span className="text-[12px] text-ink-3">{adapters?.adapters.length ?? 0} 个已注册</span>}>
           {!(adapters?.adapters.length) ? (
             <p className="py-4 text-center text-sm text-ink-3">加载适配器清单…</p>
           ) : (
@@ -145,19 +145,19 @@ export default function Settings() {
                   {/* 390px：适配器名来自后端注册，长名字必须可截断 */}
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="num min-w-0 truncate font-mono text-[13px] font-semibold" title={a.name}>{a.name}</span>
-                    <Badge tone="idle" className="shrink-0">{a.commands.length} 条命令</Badge>
+                    <span className="shrink-0 text-[12px] text-ink-3">{a.commands.length} 条命令</span>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {a.commands.map((c) => (
                       <span key={c} className="badge max-w-full bg-ink-3/10 text-ink-2" title={`${c} → ${cmdMeta(c).hint || '—'}`}>
                         <span className="min-w-0 truncate">{cmdMeta(c).label}</span>
-                        <span className="num ml-1 min-w-0 truncate font-mono text-[10px] text-ink-3">{c}</span>
+                        <span className="num ml-1 min-w-0 truncate font-mono text-[11px] text-ink-3">{c}</span>
                       </span>
                     ))}
                   </div>
                 </div>
               ))}
-              <p className="border-t border-hairline pt-3 text-[11px] leading-relaxed text-ink-3">
+              <p className="border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
                 命令白名单由适配器声明，server 拒绝白名单外的命令；前端命令面板自动跟随。
               </p>
             </div>
@@ -165,7 +165,7 @@ export default function Settings() {
         </Panel>
 
         <Panel title={<span className="flex items-center gap-1.5"><Boxes size={14} />关于</span>} className="lg:col-span-2">
-          <p className="text-sm leading-relaxed text-ink-2">
+          <p className="max-w-[62ch] text-sm leading-relaxed text-ink-2">
             <span className="font-semibold text-ink">Cloudpath（云径）</span> 是通用 IoT 接入与管理平台：
             边缘代理把本地串口设备聚合上云，中心服务统一监控、下发命令并持久化事件，
             管理台通过 WebSocket 实时可视化。核心不绑定任何具体硬件或行业语义——

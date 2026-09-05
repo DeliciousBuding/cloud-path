@@ -107,7 +107,7 @@ export default function PluginInstanceDetail() {
                   : '目录里没有这个插件的声明，无法核对权限。期望态与实际态不受影响。'}
               />
               {catalog?.verified && (
-                <p className="mt-3 border-t border-hairline pt-3 text-[11px] leading-relaxed text-ink-3">
+                <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
                   该插件的安装物已通过验证（digest 一致），权限声明来自其 manifest。
                 </p>
               )}
@@ -119,7 +119,7 @@ export default function PluginInstanceDetail() {
 
             <Panel title={<span className="flex items-center gap-1.5"><SlidersHorizontal size={14} />配置（非敏感）</span>}>
               <ConfigTable config={instance.desired.config} />
-              <p className="mt-3 border-t border-hairline pt-3 text-[11px] leading-relaxed text-ink-3">
+              <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
                 配置里若出现 secret:// 引用，这里只显示引用名。插件的运行日志与本机路径不会出现在这一页。
               </p>
             </Panel>

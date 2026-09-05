@@ -98,7 +98,7 @@ export function GenericTable({ value, className, label = '数据表（通用视�
     <div tabIndex={0} role="group" aria-label={label} className={cn('overflow-x-auto', className)}>
       <table className="w-full border-collapse text-left text-xs">
         <thead>
-          <tr className="text-[11px] text-ink-3">
+          <tr className="text-[12px] text-ink-3">
             <th className="px-1 pb-1.5 font-medium">#</th>
             {cols.map((c) => (
               <th key={c} className="whitespace-nowrap px-1 pb-1.5 font-medium">
@@ -129,7 +129,7 @@ function ScalarChips({ value }: { value: unknown[] }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {value.map((v, i) => (
-        <span key={i} className="num max-w-full truncate rounded-full bg-ink-3/10 px-2 py-0.5 text-[11px] font-medium text-ink-2"
+        <span key={i} className="num max-w-full truncate rounded-full bg-ink-3/10 px-2 py-0.5 text-[12px] font-medium text-ink-2"
           title={cellText(v)}>
           {cellText(v)}
         </span>
@@ -220,7 +220,7 @@ export function ValueWidget({ obs, idx = EMPTY_INDEX, emphasis = false, classNam
       ? 'idle'
       : toneFromHint(presentationOf(obs.capability, idx)) ?? qualityTone(obs.quality)
     return (
-      <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium', TONE_CLS[tone])}>
+      <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-medium', TONE_CLS[tone])}>
         {obs.quality && obs.quality !== 'good' && <QualityDot q={obs.quality} />}
         {formatValue(value)}
       </span>
@@ -234,7 +234,7 @@ export function ValueWidget({ obs, idx = EMPTY_INDEX, emphasis = false, classNam
       <span className="flex min-w-0 items-baseline gap-1">
         <ScalarText widget={widget} value={value} emphasis={emphasis} />
         {obs.unit && (
-          <span className={cn('num shrink-0 text-ink-3', emphasis ? 'text-sm' : 'text-[11px]')}>{obs.unit}</span>
+          <span className={cn('num shrink-0 text-ink-3', emphasis ? 'text-sm' : 'text-[12px]')}>{obs.unit}</span>
         )}
       </span>
     </span>
@@ -334,7 +334,7 @@ export function StateRow({ entity, idx = EMPTY_INDEX, nowSec, series }: {
       </div>
       {rest.length > 0 && (
         <details className="mt-1.5">
-          <summary className="cursor-pointer select-none text-[11px] text-ink-3 transition-colors hover:text-ink-2">
+          <summary className="cursor-pointer select-none text-[12px] text-ink-3 transition-colors hover:text-ink-2">
             其余 {rest.length} 项
           </summary>
           <div className="mt-2">
@@ -417,7 +417,7 @@ export function ObsValue({ obs, idx = EMPTY_INDEX, tone = 'idle', size = 'tile',
   }
   if (widget === 'text' && MACHINEISH.test(text)) {
     return (
-      <span className={cn(shell, 'font-mono text-ink-2', size === 'slot' ? 'text-[12px]' : 'text-[11px]', className)}
+      <span className={cn(shell, size === 'slot' ? 'font-mono text-[12px] text-ink-2' : 'font-mono text-[11px] text-ink-2', className)}
         title={`${text} · ${capTitle}`}>
         {text}
       </span>
@@ -433,7 +433,7 @@ export function ObsValue({ obs, idx = EMPTY_INDEX, tone = 'idle', size = 'tile',
       title={capTitle}>
       {text}
       {obs.unit && (
-        <span className={cn('ml-1 font-normal text-ink-3', size === 'slot' ? 'text-xs' : 'text-[11px]')}>
+        <span className={cn('ml-1 font-normal text-ink-3', size === 'slot' ? 'text-xs' : 'text-[12px]')}>
           {unitLabel(obs.unit)}
         </span>
       )}
@@ -466,7 +466,7 @@ export function StateTile({ entity, idx = EMPTY_INDEX, nowSec, series }: {
   return (
     <li className="card min-w-0 p-3">
       <div className="flex min-w-0 items-center gap-1.5">
-        <span className="truncate text-[11px] font-medium text-ink-3" title={entity.name || entity.unique_key}>
+        <span className="truncate text-[12px] font-medium text-ink-3" title={entity.name || entity.unique_key}>
           {entityTitle(entity)}
         </span>
         <QualityDot q={q} />
@@ -480,7 +480,7 @@ export function StateTile({ entity, idx = EMPTY_INDEX, nowSec, series }: {
       </div>
       {rest.length > 0 && (
         <details className="mt-1.5">
-          <summary className="cursor-pointer select-none text-[11px] text-ink-3 transition-colors hover:text-ink-2">
+          <summary className="cursor-pointer select-none text-[12px] text-ink-3 transition-colors hover:text-ink-2">
             其余 {rest.length} 项
           </summary>
           <div className="mt-2">
@@ -500,7 +500,7 @@ export function MetricTile({ v }: { v: SummaryValue }) {
   if (v.kind === 'boolean') {
     return (
       <div className="card min-w-0 p-4 fade-up">
-        <p className="min-w-0 truncate text-[11px] font-medium text-ink-3" title={v.title}>{v.label}</p>
+        <p className="min-w-0 truncate text-[12px] font-medium text-ink-3" title={v.title}>{v.label}</p>
         <Badge tone={alert ? v.tone : 'idle'} className="mt-1.5">{v.text}</Badge>
       </div>
     )
@@ -508,7 +508,7 @@ export function MetricTile({ v }: { v: SummaryValue }) {
   const valueTone = alert ? TONE_TEXT_CLS[v.tone] : undefined
   return (
     <div className="card min-w-0 p-4 fade-up">
-      <p className="min-w-0 truncate text-[11px] font-medium text-ink-3" title={v.title}>{v.label}</p>
+      <p className="min-w-0 truncate text-[12px] font-medium text-ink-3" title={v.title}>{v.label}</p>
       <p className={cn('num mt-1.5 truncate text-[24px] font-semibold leading-none tracking-[-0.01em]', valueTone)}
         title={v.title}>
         {v.text}
@@ -554,7 +554,7 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
                 <span className="min-w-0 truncate text-[13px] font-medium">{capabilityLabel(ref, idx)}</span>
                 {!doc && <Badge tone="idle" className="shrink-0">未收录</Badge>}
                 <span className="num min-w-0 truncate font-mono text-[11px] text-ink-3" title={ref}>{ref}</span>
-                <span className="num ml-auto shrink-0 text-[11px] text-ink-3">
+                <span className="num ml-auto shrink-0 text-[12px] text-ink-3">
                   {props.length} 属性 · {actions.length} 动作 · {events.length} 事件
                 </span>
               </summary>
@@ -563,7 +563,7 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse text-left text-xs">
                       <thead>
-                        <tr className="text-[11px] text-ink-3">
+                        <tr className="text-[12px] text-ink-3">
                           <th className="px-1 pb-1 font-medium">属性</th>
                           <th className="px-1 pb-1 font-medium">机器名</th>
                           <th className="px-1 pb-1 font-medium">类型</th>
@@ -608,7 +608,7 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
                 )}
                 {doc && (
                   <details>
-                    <summary className="cursor-pointer select-none text-[11px] text-ink-3 transition-colors hover:text-ink-2">
+                    <summary className="cursor-pointer select-none text-[12px] text-ink-3 transition-colors hover:text-ink-2">
                       Schema JSON（v{parsed.version ?? doc.metadata?.version ?? '—'}）
                     </summary>
                     <JsonBlock className="mt-1.5" value={doc.spec} maxHeight="max-h-48" label={`${ref} schema JSON`} />
@@ -632,7 +632,7 @@ export function EntityInventory({ descriptor, className }: {
     <div className={cn('overflow-x-auto', className)}>
       <table className="w-full border-collapse text-left text-xs">
         <thead>
-          <tr className="text-[11px] text-ink-3">
+          <tr className="text-[12px] text-ink-3">
             <th className="px-1 pb-1.5 font-medium">实体</th>
             <th className="px-1 pb-1.5 font-medium">entity_id</th>
             <th className="px-1 pb-1.5 font-medium">分类</th>
@@ -650,7 +650,7 @@ export function EntityInventory({ descriptor, className }: {
                   {e.capabilities.length === 0
                     ? <span className="text-ink-3">—</span>
                     : e.capabilities.map((c) => (
-                      <span key={c} className="num max-w-[16rem] truncate font-mono text-[10px] text-ink-3" title={c}>
+                      <span key={c} className="num max-w-[16rem] truncate font-mono text-[11px] text-ink-3" title={c}>
                         {c}
                       </span>
                     ))}
@@ -699,7 +699,7 @@ export function RawView({ raw, title = '上报字段（通用视图）', classNa
       )}
       {complex.map((r) => (
         <div key={r.key} className="mt-4 border-t border-hairline pt-3 first:mt-0">
-          <p className="mb-1.5 truncate text-[11px] text-ink-3" title={r.key}>{r.label}</p>
+          <p className="mb-1.5 truncate text-[12px] text-ink-3" title={r.key}>{r.label}</p>
           {Array.isArray(r.value)
             ? (r.value.every(isScalar)
               ? <ScalarChips value={r.value} />
@@ -707,7 +707,7 @@ export function RawView({ raw, title = '上报字段（通用视图）', classNa
             : <JsonBlock value={r.value} maxHeight="max-h-40" label={`${r.label} 原始 JSON`} />}
         </div>
       ))}
-      <p className="mt-3 flex items-center gap-1 border-t border-hairline pt-2 text-[11px] text-ink-3">
+      <p className="mt-3 flex items-center gap-1 border-t border-hairline pt-2 text-[12px] text-ink-3">
         <Boxes size={11} />
         <span className={cn('truncate', TONE_TEXT_CLS.idle)}>
           该设备未上报能力声明，此处按上报字段通用渲染

@@ -163,7 +163,7 @@ export default function Activity() {
             )}
 
             {anyFilter && (
-              <button type="button" onClick={clearAll} className="link flex items-center gap-0.5 text-[11px]" title="清除全部筛选">
+              <button type="button" onClick={clearAll} className="link flex items-center gap-0.5 text-[12px]" title="清除全部筛选">
                 <FilterX size={11} /> 清除筛选
               </button>
             )}
@@ -171,7 +171,7 @@ export default function Activity() {
 
           {tab === 'events' && typeOptions.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5 border-t border-hairline pt-3">
-              <span className="mr-0.5 text-[11px] text-ink-3">事件类型</span>
+              <span className="mr-0.5 text-[12px] text-ink-3">事件类型</span>
               {typeOptions.slice(0, 24).map((t) => (
                 <button
                   key={t} type="button" onClick={() => setTypes((prev) => {
@@ -181,14 +181,14 @@ export default function Activity() {
                     return next
                   })}
                   aria-pressed={types.has(t)} title={t}
-                  className={cn('max-w-full truncate rounded-full px-3 py-1 text-[11px] font-medium transition-colors',
+                  className={cn('max-w-full truncate rounded-full px-3 py-1 text-[12px] font-medium transition-colors',
                     types.has(t) ? 'bg-accent text-accent-ink' : 'bg-ink-3/10 text-ink-2 hover:bg-ink-3/16')}
                 >
                   {eventLabel(t, index)}
                 </button>
               ))}
               {typeOptions.length > 24 && (
-                <span className="text-[11px] text-ink-3">另有 {typeOptions.length - 24} 种</span>
+                <span className="text-[12px] text-ink-3">另有 {typeOptions.length - 24} 种</span>
               )}
             </div>
           )}
@@ -224,8 +224,8 @@ export default function Activity() {
                 {density && (
                   <div className="mb-4 border-b border-hairline pb-4">
                     <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
-                      <span className="text-[11px] font-medium text-ink-3">事件密度 · 每{density.label}</span>
-                      <span className="num min-w-0 truncate text-[11px] text-ink-3"
+                      <span className="text-[12px] font-medium text-ink-3">事件密度 · 每{density.label}</span>
+                      <span className="num min-w-0 truncate text-[12px] text-ink-3"
                         title={`窗口 ${fmtDateTime(density.points[0].t)} 至今 · 共 ${events.length} 条 · 峰值 ${density.peak} 条/${density.label}`}>
                         共 {events.length} 条 · 峰值 {density.peak} 条/{density.label}
                         <span className="hidden md:inline"> · 窗口起 {fmtDateTime(density.points[0].t)}</span>
@@ -255,7 +255,7 @@ export default function Activity() {
 
 function LimitNote({ what }: { what: string }) {
   return (
-    <p className="mt-3 border-t border-hairline pt-3 text-center text-[11px] text-ink-3">
+    <p className="mt-3 border-t border-hairline pt-3 text-center text-[12px] text-ink-3">
       仅显示最近 {PAGE_LIMIT} 条{what}（更早的历史仍在数据库中，可按设备或状态筛选查看）
     </p>
   )
@@ -279,7 +279,7 @@ function CommandRows({ rows, names, index }: {
     <div className="space-y-4">
       {groups.map((g, gi) => (
         <section key={`${g.day}-${gi}`}>
-          <h4 className="mb-1 px-0.5 text-[11px] font-medium text-ink-3">{g.day}</h4>
+          <h4 className="mb-1 px-0.5 text-[12px] font-medium text-ink-3">{g.day}</h4>
           <ul className="divide-y divide-hairline">
             {g.items.map((c) => <CommandRow key={c.id} c={c} names={names} index={index} />)}
           </ul>
@@ -304,18 +304,18 @@ function CommandRow({ c, names, index }: {
         {meta.label}
       </span>
       {c.result && st.tone !== 'ok' && (
-        <span className="min-w-0 max-w-full truncate text-[11px] text-bad" title={c.result}>
+        <span className="min-w-0 max-w-full truncate text-[12px] text-bad" title={c.result}>
           {c.result}
         </span>
       )}
       <Link
         to={`/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`}
-        className="min-w-0 max-w-[10rem] truncate text-[11px] text-ink-3 transition-colors hover:text-accent"
+        className="min-w-0 max-w-[10rem] truncate text-[12px] text-ink-3 transition-colors hover:text-accent"
         title={`${c.device_id} · 查看设备`}
       >
         {names.get(c.device_id) || devId}
       </Link>
-      <span className="num ml-auto shrink-0 text-[11px] text-ink-3"
+      <span className="num ml-auto shrink-0 text-[12px] text-ink-3"
         title={c.acked_at ? `回执 ${fmtDateTime(c.acked_at)}` : fmtDateTime(c.created_at)}>
         {fmtTime(c.created_at)}
       </span>

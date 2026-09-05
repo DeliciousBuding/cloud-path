@@ -66,7 +66,7 @@ export function TokenManager() {
         </ul>
       )}
 
-      <p className="mt-4 border-t border-hairline pt-3 text-[11px] leading-relaxed text-ink-3 break-words">
+      <p className="mt-4 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3 break-words">
         令牌格式为 cp_ 前缀 + 至少 32 字节随机数据；服务端只保存 SHA-256 哈希与短前缀，
         因此列表永远看不到明文，忘记保存只能吊销后重建。旧的 CLOUDPATH_TOKEN 仍等价 default 租户 admin，但已标记为 legacy。
       </p>

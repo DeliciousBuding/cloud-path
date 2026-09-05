@@ -38,19 +38,19 @@ export function InstanceRow({ v, catalog, onEdit }: {
       {/* 期望 / 实际 两栏（紧凑版）：390px 也保持并排，因为对照本身就是信息 */}
       <div className="mt-3 grid grid-cols-2 gap-2.5">
         <div className="min-w-0 rounded-xl bg-surface-2 px-3 py-2.5">
-          <p className="text-[11px] font-medium text-ink-3">期望态</p>
+          <p className="text-[12px] font-medium text-ink-3">期望态</p>
           <p className="mt-1 flex min-w-0 items-baseline gap-1 text-[12px] font-medium"
             title={`${v.desired.enabled ? '已启用' : '已停用'} · ${v.desired.version} · 修订版 ${v.desired_revision}`}>
             <span className="shrink-0">{v.desired.enabled ? '已启用' : '已停用'}</span>
             <span className="shrink-0 text-ink-3">·</span>
             <span className="num min-w-0 truncate">{v.desired.version || '—'}</span>
           </p>
-          <p className="num mt-0.5 truncate text-[11px] text-ink-3">
+          <p className="num mt-0.5 truncate text-[12px] text-ink-3">
             修订 {v.desired_revision} · {isolationLabel(v.desired.isolation)}
           </p>
         </div>
         <div className="min-w-0 rounded-xl bg-surface-2 px-3 py-2.5">
-          <p className="text-[11px] font-medium text-ink-3">实际态</p>
+          <p className="text-[12px] font-medium text-ink-3">实际态</p>
           {v.has_observed ? (
             <>
               <p className={`mt-1 flex min-w-0 items-baseline gap-1 text-[12px] font-medium ${
@@ -61,7 +61,7 @@ export function InstanceRow({ v, catalog, onEdit }: {
                 <span className="shrink-0 text-ink-3">·</span>
                 <span className="num min-w-0 truncate">{v.observed?.version || '未给出'}</span>
               </p>
-              <p className="num mt-0.5 truncate text-[11px] text-ink-3">
+              <p className="num mt-0.5 truncate text-[12px] text-ink-3">
                 已应用 {v.applied_revision} · {hl.label}
                 {v.stale ? ' · stale' : ''}
               </p>
@@ -69,7 +69,7 @@ export function InstanceRow({ v, catalog, onEdit }: {
           ) : (
             <>
               <p className="mt-1 truncate text-[12px] font-medium text-ink-2">边缘节点未上报</p>
-              <p className="mt-0.5 min-w-0 truncate text-[11px] text-ink-3">
+              <p className="mt-0.5 min-w-0 truncate text-[12px] text-ink-3">
                 {v.edge_online ? '节点在线但还没回过' : '节点离线'}
               </p>
             </>
@@ -77,7 +77,7 @@ export function InstanceRow({ v, catalog, onEdit }: {
         </div>
       </div>
 
-      <p className="num mt-2.5 truncate text-[11px] text-ink-3"
+      <p className="num mt-2.5 truncate text-[12px] text-ink-3"
         title={`边缘节点 ${v.edge_id} · 最后回执 ${v.last_ack_at ? fmtDateTime(v.last_ack_at) : '尚无回执'}`}>
         边缘节点 {v.edge_id || '—'} · 最后回执 {v.last_ack_at ? fmtDateTime(v.last_ack_at) : '尚无回执'}
       </p>
