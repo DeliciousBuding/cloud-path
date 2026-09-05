@@ -69,7 +69,7 @@ function DevicePicker({ devices, value, onChange, loading, error, onRetry }: {
   if (error) {
     return (
       <ErrorState icon={<WifiOff size={20} />} title="设备列表加载失败"
-        hint="拿不到 GET /api/devices。这不代表没有设备接入 —— 请检查 server 是否可达后重试。"
+        hint="拿不到 GET /api/devices。这不代表没有设备接入，请检查 server 是否可达后重试。"
         onRetry={onRetry} />
     )
   }

@@ -78,7 +78,7 @@ export default function Devices() {
       ) : error ? (
         // 接口失败 ≠ 没有设备：必须分开说，否则用户会以为集群是空的
         <ErrorState icon={<WifiOff size={20} />} title="设备列表加载失败"
-          hint="拿不到 GET /api/devices。这不代表没有设备接入 —— 请检查 server 是否可达后重试。"
+          hint="拿不到 GET /api/devices。这不代表没有设备接入，请检查 server 是否可达后重试。"
           onRetry={refetch} />
       ) : list.length === 0 ? (
         <EmptyState icon={<Inbox size={24} />} title="还没有设备接入"

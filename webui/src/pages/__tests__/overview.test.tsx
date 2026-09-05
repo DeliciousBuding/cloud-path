@@ -67,17 +67,16 @@ describe('概览：有数据', () => {
     expect(screen.getByText('需要关注')).toBeInTheDocument()
   })
 
-  it('需要关注栏给出离线/失败的可跳转明细，失败命令主行说人话、时间用绝对时间', async () => {
+  it('需要关注栏只给聚合主行与去向：失败明细的单一证据家是活动页，概览不复述 ledger', async () => {
     route(FULL)
     const { container } = renderWithProviders(<Overview />)
     expect(await screen.findByText('1 台设备离线')).toBeInTheDocument()
     expect(screen.getByText('1 条命令执行失败')).toBeInTheDocument()
-    // 失败命令主行展示中文命令名（平台词典/humanize 回落），机器 cmd+args 在 tooltip
-    expect(screen.getByText('Relay On')).toBeInTheDocument()
-    expect(screen.getByText('失败')).toBeInTheDocument()
-    // 绝对时间：出现完整年月日，而不是只有「x 分钟前」
-    const times = [...container.querySelectorAll('.num')].map((n) => n.textContent ?? '')
-    expect(times.some((t) => /\d{4}\/\d{1,2}\/\d{1,2}/.test(t))).toBe(true)
+    // 机器命令名/状态徽章/明细时间不在概览二次出现（同屏同一答案只留一处）
+    expect(screen.queryByText('Relay On')).not.toBeInTheDocument()
+    expect(screen.queryByText('失败')).not.toBeInTheDocument()
+    const links = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))
+    expect(links).toContain('/activity')
   })
 
   it('边缘离线与插件未活跃各生成一条可执行的提醒（含去向链接）', async () => {

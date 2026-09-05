@@ -83,7 +83,8 @@ export function StatTile({ icon, label, value, unit, sub }: {
         {value}
         {unit && <span className="ml-1 text-base font-normal text-ink-3">{unit}</span>}
       </div>
-      {sub && <div className="mt-0.5 text-xs text-ink-3 break-words">{sub}</div>}
+      {/* sub 行恒预留：peer 瓦片共享 label→value→detail 内部行（Vercel 节奏纪律），高度结构一致不互撑 */}
+      <div className="mt-0.5 min-h-4 text-xs text-ink-3 break-words">{sub}</div>
     </div>
   )
 }

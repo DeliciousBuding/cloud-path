@@ -11,14 +11,13 @@ import { EventFeed } from '@/components/EventFeed'
 import { api } from '@/lib/api'
 import { useQuery } from '@tanstack/react-query'
 import { deviceShortName, overviewAlerts, overviewStats, type OverviewAlert, type OverviewStat } from '@/lib/overview'
-import { cmdMeta, cmdStatusMeta, fmtDateTime, mergeEvents, timeAgo } from '@/lib/format'
+import { fmtDateTime, mergeEvents, timeAgo } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import { useNow } from '@/hooks/useNow'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useDevices } from '@/hooks/useDevices'
 import { useEdges } from '@/hooks/useEdges'
 import { useOverview } from '@/hooks/useOverview'
-import { useCapabilityIndex } from '@/hooks/useDescriptor'
 import { useLive } from '@/store/ws'
 
 /**
@@ -40,7 +39,6 @@ export default function Overview() {
   const liveEvents = useLive((s) => s.events)
   const status = useLive((s) => s.status)
   // 失败命令的展示名走声明（catalog 已由同页 EventFeed 拉取，命中同一 query key，不额外发请求）
-  const capIndex = useCapabilityIndex()
   const { data: health } = useQuery({
     queryKey: ['health'], queryFn: api.health, refetchInterval: 30_000,
   })
@@ -74,7 +72,6 @@ export default function Overview() {
 
   const alerts: OverviewAlert[] = data ? overviewAlerts(data) : []
   const offline = data?.offline_devices ?? []
-  const failed = data?.failed_commands ?? []
   // 降级态的关注项：离线设备 + 离线边缘（列表通道真实字段）
   const fallbackAlerts: OverviewAlert[] = !serverOk ? [
     ...devices.filter((d) => !d.online).map((d): OverviewAlert => {
@@ -156,7 +153,47 @@ export default function Overview() {
       )}
 
       {/* ---- 主体：fleet + 关注并排；事件条通栏在下（宽屏不留死角） ---- */}
-      <div className="mt-7 grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+      {/* 单列 field：live 数据下任何双列 split 都会被两栏高差踢出画布空洞（空洞随数据搬家），
+          reflow 成单列结构消灭；fleet 表格占有全证据宽（Vercel：tables own the full evidence width） */}
+      <div className="mt-7 space-y-5">
+        {attentionRows.length > 0 && (
+        <Panel
+          title={<span className="flex items-center gap-1.5"><AlertTriangle size={14} className="text-warn" />需要关注</span>}
+          right={attention > 0
+            ? <Badge tone="warn">{attention} 项</Badge>
+            : <Badge tone="ok"><CheckCircle2 size={11} />无异常</Badge>}>
+          {attentionRows.length === 0 ? (
+            <p className="py-6 text-center text-sm text-ink-3">
+              {serverOk || !loading ? '暂无异常' : '正在检查…'}
+            </p>
+          ) : (
+            <ul className="divide-y divide-hairline">
+              {attentionRows.map((a) => (
+                <li key={a.id} className="py-2">
+                  <Link to={a.to} className="flex min-w-0 items-center gap-2 no-underline transition-colors hover:text-accent"
+                    title={a.hint}>
+                    {/* 计数已在标题人话里（「N 条命令执行失败」）：行首只留语义色点，不重复数字 */}
+                    <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full',
+                      a.tone === 'bad' ? 'bg-bad' : a.tone === 'warn' ? 'bg-warn' : 'bg-ink-3')} />
+                    <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{a.title}</span>
+                    <ArrowRight size={12} className="shrink-0 text-ink-3" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          {serverOk && offline.length > 0 && (
+            <Link to="/devices" className="link mt-3 flex items-center gap-0.5 border-t border-hairline pt-3 text-xs">
+              {offline.length} 台离线设备明细 <ArrowRight size={12} />
+            </Link>
+          )}
+        </Panel>
+        )}
+        {attentionRows.length === 0 && serverOk && !loading && (
+          <p className="flex items-center gap-1.5 px-0.5 text-[12px] text-ink-3">
+            <CheckCircle2 size={12} className="text-ok" />暂无异常
+          </p>
+        )}
         <Panel
           title={<span className="flex items-center gap-1.5"><Cpu size={14} />设备</span>}
           right={
@@ -189,55 +226,8 @@ export default function Overview() {
           )}
         </Panel>
 
-        <Panel
-          title={<span className="flex items-center gap-1.5"><AlertTriangle size={14} className="text-warn" />需要关注</span>}
-          right={attention > 0
-            ? <Badge tone="warn">{attention} 项</Badge>
-            : <Badge tone="ok"><CheckCircle2 size={11} />无异常</Badge>}>
-          {attentionRows.length === 0 ? (
-            <p className="py-6 text-center text-sm text-ink-3">
-              {serverOk || !loading ? '暂无异常' : '正在检查…'}
-            </p>
-          ) : (
-            <ul className="divide-y divide-hairline">
-              {attentionRows.map((a) => (
-                <li key={a.id} className="py-2">
-                  <Link to={a.to} className="flex min-w-0 items-center gap-2 no-underline transition-colors hover:text-accent"
-                    title={a.hint}>
-                    {/* 计数已在标题人话里（「N 条命令执行失败」）：行首只留语义色点，不重复数字 */}
-                    <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full',
-                      a.tone === 'bad' ? 'bg-bad' : a.tone === 'warn' ? 'bg-warn' : 'bg-ink-3')} />
-                    <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{a.title}</span>
-                    <ArrowRight size={12} className="shrink-0 text-ink-3" />
-                  </Link>
-                </li>
-              ))}
-              {serverOk && failed.slice(0, 4).map((c) => {
-                const meta = cmdStatusMeta(c.status)
-                const cmd = cmdMeta(c.cmd, undefined, capIndex)
-                return (
-                  <li key={c.id} className="flex min-w-0 items-center gap-2 py-2">
-                    <Badge tone={meta.tone} className="shrink-0">{meta.label}</Badge>
-                    <span className="min-w-0 flex-1 truncate text-[12px]" title={c.args ? `${c.cmd} ${c.args}` : c.cmd}>
-                      {cmd.label}
-                    </span>
-                    <span className="num shrink-0 font-mono text-[12px] text-ink-3" title={c.device_id}>
-                      {c.created_at ? fmtDateTime(c.created_at) : '—'}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-          {serverOk && offline.length > 0 && (
-            <Link to="/devices" className="link mt-3 flex items-center gap-0.5 border-t border-hairline pt-3 text-xs">
-              {offline.length} 台离线设备明细 <ArrowRight size={12} />
-            </Link>
-          )}
-        </Panel>
 
         <Panel
-          className="xl:col-span-2"
           title={<span className="flex items-center gap-1.5"><Activity size={14} />近期事件</span>}
           right={
             <Link to="/activity" className="link flex items-center gap-0.5 text-xs">

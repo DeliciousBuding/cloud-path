@@ -171,7 +171,7 @@ export default function Settings() {
           <p className="max-w-[62ch] text-sm leading-relaxed text-ink-2">
             <span className="font-semibold text-ink">Cloudpath（云径）</span> 是通用 IoT 接入与管理平台：
             边缘代理把本地串口设备聚合上云，中心服务统一监控、下发命令并持久化事件，
-            管理台通过 WebSocket 实时可视化。核心不绑定任何具体硬件或行业语义——
+            管理台通过 WebSocket 实时可视化。核心不绑定任何具体硬件或行业语义，
             设备语义由适配器插件提供。
           </p>
           <p className="mt-4 border-t border-hairline pt-4 text-xs leading-relaxed text-ink-3">

@@ -95,6 +95,8 @@ describe('颜色只走 token', () => {
     const chart = source('components/TrendChart.tsx')
     expect(chart).toContain('var(--color-accent)')
     expect(chart).toContain('isAnimationActive={false}')
+    // 装饰性渐变是硬反模式（Vercel design.md）：面积图平涂低不透明度，渐变只允许作有标注的连续数据标尺
+    expect(chart).not.toContain('linearGradient')
     // 轴刻度是时间戳/数值＝机器文本：11px mono（字号下限纪律在 SVG 轴上同样生效）
     expect(chart).toContain('fontSize: 11')
     expect(chart).toContain("fontFamily: 'var(--font-mono)'")

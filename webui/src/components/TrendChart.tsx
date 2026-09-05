@@ -1,4 +1,3 @@
-import { useId } from 'react'
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer,
   Tooltip, XAxis, YAxis,
@@ -45,8 +44,6 @@ export function TrendChart({ points, unit, height = 112, kind = 'area', zeroBase
   hideY?: boolean
   xTick?: (t: number) => string
 }) {
-  const gradientId = `trend-${useId().replace(/[^a-zA-Z0-9]/g, '')}`
-
   if (points.length < 2) {
     return (
       <p className="py-8 text-center text-xs text-ink-3">
@@ -106,16 +103,10 @@ export function TrendChart({ points, unit, height = 112, kind = 'area', zeroBase
           </BarChart>
         ) : (
           <AreaChart data={data} margin={margin}>
-            <defs>
-              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--color-accent)" stopOpacity={0.22} />
-                <stop offset="100%" stopColor="var(--color-accent)" stopOpacity={0.02} />
-              </linearGradient>
-            </defs>
             {xAxis}{yAxis}{grid}{tip}{zeroLine}
             <Area
               type="monotone" dataKey="v" stroke="var(--color-accent)" strokeWidth={1.8}
-              fill={`url(#${gradientId})`} dot={false} isAnimationActive={false}
+              fill="var(--color-accent)" fillOpacity={0.1} dot={false} isAnimationActive={false}
             />
           </AreaChart>
         )}

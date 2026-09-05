@@ -61,7 +61,7 @@ export default function Edges() {
         <Panel><RowSkeleton rows={3} /></Panel>
       ) : error ? (
         <ErrorState icon={<WifiOff size={20} />} title="边缘节点列表加载失败"
-          hint="拿不到 GET /api/edges。这不代表没有节点接入 —— 请检查 server 是否可达后重试。"
+          hint="拿不到 GET /api/edges。这不代表没有节点接入，请检查 server 是否可达后重试。"
           onRetry={refetch} />
       ) : edges.length === 0 ? (
         <EmptyState icon={<Network size={24} />} title="没有边缘节点"

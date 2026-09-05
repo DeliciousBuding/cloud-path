@@ -240,8 +240,22 @@ export default function DeviceDetail() {
                 {d.online ? '设备已连接，但还没有可呈现的主值' : '设备离线，暂无可呈现的主值'}
               </p>
             )}
-            <div className="grid items-start gap-5 lg:grid-cols-3">
-              <Panel className="lg:col-span-2"
+            {/* 事实横条：KPI 之后立即回答「这台设备健康吗」；KV 多列铺满通栏，不搁浅在窄轨 */}
+            <Panel title="设备状况">
+              <dl className="grid gap-x-10 gap-y-2.5 sm:grid-cols-2 xl:grid-cols-4">
+                <KeyValue k="在线" v={d.online ? '是' : '否'} />
+                <KeyValue k="边缘节点" v={d.edge_id || '—'} mono />
+                <KeyValue k="适配器" v={d.adapter || '—'} mono />
+                {d.port && <KeyValue k="串口" v={d.port} mono />}
+                <KeyValue k={d.online ? '最近更新' : '最后见'}
+                  v={<span className="num">{fmtDateTime(d.online ? d.updated_at : d.last_seen)}</span>} />
+                <KeyValue k="声明能力" v={descriptor ? `${capRefs.length} 种` : '无 Descriptor'} />
+                <KeyValue k="可下发命令" v={`${commands.actions.length} 条`} />
+              </dl>
+            </Panel>
+            {/* 双 ledger 互为 peer：等高互不牵制，空洞无处产生；概览只看最近 8 条，全部历史在各自页 */}
+            <div className="grid items-start gap-5 lg:grid-cols-2">
+              <Panel
                 title={<span className="flex items-center gap-1.5"><Activity size={14} />最近活动</span>}
                 right={
                   <button type="button" onClick={() => setTab('events')}
@@ -253,28 +267,8 @@ export default function DeviceDetail() {
                   ? <p className="py-6 text-center text-sm text-ink-3">还没有事件上报</p>
                   : <EventFeed events={events} showDevice={false} limit={8} />}
               </Panel>
-              <Panel title="设备状况">
-                <dl className="space-y-2.5">
-                  <KeyValue k="在线" v={d.online ? '是' : '否'} />
-                  <KeyValue k="边缘节点" v={d.edge_id || '—'} mono />
-                  <KeyValue k="适配器" v={d.adapter || '—'} mono />
-                  {d.port && <KeyValue k="串口" v={d.port} mono />}
-                  <KeyValue k={d.online ? '最近更新' : '最后见'}
-                    v={<span className="num">{fmtDateTime(d.online ? d.updated_at : d.last_seen)}</span>} />
-                  <KeyValue k="声明能力" v={descriptor ? `${capRefs.length} 种` : '无 Descriptor'} />
-                  <KeyValue k="可下发命令" v={`${commands.actions.length} 条`} />
-                </dl>
-              </Panel>
+              <CommandHistory deviceId={key} actions={commands.actions} limit={8} />
             </div>
-            {/* 命令成败是「最近发生了什么」的一半（用户自己的操作）：通栏置底，
-                避免 8+4 两栏高度互相牵制踢出空洞；概览只看最近 8 条，全部历史在控制页 */}
-            <CommandHistory deviceId={key} actions={commands.actions} limit={8}
-              footer={
-                <button type="button" onClick={() => setTab('controls')}
-                  className="link flex items-center gap-0.5 text-xs">
-                  到控制页看全部 <ArrowRight size={12} />
-                </button>
-              } />
           </div>
         </TabPanel>
       )}
@@ -328,7 +322,7 @@ export default function DeviceDetail() {
                   </div>
                   {seriesKeys.length === 0 ? (
                     <p className="py-8 text-center text-xs text-ink-3">
-                      暂无趋势数据——设备上报数值后会自动开始采样
+                      暂无趋势数据，设备上报数值后会自动开始采样
                     </p>
                   ) : (
                     <div className="grid gap-2.5 md:grid-cols-2 2xl:grid-cols-3">
