@@ -30,6 +30,18 @@ docker compose -f docker-compose.yml up -d --build
 curl -fsS http://127.0.0.1:8080/healthz
 ```
 
+## Application 插件（可选）
+
+在 `.env` 中设 `CLOUDPATH_APP_HOST=true`，重建 server 后启用应用宿主。
+镜像和两个 Compose 模板均把插件安装目录（`CLOUDPATH_APP_PLUGINS_DIR`）、
+lockfile（`CLOUDPATH_APP_LOCK`）与宿主状态（`CLOUDPATH_APP_STATE_DIR`）默认放在
+持久卷 `/data` 下；配置变量见 `.env.example`。现有插件安装目录与 lockfile
+须一同迁入该卷，插件可执行文件必须匹配容器的 OS/arch，并对 uid 65532 可读/可执行。
+
+不要沿用原生服务的相对 `data/...` 路径：容器工作目录是 `/app`，根文件系统
+只读；进程健康不代表插件安装目录已找到。除 `/healthz` 外，还应检查应用实例
+的 `/records`、`/bindings`、`/jobs`，确认实际运行状态与绑定。
+
 ## L2 公网（重点）
 
 ```bash
