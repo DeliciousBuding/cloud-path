@@ -12,6 +12,7 @@ import { api } from '@/lib/api'
 import { useQuery } from '@tanstack/react-query'
 import { deviceShortName, overviewAlerts, overviewStats, type OverviewAlert, type OverviewStat } from '@/lib/overview'
 import { cmdMeta, cmdStatusMeta, fmtDateTime, mergeEvents, timeAgo } from '@/lib/format'
+import { cn } from '@/lib/cn'
 import { useNow } from '@/hooks/useNow'
 import { useDevices } from '@/hooks/useDevices'
 import { useEdges } from '@/hooks/useEdges'
@@ -105,9 +106,7 @@ export default function Overview() {
         }
         actions={
           <>
-            {attention > 0 && (
-              <Badge tone="warn"><AlertTriangle size={11} />需要关注 {attention} 项</Badge>
-            )}
+            {/* 关注计数只在一处出现（关注面板右槽）；页头不重复同屏元数据 */}
             <Badge tone={status === 'open' ? 'ok' : status === 'connecting' ? 'warn' : 'bad'}>
               {status === 'open' ? '实时连接正常' : status === 'connecting' ? '连接中…' : '实时连接断开'}
             </Badge>
@@ -177,12 +176,12 @@ export default function Overview() {
           ) : (
             <ul className="m-0 list-none p-0">
               <DeviceRowHead />
-              {devices.slice(0, 50).map((d) => <DeviceRow key={d.id} d={d} />)}
+              {devices.slice(0, 8).map((d) => <DeviceRow key={d.id} d={d} />)}
             </ul>
           )}
-          {devices.length > 50 && (
+          {devices.length > 8 && (
             <Link to="/devices" className="link mt-3 flex items-center gap-0.5 border-t border-hairline pt-3 text-xs">
-              另有 {devices.length - 50} 台 · 查看全部 <ArrowRight size={12} />
+              另有 {devices.length - 8} 台 · 查看全部 <ArrowRight size={12} />
             </Link>
           )}
         </Panel>
@@ -202,7 +201,9 @@ export default function Overview() {
                 <li key={a.id} className="py-2">
                   <Link to={a.to} className="flex min-w-0 items-center gap-2 no-underline transition-colors hover:text-accent"
                     title={a.hint}>
-                    <Badge tone={a.tone} className="num shrink-0">{a.count}</Badge>
+                    {/* 计数已在标题人话里（「N 条命令执行失败」）：行首只留语义色点，不重复数字 */}
+                    <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full',
+                      a.tone === 'bad' ? 'bg-bad' : a.tone === 'warn' ? 'bg-warn' : 'bg-ink-3')} />
                     <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{a.title}</span>
                     <ArrowRight size={12} className="shrink-0 text-ink-3" />
                   </Link>
@@ -217,7 +218,7 @@ export default function Overview() {
                     <span className="min-w-0 flex-1 truncate text-[12px]" title={c.args ? `${c.cmd} ${c.args}` : c.cmd}>
                       {cmd.label}
                     </span>
-                    <span className="num shrink-0 text-[12px] text-ink-3" title={c.device_id}>
+                    <span className="num shrink-0 font-mono text-[12px] text-ink-3" title={c.device_id}>
                       {c.created_at ? fmtDateTime(c.created_at) : '—'}
                     </span>
                   </li>
