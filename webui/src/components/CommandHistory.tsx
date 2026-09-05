@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query'
 import { History } from 'lucide-react'
 import { Panel, Badge } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
-import { cn } from '@/lib/cn'
 import { api } from '@/lib/api'
 import { cmdMeta, cmdStatusMeta, fmtTime, fmtDateTime } from '@/lib/format'
 import type { CommandAction } from '@/lib/descriptor'
@@ -35,15 +34,13 @@ export function CommandHistory({ deviceId, actions }: { deviceId: string; action
               // 390px：徽标与时间不收缩，命令名/参数/结果三段各自 truncate，整行不撑宽容器
               <li key={c.id} className="flex min-w-0 items-center gap-3 py-2">
                 <Badge tone={st.tone} className="shrink-0">{st.label}</Badge>
-                <span className="min-w-0 truncate text-xs font-medium" title={meta.hint || c.cmd}>{meta.label}</span>
-                {c.args && (
-                  <span className="num truncate font-mono text-[11px] text-ink-3" title={`args: ${c.args}`}>
-                    {c.args}
-                  </span>
-                )}
-                {c.result && (
-                  <span className={cn('truncate text-[11px]', st.tone === 'ok' ? 'text-ink-3' : 'text-bad')}
-                    title={c.result}>
+                <span className="min-w-0 truncate text-xs font-medium"
+                  title={`${meta.hint || c.cmd}${c.args ? ` · args: ${c.args}` : ''}${c.result && st.tone === 'ok' ? ` · 回执: ${c.result}` : ''}`}>
+                  {meta.label}
+                </span>
+                {/* 回执原文是机器噪音：成功收进 title；失败原因才是人话信息，行内红字呈现 */}
+                {c.result && st.tone !== 'ok' && (
+                  <span className="truncate text-[11px] text-bad" title={c.result}>
                     {c.result}
                   </span>
                 )}

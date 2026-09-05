@@ -74,7 +74,7 @@ export function ConfirmDialog({
             <Icon size={18} />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 id={titleId} className="text-[17px] font-semibold tracking-tight break-words">{title}</h2>
+            <h2 id={titleId} className="text-[15px] font-semibold tracking-tight break-words">{title}</h2>
             <div className="mt-1.5 text-sm leading-relaxed break-words text-ink-2">{body}</div>
           </div>
         </div>

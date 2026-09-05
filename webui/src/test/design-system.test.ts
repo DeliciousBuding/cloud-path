@@ -158,6 +158,17 @@ describe('light / dark token 对齐', () => {
   })
 })
 
+describe('字号刻度（type scale：10/11/12/13/14/15/22/24/26）', () => {
+  const SCALE = new Set(['10', '11', '12', '13', '14', '15', '22', '24', '26'])
+
+  it('组件不使用刻度外的任意字号（半像素与孤儿尺寸是密度漂移源）', () => {
+    const offenders = tsx.flatMap((f) => [...f.text.matchAll(/text-\[(\d+(?:\.\d+)?)px\]/g)]
+      .filter((m) => !SCALE.has(m[1]))
+      .map((m) => `${f.path}: text-[${m[1]}px]`))
+    expect(offenders).toEqual([])
+  })
+})
+
 describe('weight 纪律（Vercel design.md：标题不超 semibold）', () => {
   it('组件不使用 font-bold 及更重的任意字重（regular 400 / medium 500 / semibold 600）', () => {
     for (const f of tsx) expect(f.text, f.path).not.toMatch(/font-(bold|extrabold|black)\b/)

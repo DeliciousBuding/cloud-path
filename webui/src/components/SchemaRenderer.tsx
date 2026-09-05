@@ -167,7 +167,7 @@ function rangeOf(obs: Observation, idx: CapabilityIndex): [number, number] | nul
 function ScalarText({ widget, value, emphasis }: { widget: WidgetKind; value: unknown; emphasis?: boolean }) {
   const text = widget === 'timestamp' ? formatTimestamp(value) : formatValue(value)
   return (
-    <span className={cn('num', emphasis ? 'block text-[28px] font-semibold leading-none tracking-tight'
+    <span className={cn('num', emphasis ? 'block text-[26px] font-semibold leading-none tracking-tight'
       : 'text-[13px] font-medium')}>{text}</span>
   )
 }

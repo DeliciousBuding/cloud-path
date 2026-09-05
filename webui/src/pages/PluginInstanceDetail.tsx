@@ -117,7 +117,7 @@ export default function PluginInstanceDetail() {
 
             <Panel title={<span className="flex items-center gap-1.5"><SlidersHorizontal size={14} />配置（非敏感）</span>}>
               <ConfigTable config={instance.desired.config} />
-              <p className="mt-3 border-t border-hairline pt-3 text-[10.5px] leading-relaxed text-ink-3">
+              <p className="mt-3 border-t border-hairline pt-3 text-[11px] leading-relaxed text-ink-3">
                 配置里若出现 secret:// 引用，这里只显示 handle 名。插件的运行日志与本机路径不会出现在这一页。
               </p>
             </Panel>

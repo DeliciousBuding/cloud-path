@@ -90,7 +90,7 @@ export default function Plugins() {
                 return (
                   <Panel key={p.id} className="fade-up">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <span className="num min-w-0 max-w-full truncate text-[14.5px] font-semibold tracking-tight" title={p.id}>
+                      <span className="num min-w-0 max-w-full truncate text-[15px] font-semibold tracking-tight" title={p.id}>
                         {p.id}
                       </span>
                       <span className="ml-auto flex shrink-0 items-center gap-1.5">
@@ -140,7 +140,7 @@ export default function Plugins() {
                       </div>
                     )}
 
-                    <p className="mt-3 border-t border-hairline pt-2.5 text-[10.5px] leading-relaxed text-ink-3">
+                    <p className="mt-3 border-t border-hairline pt-2.5 text-[11px] leading-relaxed text-ink-3">
                       以上是插件的**声明**，不代表任何 Edge 上正在运行；运行事实见「已安装」与「实例」分区。
                     </p>
                   </Panel>
@@ -182,7 +182,7 @@ export default function Plugins() {
                       <Badge tone={edgeOnline ? 'ok' : 'idle'}>{edgeOnline ? 'Edge 在线' : 'Edge 离线'}</Badge>
                     }>
                     {!edgeOnline && (
-                      <p className="mb-3 flex items-start gap-1.5 rounded-xl bg-ink-3/10 px-3 py-2.5 text-[11.5px] leading-relaxed text-ink-2">
+                      <p className="mb-3 flex items-start gap-1.5 rounded-xl bg-ink-3/10 px-3 py-2.5 text-[12px] leading-relaxed text-ink-2">
                         <CloudOff size={12} className="mt-0.5 shrink-0" />
                         <span className="min-w-0">该 Edge 离线：下面是它最后一次上报的实际态，不代表当前运行状况。其他 Edge 不受影响。</span>
                       </p>

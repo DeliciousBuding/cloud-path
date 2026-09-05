@@ -46,7 +46,7 @@ export function DeviceRow({ d }: { d: DeviceView }) {
         <StatusDot online={d.online} />
         <Link
           to={`/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`}
-          className="min-w-0 truncate text-[13.5px] font-medium no-underline hover:text-accent"
+          className="min-w-0 truncate text-[13px] font-medium no-underline hover:text-accent"
           title={`${name} · ${d.id}`}
         >
           {name}

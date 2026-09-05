@@ -22,7 +22,7 @@ export function PluginErrorNote({ error, className }: { error: unknown; classNam
   return (
     <div role="alert" className={`rounded-xl px-3.5 py-3 ${box} ${className ?? ''}`}>
       <p className="text-[13px] font-semibold break-words">{copy.title}</p>
-      <p className="mt-0.5 text-[11.5px] leading-relaxed break-words opacity-90">{copy.hint}</p>
+      <p className="mt-0.5 text-[12px] leading-relaxed break-words opacity-90">{copy.hint}</p>
       {copy.code && (
         <p className="num mt-1.5 text-[10px] opacity-70">错误码 {copy.code}</p>
       )}
@@ -86,7 +86,7 @@ export function SecretRefList({ refs }: { refs: string[] | undefined }) {
           </li>
         ))}
       </ul>
-      <p className="mt-1.5 text-[10.5px] leading-relaxed text-ink-3">
+      <p className="mt-1.5 text-[11px] leading-relaxed text-ink-3">
         只显示 handle 名。明文只在 Edge 本地的 secret provider 与插件进程内存中，Server 与浏览器都拿不到。
       </p>
     </div>
@@ -102,7 +102,7 @@ export function ConfigTable({ config }: { config: Record<string, string> | undef
       {rows.map((r) => (
         <KeyValue
           key={r.key}
-          k={<span className="num min-w-0 truncate font-mono text-[11.5px]" title={r.key}>{r.key}</span>}
+          k={<span className="num min-w-0 truncate font-mono text-[12px]" title={r.key}>{r.key}</span>}
           v={r.isSecret
             ? <span className="flex min-w-0 items-center justify-end gap-1"><Lock size={10} className="shrink-0" /><span className="truncate">{r.value}</span></span>
             : <span className="num min-w-0 truncate font-mono" title={r.value}>{r.value}</span>}

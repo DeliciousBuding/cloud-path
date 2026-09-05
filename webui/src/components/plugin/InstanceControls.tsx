@@ -142,7 +142,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
           <label className="flex cursor-pointer items-start gap-2.5 rounded-xl bg-surface-2 p-3">
             <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)}
               className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
-            <span className="min-w-0 text-[12.5px] leading-relaxed">
+            <span className="min-w-0 text-[12px] leading-relaxed">
               强制（force）：即使 Edge 认为已应用同一 revision 也重新执行一次
             </span>
           </label>
@@ -178,7 +178,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
           <label className="flex cursor-pointer items-start gap-2.5 rounded-xl bg-surface-2 p-3">
             <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)}
               className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
-            <span className="min-w-0 text-[12.5px] leading-relaxed">
+            <span className="min-w-0 text-[12px] leading-relaxed">
               同时清除本地数据（purge）：插件在 Edge 上产生的数据一并删除，**不可恢复**
             </span>
           </label>

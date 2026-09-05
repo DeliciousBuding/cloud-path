@@ -182,7 +182,7 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
           <label className="mt-3 flex cursor-pointer items-start gap-2.5 border-t border-hairline pt-3">
             <input type="checkbox" checked={permAcked} onChange={(e) => setPermAcked(e.target.checked)}
               className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
-            <span className="min-w-0 text-[12.5px] leading-relaxed">
+            <span className="min-w-0 text-[12px] leading-relaxed">
               我已核对上述 {perms} 项权限，同意授予。提交时会带上 confirm_permissions。
             </span>
           </label>
@@ -204,11 +204,11 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
             {rows.map((r, i) => (
               <div key={i} className="flex min-w-0 gap-2">
                 <label className="sr-only" htmlFor={`cfg-k-${i}`}>配置键</label>
-                <input id={`cfg-k-${i}`} className="input num min-w-0 flex-1 font-mono text-[12.5px]"
+                <input id={`cfg-k-${i}`} className="input num min-w-0 flex-1 font-mono text-[12px]"
                   placeholder="key" value={r.key} autoComplete="off" spellCheck={false}
                   onChange={(e) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, key: e.target.value } : x)))} />
                 <label className="sr-only" htmlFor={`cfg-v-${i}`}>配置值</label>
-                <input id={`cfg-v-${i}`} className="input num min-w-0 flex-1 font-mono text-[12.5px]"
+                <input id={`cfg-v-${i}`} className="input num min-w-0 flex-1 font-mono text-[12px]"
                   placeholder="value" value={r.value} autoComplete="off" spellCheck={false}
                   onChange={(e) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))} />
                 <button type="button" aria-label={`删除配置项 ${r.key || i + 1}`}
@@ -231,9 +231,9 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
           id="pi-refs" rows={3} value={refsText} autoComplete="off" spellCheck={false}
           placeholder={'db-password\nsmtp-token'}
           onChange={(e) => setRefsText(e.target.value)}
-          className="input num resize-y font-mono text-[12.5px]"
+          className="input num resize-y font-mono text-[12px]"
         />
-        <p className="mt-1.5 text-[11.5px] leading-relaxed text-ink-3">
+        <p className="mt-1.5 text-[12px] leading-relaxed text-ink-3">
           只填 handle 名（<span className="num">secret://</span> 前缀可省略）。明文只存在于 Edge 本地 provider
           与插件进程内存中，Server 与浏览器都不会看到，也不会被记录。
         </p>
@@ -249,7 +249,7 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
       </div>
 
       {missing.length > 0 && (
-        <p className="text-[11.5px] text-ink-3">还需要填写：{missing.join('、')}</p>
+        <p className="text-[12px] text-ink-3">还需要填写：{missing.join('、')}</p>
       )}
       {error ? <PluginErrorNote error={error} /> : null}
 

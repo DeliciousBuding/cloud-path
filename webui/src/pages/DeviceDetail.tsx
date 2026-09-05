@@ -216,6 +216,7 @@ export default function DeviceDetail() {
                   ? <p className="py-6 text-center text-sm text-ink-3">还没有事件上报</p>
                   : <EventFeed events={events} showDevice={false} limit={8} />}
               </Panel>
+              <div className="space-y-5">
               <Panel title="设备状况">
                 <dl className="space-y-2.5">
                   <KeyValue k="在线" v={d.online ? '是' : '否'} />
@@ -228,6 +229,9 @@ export default function DeviceDetail() {
                   <KeyValue k="可下发命令" v={`${commands.actions.length} 条`} />
                 </dl>
               </Panel>
+              {/* 右栏第二块：最近命令的成败反馈（复用控制页同一组件，不新造概念） */}
+              <CommandHistory deviceId={key} actions={commands.actions} />
+              </div>
             </div>
           </div>
         </TabPanel>

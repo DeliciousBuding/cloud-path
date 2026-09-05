@@ -28,7 +28,7 @@ export function SyncBanner({ v }: { v: PluginInstanceView }) {
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-[13px] font-semibold break-words">{s.label}</span>
-        <span className="mt-0.5 block text-[11.5px] leading-relaxed break-words text-ink-2">{s.hint}</span>
+        <span className="mt-0.5 block text-[12px] leading-relaxed break-words text-ink-2">{s.hint}</span>
       </span>
       <Badge tone={s.tone} className="num shrink-0">
         rev {v.desired_revision}/{v.applied_revision}
@@ -44,7 +44,7 @@ function Row({ k, v, tone }: { k: string; v: ReactNode; tone?: 'ok' | 'warn' | '
   return (
     <div className="flex min-w-0 items-baseline justify-between gap-2 border-b border-hairline py-1.5 last:border-b-0">
       <dt className="shrink-0 text-[11px] text-ink-3">{k}</dt>
-      <dd className={`num min-w-0 truncate text-[12.5px] font-medium ${cls ?? ''}`}
+      <dd className={`num min-w-0 truncate text-[12px] font-medium ${cls ?? ''}`}
         title={typeof v === 'string' ? v : undefined}>
         {v}
       </dd>
@@ -69,7 +69,7 @@ function UnreportedBlock({ v }: { v: PluginInstanceView }) {
         {v.edge_online ? <RadioTower size={16} /> : <CloudOff size={16} />}
       </span>
       <p className="mt-2.5 text-[13px] font-semibold">Edge 未上报</p>
-      <p className="mt-1 text-[11.5px] leading-relaxed break-words text-ink-2">
+      <p className="mt-1 text-[12px] leading-relaxed break-words text-ink-2">
         {v.edge_online
           ? '该 Edge 在线，但还没有回过这个实例的实际态。左栏只是期望，不能据此判断插件是否在运行。'
           : '该 Edge 离线，因此没有实际态。它重连并应用快照后，这里才会出现运行事实。'}
@@ -99,7 +99,7 @@ export function DesiredObserved({ v }: { v: PluginInstanceView }) {
           <Row k="隔离" v={isolationLabel(v.desired.isolation)} />
           <Row k="更新于" v={v.desired.updated_at ? fmtDateTime(v.desired.updated_at) : '—'} />
         </dl>
-        <p className="mt-2 text-[10.5px] leading-relaxed text-ink-3">
+        <p className="mt-2 text-[11px] leading-relaxed text-ink-3">
           这一栏是「希望它变成什么样」，不代表 Edge 已经执行。
         </p>
       </div>
@@ -128,7 +128,7 @@ export function DesiredObserved({ v }: { v: PluginInstanceView }) {
             )}
             {v.observed?.detail && (
               // detail 已由 server 限长并脱敏；仍然截断呈现，且不当成 stdout 原文
-              <p className="mt-2 truncate text-[10.5px] text-ink-3" title={v.observed.detail}>
+              <p className="mt-2 truncate text-[11px] text-ink-3" title={v.observed.detail}>
                 摘要：{v.observed.detail}
               </p>
             )}
