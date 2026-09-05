@@ -37,7 +37,7 @@ describe('命令集来源与空态', () => {
   it('Schema 声明来源标注「Schema 声明」，适配器回落标注「适配器白名单」+ 适配器名', () => {
     const { unmount } = renderWithProviders(<ActionPanel deviceId={KEY} set={declared} adapterName="demo" />)
     expect(screen.getByText('Schema 声明')).toBeInTheDocument()
-    expect(screen.getByText('demo')).toBeInTheDocument()
+    expect(screen.getByText('demo 适配器')).toBeInTheDocument()
     unmount()
     renderWithProviders(<ActionPanel deviceId={KEY} set={fromAdapter} adapterName="demo" />)
     expect(screen.getByText('适配器白名单')).toBeInTheDocument()

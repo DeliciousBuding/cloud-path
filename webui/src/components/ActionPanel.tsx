@@ -65,7 +65,11 @@ export function ActionPanel({ deviceId, set, adapterName, className }: {
       right={
         <span className="flex min-w-0 items-center gap-1.5">
           <Badge tone={set.source === 'descriptor' ? 'accent' : 'idle'}>{SOURCE_LABEL[set.source]}</Badge>
-          {adapterName && <span className="min-w-0 truncate text-[11px] text-ink-3" title={adapterName}>{adapterName}</span>}
+          {adapterName && (
+            <span className="min-w-0 truncate text-[11px] text-ink-3" title={`适配器 ${adapterName}`}>
+              {adapterName} 适配器
+            </span>
+          )}
         </span>
       }
     >
