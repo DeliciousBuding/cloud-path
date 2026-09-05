@@ -26,6 +26,7 @@ import {
 import type { SummaryValue } from '@/lib/descriptor'
 import { eventLabel, fmtDateTime, mergeEvents, optionLabel, payloadLabel, timeAgo } from '@/lib/format'
 import { isStaleObs } from '@/components/SchemaRenderer'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 type Tab = 'overview' | 'state' | 'controls' | 'events' | 'capabilities' | 'diagnostics'
 
@@ -65,6 +66,7 @@ export default function DeviceDetail() {
   })
 
   const d = live ?? rest
+  usePageTitle(d ? (d.name || d.id) : '设备')
 
   // 命令白名单唯一事实源是后端 /api/adapters；前端不自建清单
   const adapterCommands = useMemo(() => {

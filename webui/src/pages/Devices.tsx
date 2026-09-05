@@ -4,6 +4,7 @@ import { EmptyState, ErrorState, PageHeader, Panel, Segmented } from '@/componen
 import { RowSkeleton } from '@/components/Skeleton'
 import { DeviceRow, DeviceRowHead } from '@/components/DeviceRow'
 import { useDevices } from '@/hooks/useDevices'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import type { DeviceView } from '@/lib/types'
 
 type Filter = 'all' | 'online' | 'offline'
@@ -20,6 +21,8 @@ function matches(d: DeviceView, q: string): boolean {
  * 过滤后无结果与「一台都没有」是两种不同的空态。
  */
 export default function Devices() {
+  usePageTitle('设备')
+
   const { list, online, loading, error, refetch } = useDevices()
   const [filter, setFilter] = useState<Filter>('all')
   const [q, setQ] = useState('')

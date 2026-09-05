@@ -11,6 +11,7 @@ import { InstanceForm } from '@/components/plugin/InstanceForm'
 import { ConfigTable, InstanceFacts, PermissionList, SecretRefList } from '@/components/plugin/PluginFacts'
 import { usePluginCatalog, usePluginInstance } from '@/hooks/usePlugins'
 import { syncState } from '@/lib/plugins'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 /**
  * 插件实例详情：期望态与实际态**分离**呈现，外加 Version / Edge / Trust / Permissions /
@@ -21,6 +22,8 @@ export default function PluginInstanceDetail() {
   const { id = '' } = useParams()
   const key = decodeURIComponent(id)
   const { instance, loading, error } = usePluginInstance(key)
+  usePageTitle(instance ? `插件实例 ${instance.id}` : '插件实例')
+
   const { plugins } = usePluginCatalog()
   const [editing, setEditing] = useState(false)
 

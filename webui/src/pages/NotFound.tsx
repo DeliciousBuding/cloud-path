@@ -1,8 +1,11 @@
 import { Link } from 'react-router'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { Compass, ArrowLeft } from 'lucide-react'
 import { EmptyState } from '@/components/ui'
 
 export default function NotFound() {
+  usePageTitle('页面不存在')
+
   return (
     <div className="py-10">
       <EmptyState

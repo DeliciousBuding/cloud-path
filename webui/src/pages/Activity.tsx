@@ -15,6 +15,7 @@ import { bucketEventDensity, cmdMeta, cmdStatusMeta, eventLabel, fmtDateTime, fm
 import { cn } from '@/lib/cn'
 import type { CommandView } from '@/lib/types'
 import type { CapabilityIndex } from '@/lib/descriptor'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 /** 单次拉取上限：与后端 limit 上限一致，超出部分给出明确说明而不是静默截断 */
 const PAGE_LIMIT = 500
@@ -45,6 +46,8 @@ const SELECT_CLS = 'min-w-0 max-w-full overflow-hidden rounded-full border borde
  *   - 事件流合并 WS 实时环形缓冲与 REST 历史并按 设备+时间+类型 去重。
  */
 export default function Activity() {
+  usePageTitle('活动')
+
   const [tab, setTab] = useState<Tab>('events')
   const [device, setDevice] = useState('')
   const [edge, setEdge] = useState('')

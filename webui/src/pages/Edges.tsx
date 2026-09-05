@@ -5,6 +5,7 @@ import { Badge, EmptyState, ErrorState, PageHeader, Panel, Segmented, StatusDot 
 import { RowSkeleton } from '@/components/Skeleton'
 import { useDevices } from '@/hooks/useDevices'
 import { useEdges } from '@/hooks/useEdges'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { deviceLabel, edgeFacts, filterEdgeFacts, sortEdgeFacts, type EdgeFacts, type EdgeFilter } from '@/lib/edges'
 import { fmtDateTime } from '@/lib/format'
 
@@ -15,6 +16,8 @@ import { fmtDateTime } from '@/lib/format'
  * 只是语义色转灰并给出「不影响其他节点」的系统级说明 —— 一台掉线不牵连其他台的呈现。
  */
 export default function Edges() {
+  usePageTitle('边缘节点')
+
   const { list: edges, online, loading: edgeLoading, error, refetch } = useEdges()
   const { list: devices } = useDevices()
   const [filter, setFilter] = useState<EdgeFilter>('all')

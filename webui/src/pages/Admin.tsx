@@ -7,8 +7,11 @@ import { EmptyState, PageHeader } from '@/components/ui'
 import { TokenManager } from '@/components/admin/TokenManager'
 import { UserManager } from '@/components/admin/UserManager'
 import { useIsAdmin } from '@/store/auth'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 export default function Admin() {
+  usePageTitle('管理')
+
   const admin = useIsAdmin()
 
   if (!admin) {

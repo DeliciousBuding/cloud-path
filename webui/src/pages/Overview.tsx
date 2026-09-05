@@ -14,6 +14,7 @@ import { deviceShortName, overviewAlerts, overviewStats, type OverviewAlert, typ
 import { cmdMeta, cmdStatusMeta, fmtDateTime, mergeEvents, timeAgo } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import { useNow } from '@/hooks/useNow'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { useDevices } from '@/hooks/useDevices'
 import { useEdges } from '@/hooks/useEdges'
 import { useOverview } from '@/hooks/useOverview'
@@ -30,6 +31,8 @@ import { useLive } from '@/store/ws'
  *   - 设备 fleet → useDevices（WS 快照优先，REST 轮询兜底）；事件流 → 聚合 + WS 去重合并。
  */
 export default function Overview() {
+  usePageTitle('概览')
+
   useNow() // 页头「更新于 X 前」每秒走字（相对时间不靠轮询刷新）
   const { data, loading, isFetching, refetch } = useOverview()
   const { list: devices, loading: devLoading, error: devError, refetch: refetchDevices } = useDevices()

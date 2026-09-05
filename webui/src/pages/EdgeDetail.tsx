@@ -12,6 +12,7 @@ import { useLive } from '@/store/ws'
 import { deviceLabel, edgeFacts } from '@/lib/edges'
 import { fmtDateTime, mergeEvents, timeAgo } from '@/lib/format'
 import { useNow } from '@/hooks/useNow'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 /**
  * 边缘节点详情：这台主机的连接事实 + 它名下所有设备的当前状态 + 相关事件。
@@ -27,6 +28,7 @@ export default function EdgeDetail() {
 
   const facts = useMemo(() => edgeFacts(edges, devices), [edges, devices])
   const f = facts.find((x) => x.edge.edge_id === id)
+  usePageTitle(f ? `边缘节点 ${f.edge.edge_id}` : '边缘节点')
 
   const { data: evHist, isLoading: evLoading } = useQuery({
     queryKey: ['edge-events', id],

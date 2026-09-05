@@ -18,6 +18,7 @@ import { setupErrorCopy } from '@/lib/authErrors'
 import { confirmSession } from '@/store/auth'
 import { cn } from '@/lib/cn'
 import type { HealthView } from '@/lib/types'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 type Phase = 'checking' | 'ok' | 'fail'
 
@@ -28,6 +29,8 @@ const MAX_USERNAME = 64
 const MAX_PASSWORD = 256
 
 export default function Setup() {
+  usePageTitle('初始化')
+
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
 

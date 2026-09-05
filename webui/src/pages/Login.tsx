@@ -18,8 +18,11 @@ import { loginErrorCopy } from '@/lib/authErrors'
 import { confirmSession } from '@/store/auth'
 import { toast } from '@/store/toast'
 import { cn } from '@/lib/cn'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 export default function Login() {
+  usePageTitle('登录')
+
   const navigate = useNavigate()
 
   // ---- 主路径：账号密码 ----

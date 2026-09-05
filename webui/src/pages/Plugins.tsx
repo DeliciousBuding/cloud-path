@@ -17,6 +17,7 @@ import { groupByEdge, healthMeta, indexCatalog, shortDigest, stateMeta, trustMet
 import { fmtDateTime } from '@/lib/format'
 import type { TabItem } from '@/components/ui'
 import type { PluginInstanceView } from '@/lib/types'
+import { usePageTitle } from '@/hooks/usePageTitle'
 
 type Tab = 'catalog' | 'installed' | 'instances'
 
@@ -32,6 +33,8 @@ const LIST_CAP = 200
  * 不渲染目录里的 source 字段：它可能是安装来源的本机路径，属于不得外泄的信息。
  */
 export default function Plugins() {
+  usePageTitle('插件')
+
   const [tab, setTab] = useState<Tab>('catalog')
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<PluginInstanceView | null>(null)

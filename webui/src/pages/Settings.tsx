@@ -8,10 +8,13 @@ import { PageHeader, Panel, StatTile, Badge, KeyValue } from '@/components/ui'
 import { api, getToken, setToken, wsUrl } from '@/lib/api'
 import { cmdMeta, fmtDateTime, fmtUptime, roleLabel } from '@/lib/format'
 import { useLive, reconnectLive } from '@/store/ws'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { logout, useAuth } from '@/store/auth'
 import { toast } from '@/store/toast'
 
 export default function Settings() {
+  usePageTitle('系统')
+
   const { data: health, isFetching } = useQuery({ queryKey: ['health'], queryFn: api.health, refetchInterval: 10000 })
   const { data: stats } = useQuery({ queryKey: ['stats'], queryFn: api.stats, refetchInterval: 15000 })
   const { data: adapters } = useQuery({ queryKey: ['adapters'], queryFn: api.adapters, staleTime: 5 * 60_000 })

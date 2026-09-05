@@ -20,6 +20,7 @@ import { RowSkeleton } from '@/components/Skeleton'
 import { useLive } from '@/store/ws'
 import { useDeviceDescriptor } from '@/hooks/useDescriptor'
 import { useDevices } from '@/hooks/useDevices'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import {
   CATEGORY_LABEL, capabilityLabel, entityTitle, primaryObservation, qualityTone,
 } from '@/lib/descriptor'
@@ -209,6 +210,8 @@ function PillboxPanel({ deviceKey, dev, adapterCommands }: {
 }
 
 export default function Pillbox() {
+  usePageTitle('药盒控制')
+
   const { edgeId, deviceId } = useParams()
   const lockedKey = edgeId && deviceId
     ? `${decodeURIComponent(edgeId)}/${decodeURIComponent(deviceId)}`
