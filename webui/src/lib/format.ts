@@ -5,7 +5,7 @@
 // （docs/architecture/capability-model.md §9）。
 import { ApiError } from './api'
 import type { Tone } from '@/components/ui'
-import { capabilityLabel, commandLabel, eventDecl, humanize } from './descriptor'
+import { capabilityLabel, commandDecl, commandLabel, eventDecl, humanize } from './descriptor'
 import type { CapabilityIndex, CommandAction } from './descriptor'
 import type { EventView } from './types'
 
@@ -115,10 +115,15 @@ export function eventTone(type: string, index?: CapabilityIndex): Tone {
   return (index ? eventDecl(type, index)?.tone : undefined) ?? 'idle'
 }
 
-/** 命令展示名/提示：命令集声明（CommandAction）优先，回落 humanize(cmd) */
-export function cmdMeta(cmd: string, actions?: CommandAction[]): { label: string; hint: string } {
+/** 命令展示名/提示，回落顺序：设备命令集声明 > catalog 里的 action 声明 > 平台词典 > humanize(cmd)。
+ *  跨设备列表（活动页 / 概览）没有单设备命令集，传 idx 让它照样吃到声明标题。 */
+export function cmdMeta(
+  cmd: string, actions?: CommandAction[], idx?: CapabilityIndex,
+): { label: string; hint: string } {
   const a = actions?.find((x) => x.cmd === cmd)
   if (a) return { label: a.label, hint: a.hint ?? '' }
+  const decl = idx ? commandDecl(cmd, idx) : undefined
+  if (decl?.title) return { label: decl.title, hint: decl.description ?? '' }
   return { label: commandLabel(cmd), hint: '' }
 }
 

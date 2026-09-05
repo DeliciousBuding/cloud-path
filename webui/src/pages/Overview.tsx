@@ -16,6 +16,7 @@ import { useNow } from '@/hooks/useNow'
 import { useDevices } from '@/hooks/useDevices'
 import { useEdges } from '@/hooks/useEdges'
 import { useOverview } from '@/hooks/useOverview'
+import { useCapabilityIndex } from '@/hooks/useDescriptor'
 import { useLive } from '@/store/ws'
 
 /**
@@ -34,6 +35,8 @@ export default function Overview() {
   const edges = useEdges()
   const liveEvents = useLive((s) => s.events)
   const status = useLive((s) => s.status)
+  // 失败命令的展示名走声明（catalog 已由同页 EventFeed 拉取，命中同一 query key，不额外发请求）
+  const capIndex = useCapabilityIndex()
   const { data: health } = useQuery({
     queryKey: ['health'], queryFn: api.health, refetchInterval: 30_000,
   })
@@ -207,7 +210,7 @@ export default function Overview() {
               ))}
               {serverOk && failed.slice(0, 4).map((c) => {
                 const meta = cmdStatusMeta(c.status)
-                const cmd = cmdMeta(c.cmd)
+                const cmd = cmdMeta(c.cmd, undefined, capIndex)
                 return (
                   <li key={c.id} className="flex min-w-0 items-center gap-2 py-2">
                     <Badge tone={meta.tone} className="shrink-0">{meta.label}</Badge>

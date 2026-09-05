@@ -10,8 +10,10 @@ import { useLive } from '@/store/ws'
 import { useDevices } from '@/hooks/useDevices'
 import { useEdges } from '@/hooks/useEdges'
 import { useCapabilityIndex } from '@/hooks/useDescriptor'
-import { cmdStatusMeta, eventLabel, fmtDateTime, mergeEvents, optionLabel } from '@/lib/format'
+import { cmdMeta, cmdStatusMeta, eventLabel, fmtDateTime, fmtDay, fmtTime, mergeEvents, optionLabel } from '@/lib/format'
 import { cn } from '@/lib/cn'
+import type { CommandView } from '@/lib/types'
+import type { CapabilityIndex } from '@/lib/descriptor'
 
 /** 单次拉取上限：与后端 limit 上限一致，超出部分给出明确说明而不是静默截断 */
 const PAGE_LIMIT = 500
@@ -79,6 +81,11 @@ export default function Activity() {
     const rows = cmdQuery.data?.commands ?? []
     return edge && !device ? rows.filter((c) => c.device_id.startsWith(`${edge}/`)) : rows
   }, [cmdQuery.data, edge, device])
+
+  /** 设备 ID → 用户起的名字：命令行的目标列展示人话名，机器 ID 收进 title */
+  const deviceNames = useMemo(() => new Map(
+    devices.filter((d) => d.name).map((d) => [d.id, d.name as string]),
+  ), [devices])
 
   /** 过滤选项由当前数据里出现过的类型动态生成——前端不维护事件类型枚举 */
   const typeOptions = useMemo(() => {
@@ -207,7 +214,7 @@ export default function Activity() {
                 hint={anyFilter ? '试试清除筛选条件，或换一个设备 / 边缘节点。' : '设备上报事件后会出现在这里。'} />
             ) : (
               <>
-                <EventFeed events={events} limit={200} fullTime />
+                <EventFeed events={events} limit={200} dayGrouped />
                 {atLimit && <LimitNote what="事件" />}
               </>
             )
@@ -216,7 +223,7 @@ export default function Activity() {
               hint={anyFilter ? '试试清除筛选条件或换一个状态。' : '在设备详情页下发命令后，回执会出现在这里。'} />
           ) : (
             <>
-              <CommandRows rows={commands} />
+              <CommandRows rows={commands} names={deviceNames} index={index} />
               {atLimit && <LimitNote what="命令" />}
             </>
           )}
@@ -234,39 +241,64 @@ function LimitNote({ what }: { what: string }) {
   )
 }
 
-/** 命令历史行：状态徽标 + 命令/参数 + 目标设备 + 回执结果 + 绝对时间 */
-function CommandRows({ rows }: { rows: { id: number; device_id: string; cmd: string; args: string; status: string; created_at: number; acked_at: number; result: string }[] }) {
+/**
+ * 命令历史：跨天按天分组（组头承载日期，与事件流同一视觉语言），行内只留时刻。
+ * 机器 cmd / args / 成功回执一律收进 title（悬停可查），只有失败原因才是需要行内呈现的人话信息。
+ */
+function CommandRows({ rows, names, index }: {
+  rows: CommandView[]; names: Map<string, string>; index: CapabilityIndex
+}) {
+  const groups: { day: string; items: CommandView[] }[] = []
+  for (const c of rows.slice(0, 200)) {
+    const day = fmtDay(c.created_at)
+    const last = groups[groups.length - 1]
+    if (last && last.day === day) last.items.push(c)
+    else groups.push({ day, items: [c] })
+  }
   return (
-    <ul className="divide-y divide-hairline">
-      {rows.slice(0, 200).map((c) => {
-        const st = cmdStatusMeta(c.status)
-        const [edgeId, devId] = c.device_id.split('/')
-        return (
-          // 390px：徽标/时间不收缩，命令、目标、结果三段各自 truncate
-          <li key={c.id} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
-            <Badge tone={st.tone} className="shrink-0">{st.label}</Badge>
-            <span className="num flex min-w-0 max-w-full items-baseline gap-1 font-mono text-xs font-medium"
-              title={`${c.cmd}${c.args ? ` ${c.args}` : ''}`}>
-              <span className="min-w-0 truncate">{c.cmd}</span>
-              {c.args ? <span className="min-w-0 truncate text-ink-3">{c.args}</span> : null}
-            </span>
-            <Link
-              to={`/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`}
-              className="num min-w-0 max-w-[9rem] truncate font-mono text-[11px] text-ink-3 transition-colors hover:text-accent"
-              title={c.device_id}
-            >
-              {devId}
-            </Link>
-            {c.result && (
-              <span className="min-w-0 max-w-full truncate text-[11px] text-bad" title={c.result}>{c.result}</span>
-            )}
-            <span className="num ml-auto shrink-0 text-[11px] text-ink-3"
-              title={c.acked_at ? `回执 ${fmtDateTime(c.acked_at)}` : '尚无回执'}>
-              {fmtDateTime(c.created_at)}
-            </span>
-          </li>
-        )
-      })}
-    </ul>
+    <div className="space-y-4">
+      {groups.map((g, gi) => (
+        <section key={`${g.day}-${gi}`}>
+          <h4 className="mb-1 px-0.5 text-[11px] font-medium text-ink-3">{g.day}</h4>
+          <ul className="divide-y divide-hairline">
+            {g.items.map((c) => <CommandRow key={c.id} c={c} names={names} index={index} />)}
+          </ul>
+        </section>
+      ))}
+    </div>
+  )
+}
+
+function CommandRow({ c, names, index }: {
+  c: CommandView; names: Map<string, string>; index: CapabilityIndex
+}) {
+  const st = cmdStatusMeta(c.status)
+  const meta = cmdMeta(c.cmd, undefined, index)
+  const [edgeId, devId] = c.device_id.split('/')
+  return (
+    // 390px：徽标与时刻不收缩，命令名 / 失败原因 / 目标三段各自 truncate，整行不撑宽容器
+    <li className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
+      <Badge tone={st.tone} className="shrink-0">{st.label}</Badge>
+      <span className="min-w-0 truncate text-xs font-medium"
+        title={`${meta.hint || c.cmd}${c.args ? ` · args: ${c.args}` : ''}${c.result && st.tone === 'ok' ? ` · 回执: ${c.result}` : ''}`}>
+        {meta.label}
+      </span>
+      {c.result && st.tone !== 'ok' && (
+        <span className="min-w-0 max-w-full truncate text-[11px] text-bad" title={c.result}>
+          {c.result}
+        </span>
+      )}
+      <Link
+        to={`/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`}
+        className="min-w-0 max-w-[10rem] truncate text-[11px] text-ink-3 transition-colors hover:text-accent"
+        title={`${c.device_id} · 查看设备`}
+      >
+        {names.get(c.device_id) || devId}
+      </Link>
+      <span className="num ml-auto shrink-0 text-[11px] text-ink-3"
+        title={c.acked_at ? `回执 ${fmtDateTime(c.acked_at)}` : fmtDateTime(c.created_at)}>
+        {fmtTime(c.created_at)}
+      </span>
+    </li>
   )
 }

@@ -152,7 +152,7 @@ export default function EdgeDetail() {
             <p className="py-8 text-center text-sm text-ink-3">该节点还没有事件记录</p>
           ) : (
             <>
-              <EventFeed events={events} limit={20} fullTime />
+              <EventFeed events={events} limit={20} dayGrouped />
               {events.length > 20 && (
                 <Link to="/activity" className="link mt-3 flex items-center gap-0.5 border-t border-hairline pt-3 text-xs">
                   另有 {events.length - 20} 条 · 去活动页查看 <ArrowRight size={12} />

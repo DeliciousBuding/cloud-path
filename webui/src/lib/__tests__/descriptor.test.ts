@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CATEGORY_LABEL, CATEGORY_ORDER, EMPTY_INDEX, QUALITY_LABEL,
-  capabilityLabel, commandActions, entityTitle, eventDecl, formatTimestamp, formatValue,
+  capabilityLabel, commandActions, commandDecl, entityTitle, eventDecl, formatTimestamp, formatValue,
   humanize, indexCapabilities, inferWidget, isScalar, normalizeCapabilityDocs,
   normalizeDescriptor, observationsOf, parseCapabilityRef, pickDescriptorFor,
   presentationOf, primaryObservation, qualityTone, rawRows, readInlineDescriptor,
@@ -397,5 +397,22 @@ describe('摘要与通用回落（Descriptor 缺席时不白屏）', () => {
     })
     expect(eventDecl('device.unknown.thing', idx)).toBeUndefined()
     expect(eventDecl('device.clock.drift', EMPTY_INDEX)).toBeUndefined()
+  })
+})
+
+describe('commandDecl（跨设备命令声明查找）', () => {
+  it('decl.command 命中：拿到声明标题与说明', () => {
+    expect(commandDecl('relay_on', idx)).toEqual({ title: '闭合', description: '接通负载' })
+    expect(commandDecl('relay_off', idx)).toEqual({ title: '断开', description: undefined })
+  })
+
+  it('没有 command 字段时按 action key 命中（与 commandActions 同一键规则）', () => {
+    expect(commandDecl('pulse', idx)).toEqual({ title: '点动', description: '按毫秒脉冲' })
+  })
+
+  it('未收录命令 / 空索引返回 undefined，交由上层回落词典与 humanize', () => {
+    expect(commandDecl('not_declared_anywhere', idx)).toBeUndefined()
+    expect(commandDecl('relay_on', EMPTY_INDEX)).toBeUndefined()
+    expect(commandDecl('', idx)).toBeUndefined()
   })
 })

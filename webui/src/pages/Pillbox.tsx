@@ -8,9 +8,9 @@
 // 空态/加载/错误态齐全；390px 下不产生横向溢出（长标识符一律 truncate/break）。
 
 import { useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import {History, Pill, RadioTower, RefreshCw, WifiOff} from 'lucide-react'
+import {ArrowRight, History, Pill, RadioTower, RefreshCw, WifiOff} from 'lucide-react'
 import { BackLink, Badge, EmptyState, ErrorState, PageHeader, Panel, StatusDot, TONE_TEXT_CLS } from '@/components/ui'
 import { ActionPanel } from '@/components/ActionPanel'
 import { CommandHistory } from '@/components/CommandHistory'
@@ -35,6 +35,9 @@ function SlotCard({ entity, idx }: { entity: DescriptorEntity; idx: CapabilityIn
   const value = primary ? formatValue(primary.value) : '—'
   const tone = primary ? qualityTone(primary.quality) : 'idle'
   const cap = primary ? capabilityLabel(primary.capability, idx) : '等待观测'
+  // 与 MetricTile 同一纪律：语义色只给 warn/bad，正常值保持中性；长字符串降级字号不占 KPI 视觉位
+  const valueTone = tone === 'bad' || tone === 'warn' ? TONE_TEXT_CLS[tone] : undefined
+  const longText = typeof primary?.value === 'string' && primary.value.length > 12
   return (
     <div className="card min-w-0 p-4" data-testid="slot-card">
       <div className="flex min-w-0 items-center gap-2">
@@ -48,7 +51,9 @@ function SlotCard({ entity, idx }: { entity: DescriptorEntity; idx: CapabilityIn
           title={primary ? `${primary.capability} · ${primary.property}` : ''}>
           {cap}
         </span>
-        <span className={cn('num min-w-0 break-all text-[22px] font-semibold leading-none tracking-tight', TONE_TEXT_CLS[tone])}
+        <span
+          className={cn('num min-w-0 truncate leading-none tracking-tight',
+            longText ? 'text-[15px] font-medium' : 'text-[22px] font-semibold', valueTone)}
           title={`${value}${primary?.unit ? ` ${primary.unit}` : ''}`}>
           {value}{primary?.unit && <span className="ml-1 text-xs font-normal text-ink-3">{primary.unit}</span>}
         </span>
@@ -181,24 +186,31 @@ function PillboxPanel({ deviceKey, dev, adapterCommands }: {
         )}
       </Panel>
 
-      {/* 命令 + 提醒/漏服历史 */}
+      {/* 命令 + 提醒/漏服历史：左操作、右时间线，两列高度均衡；长列表收口并给活动页出口 */}
       <div className="grid items-start gap-5 lg:grid-cols-2">
-        <ActionPanel deviceId={deviceKey} set={commands} adapterName={dev.adapter || '—'} />
         <div className="space-y-5">
-          <Panel
-            title={<span className="flex items-center gap-1.5"><History size={14} />提醒与漏服</span>}
-            right={<span className="text-[11px] text-ink-3">{events.length} 条</span>}
-          >
-            {evLoading && events.length === 0 ? (
-              <RowSkeleton rows={3} />
-            ) : events.length === 0 ? (
-              <p className="py-4 text-center text-sm text-ink-3">还没有提醒/漏服事件</p>
-            ) : (
-              <EventFeed events={events} showDevice={false} limit={50} fullTime />
-            )}
-          </Panel>
+          <ActionPanel deviceId={deviceKey} set={commands} adapterName={dev.adapter || '—'} />
           <CommandHistory deviceId={deviceKey} actions={commands.actions} />
         </div>
+        <Panel
+          title={<span className="flex items-center gap-1.5"><History size={14} />提醒与漏服</span>}
+          right={<span className="text-[11px] text-ink-3">{events.length} 条</span>}
+        >
+          {evLoading && events.length === 0 ? (
+            <RowSkeleton rows={3} />
+          ) : events.length === 0 ? (
+            <p className="py-4 text-center text-sm text-ink-3">还没有提醒/漏服事件</p>
+          ) : (
+            <>
+              <EventFeed events={events} showDevice={false} limit={12} dayGrouped />
+              {events.length > 12 && (
+                <Link to="/activity" className="link mt-3 flex items-center gap-0.5 border-t border-hairline pt-3 text-xs">
+                  另有 {events.length - 12} 条 · 去活动页查看 <ArrowRight size={12} />
+                </Link>
+              )}
+            </>
+          )}
+        </Panel>
       </div>
     </div>
   )

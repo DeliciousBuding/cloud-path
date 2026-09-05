@@ -73,6 +73,7 @@ const CMD_LABEL: Record<string, string> = {
   buzzer: '蜂鸣器', led: 'LED 灯组', display: '数码管显示', motor: '电机',
   sync: '对时', sensor: '读取传感器', state: '状态读取', diag: '板级诊断',
   isp: '进入 ISP 下载', raw: '原始命令',
+  ping: '连通性探测', dump: '状态转储', noop: '空操作', set: '写入设定值',
 }
 
 /** 命令展示名（无声明上下文时）：平台词典 > humanize(机器名) */
@@ -805,6 +806,31 @@ export function eventDecl(type: string, idx: CapabilityIndex): {
         description: str(decl.description),
         tone: tone && (TONES as string[]).includes(tone) ? (tone as Tone) : undefined,
       }
+    }
+  }
+  return undefined
+}
+
+/**
+ * 命令声明查找：扫描 catalog 里各 Capability 的 spec.actions（eventDecl 的命令侧对称件）。
+ * 跨设备列表（活动页 / 概览）拿不到单设备命令集，只能按 cmd 在声明索引里找展示名；
+ * 键对齐 commandActions：decl.command > decl.cmd > action key。未收录时返回 undefined，
+ * 由上层回落平台词典 / humanize——机器 cmd 本身永不本地化。
+ */
+export function commandDecl(cmd: string, idx: CapabilityIndex): {
+  title?: string; description?: string
+} | undefined {
+  if (!idx.docs.length || !cmd) return undefined
+  for (const doc of idx.docs) {
+    const actions = obj(doc.spec?.actions)
+    if (!actions) continue
+    for (const [name, declRaw] of Object.entries(actions)) {
+      const decl = obj(declRaw) ?? {}
+      if ((str(decl.command) ?? str(decl.cmd) ?? name) !== cmd) continue
+      // 与 propertyLabel / capabilityLabel 同一 locale 规则：英文 title 让位给平台词典
+      const title = localizedTitle(str(decl.title) ?? str(decl.label))
+      const description = str(decl.description) ?? str(decl.hint)
+      if (title || description) return { title, description }
     }
   }
   return undefined

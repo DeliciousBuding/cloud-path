@@ -12,22 +12,22 @@ import { eventLabel, eventTone, fmtDay, fmtDateTime, fmtTime, payloadLabel } fro
  * 其次 Capability 声明的 title，最后 humanize(类型名)——前端不维护事件枚举。
  * 单行高密度：类型 / 对象 / 载荷展开 / 时刻一行放下；原始载荷按需展开（取证面，不污染扫读）。
  */
-export function EventFeed({ events, showDevice = true, limit = 30, fullTime = false }: {
+export function EventFeed({ events, showDevice = true, limit = 30, dayGrouped = false }: {
   events: EventView[]
   showDevice?: boolean
   limit?: number
-  /** true = 显示完整绝对日期时间（活动页跨天历史用）；false = 只显示时刻（详情页/概览紧凑列表） */
-  fullTime?: boolean
+  /** 长历史模式：按天分组，组头承载日期、行内只留时刻（完整时间悬停可见）；紧凑列表不分组 */
+  dayGrouped?: boolean
 }) {
   if (!events.length) {
     return <p className="py-6 text-center text-sm text-ink-3">暂无事件</p>
   }
   const shown = events.slice(0, limit)
-  if (!fullTime) {
+  if (!dayGrouped) {
     return (
       <ul className="divide-y divide-hairline">
         {shown.map((e, i) => (
-          <EventRow key={`${e.id}-${i}`} e={e} first={i === 0} showDevice={showDevice} fullTime={fullTime} />
+          <EventRow key={`${e.id}-${i}`} e={e} first={i === 0} showDevice={showDevice} />
         ))}
       </ul>
     )
@@ -47,7 +47,7 @@ export function EventFeed({ events, showDevice = true, limit = 30, fullTime = fa
           <h4 className="mb-1 px-0.5 text-[11px] font-medium text-ink-3">{g.day}</h4>
           <ul className="divide-y divide-hairline">
             {g.items.map((e, i) => (
-              <EventRow key={`${e.id}-${gi}-${i}`} e={e} first={gi === 0 && i === 0} showDevice={showDevice} fullTime={fullTime} />
+              <EventRow key={`${e.id}-${gi}-${i}`} e={e} first={gi === 0 && i === 0} showDevice={showDevice} />
             ))}
           </ul>
         </section>
@@ -56,12 +56,7 @@ export function EventFeed({ events, showDevice = true, limit = 30, fullTime = fa
   )
 }
 
-function EventRow({ e, first, showDevice, fullTime }: {
-  e: EventView
-  first: boolean
-  showDevice: boolean
-  fullTime: boolean
-}) {
+function EventRow({ e, first, showDevice }: { e: EventView; first: boolean; showDevice: boolean }) {
   const index = useCapabilityIndex()
   const [open, setOpen] = useState(false)
   const label = eventLabel(e.type, index, payloadLabel(e.payload))
@@ -92,7 +87,7 @@ function EventRow({ e, first, showDevice, fullTime }: {
           </button>
         )}
         <span className="num ml-auto shrink-0 text-[11px] text-ink-3" title={`${fmtDateTime(e.ts)} · ${e.type}`}>
-          {fullTime ? fmtDateTime(e.ts) : fmtTime(e.ts)}
+          {fmtTime(e.ts)}
         </span>
       </div>
       {open && (

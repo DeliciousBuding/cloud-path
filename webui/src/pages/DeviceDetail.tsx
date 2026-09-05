@@ -369,7 +369,7 @@ export default function DeviceDetail() {
                   hint="该设备上报事件后会出现在这里；也可以去活动页看全部设备的记录。" />
                 : (
                   <>
-                    <EventFeed events={shownEvents} showDevice={false} limit={30} fullTime />
+                    <EventFeed events={shownEvents} showDevice={false} limit={30} dayGrouped />
                     {shownEvents.length > 30 && (
                       <Link to="/activity" className="link mt-3 flex items-center gap-0.5 border-t border-hairline pt-3 text-xs">
                         仅显示最近 30 条（共 {shownEvents.length} 条）· 去活动页查完整历史 <ArrowRight size={12} />
