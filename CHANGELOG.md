@@ -82,4 +82,5 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 | `v0.2.6` | 已发布（2026-09-05） | AppHost 修复×2（jp1 生产实测 box-prod failed 90 分钟）：共享插件进程停一个实例不再连带杀兄弟（新增 StopInstanceStreamOnly，Shutdown RPC 只留给最后实例）；reconcile 自愈——desired 未变但实际态失活的实例按 stop+start 重建会话 |
 | `v0.2.7` | 已发布（2026-09-05） | D1 Application Data Plane：`/api/plugin-instances/{id}/records|bindings|jobs` 通用读面（分页/过滤/租户隔离）+ WS `domain_record` 实时投影（created/updated）；契约 docs/api.md §5.5 |
 | `v0.2.8` | 已发布（2026-09-05） | D2 Durable Scheduler：schema v10 `scheduled_jobs` + 5 字段 cron 解析器 + claim-then-dispatch 调度循环（重启零重复、missed-run policy skip/run_once、停机不漂移节奏）；`schedule_job`/`cancel_job` 从簿记变真 primitive |
+| `v0.2.9` | 已发布（2026-09-05） | appruntime 修复：事件流开启即派发初始 `InstanceLifecycle` 事件——RunJob/RunRequest 早于任何设备事件到达时，应用侧 effect writer 尚未注册，其产生的 effect 此前被静默丢弃（button-indicator bootstrap 实测抓出） |
 | `dev` | 本地 | `task build` / `task build:matrix` 的未打标产物（`git describe` 兜底） |
