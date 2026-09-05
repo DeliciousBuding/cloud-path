@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -483,6 +484,16 @@ func (d *externalDevice) Descriptor() model.Descriptor {
 		}
 		desc.Entities = append(desc.Entities, me)
 	}
+	// 实体顺序必须确定：entities 是 map，迭代顺序随机会导致
+	// 1) 消费端（Binder 的 first-match、appCandidates）每次拿到不同顺序，
+	//    one-or-more/min-1 类需求绑到哪个实体全凭运气（2026-09-05 D3 真板
+	//    实测：重启后 button-indicator 绑到 key2，用户按 K1 全部静默丢弃）；
+	// 2) descriptor 指纹（JSON 含顺序）每拍都变，diff 抑制失效，整份
+	//    descriptor 每个 poll 周期重发一次。
+	// 按 EntityID 排序：确定、可预期、与 map 迭代解耦。
+	sort.Slice(desc.Entities, func(i, j int) bool {
+		return desc.Entities[i].EntityID < desc.Entities[j].EntityID
+	})
 	return desc
 }
 

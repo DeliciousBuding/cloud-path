@@ -84,4 +84,5 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 | `v0.2.8` | 已发布（2026-09-05） | D2 Durable Scheduler：schema v10 `scheduled_jobs` + 5 字段 cron 解析器 + claim-then-dispatch 调度循环（重启零重复、missed-run policy skip/run_once、停机不漂移节奏）；`schedule_job`/`cancel_job` 从簿记变真 primitive |
 | `v0.2.9` | 已发布（2026-09-05） | appruntime 修复：事件流开启即派发初始 `InstanceLifecycle` 事件——RunJob/RunRequest 早于任何设备事件到达时，应用侧 effect writer 尚未注册，其产生的 effect 此前被静默丢弃（button-indicator bootstrap 实测抓出） |
 | `v0.2.10` | 已发布（2026-09-05） | appruntime 修复：实例停机/启动失败即移除记录——此前 failed 记录永远占位，AppHost reconcile 的进程内自愈每轮撞 `ErrInstanceExists`（D3 真板实测：自愈实际只在 server 整体重启时生效）；Stop→Start 重建成为受测契约 |
+| `v0.2.11` | 已发布（2026-09-05） | 绑定确定性修复（D3 真板实测根因）：Edge descriptor 实体按 EntityID 排序、Server appCandidates 按 (device, entity) 排序——此前 map 随机迭代让 Binder first-match 每次绑到不同实体（button-indicator 重启后绑到 key2，用户按 K1 全部静默丢弃），且 descriptor 指纹每拍抖动导致整份 descriptor 每 poll 周期重发；AppHost 事件路由增加 dispatch/unrouted 观测日志（静默丢弃盲区） |
 | `dev` | 本地 | `task build` / `task build:matrix` 的未打标产物（`git describe` 兜底） |

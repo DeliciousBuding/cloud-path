@@ -539,12 +539,20 @@ func (h *AppHost) routeDeviceEvent(deviceTenantID int64, entityID string) []rout
 
 // DispatchDeviceEvent 把一条设备事件路由到绑定了该实体的应用实例。
 // nil 接收者安全（未启用 AppHost 时 Server 直接调用）。
+// 成功路由与无路由都留痕：实体事件是稀疏高信号面（key/hall/vib/nav），
+// 静默丢弃会让「按了没反应」类问题无从排查（2026-09-05 D3 真板实测教训）。
 func (h *AppHost) DispatchDeviceEvent(deviceTenantID int64, deviceKey, entityID, eventType string, ts int64) {
 	if h == nil || entityID == "" {
 		return
 	}
+	routes := h.routeDeviceEvent(deviceTenantID, entityID)
+	if len(routes) == 0 {
+		h.logger.Info("apphost event unrouted", "entity", entityID,
+			"type", eventType, "device", deviceKey, "tenant", deviceTenantID)
+		return
+	}
 	occurred := time.Unix(ts, 0).UTC().Format(time.RFC3339)
-	for _, route := range h.routeDeviceEvent(deviceTenantID, entityID) {
+	for _, route := range routes {
 		err := h.rt.DispatchEvent(h.ctxOrBackground(), route.run.row.InstanceID, &sdkapplication.ApplicationEvent{
 			Union: &sdkapplication.CapabilityEvent{
 				RequirementID: route.req, EntityID: entityID, EventType: eventType,
@@ -553,6 +561,9 @@ func (h *AppHost) DispatchDeviceEvent(deviceTenantID int64, deviceKey, entityID,
 		})
 		if err != nil {
 			h.logger.Warn("apphost dispatch event", "instance", route.run.row.InstanceID, "entity", entityID, "err", err)
+		} else {
+			h.logger.Info("apphost dispatch event", "instance", route.run.row.InstanceID,
+				"entity", entityID, "type", eventType, "requirement", route.req)
 		}
 	}
 }
@@ -1031,6 +1042,16 @@ func (s *Server) appCandidates(tenantID int64) []coreapplication.Candidate {
 			})
 		}
 	}
+	// 候选顺序必须确定：s.descriptors 是 map（设备间迭代随机），Binder 的
+	// first-match 语义依赖顺序——顺序抖动会让 one-or-more/min-1 类需求每次
+	// 绑到不同实体（2026-09-05 D3 真板实测根因之一）。按 (DeviceID, EntityID)
+	// 排序：跨设备、跨重启完全确定。
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].DeviceID != out[j].DeviceID {
+			return out[i].DeviceID < out[j].DeviceID
+		}
+		return out[i].EntityID < out[j].EntityID
+	})
 	return out
 }
 

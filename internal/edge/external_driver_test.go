@@ -109,6 +109,52 @@ func TestExternalDeviceAccumulatesAndProjects(t *testing.T) {
 	}
 }
 
+// TestExternalDeviceDescriptorEntityOrderIsDeterministic 锁死 descriptor 实体顺序：
+// entities 底层是 map，迭代顺序随机。2026-09-05 D3 真板实测：顺序抖动让 Binder
+// 的 first-match（one-or-more/min-1）每次绑到不同实体——button-indicator 重启后
+// 绑到 key2，用户按 K1（key1）的事件全部静默丢弃；同时 descriptor 指纹（JSON 含
+// 顺序）每拍都变，diff 抑制失效导致整份 descriptor 每个 poll 周期重发。
+// Descriptor() 必须按 EntityID 排序，跨调用、跨重启完全确定。
+func TestExternalDeviceDescriptorEntityOrderIsDeterministic(t *testing.T) {
+	d := &externalDevice{
+		id:         "dev1",
+		instanceID: "stcb",
+		entities:   map[string]driver.Entity{},
+		obs:        map[string]map[string]driver.Observation{},
+		done:       make(chan struct{}),
+	}
+	// 故意乱序 upsert（模拟 driver 声明序与字母序不一致 + map 随机迭代）
+	for _, id := range []string{"key3", "buzzer", "key1", "display", "key2", "clock"} {
+		d.applyMessage(&driver.DriverMessage{DeviceID: "dev1", Union: &driver.EntityUpsert{Entity: driver.Entity{
+			EntityID: id, DeviceID: "dev1", UniqueKey: id, Name: id,
+			Category: driver.EntityCategorySensor, Capabilities: []string{"cloudpath.dev/capability/key@1"},
+		}}}, nil)
+	}
+
+	want := []string{"buzzer", "clock", "display", "key1", "key2", "key3"}
+	// 多次调用：Go 的 map 迭代顺序每次都随机，排序缺失时几乎必然在某次暴露
+	for iter := 0; iter < 50; iter++ {
+		desc := d.Descriptor()
+		if len(desc.Entities) != len(want) {
+			t.Fatalf("entities = %d, want %d", len(desc.Entities), len(want))
+		}
+		for i, e := range desc.Entities {
+			if e.EntityID != want[i] {
+				t.Fatalf("iter %d: entities[%d] = %q, want %q (full order: %v)",
+					iter, i, e.EntityID, want[i], entityIDs(desc.Entities))
+			}
+		}
+	}
+}
+
+func entityIDs(entities []model.Entity) []string {
+	out := make([]string, 0, len(entities))
+	for _, e := range entities {
+		out = append(out, e.EntityID)
+	}
+	return out
+}
+
 func TestExternalInstanceConfigCarriesLocalBinding(t *testing.T) {
 	cfg := device.Config{
 		ID:    "stcb-1",
