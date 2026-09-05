@@ -30,25 +30,29 @@ var v7Tables = []string{
 	"plugin_desired_instances", "plugin_edge_revisions", "plugin_installations", "plugin_observations",
 }
 
-// TestMigrationV6ToV9 锁定：v6 库一次 Open 直达 v9，六张新表全部建齐，
+// latestTables 是 v7 起陆续新增的全部表（迁移完整性断言用；新增版本时追加）。
+var latestTables = append(append([]string{}, v7Tables...),
+	"tenant_policies", "app_domain_records", "scheduled_jobs")
+
+// TestMigrationV6ToLatest 锁定：v6 库一次 Open 直达当前 schema，七张新表全部建齐，
 // v3–v6 既有数据一行不丢且仍能通过既有 API 读到，外键完整性自检通过。
-func TestMigrationV6ToV9(t *testing.T) {
+func TestMigrationV6ToLatest(t *testing.T) {
 	path := writeLegacyV6DB(t)
 	s, err := Open(path)
 	if err != nil {
-		t.Fatalf("v6 -> v9 迁移失败: %v", err)
+		t.Fatalf("v6 -> v%d 迁移失败: %v", schemaVersion, err)
 	}
 	defer s.Close()
 
-	if s.Version() != 9 {
-		t.Fatalf("Version() = %d, want 9", s.Version())
+	if s.Version() != schemaVersion {
+		t.Fatalf("Version() = %d, want %d", s.Version(), schemaVersion)
 	}
 	db := rawSQLite(t, path, true)
 	defer db.Close()
-	if v := userVersion(t, db); v != 9 {
-		t.Fatalf("user_version = %d, want 9", v)
+	if v := userVersion(t, db); v != schemaVersion {
+		t.Fatalf("user_version = %d, want %d", v, schemaVersion)
 	}
-	for _, table := range append(append([]string{}, v7Tables...), "tenant_policies", "app_domain_records") {
+	for _, table := range latestTables {
 		if tableMissing(t, s.db, table) {
 			t.Fatalf("表 %s 未创建", table)
 		}
@@ -112,8 +116,8 @@ func TestReopenDoesNotRerunV7V9(t *testing.T) {
 		t.Fatalf("二次 Open 重跑了迁移: %v", err)
 	}
 	defer s2.Close()
-	if s2.Version() != 9 {
-		t.Fatalf("version = %d, want 9", s2.Version())
+	if s2.Version() != schemaVersion {
+		t.Fatalf("version = %d, want %d", s2.Version(), schemaVersion)
 	}
 	if n, _ := s2.CountPluginInstances(1); n != 1 {
 		t.Fatalf("期望态丢失: %d, want 1", n)
@@ -164,8 +168,8 @@ func TestMigrationV7FailureAtomic(t *testing.T) {
 		t.Fatalf("清故障后恢复失败: %v", err)
 	}
 	defer s.Close()
-	if s.Version() != 9 {
-		t.Fatalf("version = %d, want 9", s.Version())
+	if s.Version() != schemaVersion {
+		t.Fatalf("version = %d, want %d", s.Version(), schemaVersion)
 	}
 	if devs, err := s.ListDevicesTenant(1); err != nil || len(devs) != 1 {
 		t.Fatalf("恢复后数据丢失: %+v err=%v", devs, err)
@@ -209,7 +213,7 @@ func TestMigrationV8FailureAtomic(t *testing.T) {
 		t.Fatalf("恢复失败: %v", err)
 	}
 	defer s.Close()
-	if s.Version() != 9 || tableMissing(t, s.db, "tenant_policies") || tableMissing(t, s.db, "app_domain_records") {
+	if s.Version() != schemaVersion || tableMissing(t, s.db, "tenant_policies") || tableMissing(t, s.db, "app_domain_records") || tableMissing(t, s.db, "scheduled_jobs") {
 		t.Fatalf("恢复不完整: version=%d", s.Version())
 	}
 	if err := s.SetTenantPolicy(1, TenantPolicyRow{RetentionEventsDays: 15}); err != nil {
@@ -241,10 +245,10 @@ func TestRecoverV7DDLAppliedVersionStale(t *testing.T) {
 		t.Fatalf("半迁移恢复失败: %v", err)
 	}
 	defer s.Close()
-	if s.Version() != 9 {
-		t.Fatalf("version = %d, want 9", s.Version())
+	if s.Version() != schemaVersion {
+		t.Fatalf("version = %d, want %d", s.Version(), schemaVersion)
 	}
-	for _, table := range append(append([]string{}, v7Tables...), "tenant_policies", "app_domain_records") {
+	for _, table := range latestTables {
 		if tableMissing(t, s.db, table) {
 			t.Fatalf("补齐失败：%s 缺失", table)
 		}
@@ -287,8 +291,8 @@ func TestRecoverV8DDLAppliedVersionStale(t *testing.T) {
 		t.Fatalf("半迁移恢复失败: %v", err)
 	}
 	defer s.Close()
-	if s.Version() != 9 {
-		t.Fatalf("version = %d, want 9", s.Version())
+	if s.Version() != schemaVersion {
+		t.Fatalf("version = %d, want %d", s.Version(), schemaVersion)
 	}
 	pol, err := s.GetTenantPolicy(1)
 	if err != nil {
@@ -321,13 +325,14 @@ func TestPluginTablesEnforceTenantForeignKey(t *testing.T) {
 		`INSERT INTO plugin_observations(tenant_id,edge_id,instance_id) VALUES(9999,'e1','i1')`,
 		`INSERT INTO tenant_policies(tenant_id,quota_devices) VALUES(9999,10)`,
 		`INSERT INTO app_domain_records(tenant_id,instance_id,record_type,record_id,data_json,version,updated_at) VALUES(9999,'i1','t','r','{}','',1)`,
+		`INSERT INTO scheduled_jobs(tenant_id,instance_id,schedule_id,cron,timezone,payload_json,missed_policy,next_run_at,created_at,updated_at) VALUES(9999,'i1','s1','* * * * *','UTC','{}','skip',1,1,1)`,
 	}
 	for _, q := range queries {
 		if _, err := s.db.Exec(q); err == nil {
 			t.Fatalf("外键未拦住无主行: %s", strings.TrimSpace(q))
 		}
 	}
-	for _, table := range append(append([]string{}, v7Tables...), "tenant_policies", "app_domain_records") {
+	for _, table := range latestTables {
 		var n int
 		if err := s.db.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&n); err != nil {
 			t.Fatal(err)

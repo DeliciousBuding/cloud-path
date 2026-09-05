@@ -122,7 +122,24 @@ func (s *Server) handlePluginInstanceJobs(w http.ResponseWriter, r *http.Request
 	if jobs == nil {
 		jobs = []string{}
 	}
+	scheduled := []api.AppScheduledJobView{}
+	if s.cfg.Store != nil {
+		if rows, err := s.cfg.Store.ListScheduledJobs(tenantID, instanceID); err == nil {
+			for _, row := range rows {
+				scheduled = append(scheduled, api.AppScheduledJobView{
+					ScheduleID:   row.ScheduleID,
+					Cron:         row.Cron,
+					Timezone:     row.Timezone,
+					MissedPolicy: row.MissedPolicy,
+					NextRunAt:    row.NextRunAt,
+					LastRunAt:    row.LastRunAt,
+					State:        row.State,
+					Revision:     row.Revision,
+				})
+			}
+		}
+	}
 	writeJSON(w, http.StatusOK, api.AppJobsView{
-		InstanceID: instanceID, Running: running, Jobs: jobs,
+		InstanceID: instanceID, Running: running, Jobs: jobs, Scheduled: scheduled,
 	})
 }

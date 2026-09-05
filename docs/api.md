@@ -218,6 +218,14 @@ descriptor——两者只在实例运行期间存在。AppHost 未启用或实�
 `200 {"running":false,"bindings":[]}`，不伪造持久态。绑定视图字段：
 `{requirement_id, capability, entity_id}`。
 
+**jobs 响应**：`jobs` 为 descriptor 声明的运行态 job id；`scheduled` 为 D2
+Durable Scheduler 的声明式 cron 任务（`schedule_job` 效果声明，DB 持久，含
+cancelled，`state` 自述）：`{schedule_id, cron, timezone, missed_policy,
+next_run_at, last_run_at, state, revision}`。`missed_policy ∈ skip|run_once`，
+默认 skip（Server 停机错过的 run 不补执行；run_once 恰好补一次）。派发语义：
+claim-then-dispatch（先持久推进 next_run_at 再派发）——重启零重复派发，
+崩溃窗口内至多丢一次 run（不回放过期副作用）。
+
 **WS 实时投影**：领域记录每次写入向**本租户**浏览器广播（信封复用 §6）：
 
 ```json

@@ -35,7 +35,7 @@ func TestMigrationV9FailureAtomic(t *testing.T) {
 		t.Fatalf("恢复失败: %v", err)
 	}
 	defer s.Close()
-	if s.Version() != 9 || tableMissing(t, s.db, "app_domain_records") {
+	if s.Version() != schemaVersion || tableMissing(t, s.db, "app_domain_records") {
 		t.Fatalf("恢复不完整: version=%d", s.Version())
 	}
 	// 恢复后领域记录可立即读写
@@ -66,8 +66,8 @@ func TestRecoverV9DDLAppliedVersionStale(t *testing.T) {
 		t.Fatalf("半迁移恢复失败: %v", err)
 	}
 	defer s.Close()
-	if s.Version() != 9 {
-		t.Fatalf("version = %d, want 9", s.Version())
+	if s.Version() != schemaVersion {
+		t.Fatalf("version = %d, want %d", s.Version(), schemaVersion)
 	}
 	rows, err := s.ListAppDomainRecords(1, "box1", 10)
 	if err != nil || len(rows) != 1 || rows[0].RecordID != "w-keep" {

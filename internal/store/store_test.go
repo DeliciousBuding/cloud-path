@@ -50,6 +50,7 @@ func TestMigrationReachesCurrentVersion(t *testing.T) {
 		"idx_device_state_tenant", "idx_devices_tenant",
 		"idx_events_device_ts", "idx_events_tenant_device_ts", "idx_events_tenant_ts", "idx_events_ts",
 		"idx_plugin_observations_tenant_reported",
+		"idx_scheduled_jobs_due",
 		"idx_sessions_expires", "idx_sessions_user",
 		"idx_tenant_tokens_hash", "idx_tenant_tokens_prefix", "idx_tenant_tokens_tenant",
 		"idx_users_tenant",

@@ -367,12 +367,26 @@ type AppBindingsView struct {
 	Bindings   []AppBindingView `json:"bindings"`
 }
 
+// AppScheduledJobView 是一条声明式 cron 任务（schedule_job 效果声明，DB 持久）。
+type AppScheduledJobView struct {
+	ScheduleID   string `json:"schedule_id"`
+	Cron         string `json:"cron"`
+	Timezone     string `json:"timezone"`
+	MissedPolicy string `json:"missed_policy"`
+	NextRunAt    int64  `json:"next_run_at,omitempty"` // unix 秒
+	LastRunAt    int64  `json:"last_run_at,omitempty"` // unix 秒
+	State        string `json:"state"`
+	Revision     int64  `json:"revision"`
+}
+
 // AppJobsView 是 GET /api/plugin-instances/{id}/jobs 响应。
-// Jobs 为应用声明并注册到分钟调度的 job id（运行态投影）。
+// Jobs 为应用声明并注册到分钟调度的 job id（运行态投影）；
+// Scheduled 为 D2 Durable Scheduler 的声明式 cron 任务（持久态）。
 type AppJobsView struct {
-	InstanceID string   `json:"instance_id"`
-	Running    bool     `json:"running"`
-	Jobs       []string `json:"jobs"`
+	InstanceID string                `json:"instance_id"`
+	Running    bool                  `json:"running"`
+	Jobs       []string              `json:"jobs"`
+	Scheduled  []AppScheduledJobView `json:"scheduled"`
 }
 
 // ---- 鉴权与多租户（docs/api.md §2）----

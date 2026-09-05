@@ -56,12 +56,11 @@ type AppHost struct {
 	done   chan struct{}
 	bootID string
 
-	mu        sync.Mutex
-	running   map[string]*appInstanceRun // instanceID → 运行记录
-	ticked    map[string]bool            // "<instance>|<window>|<date>" → 已派发（防重复开窗）
-	schedules map[string]map[string]bool // instanceID → 应用声明的 schedule id 集合（任务簿记）
-	appCmds   map[int64]appCommandRef    // server 命令 id → 应用侧引用（RequestCompleted 用）
-	seq       uint64                     // observed 上报序号
+	mu      sync.Mutex
+	running map[string]*appInstanceRun // instanceID → 运行记录
+	ticked  map[string]bool            // "<instance>|<window>|<date>" → 已派发（防重复开窗）
+	appCmds map[int64]appCommandRef    // server 命令 id → 应用侧引用（RequestCompleted 用）
+	seq     uint64                     // observed 上报序号
 }
 
 // AppHostConfig 是 Server 侧 Application Plugin Host 的配置（Config.AppHost）。
@@ -133,17 +132,16 @@ func NewAppHost(srv *Server, cfg AppHostConfig) (*AppHost, error) {
 		return nil, fmt.Errorf("apphost: %w", err)
 	}
 	h := &AppHost{
-		srv:       srv,
-		cfg:       cfg,
-		logger:    logger,
-		mgr:       mgr,
-		ph:        ph,
-		done:      make(chan struct{}),
-		bootID:    fmt.Sprintf("server-apphost-%d", time.Now().UnixNano()),
-		running:   map[string]*appInstanceRun{},
-		ticked:    map[string]bool{},
-		schedules: map[string]map[string]bool{},
-		appCmds:   map[int64]appCommandRef{},
+		srv:     srv,
+		cfg:     cfg,
+		logger:  logger,
+		mgr:     mgr,
+		ph:      ph,
+		done:    make(chan struct{}),
+		bootID:  fmt.Sprintf("server-apphost-%d", time.Now().UnixNano()),
+		running: map[string]*appInstanceRun{},
+		ticked:  map[string]bool{},
+		appCmds: map[int64]appCommandRef{},
 	}
 	rt, err := appruntime.NewRuntime(appruntime.RuntimeOptions{
 		Dialer: func(pluginID string) (sdkapplication.ApplicationClient, error) {
@@ -173,6 +171,8 @@ func (h *AppHost) Start(ctx context.Context) error {
 	if err := h.reconcile(h.ctx); err != nil {
 		h.logger.Warn("apphost initial reconcile failed", "err", err)
 	}
+	// 启动即处理声明式任务：停机期间错过的 run 在此按 missed-run policy 收敛
+	h.runScheduledJobs(time.Now())
 
 	var wg sync.WaitGroup
 	wg.Add(3)
@@ -381,7 +381,6 @@ func (h *AppHost) stopInstance(instanceID string) {
 		pluginID = run.row.PluginID
 	}
 	delete(h.running, instanceID)
-	delete(h.schedules, instanceID)
 	siblings := 0
 	if pluginID != "" {
 		for _, run := range h.running {
@@ -668,6 +667,107 @@ func (h *AppHost) minutePass(now time.Time) {
 			h.logger.Warn("apphost run job", "instance", j.instanceID, "job", j.req.JobID, "err", err)
 		}
 	}
+
+	// D2 Durable Scheduler：声明式 cron 任务（schedule_job 效果声明，DB 持久）
+	h.runScheduledJobs(now)
+}
+
+// runScheduledJobs 扫描到期声明式任务并派发。每分钟（及启动时）调用一次；
+// 语义见 dispatchScheduledJob（claim-then-dispatch + missed-run policy）。
+func (h *AppHost) runScheduledJobs(now time.Time) {
+	st := h.srv.cfg.Store
+	if st == nil {
+		return
+	}
+	due, err := st.ListScheduledJobsDue(now.Unix())
+	if err != nil {
+		h.logger.Warn("apphost scheduled jobs scan", "err", err)
+		return
+	}
+	for _, row := range due {
+		h.dispatchScheduledJob(st, row, now)
+	}
+}
+
+// scheduledMissedGrace 是「正常准点」与「停机错过」的分界：到期不超过该值的
+// 视为正常触发（minutePass 的分钟粒度 + 少量调度延迟）；超过即视为停机期间
+// 错过，走 missed-run policy。
+const scheduledMissedGrace = 90
+
+// dispatchScheduledJob 处理一条到期声明式任务。核心语义：
+//
+//   - claim-then-dispatch：先把 next_run_at / last_run_at / last_dispatch 持久
+//     推进，再派发。崩溃在 claim 之后 → 该次运行静默跳过（at-most-once），
+//     绝不重放——与 Edge 重连「只收敛最终态，不回放过期副作用」同一哲学。
+//   - 节奏保持：推进从原计划时刻起算（不从 now），停机不漂移 cron 节奏。
+//   - missed-run policy：停机错过的 run，skip（默认）= 只推进不派发；
+//     run_once = 补派发恰好一次（不管错过了几个周期）。
+func (h *AppHost) dispatchScheduledJob(st *store.Store, row store.ScheduledJobRow, now time.Time) {
+	expr, err := parseCronExpr(row.Cron)
+	if err != nil {
+		// 非法 cron（上游版本变更等）：撤销以免每分钟热循环
+		h.logger.Warn("apphost scheduled job bad cron, cancelling", "instance", row.InstanceID,
+			"schedule", row.ScheduleID, "cron", row.Cron, "err", err)
+		_ = st.CancelScheduledJob(row.TenantID, row.InstanceID, row.ScheduleID)
+		return
+	}
+	tz, err := time.LoadLocation(row.Timezone)
+	if err != nil {
+		tz = time.UTC
+	}
+	next := expr.nextAfter(time.Unix(row.NextRunAt, 0), tz)
+	for !next.IsZero() && next.Unix() <= now.Unix() {
+		next = expr.nextAfter(next, tz)
+	}
+	if next.IsZero() {
+		// 表达式在扫描视野内再无触发（如 2 月 30 日）：撤销
+		h.logger.Warn("apphost scheduled job has no future occurrence, cancelling",
+			"instance", row.InstanceID, "schedule", row.ScheduleID)
+		_ = st.CancelScheduledJob(row.TenantID, row.InstanceID, row.ScheduleID)
+		return
+	}
+	dispatch := now.Unix()-row.NextRunAt <= scheduledMissedGrace || row.MissedPolicy == "run_once"
+	dispatchKey := ""
+	if dispatch {
+		dispatchKey = fmt.Sprintf("sj|%s|%s|%d", row.InstanceID, row.ScheduleID, row.NextRunAt)
+	}
+	if err := st.ClaimScheduledJobRun(row.TenantID, row.InstanceID, row.ScheduleID,
+		next.Unix(), row.NextRunAt, dispatchKey); err != nil {
+		h.logger.Warn("apphost scheduled job claim", "instance", row.InstanceID,
+			"schedule", row.ScheduleID, "err", err)
+		return
+	}
+	if !dispatch {
+		h.logger.Info("apphost scheduled job run missed (skip policy)",
+			"instance", row.InstanceID, "schedule", row.ScheduleID,
+			"planned_at", row.NextRunAt, "next_run_at", next.Unix())
+		return
+	}
+	if _, err := h.rt.RunJob(h.ctxOrBackground(), row.InstanceID, &sdkapplication.RunJobRequest{
+		PluginInstanceID: row.InstanceID,
+		JobID:            row.ScheduleID,
+		JobType:          "scheduled",
+		ArgsJSON:         row.PayloadJSON,
+		IdempotencyKey:   dispatchKey,
+	}); err != nil {
+		// 已 claim（at-most-once）：本轮不重试，下轮自然进入下一计划时刻
+		h.logger.Warn("apphost scheduled job dispatch", "instance", row.InstanceID,
+			"schedule", row.ScheduleID, "err", err)
+		return
+	}
+	h.logger.Info("apphost scheduled job dispatched", "instance", row.InstanceID,
+		"schedule", row.ScheduleID, "planned_at", row.NextRunAt, "next_run_at", next.Unix())
+}
+
+// instanceTimezone 返回实例配置时区（schedule_job 效果声明时取用）；实例不
+// 在运行（理论不可达：效果来自运行中的实例）或无配置 → UTC。
+func (h *AppHost) instanceTimezone(instanceID string) *time.Location {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if run, ok := h.running[instanceID]; ok && run.tz != nil {
+		return run.tz
+	}
+	return time.UTC
 }
 
 // buildWindowTick 把当日窗口规格转成应用期望的 WindowJSON
@@ -841,24 +941,40 @@ func (e *appEffectExecutor) Execute(ctx context.Context, effect appruntime.Effec
 		e.host.broadcastDomainRecord(tid, effect.PluginInstanceID, p, created, now)
 		return nil
 	case appruntime.EffectScheduleJob:
-		// 任务簿记：应用声明的定时任务记录在册（cancel_job 可撤销）。
-		// 声明 job（descriptor.Jobs）由分钟循环驱动执行；schedule payload 的
-		// 独立 cron 执行是后续自动化引擎（Milestone D）的工作，这里不臆造。
-		e.host.mu.Lock()
-		set := e.host.schedules[effect.PluginInstanceID]
-		if set == nil {
-			set = map[string]bool{}
-			e.host.schedules[effect.PluginInstanceID] = set
+		tid, err := strconv.ParseInt(effect.TenantID, 10, 64)
+		if err != nil {
+			return fmt.Errorf("apphost: effect tenant %q: %w", effect.TenantID, err)
 		}
-		set[effect.ScheduleJob.ScheduleID] = true
-		e.host.mu.Unlock()
+		p := effect.ScheduleJob
+		expr, err := parseCronExpr(p.Cron)
+		if err != nil {
+			return fmt.Errorf("apphost: schedule %q: %w", p.ScheduleID, err)
+		}
+		tz := e.host.instanceTimezone(effect.PluginInstanceID)
+		next := expr.nextAfter(time.Now(), tz)
+		if next.IsZero() {
+			return fmt.Errorf("apphost: schedule %q: cron %q has no future occurrence", p.ScheduleID, p.Cron)
+		}
+		if _, err := e.host.srv.cfg.Store.UpsertScheduledJob(store.ScheduledJobRow{
+			TenantID: tid, InstanceID: effect.PluginInstanceID, ScheduleID: p.ScheduleID,
+			Cron: p.Cron, Timezone: tz.String(), PayloadJSON: p.PayloadJSON,
+			MissedPolicy: "skip", NextRunAt: next.Unix(),
+		}); err != nil {
+			return fmt.Errorf("apphost: schedule %q: %w", p.ScheduleID, err)
+		}
 		e.host.logger.Info("apphost schedule registered", "instance", effect.PluginInstanceID,
-			"schedule", effect.ScheduleJob.ScheduleID, "cron", effect.ScheduleJob.Cron)
+			"schedule", p.ScheduleID, "cron", p.Cron, "next_run_at", next.Unix())
 		return nil
 	case appruntime.EffectCancelJob:
-		e.host.mu.Lock()
-		delete(e.host.schedules[effect.PluginInstanceID], effect.CancelJob.ScheduleID)
-		e.host.mu.Unlock()
+		tid, err := strconv.ParseInt(effect.TenantID, 10, 64)
+		if err != nil {
+			return fmt.Errorf("apphost: effect tenant %q: %w", effect.TenantID, err)
+		}
+		if err := e.host.srv.cfg.Store.CancelScheduledJob(tid, effect.PluginInstanceID, effect.CancelJob.ScheduleID); err != nil {
+			return fmt.Errorf("apphost: cancel schedule %q: %w", effect.CancelJob.ScheduleID, err)
+		}
+		e.host.logger.Info("apphost schedule cancelled", "instance", effect.PluginInstanceID,
+			"schedule", effect.CancelJob.ScheduleID)
 		return nil
 	case appruntime.EffectSendNotification:
 		// 通知通道（Connector/Notification）属生态扩展阶段：现在如实记录，

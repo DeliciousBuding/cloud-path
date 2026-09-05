@@ -61,6 +61,7 @@ var migrations = []migration{
 	{version: 7, custom: migrateV7},
 	{version: 8, custom: migrateV8},
 	{version: 9, custom: migrateV9},
+	{version: 10, custom: migrateV10},
 }
 
 // schemaVersion 是当前 schema 版本（迁移表最后一项）。
