@@ -178,6 +178,20 @@ describe('weight 纪律（Vercel design.md：标题不超 semibold）', () => {
   })
 })
 
+describe('命令下发契约：用户原文不被前端静默改写', () => {
+  it('CommandButton 不做静默截断/剥离（校验单一出口 = ActionPanel argsError 显式报错）', () => {
+    const btn = source('components/CommandButton.tsx')
+    expect(btn).not.toContain('sanitizeArgs')
+    expect(btn).not.toContain('.slice(')
+    expect(btn).not.toContain('replace(')
+  })
+
+  it('ack 失败缺 detail 时不说机器串（状态词汇人话兜底）', () => {
+    const btn = source('components/CommandButton.tsx')
+    expect(btn).not.toContain('ack.detail || ack.status')
+  })
+})
+
 describe('字距纪律（CJK 安全：负字距止于 -0.01em；mono 零字距）', () => {
   it('组件不用 tracking-tight / tracking-tighter（-0.025em 是拉丁刻度，CJK 全角字面会挤）', () => {
     const offenders = tsx.flatMap((f) => [...f.text.matchAll(/tracking-(?:tight|tighter)\b/g)].map((m) => `${f.path}: ${m[0]}`))

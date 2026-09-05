@@ -11,11 +11,6 @@ import type { CommandAction } from '@/lib/descriptor'
 
 const ACK_TIMEOUT_MS = 15000
 
-/** args 卫生：后端限制长度且不含换行/NUL（docs/api.md），前端先收敛一次 */
-export function sanitizeArgs(s: string, max = 64): string {
-  return s.replace(/[\r\n\0]/g, '').slice(0, max)
-}
-
 /**
  * 命令按钮：POST 下发 → 记录 command_id → 订阅 WS ack → 轻提示反馈 + 超时兜底。
  *
@@ -47,7 +42,6 @@ export function CommandButton({ deviceId, action, args, className, disabled }: {
   const [pendingId, setPendingId] = useState<number | null>(null)
   const settled = useRef<Set<number>>(new Set())
   const label = action.label
-  const maxLen = action.inputMaxLength ?? 64
 
   // ack 到达 → 结算
   useEffect(() => {
@@ -59,7 +53,7 @@ export function CommandButton({ deviceId, action, args, className, disabled }: {
     setPendingId(null)
     refreshHistory()
     if (ack.status === 'ok') toast.ok(`${label}已执行`, ack.detail || undefined)
-    else toast.bad(`${label}失败`, ack.detail || ack.status)
+    else toast.bad(`${label}失败`, ack.detail || '边缘节点返回失败但未附原因，可在命令历史查看原始回执')
   }, [acks, pendingId, label])
 
   // 超时兜底（edge 未回执）
@@ -87,10 +81,9 @@ export function CommandButton({ deviceId, action, args, className, disabled }: {
     const [edgeId, devId] = deviceId.split('/')
     setBusy(true)
     try {
-      const cv = await api.sendCommand(
-        edgeId ?? '', devId ?? '', action.cmd,
-        args === undefined ? undefined : sanitizeArgs(args, maxLen),
-      )
+      // 用户原文逐字下发：校验单一出口在 ActionPanel（argsError 显式报错+禁用），
+      // 前端不做静默二次截断；后端仍有自己的长度/字符门禁兜底拒收
+      const cv = await api.sendCommand(edgeId ?? '', devId ?? '', action.cmd, args)
       setPendingId(cv.id)
       refreshHistory()
     } catch (e) {

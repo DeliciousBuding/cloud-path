@@ -3,7 +3,7 @@
 // 前端不再维护 CMD 白名单/文案/图标表。图标一律省略，避免又变成一张命令→外观映射表。
 import { useState } from 'react'
 import { Command, SlidersHorizontal } from 'lucide-react'
-import { Badge, Panel } from './ui'
+import { Panel } from './ui'
 import { CommandButton } from './CommandButton'
 import { cn } from '@/lib/cn'
 import { argsError, optionLabel } from '@/lib/format'
@@ -68,7 +68,8 @@ export function ActionPanel({ deviceId, set, adapterName, className }: {
       title={<span className="flex items-center gap-1.5"><Command size={14} />命令</span>}
       right={
         <span className="flex min-w-0 items-center gap-1.5">
-          <Badge tone={set.source === 'descriptor' ? 'accent' : 'idle'}>{SOURCE_LABEL[set.source]}</Badge>
+          {/* 命令集来源是溯源元数据不是状态：纯文本（胶囊只承载状态/语义） */}
+          <span className="shrink-0 text-[12px] text-ink-3">{SOURCE_LABEL[set.source]}</span>
           {adapterName && (
             <span className="min-w-0 truncate text-[12px] text-ink-3" title={`适配器 ${adapterName}`}>
               {adapterName} 适配器
