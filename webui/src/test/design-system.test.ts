@@ -187,11 +187,27 @@ describe('减少动效偏好的 CSS 兜底', () => {
 })
 
 describe('390px 溢出收口（静态守卫）', () => {
+  /**
+   * 硬宽度扫描。裸 w-[..] / min-w-[..] 在 390px 会撑出横向滚动，必须拦；
+   * sm:/md:/lg: 等断点前缀只在更宽视口生效，390 不受影响，放行；
+   * max-* 前缀恰恰在窄屏生效，仍拦。
+   */
+  function fixedWidths(text: string): string[] {
+    const re = /(?<![-\w])(?:([\w-]+):)?(?:w|min-w)-\[\d+(?:px|rem|vw|em)\]/g
+    return [...text.matchAll(re)]
+      .filter((m) => !m[1] || m[1].startsWith('max-'))
+      .map((m) => m[0])
+  }
+
   it('组件不写死像素/固定宽度（max-w-* 是上限，允许且鼓励）', () => {
-    // 负向后顾排除 max-w-[9rem] 这类「宽度上限」，只抓 w-[320px] / min-w-[12rem] 这类硬宽度
-    const fixed = /(?<![-\w])(?:w|min-w)-\[\d+(?:px|rem|vw|em)\]/g
-    const offenders = tsx.flatMap((f) => [...f.text.matchAll(fixed)].map((m) => `${f.path}: ${m[0]}`))
+    const offenders = tsx.flatMap((f) => fixedWidths(f.text).map((c) => `${f.path}: ${c}`))
     expect(offenders).toEqual([])
+  })
+
+  it('守卫语义对照：裸硬宽度与 max-* 硬宽度必抓，断点前缀放行', () => {
+    expect(fixedWidths('className="w-[218px]"')).toEqual(['w-[218px]'])
+    expect(fixedWidths('className="max-sm:w-[500px]"')).toEqual(['max-sm:w-[500px]'])
+    expect(fixedWidths('className="sm:w-[218px] max-w-full"')).toEqual([])
   })
 
   it('内联样式只允许百分比宽度（量程条），不许出现像素宽度', () => {

@@ -10,7 +10,8 @@ import { useDevices } from '@/hooks/useDevices'
 import { useEdges } from '@/hooks/useEdges'
 import { useLive } from '@/store/ws'
 import { deviceLabel, edgeFacts } from '@/lib/edges'
-import { fmtDateTime, mergeEvents } from '@/lib/format'
+import { fmtDateTime, mergeEvents, timeAgo } from '@/lib/format'
+import { useNow } from '@/hooks/useNow'
 
 /**
  * 边缘节点详情：这台主机的连接事实 + 它名下所有设备的当前状态 + 相关事件。
@@ -22,6 +23,7 @@ export default function EdgeDetail() {
   const { list: edges, loading: edgeLoading, error: edgeError, refetch } = useEdges()
   const { list: devices } = useDevices()
   const liveEvents = useLive((s) => s.events)
+  useNow() // 头部「连接于 X 前」每秒走字
 
   const facts = useMemo(() => edgeFacts(edges, devices), [edges, devices])
   const f = facts.find((x) => x.edge.edge_id === id)
@@ -75,8 +77,10 @@ export default function EdgeDetail() {
         </h1>
         <Badge tone={e.online ? 'ok' : 'idle'}>{e.online ? '在线' : '离线'}</Badge>
         {e.version && <Badge tone="accent" className="max-w-full truncate">{e.version}</Badge>}
-        <span className="num ml-auto text-xs text-ink-3">
-          {e.online ? '连接于 ' : '最后在线 '}{e.connected_at ? fmtDateTime(e.connected_at) : '—'}
+        <span className="ml-auto text-xs text-ink-3"
+          title={e.connected_at ? fmtDateTime(e.connected_at) : undefined}>
+          {e.online ? '连接于 ' : '最后在线 '}
+          {e.connected_at ? <span className="num">{timeAgo(e.connected_at)}</span> : '—'}
         </span>
       </header>
 

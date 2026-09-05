@@ -11,7 +11,8 @@ import { EventFeed } from '@/components/EventFeed'
 import { api } from '@/lib/api'
 import { useQuery } from '@tanstack/react-query'
 import { deviceShortName, overviewAlerts, overviewStats, type OverviewAlert, type OverviewStat } from '@/lib/overview'
-import { cmdMeta, cmdStatusMeta, fmtDateTime, mergeEvents } from '@/lib/format'
+import { cmdMeta, cmdStatusMeta, fmtDateTime, mergeEvents, timeAgo } from '@/lib/format'
+import { useNow } from '@/hooks/useNow'
 import { useDevices } from '@/hooks/useDevices'
 import { useEdges } from '@/hooks/useEdges'
 import { useOverview } from '@/hooks/useOverview'
@@ -27,6 +28,7 @@ import { useLive } from '@/store/ws'
  *   - 设备 fleet → useDevices（WS 快照优先，REST 轮询兜底）；事件流 → 聚合 + WS 去重合并。
  */
 export default function Overview() {
+  useNow() // 页头「更新于 X 前」每秒走字（相对时间不靠轮询刷新）
   const { data, loading, isFetching, refetch } = useOverview()
   const { list: devices, loading: devLoading, error: devError, refetch: refetchDevices } = useDevices()
   const edges = useEdges()
@@ -93,7 +95,7 @@ export default function Overview() {
         title="概览"
         subtitle={
           data?.server_time
-            ? <>更新于 <span className="num">{fmtDateTime(data.server_time)}</span></>
+            ? <span title={fmtDateTime(data.server_time)}>更新于 {timeAgo(data.server_time)}</span>
             : health
               ? <>服务已运行 <span className="num">{Math.floor(health.uptime_s / 60)}</span> 分钟</>
               : '设备、边缘节点与插件的实时总览'
@@ -149,9 +151,8 @@ export default function Overview() {
       )}
 
       {/* ---- 主体：fleet + 关注并排；事件条通栏在下（宽屏不留死角） ---- */}
-      <div className="mt-7 grid items-stretch gap-5 xl:grid-cols-[340px_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="mt-7 grid items-stretch gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <Panel
-          className="xl:col-span-2 2xl:col-span-1"
           title={<span className="flex items-center gap-1.5"><Cpu size={14} />设备</span>}
           right={
             <Link to="/devices" className="link flex items-center gap-0.5 text-xs">
@@ -184,7 +185,6 @@ export default function Overview() {
         </Panel>
 
         <Panel
-          className="xl:self-start 2xl:self-stretch"
           title={<span className="flex items-center gap-1.5"><AlertTriangle size={14} className="text-warn" />需要关注</span>}
           right={attention > 0
             ? <Badge tone="warn">{attention} 项</Badge>
@@ -230,7 +230,7 @@ export default function Overview() {
         </Panel>
 
         <Panel
-          className="2xl:col-span-2"
+          className="xl:col-span-2"
           title={<span className="flex items-center gap-1.5"><Activity size={14} />近期事件</span>}
           right={
             <Link to="/activity" className="link flex items-center gap-0.5 text-xs">

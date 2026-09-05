@@ -63,7 +63,7 @@ function EventRow({ e, first, showDevice, fullTime }: {
             aria-expanded={open}
             className="flex shrink-0 items-center gap-0.5 text-[11px] text-ink-3 transition-colors hover:text-ink-2">
             <ChevronRight size={11} className={open ? 'rotate-90 transition-transform' : 'transition-transform'} />
-            载荷
+            详情
           </button>
         )}
         <span className="num ml-auto shrink-0 text-[11px] text-ink-3" title={`${fmtDateTime(e.ts)} · ${e.type}`}>

@@ -78,11 +78,11 @@ export function StatTile({ icon, label, value, unit, sub }: {
       <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-ink-2">
         {icon}<span className="truncate">{label}</span>
       </div>
-      <div className="num mt-2 text-3xl font-semibold tracking-tight break-words">
+      <div className="num mt-1.5 text-[26px] font-semibold leading-tight tracking-tight break-words">
         {value}
         {unit && <span className="ml-1 text-base font-normal text-ink-3">{unit}</span>}
       </div>
-      {sub && <div className="mt-1 text-xs text-ink-3 break-words">{sub}</div>}
+      {sub && <div className="mt-0.5 text-xs text-ink-3 break-words">{sub}</div>}
     </div>
   )
 }

@@ -4,7 +4,6 @@
 //   - 怎么展示 = presentation.defaultWidget（UI Hint），缺席则按值类型推导
 //   - 未知 Capability = 通用表格 / JSON 回落（docs/architecture/capability-model.md §9）
 // 颜色只走设计系统 token（ui.tsx TONE_CLS / index.css），390px 下不产生横向溢出。
-import { Fragment } from 'react'
 import { Activity, Boxes, SlidersHorizontal, Stethoscope, Zap, type LucideIcon } from 'lucide-react'
 import { Badge, Panel, TONE_CLS, TONE_TEXT_CLS, type Tone } from './ui'
 import { cn } from '@/lib/cn'
@@ -291,11 +290,15 @@ function worstQuality(os: Observation[]): ObservationQuality | undefined {
 
 /** 实时状态单格：展示名 + 当前值 + 单位；质量点/stale 只标异常格；
  *  次级观测默认折叠（渐进披露）；机器 ID 与原始 JSON 不进这一层（去能力/诊断页）。 */
-export function StateCell({ entity, idx = EMPTY_INDEX, nowSec, series }: {
+/**
+ * 状态行（实时状态默认视图）：一个实体一行——展示名 + 质量 + 火花线 + 右对齐当前值。
+ * 行 / divider 能解决的就不要再套一张卡：16 个实体 = 16 行扫完，宽屏不留网格空洞。
+ */
+export function StateRow({ entity, idx = EMPTY_INDEX, nowSec, series }: {
   entity: DescriptorEntity
   idx?: CapabilityIndex
   nowSec?: number
-  /** 会话数值序列（deviceKey 下的 属性键 → 点）；命中主观测键时卡片内嵌火花线 */
+  /** 会话数值序列（deviceKey 下的 属性键 -> 点）；命中主观测键时行内嵌火花线 */
   series?: Record<string, SeriesPoint[]>
 }) {
   const obs = observationsOf(entity)
@@ -303,45 +306,43 @@ export function StateCell({ entity, idx = EMPTY_INDEX, nowSec, series }: {
   const rest = obs.filter((o) => o !== primary)
   const q = worstQuality(obs)
   const stale = nowSec !== undefined && obs.some((o) => isStaleObs(o, nowSec))
+  // 序列键形态因适配器而异（entity.property 点分 / 裸属性名 / 实体名）：逐级回落
+  const pts = primary
+    ? (series?.[`${entity.entity_id}.${primary.property}`]
+      ?? series?.[primary.property]
+      ?? series?.[entity.entity_id])
+    : undefined
+  const text = primary
+    ? (widgetFor(primary, idx) === 'timestamp' ? formatTimestamp(primary.value) : formatValue(primary.value))
+    : ''
   return (
-    <div className="card min-w-0 p-3">
-      <div className="flex min-w-0 items-center gap-1.5">
-        <span className="min-w-0 truncate text-[12px] font-medium text-ink-2" title={entity.name || entity.unique_key}>
-          {entityTitle(entity)}
+    <li className="px-3.5 py-2.5">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="flex min-w-0 flex-1 items-center gap-1.5">
+          <span className="truncate text-[13px] font-medium" title={entity.name || entity.unique_key}>
+            {entityTitle(entity)}
+          </span>
+          <QualityDot q={q} />
+          {stale && <Badge tone="warn" className="shrink-0">未更新</Badge>}
         </span>
-        <QualityDot q={q} />
-        {stale && <Badge tone="warn" className="shrink-0"> stale</Badge>}
+        {pts && pts.length >= 2 && (
+          // Sparkline 自身是 w-full：宽度由外层固定槽给，避免与内部类冲突撑破行
+          <span className="hidden w-24 shrink-0 sm:block">
+            <Sparkline points={pts} />
+          </span>
+        )}
+        {primary ? (
+          <span
+            className={cn('num w-24 shrink-0 truncate text-right tracking-tight',
+              text.length > 12 ? 'text-[13px] font-medium' : 'text-[15px] font-semibold')}
+            title={`${capabilityLabel(primary.capability, idx)} · ${primary.property}`}>
+            {text}
+            {primary.unit && <span className="ml-1 text-[11px] font-normal text-ink-3">{primary.unit}</span>}
+          </span>
+        ) : (
+          <span className="w-24 shrink-0 text-right text-[12px] text-ink-3">暂无数据</span>
+        )}
       </div>
-      {primary ? (
-        <>
-          {(() => {
-            const text = widgetFor(primary, idx) === 'timestamp'
-              ? formatTimestamp(primary.value) : formatValue(primary.value)
-            // 序列键形态因适配器而异（entity.property 点分 / 裸属性名 / 实体名）：逐级回落
-            const pts = series?.[`${entity.entity_id}.${primary.property}`]
-              ?? series?.[primary.property]
-              ?? series?.[entity.entity_id]
-            return (
-              <>
-                <p className={cn('num mt-1.5 truncate leading-none tracking-tight',
-                  text.length > 12 ? 'text-[15px] font-medium' : 'text-[22px] font-semibold')}
-                  title={`${capabilityLabel(primary.capability, idx)} · ${primary.property}`}>
-                  {text}
-                  {primary.unit && <span className="ml-1 text-[12px] font-normal text-ink-3">{primary.unit}</span>}
-                </p>
-                {pts && pts.length >= 2 && <Sparkline points={pts} className="mt-1.5" />}
-              </>
-            )
-          })()}
-          {rest.length > 0 && (
-            <p className="mt-1 truncate text-[11px] text-ink-3">
-              {propertyLabel(primary.property, primary.capability, idx)}
-            </p>
-          )}
-        </>
-      ) : (
-        <p className="mt-1.5 text-[13px] text-ink-3">暂无数据</p>
-      )}
       {rest.length > 0 && (
         <details className="mt-1.5">
           <summary className="cursor-pointer select-none text-[11px] text-ink-3 transition-colors hover:text-ink-2">
@@ -352,13 +353,14 @@ export function StateCell({ entity, idx = EMPTY_INDEX, nowSec, series }: {
           </div>
         </details>
       )}
-    </div>
+    </li>
   )
 }
 
-/** 实时状态矩阵：按 Descriptor category 分组（generic 顺序，不写设备特例）。
- *  所有组共享一张 auto-fill 网格、组头跨行——Entity 连续流式排布，稀疏组不留空轨；
- *  列数随容器宽度自适应（约 210px 起）。 */
+/**
+ * 实时状态矩阵：按 Descriptor category 分组，每组一个面板、每个实体一行。
+ * 组头只有组名（实体计数是调试噪音，不是用户信息）；值列右对齐，扫读时眼睛只走两条线。
+ */
 export function StateMatrix({ descriptor, idx = EMPTY_INDEX, categories, nowSec, series, className }: {
   descriptor: DeviceDescriptor
   idx?: CapabilityIndex
@@ -374,18 +376,16 @@ export function StateMatrix({ descriptor, idx = EMPTY_INDEX, categories, nowSec,
     return <p className="py-6 text-center text-sm text-ink-3">Descriptor 未声明 Entity</p>
   }
   return (
-    <div className={cn('grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(210px,1fr))]', className)}>
-      {groups.map(({ category, entities }, gi) => (
-        <Fragment key={category}>
-          <h3 className={cn('col-span-full flex items-center gap-1.5 px-0.5 text-[12px] font-medium text-ink-3',
-            gi > 0 && 'pt-2')}>
-            {CATEGORY_LABEL[category]}
-            <span className="num text-[11px] font-normal">{entities.length}</span>
-          </h3>
-          {entities.map((e) => (
-            <StateCell key={e.entity_id || e.unique_key} entity={e} idx={idx} nowSec={nowSec} series={series} />
-          ))}
-        </Fragment>
+    <div className={cn('space-y-5', className)}>
+      {groups.map(({ category, entities }) => (
+        <section key={category}>
+          <h3 className="mb-1.5 px-0.5 text-[12px] font-medium text-ink-3">{CATEGORY_LABEL[category]}</h3>
+          <ul className="card m-0 list-none divide-y divide-hairline p-0">
+            {entities.map((e) => (
+              <StateRow key={e.entity_id || e.unique_key} entity={e} idx={idx} nowSec={nowSec} series={series} />
+            ))}
+          </ul>
+        </section>
       ))}
     </div>
   )

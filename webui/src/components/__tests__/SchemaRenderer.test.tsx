@@ -38,7 +38,7 @@ describe('未知 Capability 回落', () => {
     expect(screen.getByText('温度探针')).toBeInTheDocument()
   })
 
-  it('StateMatrix 有会话序列时卡片内嵌火花线，无序列不画假线', () => {
+  it('StateMatrix 有会话序列时行内嵌火花线，无序列不画假线', () => {
     const series = { 'e-temp.current': [{ t: 1, v: 20 }, { t: 2, v: 22 }, { t: 3, v: 21 }] }
     const { container, unmount } = render(<StateMatrix descriptor={descriptor} idx={idx} series={series} />)
     expect(container.querySelector('svg[aria-hidden]')).not.toBeNull()
@@ -162,7 +162,7 @@ describe('quality / status 状态提示', () => {
 })
 
 describe('StateMatrix 分组', () => {
-  it('按平台 category 枚举分组，分区头有组名与计数，主值可扫读', () => {
+  it('按平台 category 枚举分组：组头只有组名，主值右对齐可扫读', () => {
     render(<StateMatrix descriptor={descriptor} idx={idx} />)
     expect(screen.getByRole('heading', { name: /传感器/ })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /执行器/ })).toBeInTheDocument()

@@ -130,6 +130,7 @@ describe('Schema 端点缺席时的设备详情页', () => {
     renderApp('/devices/edge-x/dev-x')
     expect(await screen.findByText('设备未注册')).toBeInTheDocument()
     expect(screen.getByText(/没有找到 edge-x\/dev-x/)).toBeInTheDocument()
+    expect(screen.queryByText('设备信息加载失败')).not.toBeInTheDocument()
   })
 })
 

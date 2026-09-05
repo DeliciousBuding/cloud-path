@@ -10,7 +10,9 @@ import { fmtDateTime } from '@/lib/format'
 import type { DeviceView } from '@/lib/types'
 
 /**
- * 设备列表行：Name / Edge / Capabilities / Online-Offline / Last Seen 五列。
+ * 设备列表行：Name / Edge / Capabilities / Trend / Status / Last Seen。
+ * 能力列只在 2xl 出现：中宽屏（含概览页的窄面板）里芯片换行会把行撑到三倍高，
+ * 而能力的完整事实面在设备详情「能力」页，列表行不需要重复承载。
  *
  * 桌面（lg）是紧凑表格行；窄屏自动堆叠并补上列名，因此 390px 下每一列都仍可读、可点。
  * Capabilities 一律来自 Descriptor 声明（entities[].capabilities），前端不维护能力清单；
@@ -38,7 +40,7 @@ export function DeviceRow({ d }: { d: DeviceView }) {
   }, [series])
 
   return (
-    <li className="grid gap-x-4 gap-y-1.5 border-b border-hairline px-4 py-2.5 last:border-b-0 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,1.4fr)_5.5rem_6.5rem_9.5rem] lg:items-center">
+    <li className="grid gap-x-4 gap-y-1.5 border-b border-hairline px-4 py-2.5 last:border-b-0 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_5.5rem_6.5rem_9.5rem] lg:items-center 2xl:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,1.4fr)_5.5rem_6.5rem_9.5rem]">
       {/* Name（+ 窄屏时把状态徽标放到同一行，避免多占一行） */}
       <div className="flex min-w-0 items-center gap-2">
         <StatusDot online={d.online} />
@@ -67,7 +69,7 @@ export function DeviceRow({ d }: { d: DeviceView }) {
       </div>
 
       {/* Capabilities（来自 Descriptor 声明） */}
-      <div className="flex min-w-0 flex-wrap items-center gap-1">
+      <div className="flex min-w-0 flex-wrap items-center gap-1 lg:hidden 2xl:flex">
         <span className="text-[11px] text-ink-3 lg:hidden">能力 </span>
         {caps.length === 0 ? (
           <span className="flex items-center gap-1 text-[11px] text-ink-3" title={descriptor ? '该 Descriptor 未声明 Capability' : '尚无 Descriptor，能力未知'}>
@@ -116,9 +118,9 @@ export function DeviceRowHead() {
   return (
     <li
       aria-hidden
-      className="hidden gap-x-4 px-4 pb-2 text-[11px] font-medium text-ink-3 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,1.4fr)_5.5rem_6.5rem_9.5rem]"
+      className="hidden gap-x-4 px-4 pb-2 text-[11px] font-medium text-ink-3 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_5.5rem_6.5rem_9.5rem] 2xl:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,1.4fr)_5.5rem_6.5rem_9.5rem]"
     >
-      <span>设备</span><span>边缘节点</span><span>能力</span><span>状态</span><span>趋势</span><span>最后见</span>
+      <span>设备</span><span>边缘节点</span><span className="hidden 2xl:inline">能力</span><span>状态</span><span>趋势</span><span>最后见</span>
     </li>
   )
 }

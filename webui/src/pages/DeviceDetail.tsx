@@ -14,7 +14,7 @@ import { CommandHistory } from '@/components/CommandHistory'
 import { TrendChart } from '@/components/TrendChart'
 import { EventFeed } from '@/components/EventFeed'
 import { RowSkeleton } from '@/components/Skeleton'
-import { api } from '@/lib/api'
+import { api, isNotFound } from '@/lib/api'
 import { useLive } from '@/store/ws'
 import { useNow } from '@/hooks/useNow'
 import { useDeviceDescriptor } from '@/hooks/useDescriptor'
@@ -44,7 +44,7 @@ export default function DeviceDetail() {
   const nowSec = Math.floor(now.getTime() / 1000)
   const [tab, setTab] = useState<Tab>('overview')
   const [kindFilter, setKindFilter] = useState('')
-  const [stateView, setStateView] = useState<'cards' | 'table' | 'trend'>('cards')
+  const [stateView, setStateView] = useState<'rows' | 'table' | 'trend'>('rows')
   const [rangeMin, setRangeMin] = useState(0)
   const [chartKind, setChartKind] = useState<'area' | 'line'>('area')
 
@@ -52,7 +52,7 @@ export default function DeviceDetail() {
   const liveEvents = useLive((s) => s.events)
   const series = useLive((s) => s.series[key]) ?? {}
 
-  const { data: rest, error: devError, refetch } = useQuery({
+  const { data: rest, error: devError, isPending: devIsPending, refetch } = useQuery({
     queryKey: ['device', key], queryFn: () => api.device(edgeId, deviceId),
     refetchInterval: 10000, retry: false,
   })
@@ -133,18 +133,21 @@ export default function DeviceDetail() {
     return `${entityTitle(ent)} · ${propertyLabel(prop, cap, capabilities)}`
   }
 
+  // 详情未到手时三态分明：加载中（骨架）/ 404（未注册空态）/ 其它失败（错误态 + 重试）。
+  // 少一个加载态，首帧就会闪「设备未注册」；少一个 404 判定，「这台设备没接入」会被误报成「server 挂了」。
   if (!d) {
     return (
       <>
         <BackLink to="/devices" label="设备" />
-        {devError ? (
-          // 接口失败不等于设备不存在：这两种结论对用户完全不同
-          <ErrorState icon={<RadioTower size={20} />} title="设备信息加载失败"
-            hint={`拿不到 ${key} 的详情（GET /api/devices/...）。这不代表设备不存在，请检查 server 是否可达后重试。`}
-            onRetry={() => { void refetch() }} />
-        ) : (
+        {devIsPending ? (
+          <Panel><RowSkeleton rows={5} /></Panel>
+        ) : isNotFound(devError) ? (
           <EmptyState icon={<RadioTower size={24} />} title="设备未注册"
             hint={`没有找到 ${key}。设备接入后会自动注册；请检查 edge 配置与连接。`} />
+        ) : (
+          <ErrorState icon={<RadioTower size={20} />} title="设备信息加载失败"
+            hint={`拿不到 ${key} 的详情。这不代表设备不存在，请检查 server 是否可达后重试。`}
+            onRetry={() => { void refetch() }} />
         )}
       </>
     )
@@ -243,7 +246,7 @@ export default function DeviceDetail() {
                 <Segmented
                   label="状态视图"
                   options={[
-                    { value: 'cards', label: '卡片' },
+                    { value: 'rows', label: '分组' },
                     { value: 'table', label: '表格' },
                     { value: 'trend', label: '趋势' },
                   ]}
@@ -251,7 +254,7 @@ export default function DeviceDetail() {
                   onChange={setStateView}
                 />
               </div>
-              {stateView === 'cards' && (descriptor
+              {stateView === 'rows' && (descriptor
                 ? <StateMatrix descriptor={descriptor} idx={capabilities} nowSec={nowSec} series={series} />
                 : <RawView raw={d.state} title="上报字段（通用视图）" />)}
               {stateView === 'table' && (descriptor

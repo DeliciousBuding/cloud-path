@@ -48,6 +48,15 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * 资源明确不存在（HTTP 404）。
+ * UI 语义：给「未注册 / 不存在」空态，而不是「加载失败」错误态——
+ * 后者会让用户去查 server，而真相是这台设备根本没接入。
+ */
+export function isNotFound(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 404
+}
+
 /** 从错误响应体提取稳定码（闭合枚举精确匹配，不做自然语言解析） */
 function extractErrorCode(body: unknown): string | undefined {
   if (!body || typeof body !== 'object') return undefined

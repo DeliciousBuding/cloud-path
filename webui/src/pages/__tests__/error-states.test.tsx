@@ -10,7 +10,7 @@ import EdgeDetail from '@/pages/EdgeDetail'
 import Edges from '@/pages/Edges'
 import { ApiError } from '@/lib/api'
 import { commandErrorCopy } from '@/lib/format'
-import { installFetch, stubResponse } from '@/test/http'
+import { installFetch, stubResponse, type StubResponse } from '@/test/http'
 import { renderWithProviders, resetStores } from '@/test/render'
 import { makeDeviceView } from '@/test/fixtures'
 
@@ -72,6 +72,24 @@ describe('详情页：失败态不冒充「不存在」', () => {
       '/devices/edge-x/dev-x',
     )
     // 404 属于「查过了、没有」：走空态而不是错误态
+    expect(await screen.findByText('设备未注册')).toBeInTheDocument()
+  })
+
+  it('DeviceDetail：详情在飞行中先给骨架，不闪「设备未注册」', async () => {
+    // 少一个加载态时，首帧会先把空态画出来再被错误态覆盖：
+    // 用户看到「设备未注册」一闪，而真相可能只是网络慢。
+    let release: (r: StubResponse) => void = () => {}
+    const gate = new Promise<StubResponse>((resolve) => { release = resolve })
+    installFetch((url) => (url.startsWith('/api/devices/edge-x/dev-x') ? gate : stubResponse(404, {})))
+    renderWithProviders(
+      <Routes><Route path="/devices/:edgeId/:deviceId" element={<DeviceDetail />} /></Routes>,
+      '/devices/edge-x/dev-x',
+    )
+
+    expect(screen.queryByText('设备未注册')).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+    release(stubResponse(404, { error: 'not found' }))
     expect(await screen.findByText('设备未注册')).toBeInTheDocument()
   })
 
