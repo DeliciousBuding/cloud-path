@@ -234,7 +234,11 @@ export default function Activity() {
                     <TrendChart points={density.points} kind="bar" zeroBase hideY unit="条" height={88} xTick={fmtHourMin} />
                   </div>
                 )}
-                <EventFeed events={events} limit={200} dayGrouped />
+                {/* 长 ledger 本地滚动（Vercel: long ledgers may scroll locally）：
+                    *  页面保持一屏可读，查找能力留在滚动容器内；组头 sticky 便于跨天定位 */}
+                <div className="max-h-[34rem] overflow-y-auto overscroll-contain pr-1">
+                  <EventFeed events={events} limit={200} dayGrouped />
+                </div>
                 {atLimit && <LimitNote what="事件" />}
               </>
             )
@@ -243,7 +247,9 @@ export default function Activity() {
               hint={anyFilter ? '试试清除筛选条件或换一个状态。' : '在设备详情页下发命令后，回执会出现在这里。'} />
           ) : (
             <>
-              <CommandRows rows={commands} names={deviceNames} index={index} />
+              <div className="max-h-[34rem] overflow-y-auto overscroll-contain pr-1">
+                <CommandRows rows={commands} names={deviceNames} index={index} />
+              </div>
               {atLimit && <LimitNote what="命令" />}
             </>
           )}

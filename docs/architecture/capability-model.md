@@ -290,3 +290,4 @@ tracking-tight 等负字距是拉丁刻度，中文显示文本不超 -0.01em，
 - 列表在 Panel 内用 divider rows（`divide-y`），不套子卡（嵌套卡片是硬反模式）；Admin 用户/令牌行已行化。
 - 权限 scope 是元数据不是状态：mono 纯文本，高权限（admin/edge）用语义色文字而非胶囊。
 - 图表轴刻度 11px mono（时间戳/数值属机器文本，字号下限在 SVG 轴同样生效）；有轴图右上角贴单位直接标签（direct labels over legends），hideY 形态由调用方 caption 人话声明单位与峰值。
+- 长 ledger（活动页事件流/命令历史）本地滚动（max-h + overflow-y-auto），页面保持一屏可读；天分组头 sticky 于滚动容器顶，跨天查找不迷路。

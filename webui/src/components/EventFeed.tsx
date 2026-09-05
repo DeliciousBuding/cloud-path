@@ -52,7 +52,7 @@ export function EventFeed({ events, showDevice = true, limit = 30, dayGrouped = 
     <div className="space-y-4">
       {groups.map((g, gi) => (
         <section key={`${g.day}-${gi}`}>
-          <h4 className="mb-1 px-0.5 text-[12px] font-medium text-ink-3">{g.day}</h4>
+          <h4 className="sticky top-0 z-10 -my-1 bg-surface py-1 px-0.5 text-[12px] font-medium text-ink-3">{g.day}</h4>
           <ul className="divide-y divide-hairline">
             {g.items.map((e, i) => (
               <EventRow key={`${e.id}-${gi}-${i}`} e={e} first={gi === 0 && i === 0} showDevice={showDevice} name={names.get(e.device_id)} />
