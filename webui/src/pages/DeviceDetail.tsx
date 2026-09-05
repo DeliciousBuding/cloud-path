@@ -77,6 +77,12 @@ export default function DeviceDetail() {
     { device: d ?? null, adapterCommands },
   )
 
+  /** 控制页的执行器实体：只读现状与命令区并排（观测值与命令输入分离） */
+  const actuators = useMemo(
+    () => (descriptor?.entities ?? []).filter((e) => e.category === 'actuator'),
+    [descriptor],
+  )
+
   const events = useMemo(
     () => mergeEvents(liveEvents.filter((e) => e.device_id === key), evHist?.events ?? []),
     [liveEvents, evHist, key],
@@ -324,25 +330,26 @@ export default function DeviceDetail() {
 
       {tab === 'controls' && (
         <TabPanel value={tab}>
-          <div className="grid items-start gap-5 lg:grid-cols-2">
-            <div className="min-w-0 space-y-5">
+          <div className="min-w-0 space-y-5">
+            {/* 观测值与命令输入分离：只读现状与命令区并排，避免「看着像已执行」 */}
+            <div className="grid items-start gap-5 lg:grid-cols-2">
               <ActionPanel deviceId={key} set={commands} adapterName={d.adapter} />
-              <CommandHistory deviceId={key} actions={commands.actions} />
-            </div>
-            {/* 观测值与命令输入分离：右侧只读呈现执行器现状，避免「看着像已执行」 */}
-            {descriptor && descriptor.entities.some((e) => e.category === 'actuator') && (
-              <Panel title={<span className="flex items-center gap-1.5"><Zap size={14} />当前状态（只读）</span>}>
-                <dl className="space-y-2.5">
-                  {descriptor.entities.filter((e) => e.category === 'actuator').map((e) => {
+              {actuators.length > 0 && (
+                <Panel title={<span className="flex items-center gap-1.5"><Zap size={14} />当前状态（只读）</span>}>
+                  <dl className="space-y-2.5">
+                    {actuators.map((e) => {
                     const o = primaryObservation(e, capabilities)
                     const v = !o ? '暂无数据'
                       : widgetFor(o, capabilities) === 'timestamp' ? formatTimestamp(o.value)
                         : `${formatValue(o.value)}${o.unit ? ` ${o.unit}` : ''}`
                     return <KeyValue key={e.unique_key} k={entityTitle(e)} v={v} />
                   })}
-                </dl>
-              </Panel>
-            )}
+                  </dl>
+                </Panel>
+              )}
+            </div>
+            {/* 命令历史通栏置底：列表型内容不挤在半宽列里与命令区比高 */}
+            <CommandHistory deviceId={key} actions={commands.actions} />
           </div>
         </TabPanel>
       )}
