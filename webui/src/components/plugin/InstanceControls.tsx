@@ -100,7 +100,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
         body={
           <>
             <p>服务端要求显式确认后才接受这次写入。下面是该插件声明的权限，请逐项核对：</p>
-            <div className="mt-3 rounded-xl bg-surface-2 p-3">
+            <div className="mt-3 rounded-lg bg-surface-2 p-3">
               <PermissionList
                 permissions={catalog?.permissions}
                 emptyHint="目录里没有这个插件的权限声明，无法核对，建议先确认插件来源再重试。"
@@ -139,7 +139,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
         confirmLabel="下发"
         busy={reconcile.isPending}
         extra={
-          <label className="flex cursor-pointer items-start gap-2.5 rounded-xl bg-surface-2 p-3">
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg bg-surface-2 p-3">
             <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)}
               className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
             <span className="min-w-0 text-[12px] leading-relaxed">
@@ -175,7 +175,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
         busy={remove.isPending}
         requireAck="我确认要删除这个插件实例。"
         extra={
-          <label className="flex cursor-pointer items-start gap-2.5 rounded-xl bg-surface-2 p-3">
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg bg-surface-2 p-3">
             <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)}
               className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
             <span className="min-w-0 text-[12px] leading-relaxed">

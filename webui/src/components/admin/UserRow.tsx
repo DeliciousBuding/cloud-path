@@ -57,7 +57,7 @@ export function UserRow({ user: u }: { user: UserView }) {
   }
 
   return (
-    <li className="rounded-2xl border border-hairline bg-surface-2 p-4">
+    <li className="py-4 first:pt-0">
       <div className="flex min-w-0 items-start gap-2">
         {/* 用户名/显示名由管理员填写，长度不可控：必须各自截断 */}
         <div className="min-w-0 flex-1">
@@ -76,7 +76,7 @@ export function UserRow({ user: u }: { user: UserView }) {
       </div>
 
       <dl className="mt-3 space-y-2">
-        <KeyValue k="用户 ID" v={u.id} />
+        <KeyValue k="用户 ID" v={<span className="font-mono">{u.id}</span>} />
         <KeyValue k="租户" v={u.tenant_slug} mono />
       </dl>
 

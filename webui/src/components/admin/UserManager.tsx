@@ -37,7 +37,7 @@ export function UserManager() {
       ) : users.length === 0 ? (
         <p className="py-6 text-center text-sm text-ink-3">本租户还没有用户</p>
       ) : (
-        <ul className="space-y-3" aria-label="用户列表">
+        <ul className="divide-y divide-hairline" aria-label="用户列表">
           {users.map((u) => <UserRow key={u.id} user={u} />)}
         </ul>
       )}

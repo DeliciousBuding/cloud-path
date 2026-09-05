@@ -144,7 +144,7 @@ export default function Login() {
 
         {/* 表单级错误：凭据错 / 限流 / 不可达。role=alert 让读屏立即播报 */}
         {formError && (
-          <p role="alert" className="rounded-xl bg-bad/10 px-3.5 py-2.5 text-[13px] leading-relaxed break-words text-bad">
+          <p role="alert" className="rounded-lg bg-bad/10 px-3.5 py-2.5 text-[13px] leading-relaxed break-words text-bad">
             {formError}
           </p>
         )}

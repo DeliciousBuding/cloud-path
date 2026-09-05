@@ -36,7 +36,7 @@ const TAIL_NAV = [{ to: '/settings', label: '系统', icon: Settings, end: false
 
 function navCls(active: boolean): string {
   return cn(
-    'flex items-center gap-2.5 rounded-xl px-3 py-2 text-[14px] font-medium transition-colors',
+    'flex items-center gap-2.5 rounded-lg px-3 py-2 text-[14px] font-medium transition-colors',
     active ? 'bg-accent/10 text-accent' : 'text-ink-2 hover:bg-ink-3/8 hover:text-ink',
   )
 }

@@ -52,7 +52,7 @@ export function CreateTokenForm({ onCreated, onCancel }: {
   }
 
   return (
-    <form onSubmit={submit} aria-label="新建服务令牌" className="mb-4 rounded-2xl border border-hairline bg-surface-2 p-4">
+    <form onSubmit={submit} aria-label="新建服务令牌" className="mb-4 border-b border-hairline pb-4">
       <TextField
         label="令牌名称" value={name} error={nameErr} autoComplete="off"
         hint="用于识别用途，例如「CI 部署」「边缘机房 A」；这里填的是名字，不是令牌明文"

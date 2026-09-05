@@ -46,7 +46,7 @@ export default function Edges() {
 
       {/* 有节点掉线时给一次系统级说明（不在每张卡上重复，避免噪音） */}
       {offlineCount > 0 && (
-        <div className="banner mb-5 rounded-xl fade-up" role="status">
+        <div className="banner mb-5 rounded-lg fade-up" role="status">
           <PowerOff size={13} className="shrink-0" />
           <span className="min-w-0 break-words">
             {offlineCount} 台边缘节点离线：这些节点上的设备暂停上报，已下发命令排队等重连；其余在线节点不受影响。

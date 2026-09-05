@@ -33,7 +33,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="mt-1.5 text-sm text-ink-2">
             渲染过程中发生错误。数据与服务本身仍在运行，重新加载通常即可恢复。
           </p>
-          <pre className="mt-4 max-h-32 overflow-auto rounded-xl bg-surface-2 p-3 text-left font-mono text-[11px] leading-relaxed text-ink-3">
+          <pre className="mt-4 max-h-32 overflow-auto rounded-lg bg-surface-2 p-3 text-left font-mono text-[11px] leading-relaxed text-ink-3">
             {error.message || String(error)}
           </pre>
           <div className="mt-5 flex justify-center gap-2">

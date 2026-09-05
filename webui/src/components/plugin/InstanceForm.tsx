@@ -123,7 +123,7 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
           </>
         ) : (
           <div className="sm:col-span-2">
-            <p className="num rounded-xl bg-surface-2 px-3.5 py-2.5 text-xs break-all text-ink-2">
+            <p className="num rounded-lg bg-surface-2 px-3.5 py-2.5 text-xs break-all text-ink-2">
               {instance?.edge_id} · {d?.instance_id}
             </p>
           </div>
@@ -172,7 +172,7 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
       </div>
 
       {/* ---- 权限确认 ---- */}
-      <div className="rounded-xl bg-surface-2 p-3.5">
+      <div className="rounded-lg bg-surface-2 p-3.5">
         <p className="mb-2 text-[13px] font-medium">该插件声明的权限</p>
         <PermissionList
           permissions={selected?.permissions}

@@ -87,7 +87,7 @@ export default function EdgeDetail() {
       </header>
 
       {!e.online && (
-        <div className="banner mb-5 rounded-xl fade-up" role="status">
+        <div className="banner mb-5 rounded-lg fade-up" role="status">
           该节点当前离线：名下设备暂停上报，已下发命令会排队等它重连。其他在线节点不受影响。
         </div>
       )}

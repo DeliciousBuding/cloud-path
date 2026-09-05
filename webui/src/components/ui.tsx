@@ -368,7 +368,7 @@ export function AuthCard({ title, subtitle, children, footer }: {
       <ThemeToggle className="absolute right-4 top-4" />
       <div className="w-full max-w-sm fade-up">
         <div className="mb-8 flex flex-col items-center text-center">
-          <span className="flex h-14 w-14 items-center justify-center rounded-[16px] bg-accent/10 text-accent">
+          <span className="flex h-14 w-14 items-center justify-center rounded-xl bg-accent/10 text-accent">
             <Logo size={30} />
           </span>
           <h1 className="mt-4 text-[26px] font-semibold leading-tight tracking-[-0.01em]">{title}</h1>

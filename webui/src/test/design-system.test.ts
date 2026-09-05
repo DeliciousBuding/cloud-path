@@ -211,6 +211,20 @@ describe('字号下限（Vercel：不用 tiny gray copy 挤密度）', () => {
   })
 })
 
+describe('圆角刻度（foundation：tile 8 / card 12；越界圆角拒）', () => {
+  it('rounded-2xl / rounded-3xl 全仓灭绝（16px+ 越界）', () => {
+    const offenders = tsx.flatMap((f) => [...f.text.matchAll(/rounded-(?:2xl|3xl)\b/g)].map((m) => `${f.path}: ${m[0]}`))
+    expect(offenders).toEqual([])
+  })
+
+  it('rounded-xl（12px=card 半径）只留给浮层卡与品牌 logo；卡内子面一律 rounded-lg（8px）', () => {
+    const allowed = new Set(['components/Toast.tsx', 'components/ui.tsx'])
+    const offenders = tsx.filter((f) => !allowed.has(f.path))
+      .flatMap((f) => [...f.text.matchAll(/rounded-xl\b/g)].map((m) => `${f.path}: ${m[0]}`))
+    expect(offenders).toEqual([])
+  })
+})
+
 describe('减少动效偏好的 CSS 兜底', () => {
   const reduced = blockOf(css, '@media (prefers-reduced-motion: reduce)')
 
@@ -280,7 +294,7 @@ describe('390px 溢出收口（静态守卫）', () => {
   it('表格与 JSON 视图在自身容器内滚动（不把横向溢出推给 body）', () => {
     const schema = source('components/SchemaRenderer.tsx')
     expect(schema).toContain("cn('overflow-x-auto', className)")
-    expect(schema).toContain('overflow-auto rounded-xl')
+    expect(schema).toContain('overflow-auto rounded-lg')
     const detail = source('pages/DeviceDetail.tsx')
     expect(detail).toContain('overflow-x-auto')
   })

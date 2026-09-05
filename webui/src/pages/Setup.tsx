@@ -146,7 +146,7 @@ export default function Setup() {
             </p>
           )}
           {phase === 'ok' && health && (
-            <div className="rounded-xl bg-ok/10 p-4">
+            <div className="rounded-lg bg-ok/10 p-4">
               <p className="flex items-center gap-2 text-sm font-medium text-ok">
                 <Check size={15} strokeWidth={2.5} /> server 已连接
               </p>
@@ -159,7 +159,7 @@ export default function Setup() {
             </div>
           )}
           {phase === 'fail' && (
-            <div className="rounded-xl bg-bad/10 p-4">
+            <div className="rounded-lg bg-bad/10 p-4">
               <p className="text-sm font-medium text-bad">无法连接 server</p>
               <p className="mt-1 break-words text-xs text-ink-2">{probeError}</p>
               <p className="mt-1 text-xs text-ink-3">请确认中心服务已启动，且本页面与 server 同源。</p>
@@ -184,7 +184,7 @@ export default function Setup() {
 
       {step === 1 && (
         <form onSubmit={onCreate} noValidate className="space-y-4">
-          <div className="rounded-xl bg-surface-2 p-3.5">
+          <div className="rounded-lg bg-surface-2 p-3.5">
             <p className="flex items-start gap-2 text-[12px] leading-relaxed text-ink-2">
               <ShieldAlert size={14} className="mt-0.5 shrink-0 text-warn" />
               <span>
@@ -247,7 +247,7 @@ export default function Setup() {
 
           {formError && (
             <div role="alert"
-              className={cn('rounded-xl p-3.5 text-[13px] leading-relaxed break-words',
+              className={cn('rounded-lg p-3.5 text-[13px] leading-relaxed break-words',
                 redirectToLogin ? 'bg-warn/12 text-warn' : 'bg-bad/10 text-bad')}>
               {formError}
               {redirectToLogin && (

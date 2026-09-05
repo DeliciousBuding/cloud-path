@@ -61,7 +61,7 @@ export function TokenManager() {
       ) : tokens.length === 0 ? (
         <p className="py-6 text-center text-sm text-ink-3">本租户还没有服务令牌</p>
       ) : (
-        <ul className="space-y-3" aria-label="服务令牌列表">
+        <ul className="divide-y divide-hairline" aria-label="服务令牌列表">
           {tokens.map((t) => <TokenRow key={t.id} token={t} />)}
         </ul>
       )}

@@ -60,7 +60,7 @@ export function SecretPanel({ secret, onClose }: { secret: CreatedToken; onClose
           spellCheck={false}
           autoComplete="off"
           aria-describedby={`${id}-status`}
-          className="num min-w-0 flex-1 rounded-xl border border-hairline bg-surface-2 px-3 py-2 font-mono text-xs break-all outline-none focus:border-accent"
+          className="num min-w-0 flex-1 rounded-lg border border-hairline bg-surface-2 px-3 py-2 font-mono text-xs break-all outline-none focus:border-accent"
         />
         <button
           type="button"

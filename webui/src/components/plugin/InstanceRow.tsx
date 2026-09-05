@@ -37,7 +37,7 @@ export function InstanceRow({ v, catalog, onEdit }: {
 
       {/* 期望 / 实际 两栏（紧凑版）：390px 也保持并排，因为对照本身就是信息 */}
       <div className="mt-3 grid grid-cols-2 gap-2.5">
-        <div className="min-w-0 rounded-xl bg-surface-2 px-3 py-2.5">
+        <div className="min-w-0 rounded-lg bg-surface-2 px-3 py-2.5">
           <p className="text-[12px] font-medium text-ink-3">期望态</p>
           <p className="mt-1 flex min-w-0 items-baseline gap-1 text-[12px] font-medium"
             title={`${v.desired.enabled ? '已启用' : '已停用'} · ${v.desired.version} · 修订版 ${v.desired_revision}`}>
@@ -49,7 +49,7 @@ export function InstanceRow({ v, catalog, onEdit }: {
             修订 {v.desired_revision} · {isolationLabel(v.desired.isolation)}
           </p>
         </div>
-        <div className="min-w-0 rounded-xl bg-surface-2 px-3 py-2.5">
+        <div className="min-w-0 rounded-lg bg-surface-2 px-3 py-2.5">
           <p className="text-[12px] font-medium text-ink-3">实际态</p>
           {v.has_observed ? (
             <>

@@ -60,7 +60,7 @@ export function JsonBlock({ value, className, maxHeight = 'max-h-56', label = '�
     // 可滚动区域必须键盘可达（WCAG 2.1.1）：tabIndex=0 + role=group + 可读名称
     <pre
       tabIndex={0} role="group" aria-label={label}
-      className={cn('num overflow-auto rounded-xl bg-surface-2 p-3 font-mono text-[11px] leading-relaxed text-ink-2',
+      className={cn('num overflow-auto rounded-lg bg-surface-2 p-3 font-mono text-[11px] leading-relaxed text-ink-2',
         maxHeight, className)}
       title="通用 JSON 视图（未收录结构的回落）"
     >{text}</pre>

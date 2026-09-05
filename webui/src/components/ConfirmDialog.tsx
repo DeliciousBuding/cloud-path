@@ -82,7 +82,7 @@ export function ConfirmDialog({
         {extra && <div className="mt-4">{extra}</div>}
 
         {requireAck && (
-          <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-xl bg-surface-2 p-3.5">
+          <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg bg-surface-2 p-3.5">
             <input
               type="checkbox" checked={acked} disabled={busy}
               onChange={(e) => setAcked(e.target.checked)}

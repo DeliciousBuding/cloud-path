@@ -20,7 +20,7 @@ export function PluginErrorNote({ error, className }: { error: unknown; classNam
   const box = copy.tone === 'bad' ? 'bg-bad/10 text-bad'
     : copy.tone === 'warn' ? 'bg-warn/12 text-warn' : 'bg-ink-3/10 text-ink-2'
   return (
-    <div role="alert" className={`rounded-xl px-3.5 py-3 ${box} ${className ?? ''}`}>
+    <div role="alert" className={`rounded-lg px-3.5 py-3 ${box} ${className ?? ''}`}>
       <p className="text-[13px] font-semibold break-words">{copy.title}</p>
       <p className="mt-0.5 text-[12px] leading-relaxed break-words opacity-90">{copy.hint}</p>
       {copy.code && (

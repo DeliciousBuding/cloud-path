@@ -24,7 +24,7 @@ export function TokenRow({ token: t }: { token: TokenView }) {
   }
 
   return (
-    <li className="rounded-2xl border border-hairline bg-surface-2 p-4">
+    <li className="py-4 first:pt-0">
       <div className="flex min-w-0 items-start gap-2">
         {/* 名称/前缀由管理员与服务端给定，长度不可控：必须各自截断 */}
         <div className="min-w-0 flex-1">
@@ -34,17 +34,21 @@ export function TokenRow({ token: t }: { token: TokenView }) {
         <span className="shrink-0"><Badge tone={tone}>{stateLabel}</Badge></span>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {(t.scopes ?? []).map((s) => (
-          <Badge key={s} tone={s === 'admin' || s === 'edge' ? 'warn' : 'idle'}>{s}</Badge>
-        ))}
-      </div>
+      {(t.scopes ?? []).length > 0 && (
+        <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1">
+          {(t.scopes ?? []).map((s) => (
+            <span key={s} className={s === 'admin' || s === 'edge' ? 'font-mono text-[12px] text-warn' : 'font-mono text-[12px] text-ink-2'}>
+              {s}
+            </span>
+          ))}
+        </div>
+      )}
 
       <dl className="mt-3 space-y-2">
-        <KeyValue k="创建于" v={fmtDateTime(t.created_at)} />
+        <KeyValue k="创建于" v={<span className="font-mono">{fmtDateTime(t.created_at)}</span>} />
         <KeyValue k="最后使用" v={t.last_used_at ? timeAgo(t.last_used_at) : '从未使用'} />
-        <KeyValue k="过期时间" v={t.expires_at ? fmtDateTime(t.expires_at) : '永不过期'} />
-        {revoked && <KeyValue k="吊销于" v={fmtDateTime(t.revoked_at ?? 0)} />}
+        <KeyValue k="过期时间" v={t.expires_at ? <span className="font-mono">{fmtDateTime(t.expires_at)}</span> : '永不过期'} />
+        {revoked && <KeyValue k="吊销于" v={<span className="font-mono">{fmtDateTime(t.revoked_at ?? 0)}</span>} />}
       </dl>
 
       {!revoked && !confirming && (

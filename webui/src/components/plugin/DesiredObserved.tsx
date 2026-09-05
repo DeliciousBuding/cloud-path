@@ -23,7 +23,7 @@ export function SyncBanner({ v }: { v: PluginInstanceView }) {
   const fgCls = s.tone === 'ok' ? 'text-ok' : s.tone === 'warn' ? 'text-warn'
     : s.tone === 'accent' ? 'text-accent' : 'text-ink-2'
   return (
-    <div className={`flex min-w-0 items-start gap-2.5 rounded-xl px-3.5 py-3 ${boxCls}`} role="status">
+    <div className={`flex min-w-0 items-start gap-2.5 rounded-lg px-3.5 py-3 ${boxCls}`} role="status">
       <span className={`mt-0.5 shrink-0 ${fgCls}`}>
         <Icon size={15} />
       </span>
@@ -66,7 +66,7 @@ function ColumnHead({ children, note }: { children: ReactNode; note: string }) {
 /** 右栏在「Edge 未上报」时的整块呈现（不是空格子） */
 function UnreportedBlock({ v }: { v: PluginInstanceView }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl bg-surface px-3 py-6 text-center">
+    <div className="flex flex-col items-center justify-center rounded-lg bg-surface px-3 py-6 text-center">
       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-3/12 text-ink-2">
         {v.edge_online ? <RadioTower size={16} /> : <CloudOff size={16} />}
       </span>
@@ -91,7 +91,7 @@ export function DesiredObserved({ v }: { v: PluginInstanceView }) {
 
   return (
     <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
-      <div className="min-w-0 rounded-xl bg-surface-2 p-3 sm:p-3.5">
+      <div className="min-w-0 rounded-lg bg-surface-2 p-3 sm:p-3.5">
         <ColumnHead note="服务器权威">期望态</ColumnHead>
         <dl className="m-0">
           <Row k="启用" v={v.desired.enabled ? '已启用' : '已停用'}
@@ -106,7 +106,7 @@ export function DesiredObserved({ v }: { v: PluginInstanceView }) {
         </p>
       </div>
 
-      <div className="min-w-0 rounded-xl bg-surface-2 p-3 sm:p-3.5">
+      <div className="min-w-0 rounded-lg bg-surface-2 p-3 sm:p-3.5">
         <ColumnHead note="边缘节点上报">实际态</ColumnHead>
         {v.has_observed ? (
           <>

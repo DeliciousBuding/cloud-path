@@ -42,7 +42,7 @@ export function CreateUserForm({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <form onSubmit={submit} aria-label="新建用户" className="mb-4 rounded-2xl border border-hairline bg-surface-2 p-4">
+    <form onSubmit={submit} aria-label="新建用户" className="mb-4 border-b border-hairline pb-4">
       <div className="grid gap-3 sm:grid-cols-2">
         <TextField
           label="用户名" value={username} error={usernameErr} autoComplete="off"

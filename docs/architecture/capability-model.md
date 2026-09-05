@@ -286,3 +286,6 @@ tracking-tight 等负字距是拉丁刻度，中文显示文本不超 -0.01em，
 - 空态/错误态不用装饰性图标瓷砖（彩色圆底）：plain 语义色图标即可。
 - 散文行宽 ≤62ch：全宽长行是布局失败（About 等通栏段落加 max-w）。
 - 表格体单元格 `vertical-align: baseline`（对齐行首基线；多行表头才底对齐）。
+- 圆角刻度只有两档：tile 8px（卡内子面/内联 note/控件）与 card 12px（.card/浮层 Toast/品牌 logo）；rounded-2xl+ 灭绝（design-system 守卫）。
+- 列表在 Panel 内用 divider rows（`divide-y`），不套子卡（嵌套卡片是硬反模式）；Admin 用户/令牌行已行化。
+- 权限 scope 是元数据不是状态：mono 纯文本，高权限（admin/edge）用语义色文字而非胶囊。
