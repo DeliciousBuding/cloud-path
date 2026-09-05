@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight, Cpu, Network, PowerOff, Server, WifiOff } from 'lucide-react'
-import { Badge, EmptyState, ErrorState, KeyValue, PageHeader, Panel, Segmented, StatusDot } from '@/components/ui'
+import { Network, PowerOff, WifiOff } from 'lucide-react'
+import { Badge, EmptyState, ErrorState, PageHeader, Panel, Segmented, StatusDot } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { useDevices } from '@/hooks/useDevices'
 import { useEdges } from '@/hooks/useEdges'
-import { deviceLabel, edgeFacts, filterEdgeFacts, sortEdgeFacts, type EdgeFilter } from '@/lib/edges'
+import { deviceLabel, edgeFacts, filterEdgeFacts, sortEdgeFacts, type EdgeFacts, type EdgeFilter } from '@/lib/edges'
 import { fmtDateTime } from '@/lib/format'
 
 /**
@@ -70,79 +70,93 @@ export default function Edges() {
             ? '全部节点都已离线。检查各主机的 cloudpath-edge 进程与网络后会自动重连。'
             : '所有节点都在线。'} />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-          {shown.map((f) => {
-            const e = f.edge
-            return (
-              <Panel key={e.edge_id} className="fade-up">
-                {/* 390px：edge_id 由后端给定，长度不可控 —— 必须可截断，否则撑出横向滚动 */}
-                <div className="flex min-w-0 items-center gap-2">
-                  <StatusDot online={e.online} />
-                  <Link to={`/edges/${encodeURIComponent(e.edge_id)}`}
-                    className="num min-w-0 flex-1 truncate text-[15px] font-semibold tracking-tight no-underline hover:text-accent"
-                    title={`${e.edge_id} · 查看详情`}>
-                    {e.edge_id}
-                  </Link>
-                  <span className="shrink-0">
-                    <Badge tone={e.online ? 'ok' : 'idle'}>{e.online ? '在线' : '离线'}</Badge>
-                  </span>
-                </div>
-
-                <dl className="mt-4 space-y-2.5">
-                  <KeyValue k="版本" v={e.version || '未知'} mono />
-                  <KeyValue
-                    k={e.online ? '连接于' : '最后在线'}
-                    v={<span className="num">{e.connected_at ? fmtDateTime(e.connected_at) : '—'}</span>}
-                  />
-                  <KeyValue k="所辖设备"
-                    v={e.online
-                      ? `${f.devices.length} 台 · ${f.onlineDevices} 台在线`
-                      : `${f.devices.length} 台（暂停上报）`} />
-                  <KeyValue k="最近上报"
-                    v={<span className="num">{f.lastReport ? fmtDateTime(f.lastReport) : '从未上报'}</span>} />
-                </dl>
-
-                <div className="mt-4 border-t border-hairline pt-3">
-                  <p className="mb-2 flex items-center gap-1 text-[11px] text-ink-3">
-                    <Cpu size={11} /> 设备
-                  </p>
-                  {f.devices.length === 0 ? (
-                    <span className="text-xs text-ink-3">该节点还没有注册设备</span>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {f.devices.slice(0, 8).map((d) => {
-                        const dev = d.id.split('/').pop() ?? d.id
-                        return (
-                          // 设备键长度由后端决定：胶囊自身限宽，内部文本截断，状态点不收缩
-                          <Link key={d.id}
-                            to={`/devices/${encodeURIComponent(e.edge_id)}/${encodeURIComponent(dev)}`}
-                            className={`badge max-w-full border transition-colors hover:bg-accent/10 hover:text-accent ${d.online ? 'border-hairline bg-ink-3/10 text-ink-2' : 'border-hairline bg-surface-2 text-ink-3'}`}
-                            title={`${deviceLabel(d)} · ${d.online ? '在线' : '离线'}`}>
-                            <StatusDot online={d.online} />
-                            <span className="min-w-0 truncate">{deviceLabel(d)}</span>
-                            <ArrowRight size={10} className="shrink-0" />
-                          </Link>
-                        )
-                      })}
-                      {f.devices.length > 8 && (
-                        <Link to={`/edges/${encodeURIComponent(e.edge_id)}`}
-                          className="badge max-w-full bg-ink-3/10 text-ink-2 hover:text-accent">
-                          另有 {f.devices.length - 8} 台
-                        </Link>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <Link to={`/edges/${encodeURIComponent(e.edge_id)}`}
-                  className="link mt-4 flex items-center gap-0.5 border-t border-hairline pt-3 text-xs">
-                  <Server size={11} /> 节点详情 <ArrowRight size={12} />
-                </Link>
-              </Panel>
-            )
-          })}
-        </div>
+        <>
+        {/* 全宽行而非卡片网格：节点少时卡片会把内容困在窄轨里留下大片空白
+            （Vercel：不要 strand content in a narrow track）；与设备舰队行同一语言 */}
+        <ul className="m-0 list-none p-0">
+          <EdgeRowHead />
+          {shown.map((f) => <EdgeRow key={f.edge.edge_id} f={f} />)}
+        </ul>
+        </>
       )}
     </>
+  )
+}
+
+const ROW_COLS = 'lg:grid-cols-[minmax(0,1.4fr)_4.5rem_5rem_minmax(0,1.7fr)_10.5rem_10.5rem]'
+
+/** 列表表头（仅桌面；窄屏每行自带列名） */
+function EdgeRowHead() {
+  return (
+    <li aria-hidden className={`hidden gap-x-4 px-4 pb-2 text-[11px] font-medium text-ink-3 lg:grid ${ROW_COLS}`}>
+      <span>边缘节点</span><span>状态</span><span>版本</span><span>设备</span>
+      <span className="text-right">连接于</span><span className="text-right">最近上报</span>
+    </li>
+  )
+}
+
+function EdgeRow({ f }: { f: EdgeFacts }) {
+  const e = f.edge
+  return (
+    <li className={`grid gap-x-4 gap-y-1.5 border-b border-hairline px-4 py-2.5 last:border-b-0 ${ROW_COLS}`}>
+      {/* 节点 ID 是运维标识：mono；点击进详情 */}
+      <div className="flex min-w-0 items-center gap-2">
+        <StatusDot online={e.online} />
+        <Link to={`/edges/${encodeURIComponent(e.edge_id)}`}
+          className="min-w-0 truncate font-mono text-[13px] font-medium no-underline hover:text-accent"
+          title={`${e.edge_id} · 查看详情`}>
+          {e.edge_id}
+        </Link>
+      </div>
+      <div className="hidden lg:block">
+        <Badge tone={e.online ? 'ok' : 'idle'}>{e.online ? '在线' : '离线'}</Badge>
+      </div>
+      <div className="hidden min-w-0 truncate font-mono text-[11px] text-ink-2 lg:block" title={`版本 ${e.version || '未知'}`}>
+        {e.version || '未知'}
+      </div>
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <span className="shrink-0 lg:hidden">
+          <Badge tone={e.online ? 'ok' : 'idle'}>{e.online ? '在线' : '离线'}</Badge>
+        </span>
+        {f.devices.length === 0 ? (
+          <span className="text-[11px] text-ink-3">还没有注册设备</span>
+        ) : (
+          <>
+            <span className="num shrink-0 text-[11px] text-ink-2"
+              title={`${f.devices.length} 台 · ${f.onlineDevices} 台在线${e.online ? '' : '（暂停上报）'}`}>
+              {f.devices.length} 台 · {f.onlineDevices} 在线
+            </span>
+            {f.devices.slice(0, 2).map((d) => {
+              const dev = d.id.split('/').pop() ?? d.id
+              return (
+                <Link key={d.id}
+                  to={`/devices/${encodeURIComponent(e.edge_id)}/${encodeURIComponent(dev)}`}
+                  className={`badge max-w-[9rem] border transition-colors hover:bg-accent/10 hover:text-accent ${d.online ? 'border-hairline bg-ink-3/10 text-ink-2' : 'border-hairline bg-surface-2 text-ink-3'}`}
+                  title={`${deviceLabel(d)} · ${d.online ? '在线' : '离线'}`}>
+                  <StatusDot online={d.online} />
+                  <span className="min-w-0 truncate">{deviceLabel(d)}</span>
+                </Link>
+              )
+            })}
+            {f.devices.length > 2 && (
+              <Link to={`/edges/${encodeURIComponent(e.edge_id)}`}
+                className="badge max-w-full bg-ink-3/10 text-ink-2 hover:text-accent">
+                +{f.devices.length - 2}
+              </Link>
+            )}
+          </>
+        )}
+      </div>
+      <div className="num min-w-0 truncate text-left font-mono text-[11px] text-ink-3 lg:text-right"
+        title={e.connected_at ? fmtDateTime(e.connected_at) : '未连接'}>
+        <span className="lg:hidden">{e.online ? '连接于 ' : '最后在线 '}</span>
+        {e.connected_at ? fmtDateTime(e.connected_at) : '—'}
+      </div>
+      <div className="num min-w-0 truncate text-left font-mono text-[11px] text-ink-3 lg:text-right"
+        title={f.lastReport ? fmtDateTime(f.lastReport) : '从未上报'}>
+        <span className="lg:hidden">最近上报 </span>
+        {f.lastReport ? fmtDateTime(f.lastReport) : '从未上报'}
+      </div>
+    </li>
   )
 }
