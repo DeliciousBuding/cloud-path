@@ -174,7 +174,11 @@ export function syncState(v: PluginInstanceView): SyncState {
   }
 }
 
-/** pluginhost.State 的规范大写名 → 展示语义（未知值原样呈现，不猜含义） */
+/** 实例状态 → 展示语义。两套后端事实源：
+ *  - edge pluginhost.State：规范大写（STOPPED/HEALTHY…）；
+ *  - server AppHost（appruntime.InstanceState）：小写（running/stopping…，见 internal/appruntime/types.go）。
+ *  两套都在同一 observed 投影里，词汇必须都覆盖，否则服务器托管实例会露出机器串。
+ *  未知值原样呈现，不猜含义。 */
 const STATE_META: Record<string, { label: string; tone: Tone }> = {
   STOPPED: { label: '已停止', tone: 'idle' },
   STARTING: { label: '启动中', tone: 'accent' },
@@ -183,6 +187,19 @@ const STATE_META: Record<string, { label: string; tone: Tone }> = {
   CRASHED: { label: '已崩溃', tone: 'bad' },
   BACKOFF: { label: '重启退避', tone: 'warn' },
   DISABLED: { label: '已禁用', tone: 'idle' },
+  created: { label: '已创建', tone: 'idle' },
+  starting: { label: '启动中', tone: 'accent' },
+  running: { label: '运行中', tone: 'ok' },
+  stopping: { label: '停止中', tone: 'accent' },
+  stopped: { label: '已停止', tone: 'idle' },
+  failed: { label: '启动失败', tone: 'bad' },
+}
+
+/** observed.detail 的已知机器标记 → 人话（其余是 server 脱敏摘要，原样呈现） */
+const HOST_DETAIL_LABEL: Record<string, string> = { 'server-apphost': '服务器本地宿主（进程内）' }
+export function hostDetailLabel(detail?: string): string | undefined {
+  if (!detail) return undefined
+  return HOST_DETAIL_LABEL[detail] ?? detail
 }
 
 /** pluginhost.Health 的规范大写名 → 展示语义 */

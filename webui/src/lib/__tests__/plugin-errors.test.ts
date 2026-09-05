@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '@/lib/api'
 import {
   healthMeta, permissionCount, permissionGroups, pluginErrorCopy, safeConfigEntries,
-  secretHandleName, stateMeta, syncState, trustMeta,
+  hostDetailLabel, secretHandleName, stateMeta, syncState, trustMeta,
 } from '@/lib/plugins'
 import { PluginErr, PLUGIN_ERR_CODES } from '@/lib/types'
 import type { PluginInstanceView } from '@/lib/types'
@@ -142,6 +142,11 @@ describe('Edge 上报的运行态语义（规范大写名）', () => {
     expect(stateMeta('HEALTHY').tone).toBe('ok')
     expect(stateMeta('CRASHED').tone).toBe('bad')
     expect(stateMeta('DISABLED').tone).toBe('idle')
+    // server AppHost（appruntime.InstanceState）小写状态同样有人话词汇，不露机器串
+    expect(stateMeta('running').label).toBe('运行中')
+    expect(stateMeta('stopping').label).toBe('停止中')
+    expect(stateMeta('failed').tone).toBe('bad')
+    expect(hostDetailLabel('server-apphost')).toBe('服务器本地宿主（进程内）')
     expect(healthMeta('DEGRADED').tone).toBe('warn')
     expect(healthMeta('UNKNOWN').tone).toBe('idle')
   })

@@ -9,7 +9,7 @@
 import type { ReactNode } from 'react'
 import { AlertTriangle, CloudOff, RadioTower, TimerReset } from 'lucide-react'
 import { Badge } from '@/components/ui'
-import { healthMeta, isolationLabel, stateMeta, syncState } from '@/lib/plugins'
+import { healthMeta, hostDetailLabel, isolationLabel, stateMeta, syncState } from '@/lib/plugins'
 import { fmtDateTime, timeAgo } from '@/lib/format'
 import type { PluginInstanceView } from '@/lib/types'
 
@@ -129,7 +129,7 @@ export function DesiredObserved({ v }: { v: PluginInstanceView }) {
             {v.observed?.detail && (
               // detail 已由 server 限长并脱敏；仍然截断呈现，且不当成 stdout 原文
               <p className="mt-2 truncate text-[11px] text-ink-3" title={v.observed.detail}>
-                摘要：{v.observed.detail}
+                摘要：{hostDetailLabel(v.observed.detail)}
               </p>
             )}
           </>
