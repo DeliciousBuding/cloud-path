@@ -63,15 +63,17 @@ export default function PluginInstanceDetail() {
         <h1 className="num min-w-0 max-w-full truncate text-[22px] font-semibold tracking-tight" title={instance.id}>
           {instance.desired.instance_id || instance.id}
         </h1>
-        <Badge tone="idle" className="max-w-full">
+        {/* 插件/节点 ID 是机器标识：mono 文本，不用胶囊（状态才配胶囊） */}
+        <span className="flex min-w-0 items-center gap-1 font-mono text-[11px] text-ink-3"
+          title={`插件 ${instance.desired.plugin_id || '未知'}`}>
           <Puzzle size={11} className="shrink-0" />
-          <span className="num min-w-0 truncate">{instance.desired.plugin_id || '未知插件'}</span>
-        </Badge>
+          <span className="min-w-0 truncate">{instance.desired.plugin_id || '未知插件'}</span>
+        </span>
         <Link to={`/edges/${encodeURIComponent(instance.edge_id)}`}
-          className="badge max-w-full bg-ink-3/10 text-ink-2 no-underline transition-colors hover:bg-accent/10 hover:text-accent"
+          className="flex min-w-0 max-w-full items-center gap-1 font-mono text-[11px] text-ink-3 no-underline transition-colors hover:text-accent"
           title={`边缘节点 ${instance.edge_id}`}>
           <Server size={11} className="shrink-0" />
-          <span className="num min-w-0 truncate">{instance.edge_id || '—'}</span>
+          <span className="min-w-0 truncate">{instance.edge_id || '—'}</span>
         </Link>
         <Badge tone={instance.edge_online ? 'ok' : 'idle'}>
           {instance.edge_online ? '边缘节点在线' : '边缘节点离线'}

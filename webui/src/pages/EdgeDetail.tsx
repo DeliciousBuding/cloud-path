@@ -72,11 +72,13 @@ export default function EdgeDetail() {
 
       <header className="mb-7 flex flex-wrap items-center gap-3 fade-up">
         <StatusDot online={e.online} />
-        <h1 className="num min-w-0 max-w-full truncate text-[22px] font-semibold tracking-tight" title={e.edge_id}>
+        <h1 className="min-w-0 max-w-full truncate font-mono text-[22px] font-semibold tracking-tight" title={e.edge_id}>
           {e.edge_id}
         </h1>
         <Badge tone={e.online ? 'ok' : 'idle'}>{e.online ? '在线' : '离线'}</Badge>
-        {e.version && <Badge tone="accent" className="max-w-full truncate">{e.version}</Badge>}
+        {e.version && (
+          <span className="min-w-0 truncate font-mono text-[11px] text-ink-3" title={`版本 ${e.version}`}>{e.version}</span>
+        )}
         <span className="ml-auto text-xs text-ink-3"
           title={e.connected_at ? fmtDateTime(e.connected_at) : undefined}>
           {e.online ? '连接于 ' : '最后在线 '}
@@ -97,9 +99,9 @@ export default function EdgeDetail() {
             <KeyValue k="在线" v={e.online ? '是' : '否'} />
             <KeyValue k="版本" v={e.version || '未知'} mono />
             <KeyValue k={e.online ? '连接于' : '最后在线'}
-              v={<span className="num">{e.connected_at ? fmtDateTime(e.connected_at) : '—'}</span>} />
+              v={<span className="num font-mono">{e.connected_at ? fmtDateTime(e.connected_at) : '—'}</span>} />
             <KeyValue k="最近上报"
-              v={<span className="num">{f.lastReport ? fmtDateTime(f.lastReport) : '从未上报'}</span>} />
+              v={<span className="num font-mono">{f.lastReport ? fmtDateTime(f.lastReport) : '从未上报'}</span>} />
             <KeyValue k="所辖设备" v={`${f.devices.length} 台 · ${f.onlineDevices} 台在线`} />
             <KeyValue k="接入时声明" v={`${f.declared.length} 台`} />
           </dl>
@@ -127,11 +129,11 @@ export default function EdgeDetail() {
                       <span className="block truncate text-[13px] font-medium hover:text-accent" title={deviceLabel(d)}>
                         {deviceLabel(d)}
                       </span>
-                      <span className="num block truncate text-[11px] text-ink-3" title={d.id}>
+                      <span className="num block truncate font-mono text-[11px] text-ink-3" title={d.id}>
                         {d.adapter || '未知适配器'}{d.port ? ` · ${d.port}` : ''}
                       </span>
                     </Link>
-                    <span className="num shrink-0 text-[11px] text-ink-3"
+                    <span className="num shrink-0 font-mono text-[11px] text-ink-3"
                       title={d.online ? '最近更新' : '最后见'}>
                       {(d.online ? d.updated_at : d.last_seen)
                         ? fmtDateTime(d.online ? d.updated_at : d.last_seen) : '—'}

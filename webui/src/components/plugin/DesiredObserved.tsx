@@ -8,7 +8,8 @@
 //   - `stale` / `drift` 各有独立视觉状态，且都写在右栏或顶部同步条上。
 import type { ReactNode } from 'react'
 import { AlertTriangle, CloudOff, RadioTower, TimerReset } from 'lucide-react'
-import { Badge } from '@/components/ui'
+import { TONE_TEXT_CLS } from '@/components/ui'
+import { cn } from '@/lib/cn'
 import { healthMeta, hostDetailLabel, isolationLabel, stateMeta, syncState } from '@/lib/plugins'
 import { fmtDateTime, timeAgo } from '@/lib/format'
 import type { PluginInstanceView } from '@/lib/types'
@@ -30,9 +31,10 @@ export function SyncBanner({ v }: { v: PluginInstanceView }) {
         <span className="block text-[13px] font-semibold break-words">{s.label}</span>
         <span className="mt-0.5 block text-[12px] leading-relaxed break-words text-ink-2">{s.hint}</span>
       </span>
-      <Badge tone={s.tone} className="num shrink-0">
+      <span className={cn('num shrink-0 text-[11px] font-medium', TONE_TEXT_CLS[s.tone])}
+        title={`期望修订 ${v.desired_revision} / 已应用 ${v.applied_revision}`}>
         修订 {v.desired_revision}/{v.applied_revision}
-      </Badge>
+      </span>
     </div>
   )
 }

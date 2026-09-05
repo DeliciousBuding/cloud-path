@@ -27,10 +27,11 @@ export function InstanceRow({ v, catalog, onEdit }: {
           title={`${v.id} · 查看详情`}>
           {v.desired.instance_id || v.id}
         </Link>
-        <Badge tone="idle" className="max-w-full">
+        <span className="flex min-w-0 items-center gap-1 font-mono text-[11px] text-ink-3"
+          title={`插件 ${v.desired.plugin_id || '未知'}`}>
           <Boxes size={11} className="shrink-0" />
-          <span className="num min-w-0 truncate">{v.desired.plugin_id || '未知插件'}</span>
-        </Badge>
+          <span className="min-w-0 truncate">{v.desired.plugin_id || '未知插件'}</span>
+        </span>
         <span className="ml-auto shrink-0"><Badge tone={s.tone}>{s.label}</Badge></span>
       </div>
 
