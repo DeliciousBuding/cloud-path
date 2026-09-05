@@ -192,6 +192,24 @@ describe('命令下发契约：用户原文不被前端静默改写', () => {
   })
 })
 
+describe('JSX 文本不许漏 Markdown 语法（** 会原样渲染给用户）', () => {
+  it('全量 .tsx 的 JsxText 里没有 ** 字面量（强调走 semibold span，不走伪 markdown）', () => {
+    const offenders = tsx.flatMap((f) => {
+      const sf = ts.createSourceFile(f.path, f.text, ts.ScriptTarget.ESNext, true)
+      const out: string[] = []
+      const visit = (node: ts.Node): void => {
+        if (node.kind === ts.SyntaxKind.JsxText && node.getText(sf).includes('**')) {
+          out.push(`${f.path}:${sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1}`)
+        }
+        ts.forEachChild(node, visit)
+      }
+      visit(sf)
+      return out
+    })
+    expect(offenders).toEqual([])
+  })
+})
+
 describe('字距纪律（CJK 安全：负字距止于 -0.01em；mono 零字距）', () => {
   it('组件不用 tracking-tight / tracking-tighter（-0.025em 是拉丁刻度，CJK 全角字面会挤）', () => {
     const offenders = tsx.flatMap((f) => [...f.text.matchAll(/tracking-(?:tight|tighter)\b/g)].map((m) => `${f.path}: ${m[0]}`))

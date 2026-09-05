@@ -150,7 +150,7 @@ export default function Setup() {
               <p className="flex items-center gap-2 text-sm font-medium text-ok">
                 <Check size={15} strokeWidth={2.5} /> server 已连接
               </p>
-              <p className="num mt-1 text-xs break-words text-ink-2">版本 {health.version}</p>
+              <p className="mt-1 text-xs break-words text-ink-2">版本 <span className="font-mono">{health.version}</span></p>
               {alreadyIn && (
                 <p className="mt-2 text-xs leading-relaxed text-ink-2">
                   你已经登录了，无需再初始化。
@@ -188,7 +188,7 @@ export default function Setup() {
             <p className="flex items-start gap-2 text-[12px] leading-relaxed text-ink-2">
               <ShieldAlert size={14} className="mt-0.5 shrink-0 text-warn" />
               <span>
-                这里创建的是**首个管理员账号**，创建成功后实例立即进入全鉴权模式，其他账号需由管理员在
+                这里创建的是<span className="font-semibold text-ink">首个管理员账号</span>，创建成功后实例立即进入全鉴权模式，其他账号需由管理员在
                 「管理 → 用户」中创建。首次设置只允许从服务器本机（回环地址）进行，或携带一次性 setup token。
               </span>
             </p>

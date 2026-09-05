@@ -141,7 +141,7 @@ export default function Plugins() {
                     )}
 
                     <p className="mt-3 border-t border-hairline pt-2.5 text-[12px] leading-relaxed text-ink-3">
-                      以上是插件的**声明**，不代表任何 Edge 上正在运行；运行事实见「已安装」与「实例」分区。
+                      以上是插件的声明目录，不代表任何 Edge 上正在运行；运行事实见「已安装」与「实例」分区。
                     </p>
                   </Panel>
                 )

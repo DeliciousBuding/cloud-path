@@ -179,7 +179,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
             <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)}
               className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
             <span className="min-w-0 text-[12px] leading-relaxed">
-              同时清除本地数据（purge）：插件在 Edge 上产生的数据一并删除，**不可恢复**
+              同时清除本地数据（purge）：插件在 Edge 上产生的数据一并删除，<span className="font-semibold text-bad">不可恢复</span>
             </span>
           </label>
         }
