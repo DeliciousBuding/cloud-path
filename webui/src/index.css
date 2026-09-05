@@ -236,6 +236,12 @@ body {
   border-color: color-mix(in srgb, var(--color-accent) 55%, transparent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 16%, transparent);
 }
+/* 紧凑变体：工具条下拉 / 带图标搜索框。
+ * .input 本身是非分层 CSS，组件里叠 py-1 / pl-9 这类工具类会被层叠吃掉，
+ * 所以输入框的尺寸角色只能由设计系统定义，不允许各组件自行覆盖。 */
+.input-sm { padding: 5px 10px; font-size: 12px; }
+.input-search { padding: 8px 12px 8px 34px; font-size: 13px; }
+
 .input-error, .input-error:focus {
   border-color: var(--color-bad);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-bad) 15%, transparent);

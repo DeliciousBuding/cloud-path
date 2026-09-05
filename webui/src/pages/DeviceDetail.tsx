@@ -347,7 +347,7 @@ export default function DeviceDetail() {
               <div className="mb-3 flex items-center gap-2">
                 <label htmlFor="ev-kind" className="shrink-0 text-[11px] text-ink-3">筛选</label>
                 <select id="ev-kind" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}
-                  className="input min-w-0 max-w-[18rem] py-1 text-xs">
+                  className="input input-sm min-w-0 max-w-[18rem]">
                   <option value="">全部事件</option>
                   {eventKinds.map(([t, l]) => <option key={t} value={t}>{optionLabel(l, 40)}</option>)}
                 </select>
