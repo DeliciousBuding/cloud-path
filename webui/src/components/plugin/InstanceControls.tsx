@@ -7,6 +7,7 @@
 //   ③ 收到 plugin_permission_confirmation_required 时弹出权限清单要求显式确认，
 //      用户勾选后才带 confirm_permissions:true 重发同一份 payload。
 import { useState } from 'react'
+import { useAuth } from '@/store/auth'
 import { Link } from 'react-router'
 import { Pencil, Power, RefreshCw, Trash2 } from 'lucide-react'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -24,6 +25,8 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
   onEdit?: () => void
   showEdit?: boolean
 }) {
+  const readOnly = useAuth((s) => s.status === 'in' && s.user?.role === 'viewer')
+  const host = v.edge_id === 'server' ? '应用宿主' : '边缘节点'
   const update = useUpdateInstance()
   const remove = useDeleteInstance()
   const reconcile = useReconcileInstance()
@@ -48,6 +51,8 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
     }
   }
 
+  if (readOnly) return <p className="text-sm text-ink-3">当前账号为只读，可查看应用数据，不能更改实例。</p>
+
   const toggleLabel = v.desired.enabled ? '停用' : '启用'
 
   return (
@@ -56,7 +61,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
         <button
           type="button" className="btn btn-ghost" disabled={busy}
           onClick={() => void patch({ enabled: !v.desired.enabled })}
-          title={`把期望态改成${toggleLabel}；Edge 应用后才真正生效`}
+          title={`把期望态改成${toggleLabel}；${host}应用后才真正生效`}
         >
           <Power size={13} className="shrink-0" />
           {update.isPending ? '提交中…' : toggleLabel}
@@ -66,7 +71,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
           type="button" className="btn btn-ghost" disabled={busy}
           // 不一致或过期时值得问一下（可能强制重启实例），一致时直接下发
           onClick={() => (v.drift || v.stale ? setReconcileOpen(true) : void reconcile.mutateAsync({ id: v.id }).catch(() => {}))}
-          title="让 Edge 重新收敛到最新期望快照"
+          title={"让" + host + "重新收敛到最新期望快照"}
         >
           <RefreshCw size={13} className="shrink-0" />
           {reconcile.isPending ? '下发中…' : '重新下发'}
@@ -127,12 +132,13 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
         body={
           <>
             <p>
-              当前期望修订版 {v.desired_revision}，边缘节点已应用 {v.applied_revision}。
-              重新下发会让边缘节点重新收敛到最新完整快照。
+              当前期望修订版 {v.desired_revision}，{host}已应用 {v.applied_revision}。
+              重新下发会让{host}重新收敛到最新完整快照。
             </p>
             <p className="mt-2 text-xs text-ink-2">
-              {!v.edge_online && '注意：该边缘节点当前离线，快照会在它重连后才被应用。'}
-              {v.edge_online && '该 Edge 在线，通常会立即开始应用。'}
+              {v.edge_id !== 'server' && !v.edge_online && '注意：该边缘节点当前离线，快照会在它重连后才被应用。'}
+              {v.edge_id !== 'server' && v.edge_online && '该边缘节点在线，通常会立即开始应用。'}
+              {v.edge_id === 'server' && '由中心服务的应用宿主处理；请以更新后的运行状态为准。'}
             </p>
           </>
         }
@@ -143,7 +149,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
             <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)}
               className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
             <span className="min-w-0 text-[12px] leading-relaxed">
-              强制（force）：即使 Edge 认为已应用同一 revision 也重新执行一次
+              强制（force）：即使{host}认为已应用同一修订版也重新执行一次
             </span>
           </label>
         }
@@ -164,7 +170,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
         body={
           <>
             <p>
-              期望态会被移除，Edge 在下一次快照同步时停止该实例。这是一次写操作，会记入审计。
+              期望态会被移除，{host}在下一次同步时停止该实例。这是一次写操作，会记入审计。
             </p>
             <p className="num mt-2 text-xs text-ink-3 break-all">
               {v.edge_id} · {v.desired.plugin_id} · {v.desired.version}
@@ -179,7 +185,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
             <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)}
               className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
             <span className="min-w-0 text-[12px] leading-relaxed">
-              同时清除本地数据（purge）：插件在 Edge 上产生的数据一并删除，<span className="font-semibold text-bad">不可恢复</span>
+              同时清除本地数据（purge）：插件在运行宿主上产生的数据一并删除，<span className="font-semibold text-bad">不可恢复</span>
             </span>
           </label>
         }

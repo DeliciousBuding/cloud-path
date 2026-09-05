@@ -607,3 +607,48 @@ export interface PluginCatalogView {
 export interface PluginCatalogListResponse {
   plugins: PluginCatalogView[]
 }
+// Application Plane: internal/api/types.go。数据面 ID 不含部署节点前缀。
+export interface AppDomainRecordView {
+  record_type: string
+  record_id: string
+  data_json: string
+  version?: string
+  updated_at: number
+}
+export interface DomainRecordData extends AppDomainRecordView {
+  instance_id: string
+  created: boolean
+}
+export interface AppDomainRecordsView {
+  instance_id: string
+  records: AppDomainRecordView[]
+  record_type?: string
+  limit: number
+  offset: number
+}
+export interface AppBindingView {
+  requirement_id: string
+  capability: string
+  entity_id: string
+}
+export interface AppBindingsView {
+  instance_id: string
+  running: boolean
+  bindings: AppBindingView[]
+}
+export interface AppScheduledJobView {
+  schedule_id: string
+  cron: string
+  timezone: string
+  missed_policy: string
+  next_run_at?: number
+  last_run_at?: number
+  state: string
+  revision: number
+}
+export interface AppJobsView {
+  instance_id: string
+  running: boolean
+  jobs: string[]
+  scheduled: AppScheduledJobView[]
+}

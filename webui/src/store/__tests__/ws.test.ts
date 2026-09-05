@@ -211,3 +211,73 @@ describe('WS 消费必须宽容（不得让整个 UI 崩）', () => {
     expect(useLive.getState().devices['e1/d1']?.online).toBe(false)
   })
 })
+
+function domainFrame(instanceID = 'app-a') {
+  return { v: 1, type: 'domain_record', ts: 1_800_000_000, data: {
+    instance_id: instanceID, record_type: 'sample', record_id: 'record-1', data_json: '{"count":1}',
+    updated_at: 1_800_000_000, created: true,
+  } }
+}
+
+describe('Application Plane 实时通知', () => {
+  it('新增与同键覆盖都发失效通知，不在实时 store 再存一份领域记录', () => {
+    connectLive()
+    lastSocket().simulateOpen()
+    lastSocket().simulateMessage(domainFrame())
+    expect(useLive.getState().domainRecord).toEqual({ instanceID: 'app-a', sequence: 1 })
+    const update = domainFrame()
+    update.data.created = false
+    update.data.data_json = '{"count":2}'
+    lastSocket().simulateMessage(update)
+    expect(useLive.getState().domainRecord).toEqual({ instanceID: 'app-a', sequence: 2 })
+    expect(useLive.getState().events).toEqual([])
+    expect(useLive.getState().devices).toEqual({})
+  })
+
+  it('快速交错实例通知都能被订阅者观察，不只剩最后一个实例', () => {
+    connectLive()
+    const seen: string[] = []
+    const stop = useLive.subscribe((state, previous) => {
+      if (state.domainRecord !== previous.domainRecord && state.domainRecord) seen.push(state.domainRecord.instanceID)
+    })
+    lastSocket().simulateMessage(domainFrame('app-a'))
+    lastSocket().simulateMessage(domainFrame('app-b'))
+    stop()
+    expect(seen).toEqual(['app-a', 'app-b'])
+  })
+
+  it('畸形载荷与不支持的信封版本不触发补读', () => {
+    connectLive()
+    const original = domainFrame()
+    for (const invalid of [
+      { instance_id: '' }, { record_type: null }, { record_id: '' }, { data_json: {} },
+      { created: undefined }, { created: 'false' }, { updated_at: 'bad' }, { version: 1 },
+    ]) lastSocket().simulateMessage({ ...original, data: { ...original.data, ...invalid } })
+    lastSocket().simulateMessage({ ...original, v: 2 })
+    lastSocket().simulateMessage({ ...original, data: null })
+    expect(useLive.getState().domainRecord).toBeNull()
+  })
+
+  it('连接代次只在当前连接成功时推进；旧连接的迟到通知/握手不能污染新会话', () => {
+    connectLive()
+    const first = lastSocket()
+    first.simulateOpen()
+    expect(useLive.getState().connectionEpoch).toBe(1)
+    first.simulateMessage(domainFrame())
+    disconnectLive()
+    expect(useLive.getState().domainRecord).toBeNull()
+    first.simulateOpen()
+    first.simulateMessage(domainFrame())
+    expect(useLive.getState().status).toBe('closed')
+    expect(useLive.getState().domainRecord).toBeNull()
+    expect(useLive.getState().connectionEpoch).toBe(1)
+    connectLive()
+    const second = lastSocket()
+    second.simulateOpen()
+    expect(useLive.getState().connectionEpoch).toBe(2)
+    first.simulateMessage(domainFrame('old-account'))
+    expect(useLive.getState().domainRecord).toBeNull()
+    second.simulateMessage(domainFrame('new-account'))
+    expect(useLive.getState().domainRecord?.instanceID).toBe('new-account')
+  })
+})

@@ -3,7 +3,7 @@
 // + 可选 Bearer 服务令牌（localStorage）。登录态事实源 = GET /api/auth/me（200 已登录 / 401 未登录）。
 // 任何受保护端点返回 401 → markUnauthenticated() 全局收敛（store/auth.ts → 路由守卫跳 /login）。
 import type {
-  AdapterView, CommandView, CreateTokenInput, CreatedToken, CreateUserInput, DeviceView, EdgeView,
+  AppDomainRecordsView, AppBindingsView, AppJobsView, AdapterView, CommandView, CreateTokenInput, CreatedToken, CreateUserInput, DeviceView, EdgeView,
   EventView, HealthView, MeResponse, OverviewView, PluginCatalogListResponse, PluginCatalogView,
   PluginInstanceActionRequest, PluginInstanceCreateRequest, PluginInstanceDeleteRequest,
   PluginInstanceListResponse, PluginInstanceUpdateRequest, PluginInstanceView,
@@ -89,9 +89,11 @@ async function req<T>(path: string, init?: RequestInit, opts?: ReqOptions): Prom
   try {
     // 会话 cookie（cp_session）由浏览器同源自动携带；显式声明以固定语义
     res = await fetch(path, { ...init, headers, credentials: 'same-origin' })
-  } catch {
+  } catch (error) {
+    if (init?.signal?.aborted) throw error
     throw new Error('无法连接 server（服务未启动或网络不可达）')
   }
+  init?.signal?.throwIfAborted()
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`
     let code: string | undefined
@@ -100,6 +102,7 @@ async function req<T>(path: string, init?: RequestInit, opts?: ReqOptions): Prom
       if (j?.error) msg = j.error
       code = extractErrorCode(j)
     } catch { /* 保持状态码信息 */ }
+    init?.signal?.throwIfAborted()
     if (res.status === 401 && !opts?.public) markUnauthenticated()
     throw new ApiError(res.status, msg, parseRetryAfter(res), code)
   }
@@ -185,7 +188,17 @@ export const api = {
   plugin: (pluginId: string) =>
     req<PluginCatalogView>(`/api/plugins/${encodeURIComponent(pluginId)}`),
 
-  // ---- 插件实例管理（冻结端点，路径不得改；错误按 PluginErr* 稳定码呈现）----
+  // ---- 应用只读数据：只传 desired.instance_id，不使用控制面 v.id / 节点前缀 ----
+  appRecords: (id: string, options: { recordType?: string; limit?: number; offset?: number } = {}, signal?: AbortSignal) => {
+    const params = new URLSearchParams({ limit: String(options.limit ?? 20), offset: String(options.offset ?? 0) })
+    if (options.recordType) params.set('record_type', options.recordType)
+    return req<AppDomainRecordsView>(`/api/plugin-instances/${encodeURIComponent(id)}/records?${params}`, { signal })
+  },
+  appBindings: (id: string, signal?: AbortSignal) =>
+    req<AppBindingsView>(`/api/plugin-instances/${encodeURIComponent(id)}/bindings`, { signal }),
+  appJobs: (id: string, signal?: AbortSignal) =>
+    req<AppJobsView>(`/api/plugin-instances/${encodeURIComponent(id)}/jobs`, { signal }),
+  // ---- 插件实例管理：v.id 是服务端返回的控制面键，保留原值（可能含节点前缀） ----
   pluginInstances: () => req<PluginInstanceListResponse>('/api/plugin-instances'),
   pluginInstance: (id: string) =>
     req<PluginInstanceView>(`/api/plugin-instances/${encodeURIComponent(id)}`),
