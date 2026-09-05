@@ -193,7 +193,8 @@ API（没有 `/api/pillbox/*`，永远不会有）。
 | `GET /api/plugin-instances/{id}/jobs` | viewer | 应用声明的 job 列表（运行态） |
 
 **records 查询参数**：`record_type`（可选过滤，形状同插件 id 段）、`limit`
-（默认 100，上限 1000）、`offset`（默认 0）。非法值显式 `400`。响应：
+（默认 100，传 0 也使用默认值，上限 1000）、`offset`（默认 0）。非法值显式 `400`。
+响应的 `limit` 始终是实际生效的条数上限。响应：
 
 ```json
 {
@@ -208,7 +209,8 @@ API（没有 `/api/pillbox/*`，永远不会有）。
 ```
 
 排序 `updated_at DESC, record_id`。`data_json` 原样透传应用写入的 JSON 字符串
-（消费端自行 parse）。
+（消费端自行 parse）。`records` / `jobs` 读取存储失败返回 `500`，未配置
+持久存储返回 `503`，不得把这些故障当成成功的空列表。
 
 **租户隔离语义**：记录按 `(tenant, instance)` 复合键过滤——跨租户查同一实例
 返回 `200 + 空列表`，与「实例不存在」同形，探测得不到存在性信息。
@@ -235,7 +237,9 @@ claim-then-dispatch（先持久推进 next_run_at 再派发）——重启零重
 ```
 
 `created:true` = 首次写入，`false` = 同键覆盖（upsert）。历史记录从 REST 补
-（同 `/api/events` 模式），快照不内嵌领域记录。
+（同 `/api/events` 模式），快照不内嵌领域记录。浏览器按
+`(instance_id, record_type, record_id)` 合流；建立或重建实时连接后重新读取 REST，
+补齐断线窗口，不依赖 WebSocket 重放。
 
 ### 5.6 插件写面稳定错误码
 
