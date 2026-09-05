@@ -36,6 +36,7 @@ const PROPERTY_LABEL: Record<string, string> = {
   mask: '掩码', mode: '模式', level: '设定值', enabled: '开关', count: '计数',
   status: '状态',
   commands: '命令数', pings: 'Ping 计数', ticks: '心跳计数', uptime_s: '运行时长',
+  seconds: '秒数',
 }
 
 /** 平台通用词汇表（展示回退第二层）：常见硬件名词的中文展示别名。

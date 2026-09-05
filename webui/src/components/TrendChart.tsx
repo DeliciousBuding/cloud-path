@@ -50,30 +50,25 @@ export function TrendChart({ points, unit, height = 112, kind = 'area' }: {
   const hi = Math.max(...values)
   const pad = (hi - lo) * 0.15 || Math.max(1, Math.abs(hi) * 0.1)
   const crossesZero = lo < 0 && hi > 0
-
-  const axis = (
-    <>
-      <XAxis
-        dataKey="t" tick={{ fontSize: 10, fill: 'var(--color-ink-3)' }} tickFormatter={timeTick}
-        minTickGap={48} axisLine={false} tickLine={false} height={18}
-      />
-      <YAxis
-        dataKey="v" width={38} tick={{ fontSize: 10, fill: 'var(--color-ink-3)' }}
-        tickFormatter={(v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1))}
-        domain={[lo - pad, hi + pad]} axisLine={false} tickLine={false}
-      />
-      <CartesianGrid stroke="var(--color-hairline)" strokeDasharray="2 4" vertical={false} />
-      <Tooltip content={<ChartTooltip unit={unit} />} isAnimationActive={false} />
-      {crossesZero && <ReferenceLine y={0} stroke="var(--color-hairline)" />}
-    </>
-  )
+  // 轴/网格/Tooltip 必须内联为图表直接子元素：recharts 2.15 不展开 fragment 变量形式的轴
 
   return (
     <div className="w-full" style={{ height }}>
       <ResponsiveContainer>
         {kind === 'line' ? (
           <LineChart data={data} margin={{ top: 6, right: 4, bottom: 0, left: -14 }}>
-            {axis}
+            <XAxis
+              dataKey="t" tick={{ fontSize: 10, fill: 'var(--color-ink-3)' }} tickFormatter={timeTick}
+              minTickGap={48} axisLine={false} tickLine={false} height={18}
+            />
+            <YAxis
+              dataKey="v" width={38} tick={{ fontSize: 10, fill: 'var(--color-ink-3)' }}
+              tickFormatter={(v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1))}
+              domain={[lo - pad, hi + pad]} axisLine={false} tickLine={false}
+            />
+            <CartesianGrid stroke="var(--color-hairline)" strokeDasharray="2 4" vertical={false} />
+            <Tooltip content={<ChartTooltip unit={unit} />} isAnimationActive={false} />
+            {crossesZero && <ReferenceLine y={0} stroke="var(--color-hairline)" />}
             <Line
               type="monotone" dataKey="v" stroke="var(--color-accent)" strokeWidth={1.8}
               dot={false} isAnimationActive={false}
@@ -87,7 +82,18 @@ export function TrendChart({ points, unit, height = 112, kind = 'area' }: {
                 <stop offset="100%" stopColor="var(--color-accent)" stopOpacity={0.02} />
               </linearGradient>
             </defs>
-            {axis}
+            <XAxis
+              dataKey="t" tick={{ fontSize: 10, fill: 'var(--color-ink-3)' }} tickFormatter={timeTick}
+              minTickGap={48} axisLine={false} tickLine={false} height={18}
+            />
+            <YAxis
+              dataKey="v" width={38} tick={{ fontSize: 10, fill: 'var(--color-ink-3)' }}
+              tickFormatter={(v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1))}
+              domain={[lo - pad, hi + pad]} axisLine={false} tickLine={false}
+            />
+            <CartesianGrid stroke="var(--color-hairline)" strokeDasharray="2 4" vertical={false} />
+            <Tooltip content={<ChartTooltip unit={unit} />} isAnimationActive={false} />
+            {crossesZero && <ReferenceLine y={0} stroke="var(--color-hairline)" />}
             <Area
               type="monotone" dataKey="v" stroke="var(--color-accent)" strokeWidth={1.8}
               fill={`url(#${gradientId})`} dot={false} isAnimationActive={false}

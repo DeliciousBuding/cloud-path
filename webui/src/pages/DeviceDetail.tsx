@@ -300,7 +300,12 @@ export default function DeviceDetail() {
                               <span className="min-w-0 truncate text-[12px] font-medium text-ink-2">
                                 {seriesLabel(k)}
                               </span>
-                              <span className="num shrink-0 text-[11px] text-ink-3">{pts.length} 点</span>
+                              <span className="flex shrink-0 items-baseline gap-1.5">
+                                <span className="num text-[13px] font-semibold tracking-tight">
+                                  {pts.length ? formatValue(pts[pts.length - 1].v) : '—'}
+                                </span>
+                                <span className="num text-[11px] text-ink-3">{pts.length} 点</span>
+                              </span>
                             </div>
                             <TrendChart points={pts} kind={chartKind} height={104} />
                           </div>
