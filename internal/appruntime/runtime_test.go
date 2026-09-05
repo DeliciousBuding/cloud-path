@@ -179,6 +179,44 @@ func TestRequestAndJobDispatch(t *testing.T) {
 	}
 }
 
+// TestStopInstanceStreamOnlySkipsShutdownRPC 锁定共享进程多实例的停机语义：
+// 只拆本实例会话（state → stopped），绝不发进程级 Shutdown RPC——参考应用
+// 把 Shutdown 当进程退出信号，共享进程上任何实例发送都会连带杀死兄弟。
+func TestStopInstanceStreamOnlySkipsShutdownRPC(t *testing.T) {
+	exec := &fakeExecutor{}
+	stream := newFakeStream()
+	cli := newFakeClient(testDescriptor(), stream)
+	rt := newTestRuntime(t, cli, exec, 0)
+	defer rt.Close(context.Background())
+	startTestInstance(t, rt, testSpec())
+
+	if err := rt.StopInstanceStreamOnly("inst-1"); err != nil {
+		t.Fatalf("StopInstanceStreamOnly: %v", err)
+	}
+	if n := cli.ShutdownCount(); n != 0 {
+		t.Fatalf("Shutdown RPC 次数 = %d, want 0（共享进程禁发进程级关停）", n)
+	}
+	inst, err := rt.GetInstance("inst-1")
+	if err != nil || inst.State != StateStopped {
+		t.Fatalf("state = %s err=%v, want stopped", inst.State, err)
+	}
+}
+
+// TestRuntimeCloseStopsInstance 锁定常规 Close/StopInstance 仍走优雅 Shutdown。
+func TestRuntimeCloseStopsInstance(t *testing.T) {
+	exec := &fakeExecutor{}
+	stream := newFakeStream()
+	cli := newFakeClient(testDescriptor(), stream)
+	rt := newTestRuntime(t, cli, exec, 0)
+	startTestInstance(t, rt, testSpec())
+	if err := rt.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if n := cli.ShutdownCount(); n < 1 {
+		t.Fatalf("Shutdown RPC 次数 = %d, want >=1（最后实例的正常关停仍应优雅）", n)
+	}
+}
+
 func TestGracefulApplicationShutdown(t *testing.T) {
 	exec := &fakeExecutor{}
 	stream := newFakeStream()

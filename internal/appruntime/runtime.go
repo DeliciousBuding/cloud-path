@@ -445,6 +445,34 @@ func (r *Runtime) StopInstance(ctx context.Context, instanceID, reason string, g
 	return r.stopRecord(ctx, rec, reason, grace)
 }
 
+// StopInstanceStreamOnly 只拆除本实例的会话（事件流 + 运行记录），不发
+// 进程级 Shutdown RPC。共享插件进程里停掉一个实例时必须用它：Shutdown
+// RPC 是参考应用的进程退出信号，对共享进程上的任一实例发送都会连带
+// 杀死全部兄弟实例（2026-09-05 jp1 生产实测：删除兄弟实例后 box-prod
+// 一起 died → state=failed 且无人自愈）。
+func (r *Runtime) StopInstanceStreamOnly(instanceID string) error {
+	rec, err := r.instance(instanceID)
+	if err != nil {
+		return err
+	}
+	rec.mu.Lock()
+	if rec.state == StateStopped {
+		rec.mu.Unlock()
+		return nil
+	}
+	rec.state = StateStopping
+	cancel := rec.cancel
+	rec.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	waitDone(context.Background(), rec.done, 2*time.Second)
+	rec.mu.Lock()
+	rec.state = StateStopped
+	rec.mu.Unlock()
+	return nil
+}
+
 // Close shuts down the runtime and every instance. It is idempotent.
 func (r *Runtime) Close(ctx context.Context) error {
 	r.mu.Lock()

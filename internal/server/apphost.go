@@ -279,7 +279,19 @@ func (h *AppHost) reconcile(ctx context.Context) error {
 	for id, r := range desired {
 		run, running := h.running[id]
 		if running && run.row.Revision == r.Revision {
-			continue // 无变化
+			// desired 无变化，但实际态可能已失活（共享进程被连带杀死、
+			// 插件进程崩溃后流断开等）。reconcile 必须自愈：否则 failed
+			// 实例永远躺着（2026-09-05 jp1 生产实测：box-prod failed 后
+			// 90 分钟无人重启，窗口照开但 job/事件全部丢弃）。
+			alive := false
+			if inst, err := h.rt.GetInstance(id); err == nil {
+				alive = inst.State == appruntime.StateRunning || inst.State == appruntime.StateStarting
+			}
+			if alive {
+				continue
+			}
+			h.logger.Warn("apphost instance not running, healing", "instance", id)
+			// 落到下面的 stop+start 路径重建会话
 		}
 		if running {
 			toStop = append(toStop, run.row)
@@ -302,13 +314,37 @@ func (h *AppHost) reconcile(ctx context.Context) error {
 
 func (h *AppHost) stopInstance(instanceID string) {
 	h.mu.Lock()
+	pluginID := ""
+	if run, ok := h.running[instanceID]; ok {
+		pluginID = run.row.PluginID
+	}
 	delete(h.running, instanceID)
 	delete(h.schedules, instanceID)
+	siblings := 0
+	if pluginID != "" {
+		for _, run := range h.running {
+			if run.row.PluginID == pluginID {
+				siblings++
+			}
+		}
+	}
 	h.mu.Unlock()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := h.rt.StopInstance(ctx, instanceID, "desired removed or disabled", 3*time.Second); err != nil {
-		h.logger.Warn("apphost stop instance", "instance", instanceID, "err", err)
+
+	if siblings == 0 {
+		// 该插件的最后一个实例：进程级优雅关停（Shutdown RPC 对参考应用
+		// 是进程退出信号，此时发送才是安全的）
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := h.rt.StopInstance(ctx, instanceID, "desired removed or disabled", 3*time.Second); err != nil {
+			h.logger.Warn("apphost stop instance", "instance", instanceID, "err", err)
+		}
+		return
+	}
+	// 共享进程还有兄弟实例：只拆本实例会话。绝不能发 Shutdown RPC——
+	// 2026-09-05 jp1 生产实测：删除兄弟实例触发进程退出，同进程的
+	// box-prod 被连带杀死 → state=failed。
+	if err := h.rt.StopInstanceStreamOnly(instanceID); err != nil {
+		h.logger.Warn("apphost stop instance (stream only)", "instance", instanceID, "err", err)
 	}
 }
 
