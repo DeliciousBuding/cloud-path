@@ -199,7 +199,7 @@ export default function DeviceDetail() {
 
       <header className="mb-5 flex flex-wrap items-center gap-3 fade-up">
         <StatusDot online={d.online} />
-        <h1 className="min-w-0 max-w-full truncate text-[22px] font-semibold tracking-[-0.01em]" title={d.id}>
+        <h1 className="min-w-0 max-w-full truncate text-[24px] font-semibold tracking-[-0.01em]" title={d.id}>
           {d.name || deviceId}
         </h1>
         {d.adapter && (

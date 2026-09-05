@@ -166,7 +166,7 @@ function rangeOf(obs: Observation, idx: CapabilityIndex): [number, number] | nul
 function ScalarText({ widget, value, emphasis }: { widget: WidgetKind; value: unknown; emphasis?: boolean }) {
   const text = widget === 'timestamp' ? formatTimestamp(value) : formatValue(value)
   return (
-    <span className={cn('num', emphasis ? 'block text-[26px] font-semibold leading-none tracking-[-0.01em]'
+    <span className={cn('num', emphasis ? 'metric block text-[30px] font-semibold leading-none'
       : 'text-[13px] font-medium')}>{text}</span>
   )
 }
@@ -425,7 +425,7 @@ export function ObsValue({ obs, idx = EMPTY_INDEX, tone = 'idle', size = 'tile',
   }
   const long = text.length > 12
   const valueCls = size === 'slot'
-    ? (long ? 'text-[15px] font-medium' : 'text-[22px] font-semibold')
+    ? (long ? 'text-[15px] font-medium' : 'text-[24px] font-semibold')
     : (long ? 'text-[13px] font-medium' : 'text-[15px] font-semibold')
   return (
     <span
@@ -509,7 +509,7 @@ export function MetricTile({ v }: { v: SummaryValue }) {
   return (
     <div className="card min-w-0 p-4 fade-up">
       <p className="min-w-0 truncate text-[12px] font-medium text-ink-3" title={v.title}>{v.label}</p>
-      <p className={cn('num mt-1.5 truncate text-[24px] font-semibold leading-none tracking-[-0.01em]', valueTone)}
+      <p className={cn('metric num mt-1.5 truncate text-[30px] font-semibold leading-none', valueTone)}
         title={v.title}>
         {v.text}
         {v.unit && <span className="ml-1 text-[12px] font-normal text-ink-3">{v.unit}</span>}

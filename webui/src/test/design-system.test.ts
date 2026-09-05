@@ -161,8 +161,8 @@ describe('light / dark token 对齐', () => {
   })
 })
 
-describe('字号刻度（type scale：10/11/12/13/14/15/22/24/26）', () => {
-  const SCALE = new Set(['10', '11', '12', '13', '14', '15', '22', '24', '26'])
+describe('字号刻度（type scale：10/11/12/13/14/15/22/24/26/28/30）', () => {
+  const SCALE = new Set(['10', '11', '12', '13', '14', '15', '22', '24', '26', '28', '30'])
 
   it('组件不使用刻度外的任意字号（半像素与孤儿尺寸是密度漂移源）', () => {
     const offenders = tsx.flatMap((f) => [...f.text.matchAll(/text-\[(\d+(?:\.\d+)?)px\]/g)]
@@ -226,8 +226,31 @@ describe('字距纪律（CJK 安全：负字距止于 -0.01em；mono 零字距�
     expect(offenders).toEqual([])
   })
 
-  it('正文基底 450 = CJK/暗画布光学墨度平价（可变轴真实实例，非合成粗）', () => {
+  it('正文基底 450 = CJK/浅色画布光学墨度平价（可变轴真实实例，非合成粗）', () => {
     expect(css).toContain('font-weight: 450;')
+  })
+
+  it('暗画布整条字重阶梯等差上移 50（450→500 / 500→550 / 600→650），相对差与层级不变', () => {
+    expect(css).toContain('.dark body { font-weight: 500; }')
+    expect(css).toContain('.dark .font-medium { font-weight: 550; }')
+    expect(css).toContain('.dark .font-semibold { font-weight: 650; }')
+  })
+})
+
+describe('CJK 标点与数字 display 刻度', () => {
+  it('正文 palt 收紧中文标点；数字面保留 tnum', () => {
+    expect(css).toContain('font-feature-settings: "palt";')
+    expect(css).toContain('font-feature-settings: "tnum", "palt";')
+  })
+
+  it('.metric 是拉丁负字距 -0.02em 的唯一出口，tsx 不得直接写该字距', () => {
+    expect(css).toMatch(/\.metric \{[^}]*letter-spacing: -0\.02em;/)
+    for (const f of tsx) expect(f.text, f.path).not.toMatch(/tracking-\[-0\.02em\]/)
+  })
+
+  it('标题断行平衡、散文避孤行（CJK 两行标题长短悬殊是廉价感来源）', () => {
+    expect(css).toContain('h1, h2, h3 { text-wrap: balance; }')
+    expect(css).toContain('p { text-wrap: pretty; }')
   })
 })
 

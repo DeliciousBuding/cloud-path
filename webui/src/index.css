@@ -94,14 +94,27 @@ body {
   background: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-sans);
-  /* 光学墨度平价：CJK 字形密度使 400 观感比同档拉丁细，暗画布灰度抗锯齿再削一笔。
-   * 450 是可变字重轴真实实例（Geist / Noto Sans SC 均 100-900），非合成粗；显式声明 500/600 的组件不受影响。 */
+  /* 光学墨度平价（浅色画布）：CJK 字形密度使 400 观感比同档拉丁细；450 是可变字重轴
+   * 真实实例（Geist / Noto Sans SC 均 100-900），非合成粗。暗色补偿见下方 .dark 块。 */
   font-weight: 450;
+  /* 中文标点比例宽度：全角逗号/句号默认占整字宽，界面短句显散；palt 只收紧标点、不碰汉字字面。 */
+  font-feature-settings: "palt";
   transition: background-color .3s ease, color .3s ease;
 }
 
+/* 暗画布光学墨度补偿：纯黑 + 灰度抗锯齿削掉约半个字重档的笔画——Noto Sans SC 在暗底
+ * 观感发飘的根因在此。暗色下整条字重阶梯等差上移 50（450→500 / 500→550 / 600→650），
+ * 相对差与层级不变；浅色画布不补偿。650 是暗色下 600 的光学等价实例，不是新语义档。 */
+.dark body { font-weight: 500; }
+.dark .font-medium { font-weight: 550; }
+.dark .font-semibold { font-weight: 650; }
+
 /* 数字等宽（时钟/漂移对齐不抖动） */
-.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum", "palt"; }
+
+/* 纯拉丁数字的 display 刻度（KPI / 观测大数字）：等宽数字 + Geist 数字负字距。
+ * -0.02em 是拉丁刻度，唯一出口是本类（内容恒为数字与单位）；CJK 文本负字距止于 -0.01em（守卫）。 */
+.metric { font-variant-numeric: tabular-nums; font-feature-settings: "tnum", "palt"; letter-spacing: -0.02em; }
 
 /* 卡片 */
 .card {
@@ -199,6 +212,10 @@ body {
 
 /* 表格：体单元格对齐行首基线（多行表头才底对齐）；Vercel 表格纪律 */
 table td, table th { vertical-align: baseline; }
+
+/* 标题断行平衡、散文避孤行：CJK 标题折两行时长短悬殊是廉价感来源 */
+h1, h2, h3 { text-wrap: balance; }
+p { text-wrap: pretty; }
 
 /* 尊重系统"减少动效"偏好 */
 @media (prefers-reduced-motion: reduce) {
