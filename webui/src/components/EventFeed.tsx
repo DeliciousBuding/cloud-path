@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { ChevronRight } from 'lucide-react'
 import type { EventView } from '@/lib/types'
 import { Badge } from './ui'
 import { useCapabilityIndex } from '@/hooks/useDescriptor'
+import { useDevices } from '@/hooks/useDevices'
+import { cn } from '@/lib/cn'
 import { eventLabel, eventTone, fmtDay, fmtDateTime, fmtTime, payloadLabel } from '@/lib/format'
 
 /**
@@ -19,6 +21,12 @@ export function EventFeed({ events, showDevice = true, limit = 30, dayGrouped = 
   /** 长历史模式：按天分组，组头承载日期、行内只留时刻（完整时间悬停可见）；紧凑列表不分组 */
   dayGrouped?: boolean
 }) {
+  // 设备列展示人话名字（机器 ID 收进 title）：与命令历史同一纪律
+  const { list: devices } = useDevices()
+  const names = useMemo(() => new Map(
+    devices.filter((d) => d.name).map((d) => [d.id, d.name as string]),
+  ), [devices])
+
   if (!events.length) {
     return <p className="py-6 text-center text-sm text-ink-3">暂无事件</p>
   }
@@ -27,7 +35,7 @@ export function EventFeed({ events, showDevice = true, limit = 30, dayGrouped = 
     return (
       <ul className="divide-y divide-hairline">
         {shown.map((e, i) => (
-          <EventRow key={`${e.id}-${i}`} e={e} first={i === 0} showDevice={showDevice} />
+          <EventRow key={`${e.id}-${i}`} e={e} first={i === 0} showDevice={showDevice} name={names.get(e.device_id)} />
         ))}
       </ul>
     )
@@ -47,7 +55,7 @@ export function EventFeed({ events, showDevice = true, limit = 30, dayGrouped = 
           <h4 className="mb-1 px-0.5 text-[11px] font-medium text-ink-3">{g.day}</h4>
           <ul className="divide-y divide-hairline">
             {g.items.map((e, i) => (
-              <EventRow key={`${e.id}-${gi}-${i}`} e={e} first={gi === 0 && i === 0} showDevice={showDevice} />
+              <EventRow key={`${e.id}-${gi}-${i}`} e={e} first={gi === 0 && i === 0} showDevice={showDevice} name={names.get(e.device_id)} />
             ))}
           </ul>
         </section>
@@ -56,7 +64,9 @@ export function EventFeed({ events, showDevice = true, limit = 30, dayGrouped = 
   )
 }
 
-function EventRow({ e, first, showDevice }: { e: EventView; first: boolean; showDevice: boolean }) {
+function EventRow({ e, first, showDevice, name }: {
+  e: EventView; first: boolean; showDevice: boolean; name?: string
+}) {
   const index = useCapabilityIndex()
   const [open, setOpen] = useState(false)
   const label = eventLabel(e.type, index, payloadLabel(e.payload))
@@ -70,10 +80,11 @@ function EventRow({ e, first, showDevice }: { e: EventView; first: boolean; show
         {showDevice && (
           <Link
             to={`/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`}
-            className="num truncate font-mono text-[11px] text-ink-3 transition-colors hover:text-accent"
-            title={e.device_id}
+            className={cn('min-w-0 max-w-[10rem] truncate text-[11px] text-ink-3 transition-colors hover:text-accent',
+              !name && 'num font-mono')}
+            title={`${e.device_id} · 查看设备`}
           >
-            {devId}
+            {name || devId}
           </Link>
         )}
         {hasPayload && (
