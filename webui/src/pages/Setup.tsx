@@ -272,13 +272,11 @@ export default function Setup() {
 
       {step === 2 && (
         <div className="space-y-4 text-center">
-          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-ok/12 text-ok">
-            <PartyPopper size={22} />
-          </span>
+          <span className="text-ok"><PartyPopper size={22} /></span>
           <div>
             <p className="text-[15px] font-semibold">设置完成</p>
             <p className="mt-1 text-[13px] leading-relaxed break-words text-ink-2">
-              管理员账号 <span className="num font-medium text-ink">{createdUser || username}</span> 已创建，
+              管理员账号 <span className="font-mono font-medium text-ink">{createdUser || username}</span> 已创建，
               并且你已经登录。实例现在处于全鉴权模式。
             </p>
           </div>

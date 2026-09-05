@@ -139,6 +139,29 @@ export default function DeviceDetail() {
     return `${entityTitle(ent)} · ${propertyLabel(prop, cap, capabilities)}`
   }
 
+  /** 序列单位：声明里的人话单位（°C / 秒…）；趋势图右上角直接标签与 Tooltip 共用。
+   *  键形态与 StateTile 火花线同一回落链：entity.property 点分 / 裸实体 id / 裸属性名 */
+  const seriesUnit = (k: string): string | undefined => {
+    const dot = k.lastIndexOf('.')
+    if (dot > 0) {
+      const ent = descriptor?.entities.find((e) => e.entity_id === k.slice(0, dot) || e.unique_key === k.slice(0, dot))
+      return unitLabel(ent?.observations?.[k.slice(dot + 1)]?.unit)
+    }
+    const ents = descriptor?.entities ?? []
+    // raw 键是适配器别名（如 uptime_s ↔ entity uptime）：精确匹配优先，前缀别名兜底
+    const exact = ents.find((e) => e.entity_id === k || e.unique_key === k)
+    const cand = exact ? [exact] : ents.filter((e) => k.startsWith(`${e.entity_id}_`))
+    for (const e of cand) {
+      const u = unitLabel(primaryObservation(e, capabilities)?.unit)
+      if (u) return u
+    }
+    for (const e of ents) {
+      const u = unitLabel(e.observations?.[k]?.unit)
+      if (u) return u
+    }
+    return undefined
+  }
+
   // 详情未到手时三态分明：加载中（骨架）/ 404（未注册空态）/ 其它失败（错误态 + 重试）。
   // 少一个加载态，首帧就会闪「设备未注册」；少一个 404 判定，「这台设备没接入」会被误报成「server 挂了」。
   if (!d) {
@@ -324,7 +347,7 @@ export default function DeviceDetail() {
                                 <span className="num text-[12px] text-ink-3">{pts.length} 点</span>
                               </span>
                             </div>
-                            <TrendChart points={pts} kind={chartKind} height={104} />
+                            <TrendChart points={pts} kind={chartKind} height={104} unit={seriesUnit(k)} />
                           </div>
                         )
                       })}

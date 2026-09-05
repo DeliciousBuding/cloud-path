@@ -60,17 +60,18 @@ export function TrendChart({ points, unit, height = 112, kind = 'area', zeroBase
   const lo = Math.min(...values)
   const hi = Math.max(...values)
   const pad = zeroBase ? Math.max(1, hi * 0.12) : (hi - lo) * 0.15 || Math.max(1, Math.abs(hi) * 0.1)
-  const domain: [number, number] = [zeroBase ? 0 : lo - pad, hi + pad]
+  // 诚实编码：非负序列（计数/时长…）域下限恒 0——负轴会凭空制造差异；真负值数据（温差等）才下探
+  const domain: [number, number] = [zeroBase || lo >= 0 ? 0 : lo - pad, hi + pad]
 
   const xAxis = (
     <XAxis
-      dataKey="t" tick={{ fontSize: 10, fill: 'var(--color-ink-3)' }} tickFormatter={xTick}
+      dataKey="t" tick={{ fontSize: 11, fill: 'var(--color-ink-3)', fontFamily: 'var(--font-mono)' }} tickFormatter={xTick}
       minTickGap={48} axisLine={false} tickLine={false} height={18}
     />
   )
   const yAxis = hideY ? null : (
     <YAxis
-      dataKey="v" width={38} tick={{ fontSize: 10, fill: 'var(--color-ink-3)' }}
+      dataKey="v" width={38} tick={{ fontSize: 11, fill: 'var(--color-ink-3)', fontFamily: 'var(--font-mono)' }}
       tickFormatter={(v: number) => (zeroBase ? String(Math.round(v)) : Number.isInteger(v) ? String(v) : v.toFixed(1))}
       domain={domain} axisLine={false} tickLine={false} allowDecimals={!zeroBase}
     />
@@ -81,7 +82,12 @@ export function TrendChart({ points, unit, height = 112, kind = 'area', zeroBase
   const margin = { top: 6, right: 4, bottom: 0, left: hideY ? 0 : -14 }
 
   return (
-    <div className="w-full" style={{ height }}>
+    <div className="relative w-full" style={{ height }}>
+      {/* 单位直接标签（Vercel: direct labels over legends）：有轴图右上角贴单位；
+        * hideY 形态由调用方 caption 说人话（如活动页「峰值 N 条/桶宽」），不重复 */}
+      {unit && !hideY && (
+        <span className="pointer-events-none absolute right-1 top-0 z-10 text-[12px] text-ink-3">{unit}</span>
+      )}
       <ResponsiveContainer>
         {kind === 'line' ? (
           <LineChart data={data} margin={margin}>
