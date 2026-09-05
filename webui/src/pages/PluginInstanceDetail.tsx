@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { BackLink, Badge, EmptyState, ErrorState, Panel } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
+import { ApplicationPlane } from '@/components/plugin/ApplicationPlane'
 import { InstanceSplit } from '@/components/plugin/InstanceRow'
 import { InstanceControls } from '@/components/plugin/InstanceControls'
 import { InstanceForm } from '@/components/plugin/InstanceForm'
@@ -12,6 +13,7 @@ import { ConfigTable, InstanceFacts, PermissionList, SecretRefList } from '@/com
 import { usePluginCatalog, usePluginInstance } from '@/hooks/usePlugins'
 import { syncState } from '@/lib/plugins'
 import { usePageTitle } from '@/hooks/usePageTitle'
+import { useAuth } from '@/store/auth'
 
 /**
  * 插件实例详情：期望态与实际态**分离**呈现，外加 Version / Edge / Trust / Permissions /
@@ -26,6 +28,7 @@ export default function PluginInstanceDetail() {
 
   const { plugins } = usePluginCatalog()
   const [editing, setEditing] = useState(false)
+  const readOnly = useAuth((s) => s.status === 'in' && s.user?.role === 'viewer')
 
   const catalog = useMemo(
     () => (instance ? plugins.find((p) => p.id === instance.desired.plugin_id) : undefined),
@@ -57,6 +60,49 @@ export default function PluginInstanceDetail() {
   }
 
   const s = syncState(instance)
+  const serverHosted = instance.edge_id === 'server'
+  const isApplication = serverHosted || catalog?.kind === 'application'
+  const lifecycleKey = JSON.stringify([instance.desired.revision, instance.desired.enabled,
+    instance.has_observed, instance.observed?.state, instance.observed?.restart_count])
+
+  const facts = (
+    <div className="grid items-start gap-5 lg:grid-cols-3">
+      <Panel className="lg:col-span-2"
+        title={<span className="flex items-center gap-1.5"><Boxes size={14} />期望态与实际态</span>}>
+        <InstanceSplit v={instance} />
+      </Panel>
+
+      <Panel title={<span className="flex items-center gap-1.5"><Settings2 size={14} />事实一览</span>}>
+        <InstanceFacts v={instance} catalog={catalog} />
+      </Panel>
+
+      <Panel title={<span className="flex items-center gap-1.5"><ShieldCheck size={14} />权限</span>}
+        right={catalog ? undefined : <Badge tone="idle">目录未提供</Badge>}>
+        <PermissionList
+          permissions={catalog?.permissions}
+          emptyHint={catalog
+            ? '该插件没有声明任何权限'
+            : '目录里没有这个插件的声明，无法核对权限。期望态与实际态不受影响。'}
+        />
+        {catalog?.verified && (
+          <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
+            该插件的安装物已通过验证（digest 一致），权限声明来自其 manifest。
+          </p>
+        )}
+      </Panel>
+
+      <Panel title={<span className="flex items-center gap-1.5"><KeyRound size={14} />密钥引用</span>}>
+        <SecretRefList refs={instance.desired.secret_refs} />
+      </Panel>
+
+      <Panel title={<span className="flex items-center gap-1.5"><SlidersHorizontal size={14} />配置（非敏感）</span>}>
+        <ConfigTable config={instance.desired.config} />
+        <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
+          配置里若出现 secret:// 引用，这里只显示引用名。插件的运行日志与本机路径不会出现在这一页。
+        </p>
+      </Panel>
+    </div>
+  )
 
   return (
     <>
@@ -72,68 +118,42 @@ export default function PluginInstanceDetail() {
           <Puzzle size={11} className="shrink-0" />
           <span className="min-w-0 truncate">{instance.desired.plugin_id || '未知插件'}</span>
         </span>
-        <Link to={`/edges/${encodeURIComponent(instance.edge_id)}`}
-          className="flex min-w-0 max-w-full items-center gap-1 font-mono text-[11px] text-ink-3 no-underline transition-colors hover:text-accent"
-          title={`边缘节点 ${instance.edge_id}`}>
-          <Server size={11} className="shrink-0" />
-          <span className="min-w-0 truncate">{instance.edge_id || '—'}</span>
-        </Link>
-        <Badge tone={instance.edge_online ? 'ok' : 'idle'}>
-          {instance.edge_online ? '边缘节点在线' : '边缘节点离线'}
-        </Badge>
+        {serverHosted ? <span className="flex items-center gap-1 text-xs text-ink-2"><Server size={13} />中心服务</span> : <>
+          <Link to={`/edges/${encodeURIComponent(instance.edge_id)}`}
+            className="flex min-w-0 max-w-full items-center gap-1 font-mono text-[11px] text-ink-3 no-underline transition-colors hover:text-accent"
+            title={`边缘节点 ${instance.edge_id}`}>
+            <Server size={11} className="shrink-0" />
+            <span className="min-w-0 truncate">{instance.edge_id || '—'}</span>
+          </Link>
+          <Badge tone={instance.edge_online ? 'ok' : 'idle'}>
+            {instance.edge_online ? '边缘节点在线' : '边缘节点离线'}
+          </Badge>
+        </>}
         <span className="ml-auto shrink-0"><Badge tone={s.tone}>{s.label}</Badge></span>
       </header>
 
-      {editing ? (
+      {isApplication && instance.desired.instance_id && (
+        <ApplicationPlane key={instance.id} instanceID={instance.desired.instance_id} lifecycleKey={lifecycleKey} />
+      )}
+
+      {editing && !readOnly ? (
         <Panel title={<span className="flex items-center gap-1.5"><SlidersHorizontal size={14} />编辑期望态</span>}
           className="mb-5">
           <InstanceForm mode="edit" instance={instance} catalog={plugins} onDone={() => setEditing(false)} />
         </Panel>
       ) : (
         <>
-          <div className="grid items-start gap-5 lg:grid-cols-3">
-            <Panel className="lg:col-span-2"
-              title={<span className="flex items-center gap-1.5"><Boxes size={14} />期望态与实际态</span>}>
-              <InstanceSplit v={instance} />
-            </Panel>
-
-            <Panel title={<span className="flex items-center gap-1.5"><Settings2 size={14} />事实一览</span>}>
-              <InstanceFacts v={instance} catalog={catalog} />
-            </Panel>
-
-            <Panel title={<span className="flex items-center gap-1.5"><ShieldCheck size={14} />权限</span>}
-              right={catalog ? undefined : <Badge tone="idle">目录未提供</Badge>}>
-              <PermissionList
-                permissions={catalog?.permissions}
-                emptyHint={catalog
-                  ? '该插件没有声明任何权限'
-                  : '目录里没有这个插件的声明，无法核对权限。期望态与实际态不受影响。'}
-              />
-              {catalog?.verified && (
-                <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
-                  该插件的安装物已通过验证（digest 一致），权限声明来自其 manifest。
-                </p>
-              )}
-            </Panel>
-
-            <Panel title={<span className="flex items-center gap-1.5"><KeyRound size={14} />密钥引用</span>}>
-              <SecretRefList refs={instance.desired.secret_refs} />
-            </Panel>
-
-            <Panel title={<span className="flex items-center gap-1.5"><SlidersHorizontal size={14} />配置（非敏感）</span>}>
-              <ConfigTable config={instance.desired.config} />
-              <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
-                配置里若出现 secret:// 引用，这里只显示引用名。插件的运行日志与本机路径不会出现在这一页。
-              </p>
-            </Panel>
-          </div>
+          {isApplication ? <details className="min-w-0">
+            <summary className="mb-4 cursor-pointer text-sm text-ink-2">配置与技术信息</summary>
+            {facts}
+          </details> : facts}
 
           <Panel className="mt-5" title="操作">
             <InstanceControls v={instance} catalog={catalog} showEdit={false}
               onEdit={() => setEditing(true)} />
-            <button type="button" className="btn btn-ghost mt-3" onClick={() => setEditing(true)}>
+            {!readOnly && <button type="button" className="btn btn-ghost mt-3" onClick={() => setEditing(true)}>
               <SlidersHorizontal size={13} /> 编辑期望态（版本 / 隔离 / 配置 / 密钥引用）
-            </button>
+            </button>}
           </Panel>
         </>
       )}

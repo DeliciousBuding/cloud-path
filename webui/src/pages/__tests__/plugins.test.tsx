@@ -232,7 +232,7 @@ describe('实例分区：desired 与 observed 永远分别渲染', () => {
     // secret 只有 handle 名，配置里的 secret:// 值也被折叠成名字
     expect(screen.getAllByText('db-password').length).toBeGreaterThan(0)
     expect(screen.queryByText('secret://db-password')).not.toBeInTheDocument()
-    expect(screen.getByText(/明文只在 Edge 本地/)).toBeInTheDocument()
+    expect(screen.getByText(/明文只在运行宿主/)).toBeInTheDocument()
   })
 
   it('详情页不泄漏本机绝对路径与插件 stdout 原文', async () => {

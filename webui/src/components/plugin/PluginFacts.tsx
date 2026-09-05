@@ -87,7 +87,7 @@ export function SecretRefList({ refs }: { refs: string[] | undefined }) {
         ))}
       </ul>
       <p className="mt-1.5 text-[12px] leading-relaxed text-ink-3">
-        只显示 handle 名。明文只在 Edge 本地的 secret provider 与插件进程内存中，Server 与浏览器都拿不到。
+        只显示引用名。明文只在运行宿主的密钥提供方与插件进程内存中，管理界面拿不到。
       </p>
     </div>
   )
@@ -118,8 +118,10 @@ export function InstanceFacts({ v, catalog }: { v: PluginInstanceView; catalog?:
   const rows: { k: string; node: ReactNode }[] = [
     { k: '实例 ID', node: <span className="num min-w-0 truncate font-mono" title={v.id}>{v.id}</span> },
     { k: '插件', node: <span className="num min-w-0 truncate font-mono" title={v.desired.plugin_id}>{v.desired.plugin_id || '—'}</span> },
-    { k: '边缘节点', node: <span className="num min-w-0 truncate font-mono" title={v.edge_id}>{v.edge_id || '—'}</span> },
-    { k: '边缘节点在线', node: v.edge_online ? '是' : '否' },
+    ...(v.edge_id === 'server' ? [{ k: '运行位置', node: '中心服务' }] : [
+      { k: '边缘节点', node: <span className="num min-w-0 truncate font-mono" title={v.edge_id}>{v.edge_id || '—'}</span> },
+      { k: '边缘节点在线', node: v.edge_online ? '是' : '否' },
+    ]),
     { k: '期望版本', node: v.desired.version || '—' },
     { k: '实际版本', node: v.has_observed ? (v.observed?.version || '未给出') : '未上报' },
     { k: '期望修订版', node: String(v.desired_revision) },
