@@ -89,7 +89,7 @@ export default function Plugins() {
             <Panel><RowSkeleton rows={4} /></Panel>
           ) : plugins.length === 0 ? (
             <EmptyState icon={<PackageOpen size={24} />} title="插件目录为空"
-              hint="还没有已安装的插件被登记到目录里。Edge 安装插件并上报后，这里会出现它的声明事实（版本、摘要、权限、贡献）。" />
+              hint="插件声明同步到目录后，这里会显示版本、摘要、权限和贡献。目录为空不代表没有已安装或运行的实例。" />
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
               {plugins.slice(0, LIST_CAP).map((p) => {
@@ -283,7 +283,7 @@ export default function Plugins() {
                 </p>
               )}
               <p className="text-[12px] leading-relaxed text-ink-3">
-                每行都分开写「期望态」与「实际态」：期望已启用不等于 Edge 已经运行。实际态缺席时明确显示「Edge 未上报」。
+                每行都分开写「期望态」与「实际态」：期望已启用不等于运行宿主已运行该实例。尚未收到实际态时，明确标注未上报。
               </p>
             </div>
           )}

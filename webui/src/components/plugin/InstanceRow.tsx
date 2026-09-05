@@ -17,6 +17,7 @@ export function InstanceRow({ v, catalog, onEdit }: {
   const s = syncState(v)
   const st = stateMeta(v.observed?.state)
   const hl = healthMeta(v.observed?.health)
+  const hostLocation = v.edge_id === 'server' ? '中心服务' : `边缘节点 ${v.edge_id || '—'}`
 
   return (
     <section className="card p-4 fade-up sm:p-5">
@@ -78,8 +79,8 @@ export function InstanceRow({ v, catalog, onEdit }: {
       </div>
 
       <p className="num mt-2.5 truncate text-[12px] text-ink-3"
-        title={`边缘节点 ${v.edge_id} · 最后回执 ${v.last_ack_at ? fmtDateTime(v.last_ack_at) : '尚无回执'}`}>
-        边缘节点 {v.edge_id || '—'} · 最后回执 {v.last_ack_at ? fmtDateTime(v.last_ack_at) : '尚无回执'}
+        title={`${hostLocation} · 最后回执 ${v.last_ack_at ? fmtDateTime(v.last_ack_at) : '尚无回执'}`}>
+        {hostLocation} · 最后回执 {v.last_ack_at ? fmtDateTime(v.last_ack_at) : '尚无回执'}
       </p>
 
       <div className="mt-3 border-t border-hairline pt-3">
