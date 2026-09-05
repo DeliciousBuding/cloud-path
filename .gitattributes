@@ -5,3 +5,11 @@
 go.mod text eol=lf
 go.sum text eol=lf
 *.sh text eol=lf
+
+# webui 前端源码与文档统一 LF：历史混行尾让首次修改的文件产生整文件 diff（行尾噪音）。
+# 二进制资产（woff2/svg）不加 text 属性，保持二进制安全。
+*.ts text eol=lf
+*.tsx text eol=lf
+*.css text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
