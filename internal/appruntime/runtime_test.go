@@ -263,17 +263,16 @@ func TestEventBackpressure(t *testing.T) {
 	event := func(id string) *sdkapplication.ApplicationEvent {
 		return &sdkapplication.ApplicationEvent{Union: &sdkapplication.InstanceLifecycle{State: id}}
 	}
-	if err := rt.DispatchEvent(ctx, "inst-1", event("one")); err != nil {
-		t.Fatalf("dispatch one: %v", err)
-	}
+	// 流开启时 startRecord 已自动派发初始 lifecycle 事件（writer 预注册修复），
+	// 它占用第一个阻塞的 Send 槽位；后续账目把它计入。
 	select {
 	case <-stream.sendStarted:
 	case <-time.After(time.Second):
 		t.Fatal("sender never started the blocked Send")
 	}
 
-	if err := rt.DispatchEvent(ctx, "inst-1", event("two")); err != nil {
-		t.Fatalf("dispatch two: %v", err)
+	if err := rt.DispatchEvent(ctx, "inst-1", event("one")); err != nil {
+		t.Fatalf("dispatch one: %v", err)
 	}
 
 	shortCtx, shortCancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
@@ -294,7 +293,7 @@ func TestEventBackpressure(t *testing.T) {
 		}
 		t.Fatalf("sent = %d, want >= %d", stream.SentCount(), n)
 	}
-	waitForSent(2)
+	waitForSent(2) // 初始 lifecycle + one
 
 	if err := rt.DispatchEvent(ctx, "inst-1", event("three")); err != nil {
 		t.Fatalf("dispatch three after release: %v", err)

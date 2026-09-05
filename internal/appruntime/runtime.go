@@ -218,6 +218,14 @@ func (r *Runtime) startRecord(ctx context.Context, rec *instanceRecord) error {
 	rec.mu.Lock()
 	rec.state = StateRunning
 	rec.mu.Unlock()
+
+	// 流开启即派发初始 Lifecycle 事件：应用普遍在首个业务事件到达时才登记
+	// 本实例的 effect writer，而 RunJob/RunRequest 可早于任何设备事件到达
+	// （如 AppHost 分钟循环驱动的 descriptor job）——没有这个首事件，此类
+	// 调用产生的 effect 会被「无 writer」路径静默丢弃（2026-09-05 button-
+	// indicator bootstrap 实测：heartbeat 声明在无人按键时永远无法送达）。
+	_ = r.DispatchEvent(context.Background(), rec.spec.PluginInstanceID,
+		&sdkapplication.ApplicationEvent{Union: &sdkapplication.InstanceLifecycle{State: "running"}})
 	return nil
 }
 
