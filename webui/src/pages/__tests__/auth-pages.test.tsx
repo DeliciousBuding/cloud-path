@@ -394,15 +394,25 @@ describe('路由守卫：me 是登录态唯一事实源', () => {
 })
 
 describe('认证页主题切换（脱离侧栏时仍可达）', () => {
-  it('切换按钮有可读名称，点击后 html 上挂 .dark 且不写内联色值', async () => {
+  it('与侧栏同一三态循环：跟随系统 → 浅色 → 深色 → 跟随系统，名称可读且 .dark 跟随', async () => {
     const user = userEvent.setup()
     routeWith(() => stubResponse(404, {}))
     renderPage(<Login />, '/login')
-    const toggle = screen.getByRole('button', { name: '切换为深色外观' })
+    // 缺省跟随系统（jsdom prefers-color-scheme=light）→ 下一态浅色
+    let toggle = screen.getByRole('button', { name: '切换为浅色外观' })
     expect(document.documentElement).not.toHaveClass('dark')
     await user.click(toggle)
+    expect(localStorage.getItem('cloudpath.theme')).toBe('light')
+    expect(document.documentElement).not.toHaveClass('dark')
+    toggle = screen.getByRole('button', { name: '切换为深色外观' })
+    await user.click(toggle)
+    expect(localStorage.getItem('cloudpath.theme')).toBe('dark')
     expect(document.documentElement).toHaveClass('dark')
-    expect(screen.getByRole('button', { name: '切换为浅色外观' })).toBeInTheDocument()
+    toggle = screen.getByRole('button', { name: '切换为跟随系统' })
+    await user.click(toggle)
+    expect(localStorage.getItem('cloudpath.theme')).toBe('system')
+    expect(document.documentElement).not.toHaveClass('dark')
+    // 颜色只走 token：卡片不写内联色值
     const card = screen.getByRole('heading', { level: 1, name: '登录 Cloudpath' }).closest('.card, div')
     expect(card?.getAttribute('style')).toBeNull()
   })

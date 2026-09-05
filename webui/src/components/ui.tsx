@@ -3,10 +3,10 @@
 // 颜色一律走 index.css token（Tailwind 主题类或 .btn/.input/.card 基类），组件内禁止裸色值。
 import { useId, useState } from 'react'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react'
-import { ArrowLeft, Moon, RefreshCw, Sun } from 'lucide-react'
+import { ArrowLeft, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
 import { Link } from 'react-router'
 import { cn } from '@/lib/cn'
-import { setTheme } from '@/lib/theme'
+import { getTheme, setTheme } from '@/lib/theme'
 import type { ThemeMode } from '@/lib/theme'
 import { Logo } from './Logo'
 
@@ -330,27 +330,31 @@ export function TextField({ label, hint, error, className, suffix, ...rest }: {
   )
 }
 
-/** 主题快速切换：供 Login/Setup 等脱离 Layout 侧栏的独立页使用 */
+/** 主题快速切换：供 Login/Setup 等脱离 Layout 侧栏的独立页使用。
+ *  与侧栏 ThemeControl 同一三态语义（浅色 → 深色 → 跟随系统）循环，
+ *  图标反映当前模式、文案预告下一模式——不让「跟随系统」在独立页被悄悄丢掉。 */
 export function ThemeToggle({ className }: { className?: string }) {
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
-  const label = dark ? '切换为浅色外观' : '切换为深色外观'
+  const [mode, setMode] = useState<ThemeMode>(() => getTheme())
+  const META: Record<ThemeMode, { icon: typeof Sun; label: string }> = {
+    light: { icon: Sun, label: '浅色外观' },
+    dark: { icon: Moon, label: '深色外观' },
+    system: { icon: Monitor, label: '跟随系统' },
+  }
+  const next: ThemeMode = mode === 'light' ? 'dark' : mode === 'dark' ? 'system' : 'light'
+  const Cur = META[mode].icon
   return (
     <button
       type="button"
-      title={label}
-      aria-label={label}
-      onClick={() => {
-        const next: ThemeMode = dark ? 'light' : 'dark'
-        setTheme(next)
-        setDark(!dark)
-      }}
+      title={`当前：${META[mode].label} · 点击切换为${META[next].label}`}
+      aria-label={`切换为${META[next].label}`}
+      onClick={() => { setTheme(next); setMode(next) }}
       className={cn(
         'flex h-8 w-8 items-center justify-center rounded-full border border-hairline',
         'bg-surface/70 text-ink-2 transition-colors hover:text-ink',
         className,
       )}
     >
-      {dark ? <Sun size={15} strokeWidth={2} /> : <Moon size={15} strokeWidth={2} />}
+      <Cur size={15} strokeWidth={2} />
     </button>
   )
 }
