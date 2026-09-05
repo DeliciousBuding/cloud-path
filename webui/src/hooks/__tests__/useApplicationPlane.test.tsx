@@ -3,7 +3,8 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useApplicationPlane } from '@/hooks/useApplicationPlane'
-import { useAuth } from '@/store/auth'
+import { confirmSession, useAuth } from '@/store/auth'
+import { setToken } from '@/lib/api'
 import { useLive } from '@/store/ws'
 import { appRecord, appResponse, appUser } from '@/test/application-plane'
 import { installFetch, stubResponse } from '@/test/http'
@@ -33,6 +34,50 @@ afterEach(() => {
 })
 
 describe('应用查询与单例实时通道的接线', () => {
+  it.each(['admin', 'viewer'] as const)('服务令牌 id=0 经 me 认证后可读三个分区并携带 Authorization（%s）', async (role) => {
+    useAuth.setState({ status: 'out', user: null })
+    const user = { ...appUser, id: 0, username: 'token', name: '服务令牌', role }
+    setToken('test-service-token')
+    const http = installFetch((url) => url === '/api/auth/me' ? stubResponse(200, { user }) : appResponse(url))
+    await confirmSession()
+    const { result } = renderHook(() => useApplicationPlane('app-a'), { wrapper: wrapper() })
+    await advance()
+    expect(result.current.canRead).toBe(true)
+    expect(result.current.records.data?.records).toEqual([appRecord()])
+    expect(result.current.bindings.data?.bindings).toHaveLength(1)
+    expect(result.current.jobs.data?.jobs).toHaveLength(1)
+    expect(result.current.jobs.data?.scheduled).toHaveLength(1)
+    for (const endpoint of ['records', 'bindings', 'jobs']) {
+      expect(http.to('/app-a/' + endpoint)).toHaveLength(1)
+    }
+    expect(http.to('/api/auth/me')).toHaveLength(1)
+    for (const call of http.calls) {
+      expect(call.headers.Authorization).toBe('Bearer test-service-token')
+      expect(call.credentials).toBe('same-origin')
+      expect(call.method).toBe('GET')
+    }
+  })
+
+  it.each([
+    { reason: '没有身份', user: null },
+    { reason: '缺少用户标识', user: { ...appUser, id: undefined } },
+    { reason: '用户标识为空', user: { ...appUser, id: null } },
+    { reason: '缺少租户', user: { ...appUser, tenant_id: undefined } },
+    { reason: '租户为空', user: { ...appUser, tenant_id: null } },
+    { reason: '租户为零', user: { ...appUser, tenant_id: 0 } },
+    { reason: '租户无效', user: { ...appUser, tenant_id: -1 } },
+  ])('已认证但$reason时不请求应用数据', async ({ user }) => {
+    const http = installFetch((url) => url === '/api/auth/me' ? stubResponse(200, { user }) : appResponse(url))
+    await confirmSession()
+    const { result } = renderHook(() => useApplicationPlane('app-a'), { wrapper: wrapper() })
+    await advance(20_000)
+    expect(result.current.canRead).toBe(false)
+    expect(result.current.records.data).toBeUndefined()
+    expect(result.current.bindings.data).toBeUndefined()
+    expect(result.current.jobs.data).toBeUndefined()
+    expect(http.calls.map((call) => call.url)).toEqual(['/api/auth/me'])
+  })
+
   it('紧邻的不同实例通知不会吞掉当前实例的更新；突发推送只补读一次', async () => {
     let record = appRecord('same-record', { count: 1 })
     const http = installFetch((url) => appResponse(url, { records: [record] }))

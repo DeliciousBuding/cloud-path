@@ -12,7 +12,8 @@ export function useApplicationPlane(instanceID: string, offset = 0, recordType =
   const tenantID = useAuth((s) => s.user?.tenant_id)
   const userID = useAuth((s) => s.user?.id)
   const authenticated = useAuth((s) => s.status === 'in')
-  const canRead = authenticated && Boolean(tenantID && userID && instanceID)
+  // 服务令牌没有账号 ID（id=0），仍可拥有已认证的租户身份。
+  const canRead = authenticated && (tenantID ?? 0) > 0 && userID != null && Boolean(instanceID)
   const status = useLive((s) => s.status)
   const scope = ['application-plane', tenantID, userID, instanceID] as const
   const previousLifecycle = useRef(lifecycleKey)
