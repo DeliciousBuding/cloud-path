@@ -261,10 +261,10 @@ observed.detail 的已知机器标记（server-apphost）经 `hostDetailLabel()`
 
 视觉纪律（Vercel design.md 反模式审查）：无限循环动效（脉冲光环/闪动）与玻璃拟态一律移除（default to stillness / 拒 glass）；
 普通元数据（适配器/串口/节点 ID）不用胶囊，降级为 mono 文本，只有状态保留胶囊；数值/时间列右对齐且表头同对齐；
-时间戳与机器标识用 Geist Mono（只标识本身进 mono，整句不进）；散文不用破折号。
+时间戳与机器标识用 Geist Mono（只标识本身进 mono，整句不进）；散文不用破折号。胶囊只承载状态/语义：分类、计数、权限 scope、命令集来源等普通元数据用纯文本（高权限 scope 用语义色文字而非胶囊）。
 
 命令参数校验契约（Vercel field 纪律）：保留用户原文，不静默剥离/截断；超长/控制字符在框下显式报错并禁用下发
-（argsError）；单行 input 的换行净化由 HTML spec 负责，前端不重复做。label 与长度上限说明在框外。
+（argsError）；单行 input 的换行净化由 HTML spec 负责，前端不重复做。label 与长度上限说明在框外。参数逐字下发（前端不做静默二次截断，后端门禁兜底拒收）；ack 失败缺 detail 用人话兜底，不露机器状态串。
 
 实时状态分组视图 = 紧凑瓦片矩阵（StateTile：2/3/4 列随宽度）：单标量不拉通栏行（标签↔值
 扫视距离是可读性成本）；布尔走胶囊、机器串（无 CJK/足够长/id 字符集）在默认视图以 mono 降级呈现、
@@ -272,24 +272,24 @@ observed.detail 的已知机器标记（server-apphost）经 `hostDetailLabel()`
 
 中文字体纪律：中文走自托管 Noto Sans SC 可变子集（OFL；GB2312 一级字表 ∪ 界面词汇 ∪ 中文标点，
 unicode-range 只接管 CJK，拉丁/数字仍走 Geist；可复现构建见 webui/scripts/build-cjk-subset.py）。
-tracking-tight 等负字距是拉丁刻度，中文显示文本不超 -0.01em，正文保持 0。
+负字距是拉丁刻度：全仓止于 CJK 安全值 -0.01em（`tracking-tight` 禁用，design-system 守卫）；mono 等宽面恒零字距（负字距破坏等宽网格）；中文正文保持 0。
 
-### 10.9 排版纪律（2026-09-05 增补）
+### 10.9 排版刻度与字重（2026-09-05 增补）
 
 - 正文基底 `font-weight: 450`：CJK 字形密度使 400 观感比同档拉丁细，暗画布灰度抗锯齿再削一笔；450 是 Geist / Noto Sans SC 可变字重轴真实实例，非合成粗。显式声明 500/600 的组件不受影响。
-- 负字距全仓止于 CJK 安全值 `-0.01em`：`tracking-tight`（-0.025em，拉丁刻度）禁用（design-system 测试守卫）；mono 等宽面恒零字距。
-- 阅读字号下限：键值行 / 按钮 / 侧栏导航 14px（13px 中文正文在暗画布显细显挤）；12px 只给元数据。
-- 主值渲染单一出口 `ObsValue`（webui SchemaRenderer）：布尔→状态胶囊、机器串→mono 降级、数值→tabular、单位经 `unitLabel` 人话化；实时状态瓦片 / 状态表行 / 药盒槽位复用同一出口，`size` 区分 tile/row/slot。页面内复制这套纪律即漂移开始。
+- 字号下限：非 mono 文字 ≥12px；mono 微文本（标识/raw JSON/版本号/SVG 轴刻度）11px；10px 全仓灭绝。阅读字号（键值行/按钮/侧栏导航）14px。均由 design-system 守卫执行。
 - 字符串型 KPI（版本号等）用 mono medium 渲染，不用 sans semibold：字符串不是量级。
-- 字号下限：非 mono 文字 ≥12px（CJK 元数据 11px 属 tiny gray copy，Vercel 明确拒绝）；mono 微文本（标识/raw JSON/版本号）11px；10px 全仓灭绝（design-system 守卫）。
-- 胶囊只承载状态/语义；分类、计数等普通元数据用纯文本（`text-[12px] text-ink-3`）。
-- 空态/错误态不用装饰性图标瓷砖（彩色圆底）：plain 语义色图标即可。
 - 散文行宽 ≤62ch：全宽长行是布局失败（About 等通栏段落加 max-w）。
-- 表格体单元格 `vertical-align: baseline`（对齐行首基线；多行表头才底对齐）。
-- 圆角刻度只有两档：tile 8px（卡内子面/内联 note/控件）与 card 12px（.card/浮层 Toast/品牌 logo）；rounded-2xl+ 灭绝（design-system 守卫）。
+
+### 10.10 形状与结构
+
+- 圆角刻度只有两档：tile 8px（卡内子面/内联 note/控件）与 card 12px（.card/浮层 Toast/品牌 logo）；rounded-2xl+ 灭绝（守卫）。
 - 列表在 Panel 内用 divider rows（`divide-y`），不套子卡（嵌套卡片是硬反模式）；Admin 用户/令牌行已行化。
-- 权限 scope 是元数据不是状态：mono 纯文本，高权限（admin/edge）用语义色文字而非胶囊。
-- 图表轴刻度 11px mono（时间戳/数值属机器文本，字号下限在 SVG 轴同样生效）；有轴图右上角贴单位直接标签（direct labels over legends），hideY 形态由调用方 caption 人话声明单位与峰值。
+- 表格体单元格 `vertical-align: baseline`（对齐行首基线；多行表头才底对齐）。
 - 长 ledger（活动页事件流/命令历史）本地滚动（max-h + overflow-y-auto），页面保持一屏可读；天分组头 sticky 于滚动容器顶，跨天查找不迷路。
-- 命令下发契约：用户参数原文逐字下发，校验单一出口＝ActionPanel `argsError`（显式报错＋禁用）；前端不做静默截断/剥离（后端门禁兜底拒收）；ack 失败缺 detail 用人话兜底，不露机器状态串；命令集来源是溯源元数据，纯文本不配胶囊。
+- 空态/错误态不用装饰性图标瓷砖（彩色圆底）：plain 语义色图标即可。
+
+### 10.11 页面组合
+
 - 概览是摘要不是 ledger：fleet 首屏只露 8 行＋「查看全部」出口（完整查找去 /devices）；同一计数/状态在一屏内只出现一处（页头不重复关注面板的计数）；关注行计数已在人话标题里，行首只留语义色点。
+- 概览主网格 `items-start`：面板自然高度、不互相拉伸制造卡内空腔（underfilled split 是布局失败）；留白归画布。
