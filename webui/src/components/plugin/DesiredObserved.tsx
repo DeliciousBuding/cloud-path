@@ -38,13 +38,13 @@ export function SyncBanner({ v }: { v: PluginInstanceView }) {
 }
 
 /** 一行事实：左标签右值，值必须可截断（390px 两栏时每栏只有约 10rem） */
-function Row({ k, v, tone }: { k: string; v: ReactNode; tone?: 'ok' | 'warn' | 'bad' | 'idle' | 'accent' }) {
+function Row({ k, v, tone, wrap }: { k: string; v: ReactNode; tone?: 'ok' | 'warn' | 'bad' | 'idle' | 'accent'; wrap?: boolean }) {
   const cls = tone === 'ok' ? 'text-ok' : tone === 'warn' ? 'text-warn'
     : tone === 'bad' ? 'text-bad' : tone === 'accent' ? 'text-accent' : undefined
   return (
     <div className="flex min-w-0 items-baseline justify-between gap-2 border-b border-hairline py-1.5 last:border-b-0">
       <dt className="shrink-0 text-[11px] text-ink-3">{k}</dt>
-      <dd className={`num min-w-0 truncate text-[12px] font-medium ${cls ?? ''}`}
+      <dd className={`num min-w-0 text-[12px] font-medium ${wrap ? 'break-words' : 'truncate'} ${cls ?? ''}`}
         title={typeof v === 'string' ? v : undefined}>
         {v}
       </dd>
@@ -97,7 +97,7 @@ export function DesiredObserved({ v }: { v: PluginInstanceView }) {
           <Row k="版本" v={v.desired.version || '—'} />
           <Row k="修订版" v={v.desired_revision} />
           <Row k="隔离" v={isolationLabel(v.desired.isolation)} />
-          <Row k="更新于" v={v.desired.updated_at ? fmtDateTime(v.desired.updated_at) : '—'} />
+          <Row wrap k="更新于" v={v.desired.updated_at ? fmtDateTime(v.desired.updated_at) : '—'} />
         </dl>
         <p className="mt-2 text-[11px] leading-relaxed text-ink-3">
           这一栏是「希望它变成什么样」，不代表边缘节点已经执行。
@@ -115,7 +115,7 @@ export function DesiredObserved({ v }: { v: PluginInstanceView }) {
               <Row k="健康" v={hl.label} tone={hl.tone === 'idle' ? undefined : hl.tone} />
               <Row k="重启" v={`${v.observed?.restart_count ?? 0} 次`}
                 tone={(v.observed?.restart_count ?? 0) > 0 ? 'warn' : undefined} />
-              <Row k="上报于" v={reportedAt ? fmtDateTime(reportedAt) : '—'} />
+              <Row wrap k="上报于" v={reportedAt ? fmtDateTime(reportedAt) : '—'} />
             </dl>
             {v.stale && (
               <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-warn/12 px-2.5 py-2 text-[11px] leading-relaxed text-warn">
