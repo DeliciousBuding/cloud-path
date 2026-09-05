@@ -4,7 +4,7 @@ import { ChevronRight } from 'lucide-react'
 import type { EventView } from '@/lib/types'
 import { Badge } from './ui'
 import { useCapabilityIndex } from '@/hooks/useDescriptor'
-import { eventLabel, eventTone, fmtDateTime, fmtTime, payloadLabel } from '@/lib/format'
+import { eventLabel, eventTone, fmtDay, fmtDateTime, fmtTime, payloadLabel } from '@/lib/format'
 
 /**
  * 事件流（新→旧）。来源可为 WS 实时环形缓冲、REST 历史，或两者合并结果。
@@ -22,12 +22,37 @@ export function EventFeed({ events, showDevice = true, limit = 30, fullTime = fa
   if (!events.length) {
     return <p className="py-6 text-center text-sm text-ink-3">暂无事件</p>
   }
+  const shown = events.slice(0, limit)
+  if (!fullTime) {
+    return (
+      <ul className="divide-y divide-hairline">
+        {shown.map((e, i) => (
+          <EventRow key={`${e.id}-${i}`} e={e} first={i === 0} showDevice={showDevice} fullTime={fullTime} />
+        ))}
+      </ul>
+    )
+  }
+  // 跨天历史按天分组：组头是扫读锚点（今天/昨天/日期），组内仍是单行高密度时间线
+  const groups: { day: string; items: EventView[] }[] = []
+  for (const e of shown) {
+    const day = fmtDay(e.ts)
+    const last = groups[groups.length - 1]
+    if (last && last.day === day) last.items.push(e)
+    else groups.push({ day, items: [e] })
+  }
   return (
-    <ul className="divide-y divide-hairline">
-      {events.slice(0, limit).map((e, i) => (
-        <EventRow key={`${e.id}-${i}`} e={e} first={i === 0} showDevice={showDevice} fullTime={fullTime} />
+    <div className="space-y-4">
+      {groups.map((g, gi) => (
+        <section key={`${g.day}-${gi}`}>
+          <h4 className="mb-1 px-0.5 text-[11px] font-medium text-ink-3">{g.day}</h4>
+          <ul className="divide-y divide-hairline">
+            {g.items.map((e, i) => (
+              <EventRow key={`${e.id}-${gi}-${i}`} e={e} first={gi === 0 && i === 0} showDevice={showDevice} fullTime={fullTime} />
+            ))}
+          </ul>
+        </section>
       ))}
-    </ul>
+    </div>
   )
 }
 

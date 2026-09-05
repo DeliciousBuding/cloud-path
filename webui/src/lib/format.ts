@@ -18,6 +18,24 @@ export function fmtDateTime(ts: number): string {
   return new Date(ts * 1000).toLocaleString('zh-CN', { hour12: false })
 }
 
+/**
+ * 时间线 day 组头：今天 / 昨天 / 「9月5日」/ 跨年补年份。
+ * 长列表按天分组后才有扫读锚点，否则几十行同构细线流等于没有结构。
+ */
+export function fmtDay(ts: number): string {
+  const d = new Date(ts * 1000)
+  const now = new Date()
+  const dayMs = 86_400_000
+  const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const diff = Math.round((startOf(now) - startOf(d)) / dayMs)
+  if (diff === 0) return '今天'
+  if (diff === 1) return '昨天'
+  const sameYear = d.getFullYear() === now.getFullYear()
+  return d.toLocaleDateString('zh-CN', sameYear
+    ? { month: 'long', day: 'numeric' }
+    : { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
 export function timeAgo(ts: number): string {
   if (!ts) return '—'
   const s = Math.max(0, Math.floor(Date.now() / 1000 - ts))
