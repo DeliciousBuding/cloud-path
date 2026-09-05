@@ -95,7 +95,7 @@ export function DeviceRow({ d }: { d: DeviceView }) {
       </div>
 
       {/* Last Seen（绝对时间） */}
-      <div className="num text-[11px] text-ink-3" title={seen ? fmtDateTime(seen) : '从未上报'}>
+      <div className="num min-w-0 truncate text-left font-mono text-[11px] text-ink-3 lg:text-right" title={seen ? fmtDateTime(seen) : '从未上报'}>
         <span className="lg:hidden">{d.online ? '更新于 ' : '最后见 '}</span>
         {seen ? fmtDateTime(seen) : '从未上报'}
       </div>
@@ -110,7 +110,7 @@ export function DeviceRowHead() {
       aria-hidden
       className="hidden gap-x-4 px-4 pb-2 text-[11px] font-medium text-ink-3 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_5.5rem_6.5rem_9.5rem] 2xl:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,1.4fr)_5.5rem_6.5rem_9.5rem]"
     >
-      <span>设备</span><span>边缘节点</span><span className="hidden 2xl:inline">关键读数</span><span>状态</span><span>趋势</span><span>最后见</span>
+      <span>设备</span><span>边缘节点</span><span className="hidden 2xl:inline">关键读数</span><span>状态</span><span>趋势</span><span className="text-right">最后见</span>
     </li>
   )
 }

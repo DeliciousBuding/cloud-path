@@ -180,7 +180,7 @@ export default function Layout() {
       </a>
 
       {/* 桌面侧栏 */}
-      <aside className="glass fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-hairline px-3 py-5 lg:flex">
+      <aside className="bg-surface fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-hairline px-3 py-5 lg:flex">
         <div className="px-1">
           <Brand />
         </div>
@@ -196,7 +196,7 @@ export default function Layout() {
       </aside>
 
       {/* 移动端顶栏 */}
-      <header className="glass sticky top-0 z-40 border-b border-hairline px-4 py-3 lg:hidden">
+      <header className="bg-surface sticky top-0 z-40 border-b border-hairline px-4 py-3 lg:hidden">
         <div className="flex items-center justify-between">
           <Brand />
           <ConnPill />

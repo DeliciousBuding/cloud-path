@@ -73,6 +73,8 @@ function EventRow({ e, first, showDevice, name }: {
   const tone = eventTone(e.type, index)
   const [edgeId, devId] = e.device_id.split('/')
   const hasPayload = !!e.payload && e.payload !== '{}'
+  // 行内摘要只取载荷里的人话字段（label/message/reason/text）：机器 key 不进默认视图
+  const summary = payloadLabel(e.payload)
   return (
     <li className={first ? 'fade-up' : undefined}>
       <div className="flex items-center gap-3 py-2">
@@ -87,17 +89,20 @@ function EventRow({ e, first, showDevice, name }: {
             {name || devId}
           </Link>
         )}
+        {summary && (
+          <span className="min-w-0 truncate text-[12px] text-ink-2" title={e.payload || undefined}>{summary}</span>
+        )}
         {hasPayload && (
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
-            className="flex shrink-0 items-center gap-0.5 text-[11px] text-ink-3 transition-colors hover:text-ink-2">
-            <ChevronRight size={11} className={open ? 'rotate-90 transition-transform' : 'transition-transform'} />
-            详情
+            aria-label={open ? '收起原始载荷' : '展开原始载荷'}
+            className="flex shrink-0 items-center text-ink-3 transition-colors hover:text-ink-2">
+            <ChevronRight size={12} className={open ? 'rotate-90 transition-transform' : 'transition-transform'} />
           </button>
         )}
-        <span className="num ml-auto shrink-0 text-[11px] text-ink-3" title={`${fmtDateTime(e.ts)} · ${e.type}`}>
+        <span className="num ml-auto shrink-0 font-mono text-[11px] text-ink-3" title={`${fmtDateTime(e.ts)} · ${e.type}`}>
           {fmtTime(e.ts)}
         </span>
       </div>

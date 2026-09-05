@@ -7,7 +7,6 @@
 import { Activity, Boxes, SlidersHorizontal, Stethoscope, Zap, type LucideIcon } from 'lucide-react'
 import { Badge, Panel, TONE_CLS, TONE_TEXT_CLS, type Tone } from './ui'
 import { cn } from '@/lib/cn'
-import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { Sparkline } from './Sparkline'
 import type { SeriesPoint } from '@/store/ws'
 import {
@@ -477,13 +476,12 @@ export function StateTile({ entity, idx = EMPTY_INDEX, nowSec, series }: {
 
 /** KPI 瓦片（设备概览首屏）：大字号只给真正的主指标；语义色只用于 warn/bad，其余保持中性 */
 export function MetricTile({ v }: { v: SummaryValue }) {
-  const reduced = useReducedMotion()
   const alert = v.tone === 'bad' || v.tone === 'warn'
   // 布尔主值（开关/触发与否…）是状态不是量级：甫胶囊。
   // 半屏大的「否」是排版错误；胶囊语义色只接 warn/bad，其余保持中性
   if (v.kind === 'boolean') {
     return (
-      <div className={cn('card min-w-0 p-4 fade-up', v.tone === 'bad' && !reduced && 'remind')}>
+      <div className="card min-w-0 p-4 fade-up">
         <p className="min-w-0 truncate text-[11px] font-medium text-ink-3" title={v.title}>{v.label}</p>
         <Badge tone={alert ? v.tone : 'idle'} className="mt-1.5">{v.text}</Badge>
       </div>
@@ -491,7 +489,7 @@ export function MetricTile({ v }: { v: SummaryValue }) {
   }
   const valueTone = alert ? TONE_TEXT_CLS[v.tone] : undefined
   return (
-    <div className={cn('card min-w-0 p-4 fade-up', v.tone === 'bad' && !reduced && 'remind')}>
+    <div className="card min-w-0 p-4 fade-up">
       <p className="min-w-0 truncate text-[11px] font-medium text-ink-3" title={v.title}>{v.label}</p>
       <p className={cn('num mt-1.5 truncate text-[24px] font-semibold leading-none tracking-tight', valueTone)}
         title={v.title}>

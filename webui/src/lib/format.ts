@@ -64,8 +64,11 @@ export function payloadLabel(payload: string | undefined): string | undefined {
   try {
     const o = JSON.parse(payload) as unknown
     if (o && typeof o === 'object' && !Array.isArray(o)) {
-      const v = (o as Record<string, unknown>).label
-      if (typeof v === 'string' && v.length > 0) return v
+      const rec = o as Record<string, unknown>
+      for (const k of ['label', 'message', 'reason', 'text']) {
+        const v = rec[k]
+        if (typeof v === 'string' && v.length > 0) return v
+      }
     }
   } catch { /* 载荷不是 JSON：交由上层按类型名展示 */ }
   return undefined

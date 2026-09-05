@@ -108,33 +108,7 @@ body {
 }
 .card-lift:hover { box-shadow: var(--shadow-lift); transform: translateY(-2px); }
 
-/* 毛玻璃顶栏/侧栏 */
-.glass {
-  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-}
-
-/* 在线状态点：呼吸光环 */
-.dot-online { position: relative; }
-.dot-online::after {
-  content: ""; position: absolute; inset: -3px; border-radius: 999px;
-  background: var(--color-ok); opacity: .35; animation: pulse-ring 2s ease-out infinite;
-}
-@keyframes pulse-ring {
-  0% { transform: scale(.6); opacity: .5; }
-  70% { transform: scale(1.6); opacity: 0; }
-  100% { opacity: 0; }
-}
-
-/* 提醒中：轻微闪动 */
-@keyframes remind-glow {
-  0%, 100% { opacity: 1; }
-  50% { opacity: .55; }
-}
-.remind { animation: remind-glow 1.2s ease-in-out infinite; }
-
-/* 页面进入 */
+/* 页面进入（仅一次性连贯动效；循环/脉冲/玻璃拟态已按 Vercel「default to stillness」与「拒 glass」移除） */
 @keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .fade-up { animation: fade-up .35s cubic-bezier(.25,.1,.25,1) both; }
 

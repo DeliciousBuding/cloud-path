@@ -103,7 +103,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
             <div className="mt-3 rounded-xl bg-surface-2 p-3">
               <PermissionList
                 permissions={catalog?.permissions}
-                emptyHint="目录里没有这个插件的权限声明，无法核对 —— 建议先确认插件来源再重试。"
+                emptyHint="目录里没有这个插件的权限声明，无法核对，建议先确认插件来源再重试。"
               />
             </div>
           </>

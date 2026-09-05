@@ -21,7 +21,7 @@ import { useDeviceDescriptor } from '@/hooks/useDescriptor'
 import {
   entityTitle, formatTimestamp, formatValue, metricTiles, observationsOf, primaryObservation,
   propertyLabel,
-  qualityTone, summarizeRaw, widgetFor, QUALITY_LABEL,
+  qualityTone, summarizeRaw, unitLabel, widgetFor, QUALITY_LABEL,
 } from '@/lib/descriptor'
 import type { SummaryValue } from '@/lib/descriptor'
 import { eventLabel, fmtDateTime, mergeEvents, optionLabel, payloadLabel, timeAgo } from '@/lib/format'
@@ -177,18 +177,24 @@ export default function DeviceDetail() {
         <h1 className="min-w-0 max-w-full truncate text-[22px] font-semibold tracking-tight" title={d.id}>
           {d.name || deviceId}
         </h1>
-        <Badge tone="accent" className="max-w-full truncate">{d.adapter || '未知适配器'}</Badge>
+        {d.adapter && (
+          <span className="min-w-0 truncate font-mono text-[11px] text-ink-3" title={`适配器 ${d.adapter}`}>{d.adapter}</span>
+        )}
         {descriptor
           ? <StatusBadge status={descriptor.status} />
           : <Badge tone={d.online ? 'ok' : 'idle'}>{d.online ? '在线' : '离线'}</Badge>}
-        {d.port && <Badge tone="idle" className="max-w-full truncate"><Terminal size={11} className="shrink-0" />{d.port}</Badge>}
+        {d.port && (
+          <span className="flex min-w-0 items-center gap-1 truncate font-mono text-[11px] text-ink-3" title={`串口 ${d.port}`}>
+            <Terminal size={11} className="shrink-0" />{d.port}
+          </span>
+        )}
         <Link to={`/edges/${encodeURIComponent(d.edge_id)}`}
-          className="badge max-w-full bg-ink-3/10 text-ink-2 no-underline transition-colors hover:bg-accent/10 hover:text-accent"
+          className="flex min-w-0 max-w-full items-center gap-1 text-[11px] text-ink-3 no-underline transition-colors hover:text-accent"
           title={`边缘节点 ${d.edge_id}`}>
           <RadioTower size={11} className="shrink-0" />
           <span className="min-w-0 truncate">{d.edge_id}</span>
         </Link>
-        <span className="num ml-auto text-xs text-ink-3" title={`设备键 ${d.id}`}>
+        <span className="num ml-auto truncate font-mono text-[11px] text-ink-3" title={`设备键 ${d.id}`}>
           {d.online ? `更新于 ${timeAgo(d.updated_at)}` : `最后见 ${timeAgo(d.last_seen)}`}
         </span>
       </header>
@@ -479,9 +485,9 @@ function StateTable({ descriptor, idx, nowSec }: {
           <tr className="border-b border-hairline text-[11px] text-ink-3">
             <th className="px-3 py-2 font-medium">实体</th>
             <th className="px-3 py-2 font-medium">属性</th>
-            <th className="px-3 py-2 font-medium">当前值</th>
+            <th className="px-3 py-2 text-right font-medium">当前值</th>
             <th className="px-3 py-2 font-medium">质量</th>
-            <th className="px-3 py-2 font-medium">接收</th>
+            <th className="px-3 py-2 text-right font-medium">接收</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-hairline">
@@ -491,16 +497,16 @@ function StateTable({ descriptor, idx, nowSec }: {
               <td className="max-w-[10rem] truncate px-3 py-1.5 text-ink-2">
                 {propertyLabel(o.property, o.capability, idx)}
               </td>
-              <td className="num px-3 py-1.5 font-medium">
+              <td className="num px-3 py-1.5 text-right font-medium">
                 {widgetFor(o, idx) === 'timestamp' ? formatTimestamp(o.value) : formatValue(o.value)}
-                {o.unit && <span className="ml-0.5 font-normal text-ink-3">{o.unit}</span>}
+                {o.unit && <span className="ml-0.5 font-normal text-ink-3">{unitLabel(o.unit)}</span>}
               </td>
               <td className="px-3 py-1.5">
                 {o.quality && o.quality !== 'good'
                   ? <Badge tone={qualityTone(o.quality)}>{QUALITY_LABEL[o.quality]}</Badge>
                   : <span className="text-ink-3">—</span>}
               </td>
-              <td className="num whitespace-nowrap px-3 py-1.5 text-[11px] text-ink-3">
+              <td className="num whitespace-nowrap px-3 py-1.5 text-right font-mono text-[11px] text-ink-3">
                 {o.received_at ? formatTimestamp(o.received_at) : '—'}
                 {o.received_at && isStaleObs(o, nowSec) && (
                   <Badge tone="warn" className="ml-1"> stale</Badge>

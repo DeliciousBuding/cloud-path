@@ -30,7 +30,7 @@ export function ToastViewport() {
         return (
           <div
             key={t.id}
-            className="glass pointer-events-auto flex items-start gap-3 rounded-2xl border border-hairline px-4 py-3 text-left shadow-lift fade-up"
+            className="bg-surface pointer-events-auto flex items-start gap-3 rounded-2xl border border-hairline px-4 py-3 text-left shadow-lift fade-up"
           >
             <Icon size={17} className={cn('mt-0.5 shrink-0', meta.cls)} strokeWidth={2} aria-hidden />
             <span className="min-w-0 flex-1">

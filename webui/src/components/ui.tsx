@@ -34,7 +34,7 @@ export function StatusDot({ online, className }: { online: boolean; className?: 
   return (
     <span
       className={cn('inline-block h-2 w-2 shrink-0 rounded-full',
-        online ? 'bg-ok dot-online' : 'bg-idle/50', className)}
+        online ? 'bg-ok' : 'bg-idle/50', className)}
     />
   )
 }

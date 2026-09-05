@@ -50,7 +50,7 @@ export function TrendChart({ points, unit, height = 112, kind = 'area', zeroBase
   if (points.length < 2) {
     return (
       <p className="py-8 text-center text-xs text-ink-3">
-        采样中——积累两个数据点后显示趋势{unit ? `（${unit}）` : ''}
+        采样中：积累两个数据点后显示趋势{unit ? `（${unit}）` : ''}
       </p>
     )
   }

@@ -259,6 +259,10 @@ resolver 均为纯函数并有确定性单测（fallback 顺序、脏数据降�
 AppHost 的 appruntime.InstanceState（小写 running/stopping/failed…，internal/appruntime/types.go）；
 observed.detail 的已知机器标记（server-apphost）经 `hostDetailLabel()` 人话化；未知值原样呈现，不猜。
 
+视觉纪律（Vercel design.md 反模式审查）：无限循环动效（脉冲光环/闪动）与玻璃拟态一律移除（default to stillness / 拒 glass）；
+普通元数据（适配器/串口/节点 ID）不用胶囊，降级为 mono 文本，只有状态保留胶囊；数值/时间列右对齐且表头同对齐；
+时间戳与机器标识用 Geist Mono（只标识本身进 mono，整句不进）；散文不用破折号。
+
 实时状态分组视图 = 紧凑瓦片矩阵（StateTile：2/3/4 列随宽度）：单标量不拉通栏行（标签↔值
 扫视距离是可读性成本）；布尔走胶囊、机器串（无 CJK/足够长/id 字符集）在默认视图以 mono 降级呈现、
 完整值进 title，表格视图不降级；次要观测折进 details。

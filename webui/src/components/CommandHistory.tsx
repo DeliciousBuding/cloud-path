@@ -53,7 +53,7 @@ export function CommandHistory({ deviceId, actions, limit, footer }: {
                     {c.result}
                   </span>
                 )}
-                <span className="num ml-auto shrink-0 text-[11px] text-ink-3"
+                <span className="num ml-auto shrink-0 font-mono text-[11px] text-ink-3"
                   title={c.acked_at ? `回执 ${fmtDateTime(c.acked_at)}` : fmtDateTime(c.created_at)}>
                   {fmtTime(c.created_at)}
                 </span>
