@@ -31,8 +31,8 @@ export function CommandHistory({ deviceId, actions }: { deviceId: string; action
             const st = cmdStatusMeta(c.status)
             const meta = cmdMeta(c.cmd, actions)
             return (
-              // 390px：徽标与时间不收缩，命令名/参数/结果三段各自 truncate，整行不撑宽容器
-              <li key={c.id} className="flex min-w-0 items-center gap-3 py-2">
+              // 390px：可换行 + 各段 truncate（nowrap 行的 min-content 会把外层网格轨道撑宽）
+              <li key={c.id} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 py-2">
                 <Badge tone={st.tone} className="shrink-0">{st.label}</Badge>
                 <span className="min-w-0 truncate text-xs font-medium"
                   title={`${meta.hint || c.cmd}${c.args ? ` · args: ${c.args}` : ''}${c.result && st.tone === 'ok' ? ` · 回执: ${c.result}` : ''}`}>
@@ -40,7 +40,7 @@ export function CommandHistory({ deviceId, actions }: { deviceId: string; action
                 </span>
                 {/* 回执原文是机器噪音：成功收进 title；失败原因才是人话信息，行内红字呈现 */}
                 {c.result && st.tone !== 'ok' && (
-                  <span className="truncate text-[11px] text-bad" title={c.result}>
+                  <span className="min-w-0 truncate text-[11px] text-bad" title={c.result}>
                     {c.result}
                   </span>
                 )}
