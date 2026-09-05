@@ -177,6 +177,24 @@ describe('StateMatrix 分组', () => {
     expect(screen.getByText('26.5')).toBeInTheDocument()
   })
 
+  it('StateMatrix 紧凑瓦片：布尔走胶囊、机器串在默认视图 mono 降级（等宽=机器线索，完整值进 title）', () => {
+    const withId = makeDescriptor({
+      entities: [{
+        entity_id: 'e-node', unique_key: 'node', category: 'diagnostic', capabilities: [UNKNOWN_CAP],
+        observations: { node: { capability: UNKNOWN_CAP, property: 'node', value: 'reference-demo-device' } },
+      }] as DescriptorEntity[],
+    })
+    const { container } = render(<StateMatrix descriptor={withId} idx={idx} />)
+    const mono = container.querySelector('li .font-mono')
+    expect(mono?.textContent).toBe('reference-demo-device')
+    expect(mono?.getAttribute('title')).toContain('reference-demo-device')
+  })
+
+  it('StateMatrix 布尔主值渲染为胶囊（与概览 KPI 同一纪律：状态不是量级）', () => {
+    render(<StateMatrix descriptor={descriptor} idx={idx} />)
+    expect(screen.getByText('否').className).toContain('badge')
+  })
+
   it('没有 Entity 的 Descriptor 有明确空态', () => {
     render(<StateMatrix descriptor={makeDescriptor({ entities: [] })} idx={idx} />)
     expect(screen.getByText('设备声明里没有可呈现的观测项')).toBeInTheDocument()

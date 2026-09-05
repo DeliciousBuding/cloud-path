@@ -259,6 +259,10 @@ resolver 均为纯函数并有确定性单测（fallback 顺序、脏数据降�
 AppHost 的 appruntime.InstanceState（小写 running/stopping/failed…，internal/appruntime/types.go）；
 observed.detail 的已知机器标记（server-apphost）经 `hostDetailLabel()` 人话化；未知值原样呈现，不猜。
 
+实时状态分组视图 = 紧凑瓦片矩阵（StateTile：2/3/4 列随宽度）：单标量不拉通栏行（标签↔值
+扫视距离是可读性成本）；布尔走胶囊、机器串（无 CJK/足够长/id 字符集）在默认视图以 mono 降级呈现、
+完整值进 title，表格视图不降级；次要观测折进 details。
+
 中文字体纪律：中文走自托管 Noto Sans SC 可变子集（OFL；GB2312 一级字表 ∪ 界面词汇 ∪ 中文标点，
 unicode-range 只接管 CJK，拉丁/数字仍走 Geist；可复现构建见 webui/scripts/build-cjk-subset.py）。
 tracking-tight 等负字距是拉丁刻度，中文显示文本不超 -0.01em，正文保持 0。

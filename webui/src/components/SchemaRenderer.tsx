@@ -14,7 +14,7 @@ import {
   CATEGORY_LABEL, CATEGORY_ORDER, EMPTY_INDEX, QUALITY_LABEL, capabilityLabel, commandLabel,
   entityTitle, formatTimestamp, formatValue, humanize, isScalar, observationsOf, parseCapabilityRef,
   pickDisplayField, propertyLabel, presentationOf, primaryObservation, qualityTone, rawRows,
-  resolveCapability, statusMeta, toneFromHint, widgetFor,
+  resolveCapability, statusMeta, toneFromHint, unitLabel, widgetFor,
 } from '@/lib/descriptor'
 import type { CapabilityIndex, SummaryValue, WidgetKind } from '@/lib/descriptor'
 import type {
@@ -361,6 +361,10 @@ export function StateRow({ entity, idx = EMPTY_INDEX, nowSec, series }: {
  * 实时状态矩阵：按 Descriptor category 分组，每组一个面板、每个实体一行。
  * 组头只有组名（实体计数是调试噪音，不是用户信息）；值列右对齐，扫读时眼睛只走两条线。
  */
+/** 机器串判定（通用形态启发式）：无 CJK、足够长、只含 id 字符集 → 视为机器标识，
+ *  默认视图里用 mono 降级呈现（等宽 = 「这是机器串」的视觉线索），完整值进 title、表格视图不降级 */
+const MACHINEISH = /^[a-z0-9][a-z0-9._-]{7,}$/
+
 export function StateMatrix({ descriptor, idx = EMPTY_INDEX, categories, nowSec, series, className }: {
   descriptor: DeviceDescriptor
   idx?: CapabilityIndex
@@ -380,14 +384,94 @@ export function StateMatrix({ descriptor, idx = EMPTY_INDEX, categories, nowSec,
       {groups.map(({ category, entities }) => (
         <section key={category}>
           <h3 className="mb-1.5 px-0.5 text-[12px] font-medium text-ink-3">{CATEGORY_LABEL[category]}</h3>
-          <ul className="card m-0 list-none divide-y divide-hairline p-0">
+          {/* 紧凑瓦片矩阵：单标量不拉通栏行（标签↔值扫视距离是可读性成本）；
+              列数随宽度递增，390 两列、桌面三列、宽屏四列 */}
+          <ul className="m-0 grid list-none grid-cols-2 gap-2.5 p-0 md:grid-cols-3 xl:grid-cols-4">
             {entities.map((e) => (
-              <StateRow key={e.entity_id || e.unique_key} entity={e} idx={idx} nowSec={nowSec} series={series} />
+              <StateTile key={e.entity_id || e.unique_key} entity={e} idx={idx} nowSec={nowSec} series={series} />
             ))}
           </ul>
         </section>
       ))}
     </div>
+  )
+}
+
+/** 实时状态瓦片：标签 + 主值 + 火花线一眼扫完；布尔走胶囊、机器串走 mono 降级、
+ *  次要观测折进 details（默认视图只留主值） */
+export function StateTile({ entity, idx = EMPTY_INDEX, nowSec, series }: {
+  entity: DescriptorEntity
+  idx?: CapabilityIndex
+  nowSec?: number
+  series?: Record<string, SeriesPoint[]>
+}) {
+  const obs = observationsOf(entity)
+  const primary = primaryObservation(entity, idx)
+  const rest = obs.filter((o) => o !== primary)
+  const q = worstQuality(obs)
+  const stale = nowSec !== undefined && obs.some((o) => isStaleObs(o, nowSec))
+  // 序列键形态因适配器而异（entity.property 点分 / 裸属性名 / 实体名）：逐级回落
+  const pts = primary
+    ? (series?.[`${entity.entity_id}.${primary.property}`]
+      ?? series?.[primary.property]
+      ?? series?.[entity.entity_id])
+    : undefined
+  const widget = primary ? widgetFor(primary, idx) : 'text'
+  const text = primary
+    ? (widget === 'timestamp' ? formatTimestamp(primary.value) : formatValue(primary.value))
+    : ''
+  const tone = primary
+    ? (toneFromHint(presentationOf(primary.capability, idx)) ?? qualityTone(primary.quality))
+    : 'idle'
+  const alert = tone === 'bad' || tone === 'warn'
+  const machineish = widget === 'text' && MACHINEISH.test(text)
+  const capTitle = primary ? `${capabilityLabel(primary.capability, idx)} · ${primary.property}` : undefined
+  return (
+    <li className="card min-w-0 p-3">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <span className="truncate text-[11px] font-medium text-ink-3" title={entity.name || entity.unique_key}>
+          {entityTitle(entity)}
+        </span>
+        <QualityDot q={q} />
+        {stale && <Badge tone="warn" className="shrink-0">未更新</Badge>}
+      </div>
+      <div className="mt-1.5 flex min-w-0 items-center justify-between gap-2">
+        {primary ? (
+          widget === 'boolean' ? (
+            <span className="min-w-0 truncate" title={capTitle}>
+              <Badge tone={alert ? tone : 'idle'}>{text}</Badge>
+            </span>
+          ) : machineish ? (
+            <span className="min-w-0 truncate font-mono text-[11px] text-ink-2" title={`${text} · ${capTitle}`}>
+              {text}
+            </span>
+          ) : (
+            <span
+              className={cn('num min-w-0 truncate tracking-tight',
+                text.length > 12 ? 'text-[13px] font-medium' : 'text-[15px] font-semibold')}
+              title={capTitle}>
+              {text}
+              {primary.unit && <span className="ml-1 text-[11px] font-normal text-ink-3">{unitLabel(primary.unit)}</span>}
+            </span>
+          )
+        ) : (
+          <span className="text-[12px] text-ink-3">暂无数据</span>
+        )}
+        {pts && pts.length >= 2 && (
+          <span className="w-14 shrink-0"><Sparkline points={pts} height={20} /></span>
+        )}
+      </div>
+      {rest.length > 0 && (
+        <details className="mt-1.5">
+          <summary className="cursor-pointer select-none text-[11px] text-ink-3 transition-colors hover:text-ink-2">
+            其余 {rest.length} 项
+          </summary>
+          <div className="mt-2">
+            <ObservationTable observations={rest} idx={idx} />
+          </div>
+        </details>
+      )}
+    </li>
   )
 }
 
