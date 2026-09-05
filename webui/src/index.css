@@ -3,7 +3,9 @@
 /* Cloudpath 设计系统 — 苹果极简风
  * 浅色：#f5f5f7 画布 + 白卡片 + #0071e3 强调
  * 深色：纯黑画布 + #1c1c1e 卡片 + #0a84ff 强调
- * 语义色沿用 iOS 系统色：绿 #34c759 / 橙 #ff9f0a / 红 #ff453a
+ * 语义色：浅色取 WCAG AA 达标（≥4.5:1 于徽章/画布）的深标签色——
+ * 绿 #177a34 / 棕橙 #8f5400 / 红 #b3261e；深色沿用 iOS 系统色（红提亮到 #ff5a4f 达标）。
+ * 填充（圆点/底色/按钮）与文字共用同一 token，故浅色整体偏深、深色整体偏亮。
  */
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -34,14 +36,14 @@
   --color-surface: #ffffff;
   --color-surface-2: #fbfbfd;
   --color-ink: #1d1d1f;
-  --color-ink-2: #6e6e73;
-  --color-ink-3: #86868b;
+  --color-ink-2: #58585d;
+  --color-ink-3: #6f6f74;
   --color-hairline: rgba(0, 0, 0, 0.08);
   --color-accent: #0071e3;
   --color-accent-ink: #ffffff;
-  --color-ok: #34c759;
-  --color-warn: #ff9f0a;
-  --color-bad: #ff453a;
+  --color-ok: #177a34;
+  --color-warn: #8f5400;
+  --color-bad: #b3261e;
   /* 饱和危险色按钮上的文字（与 accent-ink 同理，深色主题下不反转） */
   --color-bad-ink: #ffffff;
   --color-idle: #8e8e93;
@@ -64,7 +66,7 @@
   --color-accent: #0a84ff;
   --color-ok: #30d158;
   --color-warn: #ff9f0a;
-  --color-bad: #ff453a;
+  --color-bad: #ff5a4f;
 
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
   --shadow-lift: 0 2px 8px rgba(0, 0, 0, 0.5), 0 16px 40px rgba(0, 0, 0, 0.55);
