@@ -1,7 +1,7 @@
 // ActionPanel + CommandButton：命令集完全由声明驱动（前端无白名单/文案表）。
 // 覆盖 actions.inputSchema → 参数输入、危险动作确认、args 卫生、冻结下发路径、
 // 适配器白名单回落的「带参数下发」入口，以及键盘可达性与无障碍名称。
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { ActionPanel } from '@/components/ActionPanel'
@@ -10,7 +10,7 @@ import { useLive } from '@/store/ws'
 import { useToasts } from '@/store/toast'
 import { catalogPayload, makeDescriptor } from '@/test/fixtures'
 import { installFetch, stubResponse } from '@/test/http'
-import { resetStores } from '@/test/render'
+import { renderWithProviders, resetStores } from '@/test/render'
 
 const idx = indexCapabilities(normalizeCapabilityDocs(catalogPayload))
 const KEY = 'edge-1/dev-9'
@@ -28,23 +28,23 @@ beforeEach(() => { resetStores() })
 
 describe('命令集来源与空态', () => {
   it('无声明 → 明确空态文案 + 「无声明」徽标，不摆一排猜出来的按钮', () => {
-    render(<ActionPanel deviceId={KEY} set={{ actions: [], source: 'none' }} />)
+    renderWithProviders(<ActionPanel deviceId={KEY} set={{ actions: [], source: 'none' }} />)
     expect(screen.getByText('该设备未声明可下发命令（等待 Descriptor / Capability catalog）')).toBeInTheDocument()
     expect(screen.getByText('无声明')).toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
   it('Schema 声明来源标注「Schema 声明」，适配器回落标注「适配器白名单」+ 适配器名', () => {
-    const { unmount } = render(<ActionPanel deviceId={KEY} set={declared} adapterName="demo" />)
+    const { unmount } = renderWithProviders(<ActionPanel deviceId={KEY} set={declared} adapterName="demo" />)
     expect(screen.getByText('Schema 声明')).toBeInTheDocument()
     expect(screen.getByText('demo')).toBeInTheDocument()
     unmount()
-    render(<ActionPanel deviceId={KEY} set={fromAdapter} adapterName="demo" />)
+    renderWithProviders(<ActionPanel deviceId={KEY} set={fromAdapter} adapterName="demo" />)
     expect(screen.getByText('适配器白名单')).toBeInTheDocument()
   })
 
   it('每个动作都是可读名称的按钮（名称来自声明 title，破坏性动作占满一行）', () => {
-    render(<ActionPanel deviceId={KEY} set={declared} />)
+    renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     expect(screen.getByRole('button', { name: '闭合' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '断开' })).toBeInTheDocument()
     const danger = screen.getByRole('button', { name: '恢复出厂' })
@@ -56,7 +56,7 @@ describe('命令集来源与空态', () => {
 
 describe('actions.inputSchema → 参数输入', () => {
   it('声明了 inputSchema 的动作给出带标签的输入框，占位符即参数模板，长度受限', () => {
-    render(<ActionPanel deviceId={KEY} set={declared} />)
+    renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     const input = screen.getByPlaceholderText('{"ms":0,"note":""}')
     expect(input).toHaveAttribute('maxlength', '64')
     expect(input).toHaveAccessibleName(expect.stringContaining('点动'))
@@ -67,7 +67,7 @@ describe('actions.inputSchema → 参数输入', () => {
 
   it('输入自动剔除换行/NUL（后端参数校验的前端第一道收敛）', async () => {
     const user = userEvent.setup()
-    render(<ActionPanel deviceId={KEY} set={declared} />)
+    renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     const input = screen.getByPlaceholderText('{"ms":0,"note":""}')
     await user.type(input, 'a{enter}b')
     expect(input).toHaveValue('ab')
@@ -76,7 +76,7 @@ describe('actions.inputSchema → 参数输入', () => {
   it('下发时 args 按声明长度截断，并 POST 到冻结路径', async () => {
     const user = userEvent.setup()
     const http = okPost()
-    render(<ActionPanel deviceId={KEY} set={declared} />)
+    renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     const input = screen.getByPlaceholderText('{"ms":0,"note":""}')
     fireEvent.change(input, { target: { value: 'x'.repeat(90) } })
     await user.click(screen.getByRole('button', { name: '点动' }))
@@ -92,7 +92,7 @@ describe('危险动作与回执', () => {
   it('声明了 confirmation 的动作先弹设计过的二次确认：取消不下发，确认才下发', async () => {
     const user = userEvent.setup()
     const http = okPost()
-    render(<ActionPanel deviceId={KEY} set={declared} />)
+    renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
 
     await user.click(screen.getByRole('button', { name: '恢复出厂' }))
     const dialog = screen.getByRole('dialog')
@@ -114,7 +114,7 @@ describe('危险动作与回执', () => {
   it('二次确认可以取消或 Esc 关闭，两种路径都不下发命令', async () => {
     const user = userEvent.setup()
     const http = okPost()
-    render(<ActionPanel deviceId={KEY} set={declared} />)
+    renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
 
     await user.click(screen.getByRole('button', { name: '恢复出厂' }))
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '取消' }))
@@ -131,7 +131,7 @@ describe('危险动作与回执', () => {
     const user = userEvent.setup()
     const http = okPost()
     // pulse 有 inputSchema 但没有 destructive/confirmation → 不进对话框
-    render(<ActionPanel deviceId={KEY} set={declared} />)
+    renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     await user.click(screen.getByRole('button', { name: '点动' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect((http.last()?.body as { cmd: string }).cmd).toBe('pulse')
@@ -140,7 +140,7 @@ describe('危险动作与回执', () => {
   it('下发后按钮进入 aria-busy，WS ack 到达后结算并给出可读提示', async () => {
     const user = userEvent.setup()
     okPost()
-    render(<ActionPanel deviceId={KEY} set={declared} />)
+    renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     const btn = screen.getByRole('button', { name: '闭合' })
     await user.click(btn)
     expect(btn).toHaveAttribute('aria-busy', 'true')
@@ -155,7 +155,7 @@ describe('危险动作与回执', () => {
   it('下发失败（server 500）→ 失败提示，按钮恢复可用', async () => {
     const user = userEvent.setup()
     installFetch(() => stubResponse(500, { error: '内部错误' }))
-    render(<ActionPanel deviceId={KEY} set={declared} />)
+    renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     await user.click(screen.getByRole('button', { name: '断开' }))
     const items = useToasts.getState().items
     expect(items[items.length - 1]).toMatchObject({ title: '断开未下发', tone: 'bad' })
@@ -167,7 +167,7 @@ describe('适配器白名单回落：带参数下发入口', () => {
   it('下拉选择命令后才允许填参数，选择框与输入框都有可读名称', async () => {
     const user = userEvent.setup()
     const http = okPost()
-    render(<ActionPanel deviceId={KEY} set={fromAdapter} />)
+    renderWithProviders(<ActionPanel deviceId={KEY} set={fromAdapter} />)
     const select = screen.getByRole('combobox', { name: '选择命令' })
     const args = screen.getByRole('textbox', { name: '命令参数' })
     expect(args).toBeDisabled()
@@ -185,7 +185,7 @@ describe('适配器白名单回落：带参数下发入口', () => {
   })
 
   it('Schema 声明来源时不出现「带参数下发」万能入口（避免绕过声明）', () => {
-    render(<ActionPanel deviceId={KEY} set={declared} />)
+    renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
     expect(screen.queryByText(/带参数下发/)).not.toBeInTheDocument()
   })
@@ -195,7 +195,7 @@ describe('键盘与焦点', () => {
   it('Tab 依次到达参数输入框与命令按钮，Enter 即可下发', async () => {
     const user = userEvent.setup()
     const http = okPost()
-    render(<ActionPanel deviceId={KEY} set={declared} />)
+    renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     const input = screen.getByPlaceholderText('{"ms":0,"note":""}')
     fireEvent.change(input, { target: { value: '{"ms":100}' } })
     input.focus()
@@ -206,7 +206,7 @@ describe('键盘与焦点', () => {
   })
 
   it('面板标题是 h2，命令区在无障碍树里有可读结构', () => {
-    render(<ActionPanel deviceId={KEY} set={declared} />)
+    renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     const heading = screen.getByRole('heading', { level: 2, name: /命令/ })
     expect(within(heading).getByText('命令')).toBeInTheDocument()
   })
@@ -214,7 +214,7 @@ describe('键盘与焦点', () => {
 
 describe('命令按钮说明（title/description）', () => {
   it('有 description 的动作渲染可见说明；无说明的不加冗余题注', () => {
-    render(<ActionPanel deviceId={KEY} set={declared} />)
+    renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     // close 的 description 来自后端声明 → 落到 hint，渲染为按钮下可见说明
     expect(screen.getByText('接通负载')).toBeInTheDocument()
     // open / factory_reset 未声明描述 → 按钮文案自足，不编造题注占位
@@ -222,14 +222,14 @@ describe('命令按钮说明（title/description）', () => {
   })
 
   it('按钮 title 携带能力/实体/命令溯源（工具提示，不改按钮可读名）', () => {
-    render(<ActionPanel deviceId={KEY} set={declared} />)
+    renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     const close = screen.getByRole('button', { name: '闭合' })
     expect(close).toHaveAttribute('title', expect.stringContaining('cmd=relay_on'))
     expect(close).toHaveAttribute('title', expect.stringContaining('接通负载'))
   })
 
   it('输入类动作的标签带说明（label + hint 一并呈现）', () => {
-    render(<ActionPanel deviceId={KEY} set={declared} />)
+    renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     expect(screen.getByText(/点动 · 按毫秒脉冲/)).toBeInTheDocument()
   })
 })

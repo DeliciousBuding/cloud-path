@@ -241,9 +241,13 @@ export default function Overview() {
           {loading && feed.length === 0
             ? <RowSkeleton rows={6} />
             : feed.length === 0
-              ? <p className="flex flex-col items-center gap-2 py-10 text-center text-sm text-ink-3">
-                <History size={20} /> 还没有事件上报
-              </p>
+              ? (serverOk
+                ? <p className="flex flex-col items-center gap-2 py-10 text-center text-sm text-ink-3">
+                  <History size={20} /> 还没有事件上报
+                </p>
+                : <ErrorState icon={<History size={20} />} title="事件历史暂不可用"
+                  hint="聚合通道失败；实时通道的新事件仍会自动汇入。"
+                  onRetry={() => void refetch()} compact />)
               : <EventFeed events={feed} limit={10} />}
         </Panel>
       </div>

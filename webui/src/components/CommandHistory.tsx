@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { History } from 'lucide-react'
 import { Panel, Badge } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
+import { cn } from '@/lib/cn'
 import { api } from '@/lib/api'
 import { cmdMeta, cmdStatusMeta, fmtTime, fmtDateTime } from '@/lib/format'
 import type { CommandAction } from '@/lib/descriptor'
@@ -41,7 +42,10 @@ export function CommandHistory({ deviceId, actions }: { deviceId: string; action
                   </span>
                 )}
                 {c.result && (
-                  <span className="truncate text-[11px] text-bad" title={c.result}>{c.result}</span>
+                  <span className={cn('truncate text-[11px]', st.tone === 'ok' ? 'text-ink-3' : 'text-bad')}
+                    title={c.result}>
+                    {c.result}
+                  </span>
                 )}
                 <span className="num ml-auto shrink-0 text-[11px] text-ink-3"
                   title={c.acked_at ? `回执 ${fmtDateTime(c.acked_at)}` : fmtDateTime(c.created_at)}>

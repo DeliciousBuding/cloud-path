@@ -81,6 +81,7 @@ let enabled = false
  * 仅在已登录/开放访问时真正拨号；未登录期间保持关闭（见 disconnectLive）。 */
 export function connectLive() {
   enabled = true
+  watchNetwork()
   if (!authReady(useAuth.getState().status)) return
   if (started) return
   started = true
@@ -103,6 +104,27 @@ export function disconnectLive() {
   old.onclose = null
   old.close()
   useLive.setState({ status: 'closed', failures: 0 })
+}
+
+let netWatched = false
+/** 浏览器网络事件联动：已建立的 WS 无 ping/pong，断网短时感知不到，
+ * 不收敛会让页面停在「看着正常实则已断」的假实时态；网络恢复则跳过退避立即重连。 */
+function watchNetwork() {
+  if (netWatched || typeof window === 'undefined') return
+  netWatched = true
+  window.addEventListener('offline', () => {
+    if (ws) {
+      const old = ws
+      ws = null
+      old.onclose = null
+      try { old.close() } catch { /* 已死 */ }
+    }
+    useLive.setState({ status: 'closed' })
+  })
+  window.addEventListener('online', () => {
+    retry = 0
+    dial()
+  })
 }
 
 function dial() {

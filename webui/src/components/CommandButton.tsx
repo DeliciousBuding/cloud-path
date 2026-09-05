@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useLive } from '@/store/ws'
@@ -33,6 +34,12 @@ export function CommandButton({ deviceId, action, args, className }: {
   className?: string
 }) {
   const acks = useLive((s) => s.acks)
+  const qc = useQueryClient()
+  // 下发与 ack 结算后立即刷新历史与事件，不让用户等 5s 轮询
+  const refreshHistory = () => {
+    void qc.invalidateQueries({ queryKey: ['device-commands', deviceId] })
+    void qc.invalidateQueries({ queryKey: ['device-events', deviceId] })
+  }
   const [busy, setBusy] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [pendingId, setPendingId] = useState<number | null>(null)
@@ -48,6 +55,7 @@ export function CommandButton({ deviceId, action, args, className }: {
     settled.current.add(pendingId)
     setBusy(false)
     setPendingId(null)
+    refreshHistory()
     if (ack.status === 'ok') toast.ok(`${label}已执行`, ack.detail || undefined)
     else toast.bad(`${label}失败`, ack.detail || ack.status)
   }, [acks, pendingId, label])
@@ -82,6 +90,7 @@ export function CommandButton({ deviceId, action, args, className }: {
         args === undefined ? undefined : sanitizeArgs(args, maxLen),
       )
       setPendingId(cv.id)
+      refreshHistory()
     } catch (e) {
       setBusy(false)
       // 按 HTTP 状态说人话（权限不足 / 节点离线 / 限流 …），不把服务端原文甩给用户
