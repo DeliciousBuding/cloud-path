@@ -40,6 +40,10 @@ func (s *Server) handlePluginInstanceRecords(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 		return
 	}
+	if s.cfg.Store == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store unavailable"})
+		return
+	}
 	q := r.URL.Query()
 
 	recordType := q.Get("record_type")
@@ -67,6 +71,11 @@ func (s *Server) handlePluginInstanceRecords(w http.ResponseWriter, r *http.Requ
 	if !okLimit || !okOffset || limit > 1000 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid limit/offset"})
 		return
+	}
+
+	// The response must report the same effective limit used by the store.
+	if limit == 0 {
+		limit = 100
 	}
 
 	rows, err := s.cfg.Store.ListAppDomainRecordsFiltered(tenantID, instanceID, recordType, limit, offset)
@@ -118,26 +127,31 @@ func (s *Server) handlePluginInstanceJobs(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 		return
 	}
+	if s.cfg.Store == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store unavailable"})
+		return
+	}
+	rows, err := s.cfg.Store.ListScheduledJobs(tenantID, instanceID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "store unavailable"})
+		return
+	}
 	jobs, running := s.appHost.InstanceJobs(tenantID, instanceID)
 	if jobs == nil {
 		jobs = []string{}
 	}
-	scheduled := []api.AppScheduledJobView{}
-	if s.cfg.Store != nil {
-		if rows, err := s.cfg.Store.ListScheduledJobs(tenantID, instanceID); err == nil {
-			for _, row := range rows {
-				scheduled = append(scheduled, api.AppScheduledJobView{
-					ScheduleID:   row.ScheduleID,
-					Cron:         row.Cron,
-					Timezone:     row.Timezone,
-					MissedPolicy: row.MissedPolicy,
-					NextRunAt:    row.NextRunAt,
-					LastRunAt:    row.LastRunAt,
-					State:        row.State,
-					Revision:     row.Revision,
-				})
-			}
-		}
+	scheduled := make([]api.AppScheduledJobView, 0, len(rows))
+	for _, row := range rows {
+		scheduled = append(scheduled, api.AppScheduledJobView{
+			ScheduleID:   row.ScheduleID,
+			Cron:         row.Cron,
+			Timezone:     row.Timezone,
+			MissedPolicy: row.MissedPolicy,
+			NextRunAt:    row.NextRunAt,
+			LastRunAt:    row.LastRunAt,
+			State:        row.State,
+			Revision:     row.Revision,
+		})
 	}
 	writeJSON(w, http.StatusOK, api.AppJobsView{
 		InstanceID: instanceID, Running: running, Jobs: jobs, Scheduled: scheduled,

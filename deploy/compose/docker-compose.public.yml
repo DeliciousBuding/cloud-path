@@ -2,8 +2,8 @@
 # CloudPath 部署 — compose（L2 公网形态：server + nginx TLS 反代）
 # -----------------------------------------------------------------------------
 # 用法（在 deploy/compose 目录下）：
-#   cp compose.env.example compose.env
-#   编辑 compose.env（至少改 CLOUDPATH_TOKEN / CLOUDPATH_SETUP_TOKEN /
+#   cp .env.example .env
+#   编辑 .env（至少改 CLOUDPATH_TOKEN / CLOUDPATH_SETUP_TOKEN /
 #                     CLOUDPATH_ALLOWED_ORIGINS / PUBLIC_SERVER_NAME）
 #   把证书放到 deploy/compose/certs/{fullchain.pem,privkey.pem}
 #   docker compose -f docker-compose.public.yml up -d --build
@@ -34,6 +34,10 @@ services:
     environment:
       CLOUDPATH_ADDR: "0.0.0.0:8080"
       CLOUDPATH_DB: "/data/cloudpath.db"
+      CLOUDPATH_APP_HOST: "${CLOUDPATH_APP_HOST:-false}"
+      CLOUDPATH_APP_PLUGINS_DIR: "${CLOUDPATH_APP_PLUGINS_DIR:-/data/app-plugins.d}"
+      CLOUDPATH_APP_STATE_DIR: "${CLOUDPATH_APP_STATE_DIR:-/data/app-host-state}"
+      CLOUDPATH_APP_LOCK: "${CLOUDPATH_APP_LOCK:-/data/app-plugins.lock}"
       CLOUDPATH_TOKEN: "${CLOUDPATH_TOKEN:-}"
       CLOUDPATH_SETUP_TOKEN: "${CLOUDPATH_SETUP_TOKEN:-}"
       CLOUDPATH_REQUIRE_AUTH: "true"

@@ -108,7 +108,7 @@ export function useCreateInstance() {
     // onSuccess 的第二个参数就是 mutationFn 收到的 variables，用它兜住响应缺 id 的情况
     onSuccess: (r, body) => {
       invalidate(r?.id || `${body.edge_id}/${body.instance_id}`)
-      toast.ok('期望态已提交', `revision ${r?.revision ?? '—'}；实际态要等 Edge 上报后才会出现`)
+      toast.ok('期望态已提交', `修订版 ${r?.revision ?? '—'}；实际态要等运行宿主上报后才会出现`)
     },
   })
 }
@@ -120,7 +120,7 @@ export function useUpdateInstance() {
       api.updatePluginInstance(id, body),
     onSuccess: (r, vars) => {
       invalidate(vars.id)
-      toast.ok('期望态已更新', `revision ${r?.revision ?? '—'}；Edge 应用后这里才会变成已收敛`)
+      toast.ok('期望态已更新', `修订版 ${r?.revision ?? '—'}；运行宿主应用后这里才会变成已收敛`)
     },
   })
 }
@@ -132,7 +132,7 @@ export function useDeleteInstance() {
       api.deletePluginInstance(id, body),
     onSuccess: (_r, vars) => {
       invalidate(vars.id)
-      toast.ok('实例已删除', '期望态已移除；Edge 会在下一次快照同步时停止该实例')
+      toast.ok('实例已删除', '期望态已移除；运行宿主会在下一次快照同步时停止该实例')
     },
   })
 }
@@ -144,7 +144,7 @@ export function useReconcileInstance() {
       api.reconcilePluginInstance(id, body),
     onSuccess: (r, vars) => {
       invalidate(vars.id)
-      toast.ok('已触发 reconcile', `期望 revision ${r?.revision ?? '—'} 已重新下发，等待 Edge 回执`)
+      toast.ok('已触发重新下发', `期望修订版 ${r?.revision ?? '—'} 已重新下发，等待运行宿主回执`)
     },
   })
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import {
   Boxes, CloudOff, Layers, PackagePlus, PackageOpen, Plus, Puzzle, Server, ShieldCheck,
@@ -18,6 +18,7 @@ import { fmtDateTime } from '@/lib/format'
 import type { TabItem } from '@/components/ui'
 import type { PluginInstanceView } from '@/lib/types'
 import { usePageTitle } from '@/hooks/usePageTitle'
+import { useAuth } from '@/store/auth'
 
 type Tab = 'catalog' | 'installed' | 'instances'
 
@@ -38,6 +39,14 @@ export default function Plugins() {
   const [tab, setTab] = useState<Tab>('catalog')
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<PluginInstanceView | null>(null)
+  const readOnly = useAuth((s) => s.status === 'in' && s.user?.role === 'viewer')
+
+  useEffect(() => {
+    if (readOnly) {
+      setCreating(false)
+      setEditing(null)
+    }
+  }, [readOnly])
 
   const { plugins, loading: catLoading, error: catError, refetch: refetchCat } = usePluginCatalog()
   const { instances, loading: insLoading, error: insError, refetch: refetchIns } = usePluginInstances()
@@ -59,11 +68,11 @@ export default function Plugins() {
             ? '正在加载插件面…'
             : `目录 ${plugins.length} 个 · 运行实例 ${instances.length} 个`
         }
-        actions={
+        actions={!readOnly && (
           <button type="button" className="btn btn-primary" onClick={() => { setCreating(true); setTab('instances') }}>
             <Plus size={13} /> 新建实例
           </button>
-        }
+        )}
       />
 
       <div className="mb-5">
@@ -80,7 +89,7 @@ export default function Plugins() {
             <Panel><RowSkeleton rows={4} /></Panel>
           ) : plugins.length === 0 ? (
             <EmptyState icon={<PackageOpen size={24} />} title="插件目录为空"
-              hint="还没有已安装的插件被登记到目录里。Edge 安装插件并上报后，这里会出现它的声明事实（版本、摘要、权限、贡献）。" />
+              hint="插件声明同步到目录后，这里会显示版本、摘要、权限和贡献。目录为空不代表没有已安装或运行的实例。" />
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
               {plugins.slice(0, LIST_CAP).map((p) => {
@@ -245,11 +254,11 @@ export default function Plugins() {
 
       {tab === 'instances' && (
         <TabPanel value={tab}>
-          {creating ? (
+          {!readOnly && creating ? (
             <Panel title={<span className="flex items-center gap-1.5"><PackagePlus size={14} />新建插件实例</span>}>
               <InstanceForm mode="create" catalog={plugins} onDone={() => setCreating(false)} />
             </Panel>
-          ) : editing ? (
+          ) : !readOnly && editing ? (
             <Panel title={<span className="flex items-center gap-1.5"><PackagePlus size={14} />编辑插件实例</span>}>
               <InstanceForm mode="edit" instance={editing} catalog={plugins} onDone={() => setEditing(null)} />
             </Panel>
@@ -274,7 +283,7 @@ export default function Plugins() {
                 </p>
               )}
               <p className="text-[12px] leading-relaxed text-ink-3">
-                每行都分开写「期望态」与「实际态」：期望已启用不等于 Edge 已经运行。实际态缺席时明确显示「Edge 未上报」。
+                每行都分开写「期望态」与「实际态」：期望已启用不等于运行宿主已运行该实例。尚未收到实际态时，明确标注未上报。
               </p>
             </div>
           )}

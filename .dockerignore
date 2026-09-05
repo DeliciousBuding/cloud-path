@@ -3,6 +3,7 @@
 .git
 .github
 .local
+.worktrees
 bin
 data
 dist

@@ -30,7 +30,10 @@ RUN apk add --no-cache ca-certificates && \
 COPY --from=builder --chown=cloudpath:cloudpath /out/cloudpath-server /app/cloudpath-server
 COPY --from=builder --chown=cloudpath:cloudpath /out/cloudpath-edge /app/cloudpath-edge
 ENV CLOUDPATH_ADDR=0.0.0.0:8080 \
-    CLOUDPATH_DB=/data/cloudpath.db
+    CLOUDPATH_DB=/data/cloudpath.db \
+    CLOUDPATH_APP_PLUGINS_DIR=/data/app-plugins.d \
+    CLOUDPATH_APP_STATE_DIR=/data/app-host-state \
+    CLOUDPATH_APP_LOCK=/data/app-plugins.lock
 USER cloudpath
 WORKDIR /app
 VOLUME ["/data"]

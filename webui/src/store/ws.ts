@@ -29,6 +29,9 @@ interface LiveState {
   status: WsStatus
   /** 连续「未成功 open 就关闭」的次数；open 成功即归零。UI 用它说实话，不假装实时数据正常 */
   failures: number
+  /** 单一通知槽；REST 仍是分页/排序权威，不积累第二份记录库。 */
+  domainRecord: { instanceID: string; sequence: number } | null
+  connectionEpoch: number
   devices: Record<string, DeviceView>
   edges: Record<string, EdgeView>
   /** WS 实时事件（新→旧，本地负 id，与 REST 历史正 id 不冲突） */
@@ -44,6 +47,8 @@ interface LiveState {
 export const useLive = create<LiveState>(() => ({
   status: 'closed',
   failures: 0,
+  domainRecord: null,
+  connectionEpoch: 0,
   devices: {},
   edges: {},
   events: [],
@@ -91,6 +96,7 @@ export function connectLive() {
 /** 断开实时通道并停止自动重连（登出/未登录时调用；重新登录后 connectLive 恢复） */
 export function disconnectLive() {
   enabled = false
+  useLive.setState({ domainRecord: null })
   retry = 0
   // 必须复位 started：否则「登出 → 再登录」时 connectLive() 会因为 started 仍为 true 直接返回，
   // 实时通道再也拨不出去（页面看着正常却收不到实时数据 = 假数据）。
@@ -139,12 +145,15 @@ function dial() {
   }
   // 本次握手有没有真的 open 过：只有「没 open 就关闭」才算失败（正常关闭不计入）
   let opened = false
+  const socket = ws
   ws.onopen = () => {
+    if (ws !== socket || !enabled || !authReady(useAuth.getState().status)) return
     opened = true
     retry = 0
-    useLive.setState({ status: 'open', failures: 0 })
+    useLive.setState({ status: 'open', failures: 0, connectionEpoch: useLive.getState().connectionEpoch + 1 })
   }
   ws.onclose = () => {
+    if (ws !== socket) return
     ws = null
     const failures = opened ? 0 : useLive.getState().failures + 1
     useLive.setState({ status: 'closed', failures })
@@ -156,6 +165,7 @@ function dial() {
   }
   ws.onerror = () => { /* onclose 会跟上，统一在那里重连 */ }
   ws.onmessage = (ev) => {
+    if (ws !== socket || !enabled || !authReady(useAuth.getState().status)) return
     try {
       handle(JSON.parse(ev.data as string) as Envelope)
     } catch { /* 坏帧忽略 */ }
@@ -185,6 +195,19 @@ export function reconnectLive() {
 function handle(env: Envelope) {
   const st = useLive.getState()
   switch (env.type) {
+    case 'domain_record': {
+      const data = env.data as Record<string, unknown> | undefined
+      if (env.v !== 1 || !data || typeof data.instance_id !== 'string' || !data.instance_id ||
+          typeof data.record_type !== 'string' || !data.record_type ||
+          typeof data.record_id !== 'string' || !data.record_id || typeof data.created !== 'boolean' ||
+          (data.version !== undefined && typeof data.version !== 'string') ||
+          typeof data.data_json !== 'string' || typeof data.updated_at !== 'number' ||
+          !Number.isFinite(data.updated_at)) return
+      useLive.setState({ domainRecord: {
+        instanceID: data.instance_id, sequence: (st.domainRecord?.sequence ?? 0) + 1,
+      } })
+      break
+    }
     case 'snapshot': {
       const snap = env.data as SnapshotData | undefined
       if (!snap) return

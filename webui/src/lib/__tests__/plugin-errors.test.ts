@@ -146,7 +146,7 @@ describe('Edge 上报的运行态语义（规范大写名）', () => {
     expect(stateMeta('running').label).toBe('运行中')
     expect(stateMeta('stopping').label).toBe('停止中')
     expect(stateMeta('failed').tone).toBe('bad')
-    expect(hostDetailLabel('server-apphost')).toBe('服务器本地宿主（进程内）')
+    expect(hostDetailLabel('server-apphost')).toBe('中心服务应用宿主')
     expect(healthMeta('DEGRADED').tone).toBe('warn')
     expect(healthMeta('UNKNOWN').tone).toBe('idle')
   })

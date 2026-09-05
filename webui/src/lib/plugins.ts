@@ -132,12 +132,16 @@ export interface SyncState {
  * 只把 `drift` / `stale` / `has_observed` / revision 说成人话。
  */
 export function syncState(v: PluginInstanceView): SyncState {
+  const serverHosted = v.edge_id === 'server'
+  const host = serverHosted ? '应用宿主' : '边缘节点'
   if (!v.has_observed) {
     return {
       key: 'unreported',
-      label: '边缘节点未上报',
+      label: host + '未上报',
       tone: 'idle',
-      hint: v.edge_online
+      hint: serverHosted
+        ? '应用宿主尚未上报实际态。启用只是期望，当前是否运行以应用数据区为准。'
+        : v.edge_online
         ? '期望态已下发，但该边缘节点还没有回过实际态。不能据此判断插件是否在运行。'
         : '边缘节点离线，尚未回过实际态。边缘节点重连并应用快照后这里才会出现运行事实。',
     }
@@ -147,7 +151,7 @@ export function syncState(v: PluginInstanceView): SyncState {
       key: 'stale',
       label: '实际态已过期',
       tone: 'warn',
-      hint: '边缘节点的上报已超过新鲜期，下面的实际态是历史事实，不代表当前运行状况。',
+      hint: host + '的上报已超过新鲜期，下面的实际态是历史事实，不代表当前运行状况。',
     }
   }
   if (v.drift) {
@@ -155,22 +159,22 @@ export function syncState(v: PluginInstanceView): SyncState {
       key: 'drift',
       label: '期望与实际不一致',
       tone: 'warn',
-      hint: `期望修订版 ${v.desired_revision}，边缘节点已应用 ${v.applied_revision}。可触发一次重新下发让边缘节点重新收敛。`,
+      hint: `期望修订版 ${v.desired_revision}，${host}已应用 ${v.applied_revision}。可触发一次重新下发让${host}重新收敛。`,
     }
   }
   if (v.applied_revision < v.desired_revision) {
     return {
       key: 'pending',
-      label: '等待边缘节点应用',
+      label: '等待' + host + '应用',
       tone: 'accent',
-      hint: `期望修订版 ${v.desired_revision} 已提交，边缘节点当前应用到 ${v.applied_revision}`,
+      hint: `期望修订版 ${v.desired_revision} 已提交，${host}当前应用到 ${v.applied_revision}`,
     }
   }
   return {
     key: 'synced',
     label: '已收敛',
     tone: 'ok',
-    hint: `边缘节点已应用期望修订版 ${v.applied_revision}`,
+    hint: `${host}已应用期望修订版 ${v.applied_revision}`,
   }
 }
 
@@ -196,7 +200,7 @@ const STATE_META: Record<string, { label: string; tone: Tone }> = {
 }
 
 /** observed.detail 的已知机器标记 → 人话（其余是 server 脱敏摘要，原样呈现） */
-const HOST_DETAIL_LABEL: Record<string, string> = { 'server-apphost': '服务器本地宿主（进程内）' }
+const HOST_DETAIL_LABEL: Record<string, string> = { 'server-apphost': '中心服务应用宿主' }
 export function hostDetailLabel(detail?: string): string | undefined {
   if (!detail) return undefined
   return HOST_DETAIL_LABEL[detail] ?? detail
@@ -226,6 +230,8 @@ export function trustMeta(mode: string | undefined, verified: boolean): { label:
 }
 
 export const ISOLATION_LABELS: Record<string, string> = {
+  shared: '共享进程',
+  'per-instance': '实例独立进程',
   none: '无隔离',
   process: '独立进程',
   container: '容器',

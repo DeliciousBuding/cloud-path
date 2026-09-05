@@ -2,7 +2,7 @@
 # CloudPath 部署 — compose（L0 本机/单机形态）
 # -----------------------------------------------------------------------------
 # 用法（在 deploy/compose 目录下）：
-#   cp compose.env.example compose.env      # 首次：填好 CLOUDPATH_TOKEN 等
+#   cp .env.example .env      # 首次：填好 CLOUDPATH_TOKEN 等
 #   docker compose -f docker-compose.yml up -d --build
 #   docker compose -f docker-compose.yml ps
 #   curl -fsS http://127.0.0.1:8080/healthz
@@ -28,6 +28,10 @@ services:
     environment:
       CLOUDPATH_ADDR: "0.0.0.0:8080"
       CLOUDPATH_DB: "/data/cloudpath.db"
+      CLOUDPATH_APP_HOST: "${CLOUDPATH_APP_HOST:-false}"
+      CLOUDPATH_APP_PLUGINS_DIR: "${CLOUDPATH_APP_PLUGINS_DIR:-/data/app-plugins.d}"
+      CLOUDPATH_APP_STATE_DIR: "${CLOUDPATH_APP_STATE_DIR:-/data/app-host-state}"
+      CLOUDPATH_APP_LOCK: "${CLOUDPATH_APP_LOCK:-/data/app-plugins.lock}"
       CLOUDPATH_TOKEN: "${CLOUDPATH_TOKEN:-}"
       CLOUDPATH_SETUP_TOKEN: "${CLOUDPATH_SETUP_TOKEN:-}"
       CLOUDPATH_REQUIRE_AUTH: "${CLOUDPATH_REQUIRE_AUTH:-false}"

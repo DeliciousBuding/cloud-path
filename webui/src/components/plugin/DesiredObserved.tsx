@@ -70,9 +70,9 @@ function UnreportedBlock({ v }: { v: PluginInstanceView }) {
       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-3/12 text-ink-2">
         {v.edge_online ? <RadioTower size={16} /> : <CloudOff size={16} />}
       </span>
-      <p className="mt-2.5 text-[13px] font-semibold">边缘节点未上报</p>
+      <p className="mt-2.5 text-[13px] font-semibold">{v.edge_id === 'server' ? '应用宿主未上报' : '边缘节点未上报'}</p>
       <p className="mt-1 text-[12px] leading-relaxed break-words text-ink-2">
-        {v.edge_online
+        {v.edge_id === 'server' ? '应用宿主尚未上报实际态。左栏只是期望，当前运行状态请查看应用数据。' : v.edge_online
           ? '该 Edge 在线，但还没有回过这个实例的实际态。左栏只是期望，不能据此判断插件是否在运行。'
           : '该边缘节点离线，因此没有实际态。它重连并应用快照后，这里才会出现运行事实。'}
       </p>
@@ -102,12 +102,12 @@ export function DesiredObserved({ v }: { v: PluginInstanceView }) {
           <Row wrap k="更新于" v={v.desired.updated_at ? fmtDateTime(v.desired.updated_at) : '—'} />
         </dl>
         <p className="mt-2 text-[12px] leading-relaxed text-ink-3">
-          这一栏是「希望它变成什么样」，不代表边缘节点已经执行。
+          这一栏是「希望它变成什么样」，不代表{v.edge_id === 'server' ? '应用宿主' : '边缘节点'}已经执行。
         </p>
       </div>
 
       <div className="min-w-0 rounded-lg bg-surface-2 p-3 sm:p-3.5">
-        <ColumnHead note="边缘节点上报">实际态</ColumnHead>
+        <ColumnHead note={v.edge_id === 'server' ? '应用宿主上报' : '边缘节点上报'}>实际态</ColumnHead>
         {v.has_observed ? (
           <>
             <dl className="m-0">

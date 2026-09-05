@@ -1,6 +1,6 @@
 // 插件面：三分（目录 / 已安装 / 实例）、desired≠observed 的分离呈现、
 // 稳定错误码驱动的写操作，以及「绝不把期望当实际」的反向断言。
-import { screen, within } from '@testing-library/react'
+import { act, screen, within } from '@testing-library/react'
 import { Route, Routes } from 'react-router'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -9,6 +9,8 @@ import PluginInstanceDetail from '@/pages/PluginInstanceDetail'
 import { installFetch, stubResponse } from '@/test/http'
 import { renderWithProviders, resetStores } from '@/test/render'
 import type { PluginCatalogView, PluginInstanceView } from '@/lib/types'
+import { useAuth } from '@/store/auth'
+import { appInstance, appUser } from '@/test/application-plane'
 
 const LOCAL_PATH = 'C:\\Users\\someone\\plugins\\acme-driver'
 
@@ -77,6 +79,58 @@ async function gotoTab(name: RegExp) {
 }
 
 beforeEach(() => { resetStores() })
+
+describe('插件列表只读权限', () => {
+  it('viewer 在空目录下仍区分中心服务与真实边缘节点，说明不限定 Edge', async () => {
+    useAuth.setState({ status: 'in', user: appUser })
+    route({ catalog: [], instances: [appInstance('app-a', 'app-a'), appInstance('app-b', 'server/app-b'), instance()] })
+    const { container } = renderWithProviders(<Plugins />)
+    expect(await screen.findByText('插件目录为空')).toBeInTheDocument()
+    expect(screen.getByText('插件声明同步到目录后，这里会显示版本、摘要、权限和贡献。目录为空不代表没有已安装或运行的实例。')).toBeInTheDocument()
+    await gotoTab(/实例/)
+    const locations = await screen.findAllByText(/^中心服务 · 最后回执/)
+    expect(locations).toHaveLength(2)
+    locations.forEach((location) => expect(location).toHaveAttribute('title', '中心服务 · 最后回执 尚无回执'))
+    expect(screen.getByText(/^边缘节点 edge-a · 最后回执/)).toBeInTheDocument()
+    expect(container.textContent).not.toContain('边缘节点 server')
+    expect(container.querySelector('[title^="边缘节点 server"]')).toBeNull()
+    expect(screen.getByText('每行都分开写「期望态」与「实际态」：期望已启用不等于运行宿主已运行该实例。尚未收到实际态时，明确标注未上报。')).toBeInTheDocument()
+  })
+
+  it('viewer 可查看实例，但不显示新建、创建或编辑表单入口', async () => {
+    useAuth.setState({ status: 'in', user: appUser })
+    const http = route({ instances: [instance()] })
+    const { container } = renderWithProviders(<Plugins />)
+    await gotoTab(/实例/)
+    expect(await screen.findByText('期望态')).toBeInTheDocument()
+    for (const name of ['新建实例', '创建实例', '编辑', '保存变更']) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
+    }
+    expect(container.querySelector('form')).toBeNull()
+    expect(http.calls.every((call) => call.method === 'GET')).toBe(true)
+  })
+
+  it.each([
+    { entry: '新建实例', submit: '创建实例' },
+    { entry: '编辑', submit: '保存变更' },
+  ])('$entry表单在切换为只读角色时关闭，恢复角色后不遗留表单', async ({ entry, submit }) => {
+    useAuth.setState({ status: 'in', user: { ...appUser, role: 'admin' } })
+    const http = route({ instances: [instance()] })
+    const { container } = renderWithProviders(<Plugins />)
+    const user = await gotoTab(/实例/)
+    await user.click(await screen.findByRole('button', { name: entry }))
+    expect(await screen.findByRole('button', { name: submit })).toBeInTheDocument()
+    act(() => useAuth.setState({ user: appUser }))
+    expect(container.querySelector('form')).toBeNull()
+    for (const name of ['新建实例', '创建实例', '编辑', '保存变更']) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
+    }
+    act(() => useAuth.setState({ user: { ...appUser, role: 'admin' } }))
+    expect(screen.getByRole('button', { name: entry })).toBeInTheDocument()
+    expect(container.querySelector('form')).toBeNull()
+    expect(http.calls.every((call) => call.method === 'GET')).toBe(true)
+  })
+})
 
 describe('插件面三分', () => {
   it('三个分区都在，且默认目录呈现插件声明事实', async () => {
@@ -232,7 +286,7 @@ describe('实例分区：desired 与 observed 永远分别渲染', () => {
     // secret 只有 handle 名，配置里的 secret:// 值也被折叠成名字
     expect(screen.getAllByText('db-password').length).toBeGreaterThan(0)
     expect(screen.queryByText('secret://db-password')).not.toBeInTheDocument()
-    expect(screen.getByText(/明文只在 Edge 本地/)).toBeInTheDocument()
+    expect(screen.getByText(/明文只在运行宿主/)).toBeInTheDocument()
   })
 
   it('详情页不泄漏本机绝对路径与插件 stdout 原文', async () => {
