@@ -153,7 +153,7 @@ export default function Overview() {
       )}
 
       {/* ---- 主体：fleet + 关注并排；事件条通栏在下（宽屏不留死角） ---- */}
-      <div className="mt-7 grid items-stretch gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="mt-7 grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <Panel
           title={<span className="flex items-center gap-1.5"><Cpu size={14} />设备</span>}
           right={
