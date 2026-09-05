@@ -125,7 +125,7 @@ WebUI 首屏一次性聚合。所有计数来自真实 Edge 上报与 Server 权
 |---|---|
 | `devices_online` / `devices_total` | 设备在线数 / 总数 |
 | `edges_online` / `edges_total` | Edge 在线数 / 总数 |
-| `plugins_active` / `plugins_desired` | 插件 observed 活跃数 / desired 启用数 |
+| `plugins_active` / `plugins_desired` | 未过期的实际运行数（Edge 健康/降级或中心 AppHost `running`）/ 期望启用数；期望启用不计作已运行 |
 | `commands_failed` | 失败命令数 |
 | `recent_events` | 近期事件（`EventView[]`，新→旧） |
 | `offline_devices` | 离线设备（`DeviceView[]`） |

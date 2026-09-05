@@ -257,3 +257,27 @@ func TestOverviewRequiresAuth(t *testing.T) {
 		t.Fatalf("未认证 overview = %d, want 401", resp.StatusCode)
 	}
 }
+
+func TestPluginObservedActiveAppHost(t *testing.T) {
+	tests := []struct {
+		name     string
+		edge     string
+		observed *api.PluginInstanceObservedView
+		want     bool
+	}{
+		{name: "server running", edge: "server", observed: &api.PluginInstanceObservedView{State: "running", Health: "UNKNOWN"}, want: true},
+		{name: "server stopped", edge: "server", observed: &api.PluginInstanceObservedView{State: "stopped", Health: "UNKNOWN"}},
+		{name: "server without observed", edge: "server"},
+		{name: "edge unknown running state", edge: "edge-a", observed: &api.PluginInstanceObservedView{State: "running", Health: "UNKNOWN"}},
+		{name: "edge healthy", edge: "edge-a", observed: &api.PluginInstanceObservedView{State: "HEALTHY", Health: "HEALTHY"}, want: true},
+		{name: "edge degraded", edge: "edge-a", observed: &api.PluginInstanceObservedView{State: "DEGRADED", Health: "DEGRADED"}, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := api.PluginInstanceView{EdgeID: tt.edge, Observed: tt.observed}
+			if got := pluginObservedActive(in); got != tt.want {
+				t.Fatalf("pluginObservedActive = %t, want %t", got, tt.want)
+			}
+		})
+	}
+}
