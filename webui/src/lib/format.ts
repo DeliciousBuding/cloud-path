@@ -13,6 +13,11 @@ export function fmtTime(ts: number): string {
   return new Date(ts * 1000).toLocaleTimeString('zh-CN', { hour12: false })
 }
 
+/** 时分刻度（HH:MM）：分桶时间轴用，秒级细节对 ≥ 1 分钟的桶是噪音 */
+export function fmtHourMin(ts: number): string {
+  return new Date(ts * 1000).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' })
+}
+
 export function fmtDateTime(ts: number): string {
   if (!ts) return '—'
   return new Date(ts * 1000).toLocaleString('zh-CN', { hour12: false })
@@ -193,4 +198,37 @@ export function commandErrorCopy(e: unknown): string {
     }
   }
   return e instanceof Error && e.message ? e.message : '无法连接 server（服务未启动或网络不可达）'
+}
+
+/** 桶宽候选（秒）：从数据跨度自动选，保证 ≤ want 个桶且桶宽是人话单位 */
+const DENSITY_STEPS = [60, 300, 900, 1800, 3600, 7200, 14400, 43200, 86400]
+
+function stepLabel(sec: number): string {
+  if (sec < 3600) return sec === 60 ? '分钟' : `${sec / 60} 分钟`
+  if (sec < 86400) return sec === 3600 ? '小时' : `${sec / 3600} 小时`
+  return sec === 86400 ? '天' : `${sec / 86400} 天`
+}
+
+/**
+ * 事件密度分桶（纯函数）：窗口 = 最早事件 → 现在，桶宽按跨度自动取人话单位；peak 供标题说人话。
+ * 不承诺数据没覆盖的区间（例如硬说「近 24 小时」），窗口起点由调用方如实标注。
+ * 少于两条事件返回 null（画不出分布，不画假图）。
+ */
+export function bucketEventDensity(
+  tsList: number[], nowSec: number, want = 24,
+): { points: { t: number; v: number }[]; stepSec: number; label: string; peak: number } | null {
+  if (tsList.length < 2) return null
+  const min = Math.min(...tsList)
+  const span = Math.max(3600, nowSec - min)
+  const step = DENSITY_STEPS.find((x) => span / x <= want) ?? 86400
+  const start = Math.floor(min / step) * step
+  const n = Math.max(2, Math.ceil((nowSec - start) / step) + 1)
+  const base = Math.floor(start / step)
+  const counts = new Array<number>(n).fill(0)
+  for (const ts of tsList) {
+    const i = Math.floor(ts / step) - base
+    if (i >= 0 && i < n) counts[i] += 1
+  }
+  const peak = counts.reduce((a, b) => Math.max(a, b), 0)
+  return { points: counts.map((v, i) => ({ t: start + i * step, v })), stepSec: step, label: stepLabel(step), peak }
 }

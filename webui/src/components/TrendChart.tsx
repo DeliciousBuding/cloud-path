@@ -1,6 +1,6 @@
 import { useId } from 'react'
 import {
-  Area, AreaChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer,
   Tooltip, XAxis, YAxis,
 } from 'recharts'
 import type { SeriesPoint } from '@/store/ws'
@@ -24,15 +24,26 @@ function ChartTooltip({ active, payload, unit }: {
 }
 
 /**
- * 数值趋势（通用）：任何数值观测序列都能画；折线/面积两种形态由调用方切换。
- * 序列来自 store/ws.ts 的通用采样（按 raw 属性名），标签/单位由调用方从数据传入，
- * 组件本身不认识「漂移」或任何具体设备字段。动画恒关（尊重 prefers-reduced-motion）。
+ * 数值图表（通用）：任何数值序列都能画，折线 / 面积 / 柱状三种形态由调用方切换。
+ * 序列来自 store/ws.ts 的通用采样，或调用方自己的分桶（如活动页事件密度）；
+ * 标签 / 单位由调用方传入，组件不认识「温度」或任何具体设备字段。动画恒关（尊重 prefers-reduced-motion）。
+ *
+ * 计数语义两个开关（连续量走默认，既有趋势图零回归）：
+ *   - zeroBase：零基线。计数 / 频次图的域下限恒为 0——负轴或悬空基线会夸大差异，是数据可视化谎言；
+ *   - hideY：sparkline 模式。窄高度下 Y 轴刻度纯属噪音，峰值改由调用方在标题里说人话；
+ *     无 Y 轴时横向网格也一并省去（没有刻度的网格线是纯装饰）；
+ *   - xTick：X 轴刻度粒度由调用方决定（默认时分秒，分桶图传时分）。
+ *
+ * 轴 / 网格 / Tooltip 以单元素变量内联为图表直接子元素：recharts 2.15 不展开 fragment 变量形式。
  */
-export function TrendChart({ points, unit, height = 112, kind = 'area' }: {
+export function TrendChart({ points, unit, height = 112, kind = 'area', zeroBase = false, hideY = false, xTick = timeTick }: {
   points: SeriesPoint[]
   unit?: string
   height?: number
-  kind?: 'area' | 'line'
+  kind?: 'area' | 'line' | 'bar'
+  zeroBase?: boolean
+  hideY?: boolean
+  xTick?: (t: number) => string
 }) {
   const gradientId = `trend-${useId().replace(/[^a-zA-Z0-9]/g, '')}`
 
@@ -48,52 +59,54 @@ export function TrendChart({ points, unit, height = 112, kind = 'area' }: {
   const values = data.map((d) => d.v)
   const lo = Math.min(...values)
   const hi = Math.max(...values)
-  const pad = (hi - lo) * 0.15 || Math.max(1, Math.abs(hi) * 0.1)
-  const crossesZero = lo < 0 && hi > 0
-  // 轴/网格/Tooltip 必须内联为图表直接子元素：recharts 2.15 不展开 fragment 变量形式的轴
+  const pad = zeroBase ? Math.max(1, hi * 0.12) : (hi - lo) * 0.15 || Math.max(1, Math.abs(hi) * 0.1)
+  const domain: [number, number] = [zeroBase ? 0 : lo - pad, hi + pad]
+
+  const xAxis = (
+    <XAxis
+      dataKey="t" tick={{ fontSize: 10, fill: 'var(--color-ink-3)' }} tickFormatter={xTick}
+      minTickGap={48} axisLine={false} tickLine={false} height={18}
+    />
+  )
+  const yAxis = hideY ? null : (
+    <YAxis
+      dataKey="v" width={38} tick={{ fontSize: 10, fill: 'var(--color-ink-3)' }}
+      tickFormatter={(v: number) => (zeroBase ? String(Math.round(v)) : Number.isInteger(v) ? String(v) : v.toFixed(1))}
+      domain={domain} axisLine={false} tickLine={false} allowDecimals={!zeroBase}
+    />
+  )
+  const grid = hideY ? null : <CartesianGrid stroke="var(--color-hairline)" strokeDasharray="2 4" vertical={false} />
+  const tip = <Tooltip content={<ChartTooltip unit={unit} />} isAnimationActive={false} />
+  const zeroLine = !zeroBase && lo < 0 && hi > 0 ? <ReferenceLine y={0} stroke="var(--color-hairline)" /> : null
+  const margin = { top: 6, right: 4, bottom: 0, left: hideY ? 0 : -14 }
 
   return (
     <div className="w-full" style={{ height }}>
       <ResponsiveContainer>
         {kind === 'line' ? (
-          <LineChart data={data} margin={{ top: 6, right: 4, bottom: 0, left: -14 }}>
-            <XAxis
-              dataKey="t" tick={{ fontSize: 10, fill: 'var(--color-ink-3)' }} tickFormatter={timeTick}
-              minTickGap={48} axisLine={false} tickLine={false} height={18}
-            />
-            <YAxis
-              dataKey="v" width={38} tick={{ fontSize: 10, fill: 'var(--color-ink-3)' }}
-              tickFormatter={(v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1))}
-              domain={[lo - pad, hi + pad]} axisLine={false} tickLine={false}
-            />
-            <CartesianGrid stroke="var(--color-hairline)" strokeDasharray="2 4" vertical={false} />
-            <Tooltip content={<ChartTooltip unit={unit} />} isAnimationActive={false} />
-            {crossesZero && <ReferenceLine y={0} stroke="var(--color-hairline)" />}
+          <LineChart data={data} margin={margin}>
+            {xAxis}{yAxis}{grid}{tip}{zeroLine}
             <Line
               type="monotone" dataKey="v" stroke="var(--color-accent)" strokeWidth={1.8}
               dot={false} isAnimationActive={false}
             />
           </LineChart>
+        ) : kind === 'bar' ? (
+          <BarChart data={data} margin={margin} barCategoryGap="25%">
+            {xAxis}{yAxis}{grid}{tip}{zeroLine}
+            <Bar
+              dataKey="v" fill="var(--color-accent)" radius={[2, 2, 0, 0]} isAnimationActive={false}
+            />
+          </BarChart>
         ) : (
-          <AreaChart data={data} margin={{ top: 6, right: 4, bottom: 0, left: -14 }}>
+          <AreaChart data={data} margin={margin}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="var(--color-accent)" stopOpacity={0.22} />
                 <stop offset="100%" stopColor="var(--color-accent)" stopOpacity={0.02} />
               </linearGradient>
             </defs>
-            <XAxis
-              dataKey="t" tick={{ fontSize: 10, fill: 'var(--color-ink-3)' }} tickFormatter={timeTick}
-              minTickGap={48} axisLine={false} tickLine={false} height={18}
-            />
-            <YAxis
-              dataKey="v" width={38} tick={{ fontSize: 10, fill: 'var(--color-ink-3)' }}
-              tickFormatter={(v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1))}
-              domain={[lo - pad, hi + pad]} axisLine={false} tickLine={false}
-            />
-            <CartesianGrid stroke="var(--color-hairline)" strokeDasharray="2 4" vertical={false} />
-            <Tooltip content={<ChartTooltip unit={unit} />} isAnimationActive={false} />
-            {crossesZero && <ReferenceLine y={0} stroke="var(--color-hairline)" />}
+            {xAxis}{yAxis}{grid}{tip}{zeroLine}
             <Area
               type="monotone" dataKey="v" stroke="var(--color-accent)" strokeWidth={1.8}
               fill={`url(#${gradientId})`} dot={false} isAnimationActive={false}

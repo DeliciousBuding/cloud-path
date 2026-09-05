@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cmdMeta, fmtDay } from '@/lib/format'
+import { bucketEventDensity, cmdMeta, fmtDay } from '@/lib/format'
 import { indexCapabilities, normalizeCapabilityDocs } from '@/lib/descriptor'
 import { catalogPayload } from '@/test/fixtures'
 
@@ -49,5 +49,36 @@ describe('cmdMeta（命令展示名回落顺序）', () => {
 
   it('不传 idx 就拿不到声明（说明跨设备面必须显式传索引，不是隐式全局态）', () => {
     expect(cmdMeta('relay_on').label).toBe('Relay On')
+  })
+})
+
+describe('bucketEventDensity（事件密度分桶）', () => {
+  const t0 = 1_760_000_000
+
+  it('跨度 2 小时 → 每 5 分钟一桶，计数落在正确桶且总数守恒', () => {
+    const r = bucketEventDensity([t0, t0 + 60, t0 + 400, t0 + 3600], t0 + 7200)
+    expect(r?.stepSec).toBe(300)
+    expect(r?.label).toBe('5 分钟')
+    expect(r?.points.reduce((a, p) => a + p.v, 0)).toBe(4)
+    expect(r?.points[0]).toEqual({ t: Math.floor(t0 / 300) * 300, v: 2 })
+    expect(r?.peak).toBe(2)
+  })
+
+  it('整点桶宽说人话：1 小时不带数字（每「小时」而非每「1 小时」），峰值如实', () => {
+    const r = bucketEventDensity([t0, t0 + 43200, t0 + 86400], t0 + 86400)
+    expect(r?.stepSec).toBe(3600)
+    expect(r?.label).toBe('小时')
+    expect(r?.peak).toBe(1)
+  })
+
+  it('跨天跨度 → 桶宽升到小时级，总数守恒', () => {
+    const r = bucketEventDensity([t0, t0 + 86400], t0 + 90000)
+    expect(r?.stepSec).toBeGreaterThanOrEqual(3600)
+    expect(r?.points.reduce((a, p) => a + p.v, 0)).toBe(2)
+  })
+
+  it('少于两条事件 → null（不画假图）', () => {
+    expect(bucketEventDensity([], t0)).toBeNull()
+    expect(bucketEventDensity([t0], t0 + 10)).toBeNull()
   })
 })

@@ -5,12 +5,13 @@ import { Activity as ActivityIcon, FilterX, History, RefreshCw, Terminal } from 
 import { Badge, EmptyState, ErrorState, Panel, PageHeader, Segmented, Spinner } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { EventFeed } from '@/components/EventFeed'
+import { TrendChart } from '@/components/TrendChart'
 import { api } from '@/lib/api'
 import { useLive } from '@/store/ws'
 import { useDevices } from '@/hooks/useDevices'
 import { useEdges } from '@/hooks/useEdges'
 import { useCapabilityIndex } from '@/hooks/useDescriptor'
-import { cmdMeta, cmdStatusMeta, eventLabel, fmtDateTime, fmtDay, fmtTime, mergeEvents, optionLabel } from '@/lib/format'
+import { bucketEventDensity, cmdMeta, cmdStatusMeta, eventLabel, fmtDateTime, fmtDay, fmtHourMin, fmtTime, mergeEvents, optionLabel } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import type { CommandView } from '@/lib/types'
 import type { CapabilityIndex } from '@/lib/descriptor'
@@ -81,6 +82,12 @@ export default function Activity() {
     const rows = cmdQuery.data?.commands ?? []
     return edge && !device ? rows.filter((c) => c.device_id.startsWith(`${edge}/`)) : rows
   }, [cmdQuery.data, edge, device])
+
+  /** 事件密度（真实历史分布）：桶宽按跨度自动取人话单位；窗口起点如实标注，不承诺没覆盖的区间 */
+  const density = useMemo(
+    () => (tab === 'events' ? bucketEventDensity(events.map((e) => e.ts), Math.floor(Date.now() / 1000)) : null),
+    [events, tab],
+  )
 
   /** 设备 ID → 用户起的名字：命令行的目标列展示人话名，机器 ID 收进 title */
   const deviceNames = useMemo(() => new Map(
@@ -214,6 +221,19 @@ export default function Activity() {
                 hint={anyFilter ? '试试清除筛选条件，或换一个设备 / 边缘节点。' : '设备上报事件后会出现在这里。'} />
             ) : (
               <>
+                {density && (
+                  <div className="mb-4 border-b border-hairline pb-4">
+                    <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
+                      <span className="text-[11px] font-medium text-ink-3">事件密度 · 每{density.label}</span>
+                      <span className="num min-w-0 truncate text-[11px] text-ink-3"
+                        title={`窗口 ${fmtDateTime(density.points[0].t)} 至今 · 共 ${events.length} 条 · 峰值 ${density.peak} 条/${density.label}`}>
+                        共 {events.length} 条 · 峰值 {density.peak} 条/{density.label}
+                        <span className="hidden md:inline"> · 窗口起 {fmtDateTime(density.points[0].t)}</span>
+                      </span>
+                    </div>
+                    <TrendChart points={density.points} kind="bar" zeroBase hideY unit="条" height={88} xTick={fmtHourMin} />
+                  </div>
+                )}
                 <EventFeed events={events} limit={200} dayGrouped />
                 {atLimit && <LimitNote what="事件" />}
               </>
