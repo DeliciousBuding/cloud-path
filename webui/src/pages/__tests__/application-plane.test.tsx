@@ -7,6 +7,7 @@ import { ApplicationPlane } from '@/components/plugin/ApplicationPlane'
 import PluginInstanceDetail from '@/pages/PluginInstanceDetail'
 import { useAuth } from '@/store/auth'
 import { useLive } from '@/store/ws'
+import { useToasts } from '@/store/toast'
 import { appInstance, appRecord, appResponse, appSchedule, appUser } from '@/test/application-plane'
 import { installFetch, stubResponse } from '@/test/http'
 import { renderWithProviders, resetStores } from '@/test/render'
@@ -237,6 +238,11 @@ describe('插件实例详情的应用入口', () => {
     expect(writes).toHaveLength(1)
     expect(writes[0].url).toBe('/api/plugin-instances/' + encodeURIComponent(controlID))
     expect(writes[0].body).toEqual({ enabled: false })
+    expect(useToasts.getState().items).toEqual([expect.objectContaining({
+      title: '期望态已更新',
+      detail: '修订版 2；运行宿主应用后这里才会变成已收敛',
+      tone: 'ok',
+    })])
     expect(screen.getByText('应用运行中')).toBeVisible()
     expect(screen.queryByText('应用未运行')).not.toBeInTheDocument()
   })
