@@ -1,12 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
+import {Activity, ArrowRight, Braces, Command, Grid3x3, History, LayoutDashboard, Radio, RadioTower, Sparkles, Terminal, Zap} from 'lucide-react'
 import {
-  Activity, ArrowLeft, ArrowRight, Braces, Command, Grid3x3, History, LayoutDashboard,
-  Radio, RadioTower, Sparkles, Terminal, Zap,
-} from 'lucide-react'
-import {
-  Badge, EmptyState, ErrorState, KeyValue, Panel, Segmented, StatusDot, TabBar, TabPanel,
+  BackLink, Badge, EmptyState, ErrorState, KeyValue, Panel, Segmented, StatusDot, TabBar, TabPanel,
 } from '@/components/ui'
 import type { TabItem } from '@/components/ui'
 import {
@@ -139,7 +136,7 @@ export default function DeviceDetail() {
   if (!d) {
     return (
       <>
-        <BackLink />
+        <BackLink to="/devices" label="设备" />
         {devError ? (
           // 接口失败不等于设备不存在：这两种结论对用户完全不同
           <ErrorState icon={<RadioTower size={20} />} title="设备信息加载失败"
@@ -164,7 +161,7 @@ export default function DeviceDetail() {
 
   return (
     <>
-      <BackLink />
+      <BackLink to="/devices" label="设备" />
 
       <header className="mb-5 flex flex-wrap items-center gap-3 fade-up">
         <StatusDot online={d.online} />
@@ -484,11 +481,3 @@ function StateTable({ descriptor, idx, nowSec }: {
   )
 }
 
-function BackLink() {
-  return (
-    <Link to="/devices"
-      className="mb-5 inline-flex items-center gap-1 text-sm text-ink-2 transition-colors hover:text-accent fade-up">
-      <ArrowLeft size={15} /> 设备
-    </Link>
-  )
-}

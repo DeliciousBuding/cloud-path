@@ -149,8 +149,9 @@ export default function Overview() {
       )}
 
       {/* ---- 主体：fleet + 关注并排；事件条通栏在下（宽屏不留死角） ---- */}
-      <div className="mt-7 grid items-stretch gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="mt-7 grid items-stretch gap-5 xl:grid-cols-[340px_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,1fr)_340px]">
         <Panel
+          className="xl:col-span-2 2xl:col-span-1"
           title={<span className="flex items-center gap-1.5"><Cpu size={14} />设备</span>}
           right={
             <Link to="/devices" className="link flex items-center gap-0.5 text-xs">
@@ -183,6 +184,7 @@ export default function Overview() {
         </Panel>
 
         <Panel
+          className="xl:self-start 2xl:self-stretch"
           title={<span className="flex items-center gap-1.5"><AlertTriangle size={14} className="text-warn" />需要关注</span>}
           right={attention > 0
             ? <Badge tone="warn">{attention} 项</Badge>
@@ -227,24 +229,24 @@ export default function Overview() {
           )}
         </Panel>
 
+        <Panel
+          className="2xl:col-span-2"
+          title={<span className="flex items-center gap-1.5"><Activity size={14} />近期事件</span>}
+          right={
+            <Link to="/activity" className="link flex items-center gap-0.5 text-xs">
+              全部 <ArrowRight size={12} />
+            </Link>
+          }
+        >
+          {loading && feed.length === 0
+            ? <RowSkeleton rows={6} />
+            : feed.length === 0
+              ? <p className="flex flex-col items-center gap-2 py-10 text-center text-sm text-ink-3">
+                <History size={20} /> 还没有事件上报
+              </p>
+              : <EventFeed events={feed} limit={10} />}
+        </Panel>
       </div>
-
-      <Panel
-        title={<span className="flex items-center gap-1.5"><Activity size={14} />近期事件</span>}
-        right={
-          <Link to="/activity" className="link flex items-center gap-0.5 text-xs">
-            全部 <ArrowRight size={12} />
-          </Link>
-        }
-        className="mt-5">
-        {loading && feed.length === 0
-          ? <RowSkeleton rows={6} />
-          : feed.length === 0
-            ? <p className="flex flex-col items-center gap-2 py-10 text-center text-sm text-ink-3">
-              <History size={20} /> 还没有事件上报
-            </p>
-            : <EventFeed events={feed} limit={10} />}
-      </Panel>
     </>
   )
 }

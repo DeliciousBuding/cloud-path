@@ -3,7 +3,8 @@
 // 颜色一律走 index.css token（Tailwind 主题类或 .btn/.input/.card 基类），组件内禁止裸色值。
 import { useId, useState } from 'react'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react'
-import { Moon, RefreshCw, Sun } from 'lucide-react'
+import { ArrowLeft, Moon, RefreshCw, Sun } from 'lucide-react'
+import { Link } from 'react-router'
 import { cn } from '@/lib/cn'
 import { setTheme } from '@/lib/theme'
 import type { ThemeMode } from '@/lib/theme'
@@ -369,12 +370,22 @@ export function AuthCard({ title, subtitle, children, footer }: {
           <span className="flex h-14 w-14 items-center justify-center rounded-[16px] bg-accent/10 text-accent">
             <Logo size={30} />
           </span>
-          <h1 className="mt-4 text-[24px] font-bold leading-tight tracking-tight">{title}</h1>
+          <h1 className="mt-4 text-[24px] font-semibold leading-tight tracking-tight">{title}</h1>
           {subtitle && <p className="mt-1.5 text-sm text-ink-2">{subtitle}</p>}
         </div>
         <div className="card p-6">{children}</div>
         {footer && <div className="mt-5 text-center text-xs text-ink-3">{footer}</div>}
       </div>
     </div>
+  )
+}
+
+/** 详情页统一返回链（fade-in + hover 强调色）；to/label 由调用页声明 */
+export function BackLink({ to, label }: { to: string; label: string }) {
+  return (
+    <Link to={to}
+      className="mb-5 inline-flex items-center gap-1 text-sm text-ink-2 transition-colors hover:text-accent fade-up">
+      <ArrowLeft size={15} /> {label}
+    </Link>
   )
 }

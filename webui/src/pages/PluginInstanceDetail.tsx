@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import {
-  ArrowLeft, Boxes, KeyRound, Puzzle, Server, Settings2, ShieldCheck, SlidersHorizontal,
+  Boxes, KeyRound, Puzzle, Server, Settings2, ShieldCheck, SlidersHorizontal,
 } from 'lucide-react'
-import { Badge, EmptyState, ErrorState, Panel } from '@/components/ui'
+import { BackLink, Badge, EmptyState, ErrorState, Panel } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { InstanceSplit } from '@/components/plugin/InstanceRow'
 import { InstanceControls } from '@/components/plugin/InstanceControls'
@@ -32,7 +32,7 @@ export default function PluginInstanceDetail() {
   if (loading) {
     return (
       <>
-        <BackLink />
+        <BackLink to="/plugins" label="插件" />
         <Panel><RowSkeleton rows={5} /></Panel>
       </>
     )
@@ -41,7 +41,7 @@ export default function PluginInstanceDetail() {
   if (!instance) {
     return (
       <>
-        <BackLink />
+        <BackLink to="/plugins" label="插件" />
         {error ? (
           <ErrorState icon={<Boxes size={20} />} title="实例加载失败"
             hint={`拿不到 ${key} 的实例投影。可能实例已删除、不属于当前租户，或 server 不可达。`} />
@@ -57,10 +57,10 @@ export default function PluginInstanceDetail() {
 
   return (
     <>
-      <BackLink />
+      <BackLink to="/plugins" label="插件" />
 
       <header className="mb-5 flex flex-wrap items-center gap-2.5 fade-up">
-        <h1 className="num min-w-0 max-w-full truncate text-[26px] font-bold tracking-tight" title={instance.id}>
+        <h1 className="num min-w-0 max-w-full truncate text-[22px] font-semibold tracking-tight" title={instance.id}>
           {instance.desired.instance_id || instance.id}
         </h1>
         <Badge tone="idle" className="max-w-full">
@@ -133,14 +133,5 @@ export default function PluginInstanceDetail() {
         </>
       )}
     </>
-  )
-}
-
-function BackLink() {
-  return (
-    <Link to="/plugins"
-      className="mb-5 inline-flex items-center gap-1 text-sm text-ink-2 transition-colors hover:text-accent fade-up">
-      <ArrowLeft size={15} /> 插件
-    </Link>
   )
 }

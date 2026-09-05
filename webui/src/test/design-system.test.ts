@@ -133,7 +133,7 @@ describe('JSX children 不许写 // 行注释（会被当字面文本渲染）',
 
 describe('light / dark token 对齐', () => {
   const light = colorTokens(blockOf(css, '@theme'))
-  const dark = colorTokens(blockOf(css, '.dark'))
+  const dark = colorTokens(blockOf(css, '.dark {'))
 
   it('浅色主题声明了全套语义 token', () => {
     for (const t of ['canvas', 'surface', 'surface-2', 'ink', 'ink-2', 'ink-3', 'hairline',

@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Cpu, History, Network, Server } from 'lucide-react'
-import { Badge, EmptyState, ErrorState, KeyValue, Panel, StatusDot } from '@/components/ui'
+import { Cpu, History, Network, Server } from 'lucide-react'
+import { BackLink, Badge, EmptyState, ErrorState, KeyValue, Panel, StatusDot } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { EventFeed } from '@/components/EventFeed'
 import { api } from '@/lib/api'
@@ -41,7 +41,7 @@ export default function EdgeDetail() {
   if (edgeLoading) {
     return (
       <>
-        <BackLink />
+        <BackLink to="/edges" label="边缘节点" />
         <Panel><RowSkeleton rows={4} /></Panel>
       </>
     )
@@ -50,7 +50,7 @@ export default function EdgeDetail() {
   if (!f) {
     return (
       <>
-        <BackLink />
+        <BackLink to="/edges" label="边缘节点" />
         {edgeError ? (
           <ErrorState icon={<Network size={20} />} title="边缘节点信息加载失败"
             hint={`拿不到节点列表（GET /api/edges），因此无法确认 ${id} 是否存在。请检查 server 是否可达后重试。`}
@@ -66,11 +66,11 @@ export default function EdgeDetail() {
   const e = f.edge
   return (
     <>
-      <BackLink />
+      <BackLink to="/edges" label="边缘节点" />
 
       <header className="mb-7 flex flex-wrap items-center gap-3 fade-up">
         <StatusDot online={e.online} />
-        <h1 className="num min-w-0 max-w-full truncate text-[26px] font-bold tracking-tight" title={e.edge_id}>
+        <h1 className="num min-w-0 max-w-full truncate text-[22px] font-semibold tracking-tight" title={e.edge_id}>
           {e.edge_id}
         </h1>
         <Badge tone={e.online ? 'ok' : 'idle'}>{e.online ? '在线' : '离线'}</Badge>
@@ -152,14 +152,5 @@ export default function EdgeDetail() {
         </Panel>
       </div>
     </>
-  )
-}
-
-function BackLink() {
-  return (
-    <Link to="/edges"
-      className="mb-5 inline-flex items-center gap-1 text-sm text-ink-2 transition-colors hover:text-accent fade-up">
-      <ArrowLeft size={15} /> 边缘节点
-    </Link>
   )
 }

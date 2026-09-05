@@ -8,10 +8,10 @@
 // 空态/加载/错误态齐全；390px 下不产生横向溢出（长标识符一律 truncate/break）。
 
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, History, Pill, RadioTower, RefreshCw, WifiOff } from 'lucide-react'
-import { Badge, EmptyState, ErrorState, PageHeader, Panel, StatusDot, TONE_TEXT_CLS } from '@/components/ui'
+import {History, Pill, RadioTower, RefreshCw, WifiOff} from 'lucide-react'
+import { BackLink, Badge, EmptyState, ErrorState, PageHeader, Panel, StatusDot, TONE_TEXT_CLS } from '@/components/ui'
 import { ActionPanel } from '@/components/ActionPanel'
 import { CommandHistory } from '@/components/CommandHistory'
 import { EventFeed } from '@/components/EventFeed'
@@ -57,14 +57,6 @@ function SlotCard({ entity, idx }: { entity: DescriptorEntity; idx: CapabilityIn
   )
 }
 
-function BackLink() {
-  return (
-    <Link to="/devices"
-      className="mb-5 inline-flex items-center gap-1 text-sm text-ink-2 transition-colors hover:text-accent fade-up">
-      <ArrowLeft size={15} /> 设备
-    </Link>
-  )
-}
 
 /** 设备选择器：只出现在未锁定设备的场景；长 ID 用 optionLabel 截断保护 390px */
 function DevicePicker({ devices, value, onChange, loading, error, onRetry }: {
@@ -243,7 +235,7 @@ export default function Pillbox() {
 
   return (
     <>
-      {!lockedKey && list.length > 0 && <BackLink />}
+      {!lockedKey && list.length > 0 && <BackLink to="/devices" label="设备" />}
       <PageHeader
         title="药盒控制"
         subtitle="查看每个药格的状态、下发设备命令、查看提醒与漏服历史"
