@@ -62,7 +62,10 @@ export function UserRow({ user: u }: { user: UserView }) {
         {/* 用户名/显示名由管理员填写，长度不可控：必须各自截断 */}
         <div className="min-w-0 flex-1">
           <p className="num truncate text-sm font-semibold" title={u.username}>{u.username}</p>
-          <p className="mt-0.5 truncate text-xs text-ink-2" title={u.name}>{u.name}</p>
+          {/* 显示名与用户名相同（服务端回落）时不重复占一行 */}
+          {u.name && u.name !== u.username && (
+            <p className="mt-0.5 truncate text-xs text-ink-2" title={u.name}>{u.name}</p>
+          )}
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
           <Badge tone={u.role === 'admin' ? 'accent' : u.role === 'operator' ? 'ok' : 'idle'}>
