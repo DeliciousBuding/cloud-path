@@ -96,7 +96,7 @@ export default function Devices() {
           )}
           <p className="flex items-center gap-1.5 border-t border-hairline px-4 py-2.5 text-[11px] text-ink-3">
             <Cpu size={11} className="shrink-0" />
-            能力清单来自设备主动上报的声明；「能力未知」表示设备尚未上报自己的能力。
+            关键读数取自设备主动上报声明里的主观测；「等待声明」表示设备尚未上报自己的能力声明。
           </p>
         </Panel>
       )}

@@ -1,33 +1,28 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router'
-import { Braces } from 'lucide-react'
 import { Badge, StatusDot } from './ui'
 import { useDeviceDescriptor } from '@/hooks/useDescriptor'
 import { useLive } from '@/store/ws'
 import { Sparkline } from './Sparkline'
-import { capabilityLabel, statusMeta } from '@/lib/descriptor'
+import { metricTiles, statusMeta } from '@/lib/descriptor'
 import { fmtDateTime } from '@/lib/format'
 import type { DeviceView } from '@/lib/types'
 
 /**
- * 设备列表行：Name / Edge / Capabilities / Trend / Status / Last Seen。
- * 能力列只在 2xl 出现：中宽屏（含概览页的窄面板）里芯片换行会把行撑到三倍高，
- * 而能力的完整事实面在设备详情「能力」页，列表行不需要重复承载。
+ * 设备列表行：Name / Edge / 关键读数 / Status / Trend / Last Seen。
+ * 关键读数列只在 2xl 出现（声明主观测至多两条）：中宽屏里多值换行会把行撑高，
+ * 而能力的完整事实面在设备详情「能力」页，列表行不重复承载芯片墙。
  *
  * 桌面（lg）是紧凑表格行；窄屏自动堆叠并补上列名，因此 390px 下每一列都仍可读、可点。
- * Capabilities 一律来自 Descriptor 声明（entities[].capabilities），前端不维护能力清单；
- * Descriptor 缺席时明确说「未声明能力」，不猜也不编。
+ * 读数一律由 Descriptor 声明推导（primaryObservation + presentation），前端不维护字段清单；
+ * Descriptor 缺席时明确说「等待声明」，不猜也不编。
  */
 export function DeviceRow({ d }: { d: DeviceView }) {
   const [edgeId, devId] = d.id.split('/')
   const { descriptor, capabilities } = useDeviceDescriptor(d.id, edgeId ?? '', devId ?? '', { device: d })
 
-  const caps = useMemo(() => {
-    if (!descriptor) return []
-    const set = new Set<string>()
-    for (const e of descriptor.entities) for (const c of e.capabilities) if (c) set.add(c)
-    return [...set]
-  }, [descriptor])
+  // 舰队行的「关键读数」：声明主观测至多两条（metricTiles 与概览 KPI 同一推导，无设备特例）
+  const metrics = useMemo(() => (descriptor ? metricTiles(descriptor, capabilities, 2) : []), [descriptor, capabilities])
 
   const st = descriptor ? statusMeta(descriptor.status) : null
   const name = d.name || devId || d.id
@@ -68,33 +63,23 @@ export function DeviceRow({ d }: { d: DeviceView }) {
         {d.adapter && <span className="text-ink-3"> · {d.adapter}</span>}
       </div>
 
-      {/* Capabilities（来自 Descriptor 声明） */}
-      <div className="flex min-w-0 flex-wrap items-center gap-1 lg:hidden 2xl:flex">
-        <span className="text-[11px] text-ink-3 lg:hidden">能力 </span>
-        {caps.length === 0 ? (
-          <span className="flex items-center gap-1 text-[11px] text-ink-3" title={descriptor ? '设备声明里未列出能力' : '设备尚未上报声明，能力未知'}>
-            <Braces size={10} className="shrink-0" />
-            {descriptor ? '未声明能力' : '能力未知（未上报声明）'}
-          </span>
+      {/* 关键读数（声明主观测；能力全量事实面在详情页「能力」tab） */}
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 lg:hidden 2xl:flex">
+        <span className="text-[11px] text-ink-3 lg:hidden">读数 </span>
+        {!descriptor ? (
+          <span className="text-[11px] text-ink-3" title="设备尚未上报声明，读数未知">等待声明</span>
+        ) : metrics.length === 0 ? (
+          <span className="text-[11px] text-ink-3" title="声明里没有标量主观测">暂无可读数值</span>
         ) : (
-          <>
-            {caps.slice(0, 4).map((ref) => (
-              <span key={ref} className="badge max-w-full bg-ink-3/10 text-ink-2" title={ref}>
-                <span className="min-w-0 truncate">{capabilityLabel(ref, capabilities)}</span>
+          metrics.map((m, i) => (
+            <span key={`${m.label}-${i}`} className="num flex min-w-0 items-baseline gap-1 text-[11px]" title={m.title}>
+              <span className="min-w-0 truncate text-ink-3">{m.label}</span>
+              <span className="min-w-0 truncate font-medium text-ink-2">
+                {m.text}{m.unit ? ` ${m.unit}` : ''}
               </span>
-            ))}
-            {caps.length > 4 && (
-              <span className="badge shrink-0 bg-ink-3/10 text-ink-3" title={caps.slice(4).join('\n')}>
-                +{caps.length - 4}
-              </span>
-            )}
-          </>
+            </span>
+          ))
         )}
-      </div>
-
-      {/* 会话趋势火花线（仅桌面；无序列时留空，不画假线） */}
-      <div className="hidden min-w-0 lg:block">
-        {spark && <Sparkline points={spark} height={18} />}
       </div>
 
       {/* Online / Offline（桌面列；窄屏已在名称行呈现） */}
@@ -102,6 +87,11 @@ export function DeviceRow({ d }: { d: DeviceView }) {
         {st
           ? <Badge tone={st.tone}>{st.label}</Badge>
           : <Badge tone={d.online ? 'ok' : 'idle'}>{d.online ? '在线' : '离线'}</Badge>}
+      </div>
+
+      {/* 会话趋势火花线（仅桌面；无序列时留空，不画假线） */}
+      <div className="hidden min-w-0 lg:block">
+        {spark && <Sparkline points={spark} height={18} />}
       </div>
 
       {/* Last Seen（绝对时间） */}
@@ -120,7 +110,7 @@ export function DeviceRowHead() {
       aria-hidden
       className="hidden gap-x-4 px-4 pb-2 text-[11px] font-medium text-ink-3 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_5.5rem_6.5rem_9.5rem] 2xl:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,1.4fr)_5.5rem_6.5rem_9.5rem]"
     >
-      <span>设备</span><span>边缘节点</span><span className="hidden 2xl:inline">能力</span><span>状态</span><span>趋势</span><span>最后见</span>
+      <span>设备</span><span>边缘节点</span><span className="hidden 2xl:inline">关键读数</span><span>状态</span><span>趋势</span><span>最后见</span>
     </li>
   )
 }
