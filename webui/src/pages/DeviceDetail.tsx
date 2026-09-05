@@ -391,11 +391,11 @@ export default function DeviceDetail() {
       {tab === 'capabilities' && (
         <TabPanel value={tab}>
           {!descriptor ? (
-            <EmptyState icon={<Sparkles size={24} />} title="该设备还没有提供 Descriptor"
-              hint="没有 Descriptor 就不知道它声明了哪些 Capability，因此这里不猜。命令集此时回落到后端适配器白名单（见「控制」分区）。" />
+            <EmptyState icon={<Sparkles size={24} />} title="该设备还没有上报能力声明"
+              hint="没有声明就不知道它具备哪些能力，因此这里不猜。命令集此时回落到后端适配器白名单（见「控制」分区）。" />
           ) : (
             <Panel
-              title={<span className="flex items-center gap-1.5"><Sparkles size={14} />声明的 Capability</span>}
+              title={<span className="flex items-center gap-1.5"><Sparkles size={14} />声明的能力</span>}
               right={<span className="num text-[11px] text-ink-3">{capRefs.length} 种 · catalog 收录 {capabilities.docs.length} 份</span>}>
               <CapabilityBrowser descriptor={descriptor} idx={capabilities} />
               <p className="mt-3 border-t border-hairline pt-3 text-[11px] leading-relaxed text-ink-3">

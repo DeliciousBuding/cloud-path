@@ -163,7 +163,7 @@ function PillboxPanel({ deviceKey, dev, adapterCommands }: {
         <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 border-t border-hairline pt-3 text-[11px] text-ink-3 sm:grid-cols-4">
           <div className="min-w-0"><dt className="truncate">边缘节点</dt><dd className="num truncate font-mono">{dev.edge_id || '—'}</dd></div>
           <div className="min-w-0"><dt className="truncate">适配器</dt><dd className="num truncate font-mono">{dev.adapter || '—'}</dd></div>
-          <div className="min-w-0"><dt className="truncate">声明实体</dt><dd className="num truncate">{descriptor ? `${descriptor.entities.length} 个` : '无 Descriptor'}</dd></div>
+          <div className="min-w-0"><dt className="truncate">声明实体</dt><dd className="num truncate">{descriptor ? `${descriptor.entities.length} 个` : '无声明'}</dd></div>
           <div className="min-w-0"><dt className="truncate">串口</dt><dd className="num truncate font-mono">{dev.port || '—'}</dd></div>
         </dl>
       </Panel>
@@ -171,11 +171,11 @@ function PillboxPanel({ deviceKey, dev, adapterCommands }: {
       {/* 药格/实体状态 */}
       <Panel
         title={<span className="flex items-center gap-1.5"><Pill size={14} />药格与设备状态</span>}
-        right={<span className="text-[11px] text-ink-3">{descriptor ? `${slotEntities.length} 个实体` : '等待 Descriptor'}</span>}
+        right={<span className="text-[11px] text-ink-3">{descriptor ? `${slotEntities.length} 个实体` : '等待声明'}</span>}
       >
         {!descriptor ? (
           <p className="py-8 text-center text-sm text-ink-3">
-            该设备还没有提供 Descriptor，暂时无法展示药格状态（命令区仍可从适配器白名单下发）。
+            该设备还没有上报能力声明，暂时无法展示药格状态（命令区仍可从适配器白名单下发）。
           </p>
         ) : slotEntities.length === 0 ? (
           <p className="py-8 text-center text-sm text-ink-3">设备声明里没有可呈现的观测项，没有可展示的药格。</p>

@@ -122,7 +122,7 @@ describe('Schema 端点缺席时的设备详情页', () => {
 
     // 能力分区：没有 Descriptor 就明说，不猜能力
     await user.click(screen.getByRole('tab', { name: /能力/ }))
-    expect(await screen.findByText('该设备还没有提供 Descriptor')).toBeInTheDocument()
+    expect(await screen.findByText('该设备还没有上报能力声明')).toBeInTheDocument()
   })
 
   it('设备不存在 → 明确空态而不是崩溃', async () => {
