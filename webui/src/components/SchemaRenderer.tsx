@@ -373,7 +373,7 @@ export function StateMatrix({ descriptor, idx = EMPTY_INDEX, categories, nowSec,
     .map((category) => ({ category, entities: descriptor.entities.filter((e) => e.category === category) }))
     .filter((g) => g.entities.length > 0)
   if (!groups.length) {
-    return <p className="py-6 text-center text-sm text-ink-3">Descriptor 未声明 Entity</p>
+    return <p className="py-6 text-center text-sm text-ink-3">设备声明里没有可呈现的观测项</p>
   }
   return (
     <div className={cn('space-y-5', className)}>
@@ -426,7 +426,7 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
   const set = new Set<string>()
   for (const e of descriptor.entities) for (const c of e.capabilities) if (c) set.add(c)
   const refs = [...set]
-  if (!refs.length) return <p className="py-6 text-center text-sm text-ink-3">Descriptor 未声明 Capability</p>
+  if (!refs.length) return <p className="py-6 text-center text-sm text-ink-3">设备声明里没有列出能力</p>
   return (
     <ul className={cn('m-0 list-none divide-y divide-hairline p-0', className)}>
       {refs.map((ref) => {
@@ -599,7 +599,7 @@ export function RawView({ raw, title = '上报字段（通用视图）', classNa
       <p className="mt-3 flex items-center gap-1 border-t border-hairline pt-2 text-[11px] text-ink-3">
         <Boxes size={11} />
         <span className={cn('truncate', TONE_TEXT_CLS.idle)}>
-          该设备尚未提供 Descriptor，此处按上报字段通用渲染
+          该设备未上报能力声明，此处按上报字段通用渲染
         </span>
       </p>
     </Panel>

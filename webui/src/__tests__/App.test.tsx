@@ -108,7 +108,7 @@ describe('Schema 端点缺席时的设备详情页', () => {
 
     // 实时状态分区：通用回落视图，上报字段按类型渲染（标量成键值行，对象数组成表格，嵌套对象成 JSON）
     await user.click(screen.getByRole('tab', { name: /实时状态/ }))
-    expect(await screen.findByText('该设备尚未提供 Descriptor，此处按上报字段通用渲染')).toBeInTheDocument()
+    expect(await screen.findByText('该设备未上报能力声明，此处按上报字段通用渲染')).toBeInTheDocument()
     expect(screen.getByText('上报字段（通用视图）')).toBeInTheDocument()
     expect(screen.getByText('Mode')).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Slots 数据表' })).toBeInTheDocument()

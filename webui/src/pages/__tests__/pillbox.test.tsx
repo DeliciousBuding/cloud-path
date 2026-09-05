@@ -134,7 +134,7 @@ describe('药盒控制面板（Schema 驱动）', () => {
     route({ descriptor: { device_id: 'edge-1/dev-9', external_id: 'dev-9', status: 'online', entities: [] } })
     renderWithProviders(<Pillbox />)
     await screen.findByText('药盒控制')
-    expect(await screen.findByText('Descriptor 未声明 Entity，没有可展示的药格。')).toBeInTheDocument()
+    expect(await screen.findByText('设备声明里没有可呈现的观测项，没有可展示的药格。')).toBeInTheDocument()
   })
 
   it('锁定设备路由 /pillbox/:edgeId/:deviceId 不显示选择器，直出面板', async () => {

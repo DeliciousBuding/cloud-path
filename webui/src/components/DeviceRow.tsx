@@ -72,9 +72,9 @@ export function DeviceRow({ d }: { d: DeviceView }) {
       <div className="flex min-w-0 flex-wrap items-center gap-1 lg:hidden 2xl:flex">
         <span className="text-[11px] text-ink-3 lg:hidden">能力 </span>
         {caps.length === 0 ? (
-          <span className="flex items-center gap-1 text-[11px] text-ink-3" title={descriptor ? '该 Descriptor 未声明 Capability' : '尚无 Descriptor，能力未知'}>
+          <span className="flex items-center gap-1 text-[11px] text-ink-3" title={descriptor ? '设备声明里未列出能力' : '设备尚未上报声明，能力未知'}>
             <Braces size={10} className="shrink-0" />
-            {descriptor ? '未声明能力' : '能力未知（无 Descriptor）'}
+            {descriptor ? '未声明能力' : '能力未知（未上报声明）'}
           </span>
         ) : (
           <>

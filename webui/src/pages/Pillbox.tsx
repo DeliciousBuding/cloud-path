@@ -173,7 +173,7 @@ function PillboxPanel({ deviceKey, dev, adapterCommands }: {
             该设备还没有提供 Descriptor，暂时无法展示药格状态（命令区仍可从适配器白名单下发）。
           </p>
         ) : slotEntities.length === 0 ? (
-          <p className="py-8 text-center text-sm text-ink-3">Descriptor 未声明 Entity，没有可展示的药格。</p>
+          <p className="py-8 text-center text-sm text-ink-3">设备声明里没有可呈现的观测项，没有可展示的药格。</p>
         ) : (
           <div className="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {slotEntities.map((e) => <SlotCard key={e.entity_id || e.unique_key} entity={e} idx={capabilities} />)}

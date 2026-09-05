@@ -147,7 +147,7 @@ describe('有 Schema 声明时以声明为准', () => {
 })
 
 describe('列表页的能力列同样来自声明', () => {
-  it('无 Descriptor → 「能力未知（无 Descriptor）」，不猜能力', async () => {
+  it('无声明 → 「能力未知（未上报声明）」，不猜能力', async () => {
     const { default: Devices } = await import('@/pages/Devices')
     installFetch((url) => {
       if (url === '/api/devices') return stubResponse(200, { devices: [makeDeviceView()] })
@@ -156,7 +156,7 @@ describe('列表页的能力列同样来自声明', () => {
       return stubResponse(404, {})
     })
     renderWithProviders(<Devices />)
-    expect(await screen.findByText('能力未知（无 Descriptor）')).toBeInTheDocument()
+    expect(await screen.findByText('能力未知（未上报声明）')).toBeInTheDocument()
   })
 
   it('有 Descriptor → 列出声明的 Capability（显示名取自 catalog title）', async () => {
@@ -172,6 +172,6 @@ describe('列表页的能力列同样来自声明', () => {
     renderWithProviders(<Devices />)
     expect(await screen.findByText('温度')).toBeInTheDocument()
     expect(screen.getByText('继电器')).toBeInTheDocument()
-    expect(screen.queryByText('能力未知（无 Descriptor）')).not.toBeInTheDocument()
+    expect(screen.queryByText('能力未知（未上报声明）')).not.toBeInTheDocument()
   })
 })

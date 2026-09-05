@@ -92,7 +92,7 @@ describe('未知 Capability 回落', () => {
 
   it('Descriptor 缺席时 RawView 用上报字段通用渲染（不要求后端先就绪）', () => {
     render(<RawView raw={makeDeviceView().state} />)
-    expect(screen.getByText('该设备尚未提供 Descriptor，此处按上报字段通用渲染')).toBeInTheDocument()
+    expect(screen.getByText('该设备未上报能力声明，此处按上报字段通用渲染')).toBeInTheDocument()
     expect(screen.getByText('Mode')).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Slots 数据表' })).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Diag 原始 JSON' })).toBeInTheDocument()
@@ -173,7 +173,7 @@ describe('StateMatrix 分组', () => {
 
   it('没有 Entity 的 Descriptor 有明确空态', () => {
     render(<StateMatrix descriptor={makeDescriptor({ entities: [] })} idx={idx} />)
-    expect(screen.getByText('Descriptor 未声明 Entity')).toBeInTheDocument()
+    expect(screen.getByText('设备声明里没有可呈现的观测项')).toBeInTheDocument()
   })
 })
 
