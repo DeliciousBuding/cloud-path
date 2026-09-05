@@ -90,7 +90,7 @@ export default function Plugins() {
                 return (
                   <Panel key={p.id} className="fade-up">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <span className="num min-w-0 max-w-full truncate text-[15px] font-semibold tracking-tight" title={p.id}>
+                      <span className="num min-w-0 max-w-full truncate text-[15px] font-semibold tracking-[-0.01em]" title={p.id}>
                         {p.id}
                       </span>
                       <span className="ml-auto flex shrink-0 items-center gap-1.5">

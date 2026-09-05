@@ -14,8 +14,10 @@
  * 中文绝不回落系统雅黑：Noto Sans SC 子集（GB2312 一级字表 ∪ 界面词汇 ∪ 中文标点，
  * 可变字重轴保留）以 unicode-range 只接管 CJK，拉丁/数字永远走 Geist，避免混排基线/字重错位。
  * 子集外的罕见字才回落系统黑体。
- * weight 纪律（Vercel design.md）：regular 400 / medium 500 / semibold 600，标题不超 600。
- * 字距纪律：tracking-tight 等负字距是拉丁刻度；中文显示文本不超 -0.01em（全角字面会挤），正文保 0。 */
+ * weight 纪律（Vercel design.md）：regular 400 / medium 500 / semibold 600，标题不超 600；
+ *   正文基底 450（CJK/暗画布光学墨度平价，可变轴真实实例，见 body 规则）。
+ * 字距纪律：负字距是拉丁刻度，全仓统一 CJK 安全上限 -0.01em（-0.025em 档禁用，design-system 测试守卫）；
+ *   mono 等宽面恒零字距——负字距会破坏等宽网格。 */
 @font-face {
   font-family: "Geist";
   src: url("./assets/fonts/Geist-Variable.woff2") format("woff2");
@@ -86,12 +88,15 @@
   --shadow-lift: 0 2px 8px rgba(0, 0, 0, 0.5), 0 16px 40px rgba(0, 0, 0, 0.55);
 }
 
-html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
 body {
   margin: 0;
   background: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  /* 光学墨度平价：CJK 字形密度使 400 观感比同档拉丁细，暗画布灰度抗锯齿再削一笔。
+   * 450 是可变字重轴真实实例（Geist / Noto Sans SC 均 100-900），非合成粗；显式声明 500/600 的组件不受影响。 */
+  font-weight: 450;
   transition: background-color .3s ease, color .3s ease;
 }
 
@@ -120,7 +125,7 @@ body {
 /* 按钮基类 */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 500;
+  padding: 7px 14px; border-radius: 8px; font-size: 14px; font-weight: 500;
   border: 1px solid transparent; cursor: pointer; user-select: none;
   transition: all .18s ease;
 }
@@ -189,8 +194,8 @@ body {
 
 /* 表格化键值行（详情页/系统页） */
 .kv { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.kv dt { color: var(--color-ink-2); font-size: 13px; }
-.kv dd { margin: 0; font-size: 13px; font-weight: 500; text-align: right; }
+.kv dt { color: var(--color-ink-2); font-size: 14px; }
+.kv dd { margin: 0; font-size: 14px; font-weight: 500; text-align: right; }
 
 /* 尊重系统"减少动效"偏好 */
 @media (prefers-reduced-motion: reduce) {
@@ -238,4 +243,4 @@ body {
 }
 
 /* 大号按钮（认证页主操作） */
-.btn-lg { padding: 11px 20px; font-size: 14px; font-weight: 600; }
+.btn-lg { padding: 11px 20px; font-size: 15px; font-weight: 600; }

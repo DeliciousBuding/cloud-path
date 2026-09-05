@@ -57,7 +57,7 @@ function Row({ k, v, tone, wrap }: { k: string; v: ReactNode; tone?: 'ok' | 'war
 function ColumnHead({ children, note }: { children: ReactNode; note: string }) {
   return (
     <div className="mb-1.5 flex min-w-0 items-baseline justify-between gap-2">
-      <h3 className="min-w-0 truncate text-[12px] font-semibold tracking-tight">{children}</h3>
+      <h3 className="min-w-0 truncate text-[12px] font-semibold tracking-[-0.01em]">{children}</h3>
       <span className="shrink-0 text-[10px] text-ink-3">{note}</span>
     </div>
   )

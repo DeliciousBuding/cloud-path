@@ -39,7 +39,7 @@ export function SecretPanel({ secret, onClose }: { secret: CreatedToken; onClose
       aria-describedby={`${id}-warn`}
       className="card mb-4 border-bad/30 p-5 fade-up"
     >
-      <h3 id={`${id}-title`} className="flex items-center gap-1.5 text-[15px] font-semibold tracking-tight text-bad">
+      <h3 id={`${id}-title`} className="flex items-center gap-1.5 text-[15px] font-semibold tracking-[-0.01em] text-bad">
         <ShieldAlert size={15} className="shrink-0" />
         <span className="min-w-0 break-words">令牌已创建：明文只显示这一次</span>
       </h3>

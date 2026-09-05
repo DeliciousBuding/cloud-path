@@ -60,7 +60,7 @@ export default function PluginInstanceDetail() {
       <BackLink to="/plugins" label="插件" />
 
       <header className="mb-5 flex flex-wrap items-center gap-2.5 fade-up">
-        <h1 className="num min-w-0 max-w-full truncate text-[22px] font-semibold tracking-tight" title={instance.id}>
+        <h1 className="num min-w-0 max-w-full truncate text-[22px] font-semibold tracking-[-0.01em]" title={instance.id}>
           {instance.desired.instance_id || instance.id}
         </h1>
         {/* 插件/节点 ID 是机器标识：mono 文本，不用胶囊（状态才配胶囊） */}

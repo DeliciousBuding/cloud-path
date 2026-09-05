@@ -46,7 +46,7 @@ export function Panel({ title, right, className, children }: {
     <section className={cn('card p-4', className)}>
       {(title || right) && (
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-[14px] font-semibold tracking-tight">{title}</h2>
+          <h2 className="text-[14px] font-semibold tracking-[-0.01em]">{title}</h2>
           {right}
         </div>
       )}
@@ -61,8 +61,8 @@ export function PageHeader({ title, subtitle, actions }: {
   return (
     <header className="mb-8 flex flex-wrap items-end justify-between gap-4 fade-up">
       <div>
-        {/* tracking-tight(-0.025em) 是拉丁刻度；中文标题字面全角，超过 -0.01em 会挤，故用 CJK 安全值 */}
-        <h1 className="text-[24px] font-semibold tracking-[-0.01em] leading-tight">{title}</h1>
+        {/* -0.025em 档负字距是拉丁刻度；中文标题字面全角，超过 -0.01em 会挤，故用 CJK 安全值 */}
+        <h1 className="text-[26px] font-semibold tracking-[-0.01em] leading-tight">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-ink-2">{subtitle}</p>}
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}
@@ -79,7 +79,7 @@ export function StatTile({ icon, label, value, unit, sub }: {
       <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-ink-2">
         {icon}<span className="truncate">{label}</span>
       </div>
-      <div className="num mt-1.5 text-[26px] font-semibold leading-tight tracking-tight break-words">
+      <div className="num mt-1.5 text-[26px] font-semibold leading-tight tracking-[-0.01em] break-words">
         {value}
         {unit && <span className="ml-1 text-base font-normal text-ink-3">{unit}</span>}
       </div>
@@ -134,7 +134,7 @@ export function SectionTitle({ icon, children, right }: {
 }) {
   return (
     <div className="mb-3 flex min-w-0 items-center justify-between gap-3 px-1">
-      <h2 className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold tracking-tight">
+      <h2 className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold tracking-[-0.01em]">
         {icon}<span className="truncate">{children}</span>
       </h2>
       {right}
@@ -375,7 +375,7 @@ export function AuthCard({ title, subtitle, children, footer }: {
           <span className="flex h-14 w-14 items-center justify-center rounded-[16px] bg-accent/10 text-accent">
             <Logo size={30} />
           </span>
-          <h1 className="mt-4 text-[24px] font-semibold leading-tight tracking-tight">{title}</h1>
+          <h1 className="mt-4 text-[26px] font-semibold leading-tight tracking-[-0.01em]">{title}</h1>
           {subtitle && <p className="mt-1.5 text-sm text-ink-2">{subtitle}</p>}
         </div>
         <div className="card p-6">{children}</div>

@@ -11,7 +11,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import {ArrowRight, History, Pill, RadioTower, RefreshCw, WifiOff} from 'lucide-react'
-import { BackLink, Badge, EmptyState, ErrorState, PageHeader, Panel, StatusDot, TONE_TEXT_CLS } from '@/components/ui'
+import { BackLink, Badge, EmptyState, ErrorState, PageHeader, Panel, StatusDot } from '@/components/ui'
+import { ObsValue } from '@/components/SchemaRenderer'
 import { ActionPanel } from '@/components/ActionPanel'
 import { CommandHistory } from '@/components/CommandHistory'
 import { EventFeed } from '@/components/EventFeed'
@@ -20,24 +21,19 @@ import { useLive } from '@/store/ws'
 import { useDeviceDescriptor } from '@/hooks/useDescriptor'
 import { useDevices } from '@/hooks/useDevices'
 import {
-  CATEGORY_LABEL, capabilityLabel, entityTitle, formatValue, primaryObservation, qualityTone,
+  CATEGORY_LABEL, capabilityLabel, entityTitle, primaryObservation, qualityTone,
 } from '@/lib/descriptor'
 import type { CapabilityIndex } from '@/lib/descriptor'
 import type { DescriptorEntity, DeviceView } from '@/lib/types'
 import { api } from '@/lib/api'
-import { cn } from '@/lib/cn'
 import { fmtDateTime, mergeEvents, optionLabel, timeAgo } from '@/lib/format'
 import { deviceLabel } from '@/lib/edges'
 
 /** 单个 Entity（药格/时钟/提醒…）的状态卡片：值取自声明的主观测，绝不猜业务字段名 */
 function SlotCard({ entity, idx }: { entity: DescriptorEntity; idx: CapabilityIndex }) {
   const primary = primaryObservation(entity, idx)
-  const value = primary ? formatValue(primary.value) : '—'
   const tone = primary ? qualityTone(primary.quality) : 'idle'
   const cap = primary ? capabilityLabel(primary.capability, idx) : '等待观测'
-  // 与 MetricTile 同一纪律：语义色只给 warn/bad，正常值保持中性；长字符串降级字号不占 KPI 视觉位
-  const valueTone = tone === 'bad' || tone === 'warn' ? TONE_TEXT_CLS[tone] : undefined
-  const longText = typeof primary?.value === 'string' && primary.value.length > 12
   return (
     <div className="card min-w-0 p-4" data-testid="slot-card">
       <div className="flex min-w-0 items-center gap-2">
@@ -51,12 +47,8 @@ function SlotCard({ entity, idx }: { entity: DescriptorEntity; idx: CapabilityIn
           title={primary ? `${primary.capability} · ${primary.property}` : ''}>
           {cap}
         </span>
-        <span
-          className={cn('num min-w-0 truncate leading-none tracking-tight',
-            longText ? 'text-[15px] font-medium' : 'text-[22px] font-semibold', valueTone)}
-          title={`${value}${primary?.unit ? ` ${primary.unit}` : ''}`}>
-          {value}{primary?.unit && <span className="ml-1 text-xs font-normal text-ink-3">{primary.unit}</span>}
-        </span>
+        {/* 主值走平台单一出口：布尔胶囊 / 机器串 mono / 单位人话（此前此处是漂移副本） */}
+        <ObsValue obs={primary} idx={idx} tone={tone} size="slot" />
       </div>
     </div>
   )

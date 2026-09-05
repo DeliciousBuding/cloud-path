@@ -36,7 +36,7 @@ const TAIL_NAV = [{ to: '/settings', label: '系统', icon: Settings, end: false
 
 function navCls(active: boolean): string {
   return cn(
-    'flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-medium transition-colors',
+    'flex items-center gap-2.5 rounded-xl px-3 py-2 text-[14px] font-medium transition-colors',
     active ? 'bg-accent/10 text-accent' : 'text-ink-2 hover:bg-ink-3/8 hover:text-ink',
   )
 }
@@ -86,7 +86,7 @@ function Brand() {
     <NavLink to="/" className="flex items-center gap-2.5 px-1 text-accent" aria-label="Cloudpath 概览">
       <Logo size={26} />
       <span className="leading-tight">
-        <span className="block text-[15px] font-semibold tracking-tight text-ink">Cloudpath</span>
+        <span className="block text-[15px] font-semibold tracking-[-0.01em] text-ink">Cloudpath</span>
         <span className="block text-[11px] text-ink-3">云径 · 设备接入平台</span>
       </span>
     </NavLink>

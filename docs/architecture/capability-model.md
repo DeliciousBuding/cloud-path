@@ -273,3 +273,11 @@ observed.detail 的已知机器标记（server-apphost）经 `hostDetailLabel()`
 中文字体纪律：中文走自托管 Noto Sans SC 可变子集（OFL；GB2312 一级字表 ∪ 界面词汇 ∪ 中文标点，
 unicode-range 只接管 CJK，拉丁/数字仍走 Geist；可复现构建见 webui/scripts/build-cjk-subset.py）。
 tracking-tight 等负字距是拉丁刻度，中文显示文本不超 -0.01em，正文保持 0。
+
+### 10.9 排版纪律（2026-09-05 增补）
+
+- 正文基底 `font-weight: 450`：CJK 字形密度使 400 观感比同档拉丁细，暗画布灰度抗锯齿再削一笔；450 是 Geist / Noto Sans SC 可变字重轴真实实例，非合成粗。显式声明 500/600 的组件不受影响。
+- 负字距全仓止于 CJK 安全值 `-0.01em`：`tracking-tight`（-0.025em，拉丁刻度）禁用（design-system 测试守卫）；mono 等宽面恒零字距。
+- 阅读字号下限：键值行 / 按钮 / 侧栏导航 14px（13px 中文正文在暗画布显细显挤）；12px 只给元数据。
+- 主值渲染单一出口 `ObsValue`（webui SchemaRenderer）：布尔→状态胶囊、机器串→mono 降级、数值→tabular、单位经 `unitLabel` 人话化；实时状态瓦片 / 状态表行 / 药盒槽位复用同一出口，`size` 区分 tile/row/slot。页面内复制这套纪律即漂移开始。
+- 字符串型 KPI（版本号等）用 mono medium 渲染，不用 sans semibold：字符串不是量级。

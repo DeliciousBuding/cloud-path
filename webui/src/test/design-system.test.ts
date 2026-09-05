@@ -175,6 +175,27 @@ describe('weight 纪律（Vercel design.md：标题不超 semibold）', () => {
   })
 })
 
+describe('字距纪律（CJK 安全：负字距止于 -0.01em；mono 零字距）', () => {
+  it('组件不用 tracking-tight / tracking-tighter（-0.025em 是拉丁刻度，CJK 全角字面会挤）', () => {
+    const offenders = tsx.flatMap((f) => [...f.text.matchAll(/tracking-(?:tight|tighter)\b/g)].map((m) => `${f.path}: ${m[0]}`))
+    expect(offenders).toEqual([])
+  })
+
+  it('任意负字距不超 -0.01em', () => {
+    const offenders = tsx.flatMap((f) => [...f.text.matchAll(/tracking-\[-0\.0[2-9]\d*em\]/g)].map((m) => `${f.path}: ${m[0]}`))
+    expect(offenders).toEqual([])
+  })
+
+  it('mono 标识零字距（等宽面负字距破坏网格）', () => {
+    const offenders = tsx.flatMap((f) => [...f.text.matchAll(/className="[^"]*font-mono[^"]*tracking-\[-/g)].map((m) => `${f.path}: ${m[0]}`))
+    expect(offenders).toEqual([])
+  })
+
+  it('正文基底 450 = CJK/暗画布光学墨度平价（可变轴真实实例，非合成粗）', () => {
+    expect(css).toContain('font-weight: 450;')
+  })
+})
+
 describe('减少动效偏好的 CSS 兜底', () => {
   const reduced = blockOf(css, '@media (prefers-reduced-motion: reduce)')
 

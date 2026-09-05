@@ -174,7 +174,7 @@ export default function DeviceDetail() {
 
       <header className="mb-5 flex flex-wrap items-center gap-3 fade-up">
         <StatusDot online={d.online} />
-        <h1 className="min-w-0 max-w-full truncate text-[22px] font-semibold tracking-tight" title={d.id}>
+        <h1 className="min-w-0 max-w-full truncate text-[22px] font-semibold tracking-[-0.01em]" title={d.id}>
           {d.name || deviceId}
         </h1>
         {d.adapter && (
@@ -318,7 +318,7 @@ export default function DeviceDetail() {
                                 {seriesLabel(k)}
                               </span>
                               <span className="flex shrink-0 items-baseline gap-1.5">
-                                <span className="num text-[13px] font-semibold tracking-tight">
+                                <span className="num text-[13px] font-semibold tracking-[-0.01em]">
                                   {pts.length ? formatValue(pts[pts.length - 1].v) : '—'}
                                 </span>
                                 <span className="num text-[11px] text-ink-3">{pts.length} 点</span>

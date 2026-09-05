@@ -166,7 +166,7 @@ function rangeOf(obs: Observation, idx: CapabilityIndex): [number, number] | nul
 function ScalarText({ widget, value, emphasis }: { widget: WidgetKind; value: unknown; emphasis?: boolean }) {
   const text = widget === 'timestamp' ? formatTimestamp(value) : formatValue(value)
   return (
-    <span className={cn('num', emphasis ? 'block text-[26px] font-semibold leading-none tracking-tight'
+    <span className={cn('num', emphasis ? 'block text-[26px] font-semibold leading-none tracking-[-0.01em]'
       : 'text-[13px] font-medium')}>{text}</span>
   )
 }
@@ -311,9 +311,9 @@ export function StateRow({ entity, idx = EMPTY_INDEX, nowSec, series }: {
       ?? series?.[primary.property]
       ?? series?.[entity.entity_id])
     : undefined
-  const text = primary
-    ? (widgetFor(primary, idx) === 'timestamp' ? formatTimestamp(primary.value) : formatValue(primary.value))
-    : ''
+  const tone = primary
+    ? (toneFromHint(presentationOf(primary.capability, idx)) ?? qualityTone(primary.quality))
+    : 'idle'
   return (
     <li className="px-3.5 py-2.5">
       <div className="flex min-w-0 items-center gap-3">
@@ -330,17 +330,7 @@ export function StateRow({ entity, idx = EMPTY_INDEX, nowSec, series }: {
             <Sparkline points={pts} />
           </span>
         )}
-        {primary ? (
-          <span
-            className={cn('num w-24 shrink-0 truncate text-right tracking-tight',
-              text.length > 12 ? 'text-[13px] font-medium' : 'text-[15px] font-semibold')}
-            title={`${capabilityLabel(primary.capability, idx)} · ${primary.property}`}>
-            {text}
-            {primary.unit && <span className="ml-1 text-[11px] font-normal text-ink-3">{primary.unit}</span>}
-          </span>
-        ) : (
-          <span className="w-24 shrink-0 text-right text-[12px] text-ink-3">暂无数据</span>
-        )}
+        <ObsValue obs={primary} idx={idx} tone={tone} size="row" />
       </div>
       {rest.length > 0 && (
         <details className="mt-1.5">
@@ -362,7 +352,7 @@ export function StateRow({ entity, idx = EMPTY_INDEX, nowSec, series }: {
  */
 /** 机器串判定（通用形态启发式）：无 CJK、足够长、只含 id 字符集 → 视为机器标识，
  *  默认视图里用 mono 降级呈现（等宽 = 「这是机器串」的视觉线索），完整值进 title、表格视图不降级 */
-const MACHINEISH = /^[a-z0-9][a-z0-9._-]{7,}$/
+export const MACHINEISH = /^[a-z0-9][a-z0-9._-]{7,}$/
 
 export function StateMatrix({ descriptor, idx = EMPTY_INDEX, categories, nowSec, series, className }: {
   descriptor: DeviceDescriptor
@@ -396,6 +386,61 @@ export function StateMatrix({ descriptor, idx = EMPTY_INDEX, categories, nowSec,
   )
 }
 
+/** 主值渲染纪律单一出口：布尔→状态胶囊、机器串→mono 降级、数值→tabular、单位人话化；
+ *  负字距止于 CJK 安全值，mono 零字距。size：tile=实时状态瓦片 / row=状态表行（右对齐固定槽）/
+ *  slot=药盒槽位等较大卡片。全平台「主值」只走这里——页面里复制这套纪律即漂移开始。 */
+export function ObsValue({ obs, idx = EMPTY_INDEX, tone = 'idle', size = 'tile', className }: {
+  obs: Observation | undefined
+  idx?: CapabilityIndex
+  tone?: Tone
+  size?: 'tile' | 'row' | 'slot'
+  className?: string
+}) {
+  const shell = size === 'row' ? 'w-24 shrink-0 text-right' : 'min-w-0 truncate'
+  if (!obs) {
+    return (
+      <span className={cn(shell, 'text-[12px] text-ink-3', className)}>
+        {size === 'row' ? '暂无数据' : '等待观测'}
+      </span>
+    )
+  }
+  const widget = widgetFor(obs, idx)
+  const text = widget === 'timestamp' ? formatTimestamp(obs.value) : formatValue(obs.value)
+  const capTitle = `${capabilityLabel(obs.capability, idx)} · ${obs.property}`
+  const alert = tone === 'bad' || tone === 'warn'
+  if (widget === 'boolean') {
+    return (
+      <span className={cn(shell, className)} title={capTitle}>
+        <Badge tone={alert ? tone : 'idle'}>{text}</Badge>
+      </span>
+    )
+  }
+  if (widget === 'text' && MACHINEISH.test(text)) {
+    return (
+      <span className={cn(shell, 'font-mono text-ink-2', size === 'slot' ? 'text-[12px]' : 'text-[11px]', className)}
+        title={`${text} · ${capTitle}`}>
+        {text}
+      </span>
+    )
+  }
+  const long = text.length > 12
+  const valueCls = size === 'slot'
+    ? (long ? 'text-[15px] font-medium' : 'text-[22px] font-semibold')
+    : (long ? 'text-[13px] font-medium' : 'text-[15px] font-semibold')
+  return (
+    <span
+      className={cn(shell, 'num tracking-[-0.01em]', valueCls, alert ? TONE_TEXT_CLS[tone] : undefined, className)}
+      title={capTitle}>
+      {text}
+      {obs.unit && (
+        <span className={cn('ml-1 font-normal text-ink-3', size === 'slot' ? 'text-xs' : 'text-[11px]')}>
+          {unitLabel(obs.unit)}
+        </span>
+      )}
+    </span>
+  )
+}
+
 /** 实时状态瓦片：标签 + 主值 + 火花线一眼扫完；布尔走胶囊、机器串走 mono 降级、
  *  次要观测折进 details（默认视图只留主值） */
 export function StateTile({ entity, idx = EMPTY_INDEX, nowSec, series }: {
@@ -415,16 +460,9 @@ export function StateTile({ entity, idx = EMPTY_INDEX, nowSec, series }: {
       ?? series?.[primary.property]
       ?? series?.[entity.entity_id])
     : undefined
-  const widget = primary ? widgetFor(primary, idx) : 'text'
-  const text = primary
-    ? (widget === 'timestamp' ? formatTimestamp(primary.value) : formatValue(primary.value))
-    : ''
   const tone = primary
     ? (toneFromHint(presentationOf(primary.capability, idx)) ?? qualityTone(primary.quality))
     : 'idle'
-  const alert = tone === 'bad' || tone === 'warn'
-  const machineish = widget === 'text' && MACHINEISH.test(text)
-  const capTitle = primary ? `${capabilityLabel(primary.capability, idx)} · ${primary.property}` : undefined
   return (
     <li className="card min-w-0 p-3">
       <div className="flex min-w-0 items-center gap-1.5">
@@ -435,27 +473,7 @@ export function StateTile({ entity, idx = EMPTY_INDEX, nowSec, series }: {
         {stale && <Badge tone="warn" className="shrink-0">未更新</Badge>}
       </div>
       <div className="mt-1.5 flex min-w-0 items-center justify-between gap-2">
-        {primary ? (
-          widget === 'boolean' ? (
-            <span className="min-w-0 truncate" title={capTitle}>
-              <Badge tone={alert ? tone : 'idle'}>{text}</Badge>
-            </span>
-          ) : machineish ? (
-            <span className="min-w-0 truncate font-mono text-[11px] text-ink-2" title={`${text} · ${capTitle}`}>
-              {text}
-            </span>
-          ) : (
-            <span
-              className={cn('num min-w-0 truncate tracking-tight',
-                text.length > 12 ? 'text-[13px] font-medium' : 'text-[15px] font-semibold')}
-              title={capTitle}>
-              {text}
-              {primary.unit && <span className="ml-1 text-[11px] font-normal text-ink-3">{unitLabel(primary.unit)}</span>}
-            </span>
-          )
-        ) : (
-          <span className="text-[12px] text-ink-3">暂无数据</span>
-        )}
+        <ObsValue obs={primary} idx={idx} tone={tone} />
         {pts && pts.length >= 2 && (
           <span className="w-14 shrink-0"><Sparkline points={pts} height={20} /></span>
         )}
@@ -491,7 +509,7 @@ export function MetricTile({ v }: { v: SummaryValue }) {
   return (
     <div className="card min-w-0 p-4 fade-up">
       <p className="min-w-0 truncate text-[11px] font-medium text-ink-3" title={v.title}>{v.label}</p>
-      <p className={cn('num mt-1.5 truncate text-[24px] font-semibold leading-none tracking-tight', valueTone)}
+      <p className={cn('num mt-1.5 truncate text-[24px] font-semibold leading-none tracking-[-0.01em]', valueTone)}
         title={v.title}>
         {v.text}
         {v.unit && <span className="ml-1 text-[12px] font-normal text-ink-3">{v.unit}</span>}

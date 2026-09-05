@@ -72,7 +72,7 @@ export default function EdgeDetail() {
 
       <header className="mb-7 flex flex-wrap items-center gap-3 fade-up">
         <StatusDot online={e.online} />
-        <h1 className="min-w-0 max-w-full truncate font-mono text-[22px] font-semibold tracking-tight" title={e.edge_id}>
+        <h1 className="min-w-0 max-w-full truncate font-mono text-[22px] font-semibold" title={e.edge_id}>
           {e.edge_id}
         </h1>
         <Badge tone={e.online ? 'ok' : 'idle'}>{e.online ? '在线' : '离线'}</Badge>

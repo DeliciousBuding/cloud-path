@@ -42,7 +42,8 @@ export default function Settings() {
       <PageHeader title="系统" subtitle="服务状态、账号、存储、适配器与本机令牌" />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatTile icon={<Server size={13} />} label="服务版本" value={health?.version ?? '—'} />
+        <StatTile icon={<Server size={13} />} label="服务版本"
+          value={<span className="font-mono font-medium tracking-normal break-words">{health?.version ?? '—'}</span>} />
         <StatTile icon={<Activity size={13} />} label="运行时长" value={health ? fmtUptime(health.uptime_s) : '—'} />
         <StatTile icon={<Cpu size={13} />} label="设备在线"
           value={<>{health?.devices_online ?? 0}<span className="text-ink-3">/{health?.devices_total ?? 0}</span></>} />
@@ -75,10 +76,10 @@ export default function Settings() {
           {authStatus === 'in' && user ? (
             <>
               <dl className="space-y-2.5">
-                <KeyValue k="用户名" v={<span className="num min-w-0 truncate" title={user.username}>{user.username}</span>} />
+                <KeyValue k="用户名" v={<span className="min-w-0 truncate font-mono" title={user.username}>{user.username}</span>} />
                 <KeyValue k="姓名" v={<span className="min-w-0 truncate" title={user.name}>{user.name || '—'}</span>} />
                 <KeyValue k="角色" v={roleLabel(user.role)} />
-                <KeyValue k="租户" v={<span className="num min-w-0 truncate" title={user.tenant_slug}>{user.tenant_slug || '—'}</span>} />
+                <KeyValue k="租户" v={<span className="min-w-0 truncate font-mono" title={user.tenant_slug}>{user.tenant_slug || '—'}</span>} />
               </dl>
               <p className="mt-3 border-t border-hairline pt-3 text-[11px] leading-relaxed text-ink-3">
                 登录态由浏览器会话承载；共用机器请记得登出。
@@ -127,9 +128,9 @@ export default function Settings() {
             <KeyValue k="事件总数" v={<span className="num">{stats?.events ?? '—'}</span>} />
             <KeyValue k="命令总数" v={<span className="num">{stats?.commands ?? '—'}</span>} />
             <KeyValue k="注册设备" v={<span className="num">{stats?.devices ?? '—'}</span>} />
-            <KeyValue k="最早事件" v={stats?.oldest_event ? fmtDateTime(stats.oldest_event) : '—'} />
+            <KeyValue k="最早事件" v={<span className="font-mono">{stats?.oldest_event ? fmtDateTime(stats.oldest_event) : '—'}</span>} />
             <KeyValue k="保留期" v={`${stats?.retention_days ?? '—'} 天（超期自动清理）`} />
-            <KeyValue k="Schema 版本" v={<span className="num">v{stats?.schema_version ?? '—'}</span>} />
+            <KeyValue k="Schema 版本" v={<span className="font-mono">v{stats?.schema_version ?? '—'}</span>} />
           </dl>
         </Panel>
 
@@ -170,12 +171,9 @@ export default function Settings() {
             管理台通过 WebSocket 实时可视化。核心不绑定任何具体硬件或行业语义——
             设备语义由适配器插件提供。
           </p>
-          <div className="mt-4 flex flex-wrap gap-2 border-t border-hairline pt-4 text-xs text-ink-3">
-            <span className="badge bg-ink-3/10">Go · chi · WebSocket</span>
-            <span className="badge bg-ink-3/10">SQLite（纯 Go，零 CGO）</span>
-            <span className="badge bg-ink-3/10">React 19 · Vite · Tailwind 4</span>
-            <span className="badge bg-ink-3/10">单二进制发布（前端内嵌）</span>
-          </div>
+          <p className="mt-4 border-t border-hairline pt-4 text-xs leading-relaxed text-ink-3">
+            Go · chi · WebSocket · SQLite（纯 Go，零 CGO） · React 19 · Vite · Tailwind 4 · 单二进制发布（前端内嵌）
+          </p>
         </Panel>
       </div>
     </>

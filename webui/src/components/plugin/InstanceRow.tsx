@@ -23,7 +23,7 @@ export function InstanceRow({ v, catalog, onEdit }: {
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <StatusDot online={v.edge_online && v.has_observed && st.tone === 'ok'} />
         <Link to={`/plugins/${encodeURIComponent(v.id)}`}
-          className="num min-w-0 max-w-full truncate text-[14px] font-semibold tracking-tight no-underline hover:text-accent"
+          className="num min-w-0 max-w-full truncate text-[14px] font-semibold tracking-[-0.01em] no-underline hover:text-accent"
           title={`${v.id} · 查看详情`}>
           {v.desired.instance_id || v.id}
         </Link>

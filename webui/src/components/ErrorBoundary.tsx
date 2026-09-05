@@ -29,7 +29,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-bad/10 text-bad">
             <AlertTriangle size={24} />
           </div>
-          <h1 className="mt-5 text-lg font-semibold tracking-tight">界面出现异常</h1>
+          <h1 className="mt-5 text-[22px] font-semibold tracking-[-0.01em]">界面出现异常</h1>
           <p className="mt-1.5 text-sm text-ink-2">
             渲染过程中发生错误。数据与服务本身仍在运行，重新加载通常即可恢复。
           </p>
