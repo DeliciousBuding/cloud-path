@@ -61,7 +61,8 @@ export function PageHeader({ title, subtitle, actions }: {
   return (
     <header className="mb-8 flex flex-wrap items-end justify-between gap-4 fade-up">
       <div>
-        <h1 className="text-[24px] font-semibold tracking-tight leading-tight">{title}</h1>
+        {/* tracking-tight(-0.025em) 是拉丁刻度；中文标题字面全角，超过 -0.01em 会挤，故用 CJK 安全值 */}
+        <h1 className="text-[24px] font-semibold tracking-[-0.01em] leading-tight">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-ink-2">{subtitle}</p>}
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}

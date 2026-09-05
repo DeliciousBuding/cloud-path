@@ -10,14 +10,27 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Geist 可变字体自托管（拉丁/数字）；中文回落 PingFang/雅黑。
- * weight 纪律（Vercel design.md）：regular 400 / medium 500 / semibold 600，标题不超 600。 */
+/* 字体自托管三件套：Geist（拉丁/数字）+ Geist Mono（机器文本）+ Noto Sans SC（中文，OFL）。
+ * 中文绝不回落系统雅黑：Noto Sans SC 子集（GB2312 一级字表 ∪ 界面词汇 ∪ 中文标点，
+ * 可变字重轴保留）以 unicode-range 只接管 CJK，拉丁/数字永远走 Geist，避免混排基线/字重错位。
+ * 子集外的罕见字才回落系统黑体。
+ * weight 纪律（Vercel design.md）：regular 400 / medium 500 / semibold 600，标题不超 600。
+ * 字距纪律：tracking-tight 等负字距是拉丁刻度；中文显示文本不超 -0.01em（全角字面会挤），正文保 0。 */
 @font-face {
   font-family: "Geist";
   src: url("./assets/fonts/Geist-Variable.woff2") format("woff2");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
+}
+@font-face {
+  font-family: "Noto Sans SC";
+  src: url("./assets/fonts/NotoSansSC-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  /* 只接管 CJK 与中文标点/全角：拉丁与数字留给 Geist */
+  unicode-range: U+2018-2027, U+2030-2037, U+2103, U+2190-2193, U+3000-303F, U+4E00-9FFF, U+FF01-FF5E;
 }
 @font-face {
   font-family: "Geist Mono";
@@ -28,9 +41,10 @@
 }
 
 @theme {
-  --font-sans: "Geist", -apple-system, BlinkMacSystemFont,
+  --font-sans: "Geist", "Noto Sans SC", -apple-system, BlinkMacSystemFont,
     "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
-  --font-mono: "Geist Mono", "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+  --font-mono: "Geist Mono", "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas,
+    "Noto Sans SC", monospace;
 
   --color-canvas: #f5f5f7;
   --color-surface: #ffffff;
