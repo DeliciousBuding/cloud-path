@@ -158,6 +158,12 @@ describe('light / dark token 对齐', () => {
   })
 })
 
+describe('weight 纪律（Vercel design.md：标题不超 semibold）', () => {
+  it('组件不使用 font-bold 及更重的任意字重（regular 400 / medium 500 / semibold 600）', () => {
+    for (const f of tsx) expect(f.text, f.path).not.toMatch(/font-(bold|extrabold|black)\b/)
+  })
+})
+
 describe('减少动效偏好的 CSS 兜底', () => {
   const reduced = blockOf(css, '@media (prefers-reduced-motion: reduce)')
 
