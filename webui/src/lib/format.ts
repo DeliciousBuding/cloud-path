@@ -183,6 +183,15 @@ export function optionLabel(s: string, max = 32): string {
 }
 
 /**
+ * 参数校验（Vercel field 纪律：保留用户原文，不静默剥离/截断，错在框下显式说）。
+ *  返回人话错误；合法返回 undefined。后端契约：不含换行/NUL、长度上限（docs/api.md）。 */
+export function argsError(args: string, max = 64): string | undefined {
+  if (/[\r\n\0]/.test(args)) return '参数不能包含换行或控制字符'
+  if (args.length > max) return `参数 ${args.length} 字符，超过 ${max} 字符上限`
+  return undefined
+}
+
+/**
  * 命令下发失败 → 人话。按 HTTP 状态判定，语义对齐 docs/design.md 的 REST 错误约定
  * （400 参数/白名单、401 令牌、404 设备不存在、409 edge 离线、429 命令限流、
  * 503 存储不可用或 edge 队列满）；不把服务端 message 当规则复述。

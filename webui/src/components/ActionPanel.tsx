@@ -6,7 +6,7 @@ import { Command, SlidersHorizontal } from 'lucide-react'
 import { Badge, Panel } from './ui'
 import { CommandButton } from './CommandButton'
 import { cn } from '@/lib/cn'
-import { optionLabel } from '@/lib/format'
+import { argsError, optionLabel } from '@/lib/format'
 import { humanize } from '@/lib/descriptor'
 import type { CommandAction, CommandSet } from '@/lib/descriptor'
 
@@ -21,6 +21,8 @@ function InputAction({ deviceId, action }: { deviceId: string; action: CommandAc
   const [args, setArgs] = useState('')
   const max = action.inputMaxLength ?? 64
   const id = `args-${action.cmd}`
+  // 保留用户原文：不在 onChange 静默剥离/截断，错在框下显式说并禁用下发
+  const err = argsError(args, max)
   return (
     <div className="border-t border-hairline pt-3">
       <label htmlFor={id} className="mb-1.5 block text-[11px] leading-relaxed text-ink-3">
@@ -30,13 +32,14 @@ function InputAction({ deviceId, action }: { deviceId: string; action: CommandAc
       </label>
       <div className="flex gap-2">
         <input
-          id={id} value={args} maxLength={max}
-          onChange={(e) => setArgs(e.target.value.replace(/[\r\n\0]/g, ''))}
+          id={id} value={args} aria-invalid={err ? true : undefined}
+          onChange={(e) => setArgs(e.target.value)}
           placeholder={action.inputPlaceholder ?? '参数'}
-          className="num min-w-0 flex-1 rounded-full border border-hairline bg-surface-2 px-3.5 py-1.5 font-mono text-xs outline-none transition-colors focus:border-accent"
+          className="num min-w-0 flex-1 rounded-full border border-hairline bg-surface-2 px-3.5 py-1.5 font-mono text-xs outline-none transition-colors focus:border-accent aria-[invalid=true]:border-bad"
         />
-        <CommandButton deviceId={deviceId} action={action} args={args} className="shrink-0" />
+        <CommandButton deviceId={deviceId} action={action} args={args} disabled={!!err} className="shrink-0" />
       </div>
+      {err && <p className="mt-1 text-[11px] text-bad">{err}</p>}
     </div>
   )
 }
@@ -49,6 +52,7 @@ export function ActionPanel({ deviceId, set, adapterName, className }: {
 }) {
   const [advCmd, setAdvCmd] = useState('')
   const [advArgs, setAdvArgs] = useState('')
+  const advErr = argsError(advArgs, 64)
 
   const simple = set.actions.filter((a) => !a.needsInput)
   const withInput = set.actions.filter((a) => a.needsInput)
@@ -114,15 +118,17 @@ export function ActionPanel({ deviceId, set, adapterName, className }: {
                   {advanced.map((a) => <option key={a.cmd} value={a.cmd}>{optionLabel(a.cmd)}</option>)}
                 </select>
                 <label className="sr-only" htmlFor="adv-args">命令参数</label>
-                <input id="adv-args" value={advArgs} maxLength={64} disabled={!advAction}
-                  onChange={(e) => setAdvArgs(e.target.value.replace(/[\r\n\0]/g, ''))}
+                <input id="adv-args" value={advArgs} disabled={!advAction}
+                  aria-invalid={advErr ? true : undefined}
+                  onChange={(e) => setAdvArgs(e.target.value)}
                   placeholder={advAction?.inputPlaceholder ?? '参数（可空）'}
                   className="num min-w-0 flex-1 rounded-full border border-hairline bg-surface-2 px-3.5 py-1.5 font-mono text-xs outline-none transition-colors focus:border-accent disabled:opacity-50"
                 />
                 {advAction && (
-                  <CommandButton deviceId={deviceId} action={advAction} args={advArgs} className="shrink-0" />
+                  <CommandButton deviceId={deviceId} action={advAction} args={advArgs} disabled={!!advErr} className="shrink-0" />
                 )}
               </div>
+              {advErr && <p className="mt-1 text-[11px] text-bad">{advErr}</p>}
             </div>
           )}
         </>

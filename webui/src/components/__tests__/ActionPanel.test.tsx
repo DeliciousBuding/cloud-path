@@ -58,27 +58,31 @@ describe('actions.inputSchema → 参数输入', () => {
   it('声明了 inputSchema 的动作给出带标签的输入框，占位符即参数模板，长度受限', () => {
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     const input = screen.getByPlaceholderText('{"ms":0,"note":""}')
-    expect(input).toHaveAttribute('maxlength', '64')
+    expect(input).not.toHaveAttribute('maxlength')
     expect(input).toHaveAccessibleName(expect.stringContaining('点动'))
     // label 与 input 通过 for/id 关联（不是靠视觉相邻）
     const label = document.querySelector(`label[for="${input.id}"]`)
     expect(label?.textContent).toContain('≤64 字符')
   })
 
-  it('输入自动剔除换行/NUL（后端参数校验的前端第一道收敛）', async () => {
-    const user = userEvent.setup()
+  it('无效输入保留原文并显式报错 + 禁用下发（不静默剥离/截断）', () => {
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     const input = screen.getByPlaceholderText('{"ms":0,"note":""}')
-    await user.type(input, 'a{enter}b')
-    expect(input).toHaveValue('ab')
+    // 单行 input 的值净化由 HTML spec 负责（换行进不来）；前端可见契约是超长不截断 + 显式报错 + 禁用下发
+    fireEvent.change(input, { target: { value: 'x'.repeat(70) } })
+    expect(input).toHaveValue('x'.repeat(70))
+    expect(screen.getByText(/参数 70 字符，超过 64 字符上限/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '点动' })).toBeDisabled()
+    fireEvent.change(input, { target: { value: 'ok' } })
+    expect(screen.getByRole('button', { name: '点动' })).toBeEnabled()
   })
 
-  it('下发时 args 按声明长度截断，并 POST 到冻结路径', async () => {
+  it('合法参数原文下发到冻结路径（超长/换行已在框下被拦）', async () => {
     const user = userEvent.setup()
     const http = okPost()
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     const input = screen.getByPlaceholderText('{"ms":0,"note":""}')
-    fireEvent.change(input, { target: { value: 'x'.repeat(90) } })
+    fireEvent.change(input, { target: { value: 'x'.repeat(64) } })
     await user.click(screen.getByRole('button', { name: '点动' }))
     expect(http.last()).toMatchObject({
       url: `/api/devices/edge-1/dev-9/commands`, method: 'POST',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bucketEventDensity, cmdMeta, fmtDay } from '@/lib/format'
+import { argsError, bucketEventDensity, cmdMeta, fmtDay } from '@/lib/format'
 import { indexCapabilities, normalizeCapabilityDocs } from '@/lib/descriptor'
 import { catalogPayload } from '@/test/fixtures'
 
@@ -49,6 +49,15 @@ describe('cmdMeta（命令展示名回落顺序）', () => {
 
   it('不传 idx 就拿不到声明（说明跨设备面必须显式传索引，不是隐式全局态）', () => {
     expect(cmdMeta('relay_on').label).toBe('Relay On')
+  })
+})
+
+describe('argsError（参数校验：保留原文、显式报错）', () => {
+  it('合法无错误；换行/超长各自说人话，边界恰好放行', () => {
+    expect(argsError('{"ms":100}')).toBeUndefined()
+    expect(argsError('a\nb')).toBe('参数不能包含换行或控制字符')
+    expect(argsError('x'.repeat(65), 64)).toContain('超过 64 字符上限')
+    expect(argsError('x'.repeat(64), 64)).toBeUndefined()
   })
 })
 

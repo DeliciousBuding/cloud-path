@@ -25,13 +25,15 @@ export function sanitizeArgs(s: string, max = 64): string {
  * 危险命令的二次确认走设计系统里的 ConfirmDialog（不用 window.confirm 这类默认浏览器样式）：
  * 确认文案逐字取自声明的 `confirmation`，`variant==='danger'` 时还必须显式勾选才允许执行。
  */
-export function CommandButton({ deviceId, action, args, className }: {
+export function CommandButton({ deviceId, action, args, className, disabled }: {
   /** "<edge>/<dev>" */
   deviceId: string
   action: CommandAction
   /** 受控参数（带输入框的动作用）；undefined 表示不带 args 下发 */
   args?: string
   className?: string
+  /** 参数校验不过等外部原因禁用下发（原因由调用方在框下说明） */
+  disabled?: boolean
 }) {
   const acks = useLive((s) => s.acks)
   const qc = useQueryClient()
@@ -110,7 +112,7 @@ export function CommandButton({ deviceId, action, args, className }: {
     <button
       type="button"
       onClick={onClick}
-      disabled={busy}
+      disabled={busy || disabled}
       title={title}
       aria-busy={busy}
       aria-label={label}
