@@ -243,3 +243,22 @@ resolver 均为纯函数并有确定性单测（fallback 顺序、脏数据降�
 状态三态契约：详情类页面在数据未到手时必须区分「加载中（骨架）/ 404（未注册空态）/
 其它失败（可重试错误态）」。`isNotFound()`（webui/src/lib/api.ts）是 404 语义的唯一判定；
 把 404 渲染成「加载失败」会让用户去查 server，而真相只是设备没接入。
+
+值类型感知呈现（`SummaryValue.kind`，由 widget 推导）：布尔主值（开关/触发与否）渲染为状态胶囊
+而非大字号——半屏大的「否」是排版错误；胶囊语义色只接 warn/bad，其余保持中性。单位经展示层单一
+出口 `unitLabel()` 人话化（s→秒、Cel→°C），科学单位（V/lux/%）原样；诊断页 raw JSON 不受影响。
+
+计数/频次图必须零基线（TrendChart `zeroBase`）：负轴或悬空基线会夸大差异，属数据可视化谎言；
+窄高 sparkline 模式（`hideY`）连同横向网格省去，峰值由标题说人话；X 轴刻度粒度由调用方传入
+（分桶图传时分，秒对 ≥1 分钟的桶是噪音）。
+
+设备概览首屏三段：KPI 行 → [最近活动 2/3 | 设备状况 1/3] → 命令历史通栏置底（限 8 条 + 控制页
+出口）。命令历史放右栏会拉到 20 行、把左栏踢出一大片空洞。
+
+插件实例状态词汇覆盖两套后端事实源：edge pluginhost.State（大写 STOPPED/HEALTHY…）与 server
+AppHost 的 appruntime.InstanceState（小写 running/stopping/failed…，internal/appruntime/types.go）；
+observed.detail 的已知机器标记（server-apphost）经 `hostDetailLabel()` 人话化；未知值原样呈现，不猜。
+
+中文字体纪律：中文走自托管 Noto Sans SC 可变子集（OFL；GB2312 一级字表 ∪ 界面词汇 ∪ 中文标点，
+unicode-range 只接管 CJK，拉丁/数字仍走 Geist；可复现构建见 webui/scripts/build-cjk-subset.py）。
+tracking-tight 等负字距是拉丁刻度，中文显示文本不超 -0.01em，正文保持 0。
