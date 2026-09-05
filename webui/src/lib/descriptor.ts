@@ -450,6 +450,14 @@ export function formatValue(v: unknown): string {
   return 'JSON'
 }
 
+/** 机器单位 → 人话中文单位：只转有明确口语的时频/温度符号，
+ *  科学单位（V/lux/%…）原样保留——翻成「勒克斯」反而啰嗦。展示层单一出口，诊断面 raw JSON 不受影响。 */
+const UNIT_LABEL: Record<string, string> = { s: '秒', ms: '毫秒', min: '分钟', h: '小时', Hz: '赫兹', Cel: '°C' }
+export function unitLabel(u?: string): string | undefined {
+  if (!u) return undefined
+  return UNIT_LABEL[u] ?? u
+}
+
 /** ISO 时间串 → 本地时刻（无效则原样） */
 export function formatTimestamp(v: unknown): string {
   if (typeof v !== 'string' && typeof v !== 'number') return formatValue(v)
@@ -674,6 +682,8 @@ export interface SummaryValue {
   label: string
   text: string
   unit?: string
+  /** 值类型（widget 推导）：布尔主值渲染为状态胶囊而非大字号——开关态不是量级 */
+  kind?: WidgetKind
   tone: Tone
   /** 悬停详情：capability/property/quality 溯源 */
   title?: string
@@ -710,7 +720,8 @@ function obsToSummary(
   return {
     label: label ?? entityTitle(e),
     text,
-    unit: o.unit,
+    unit: unitLabel(o.unit),
+    kind: widget,
     tone: toneOverride ?? toneFromHint(p) ?? qualityTone(o.quality),
     title,
   }
@@ -752,7 +763,7 @@ export function summarizeRaw(raw: DeviceRaw | undefined): DeviceSummary {
     const text = typeof value === 'string' && ISO_RE.test(value.trim()) ? formatTimestamp(value) : formatValue(value)
     if (text.length > MAX_TEXT_LEN) continue
     if (candidates.length > MAX_CHIPS) continue
-    candidates.push({ label, text, tone: 'idle', title: key })
+    candidates.push({ label, text, tone: 'idle', title: key, kind: inferWidget(value) })
   }
   const primary = candidates.shift() ?? null
   return {

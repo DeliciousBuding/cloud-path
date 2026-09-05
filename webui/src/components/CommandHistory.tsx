@@ -4,17 +4,25 @@ import { Panel, Badge } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { api } from '@/lib/api'
 import { cmdMeta, cmdStatusMeta, fmtTime, fmtDateTime } from '@/lib/format'
+import type { ReactNode } from 'react'
 import type { CommandAction } from '@/lib/descriptor'
 
 /** 命令历史：REST 轮询该设备的命令与回执状态（含超时/失败原因）。
  *  命令展示名来自上层传入的声明命令集（actions），未声明则 humanize(cmd)。 */
-export function CommandHistory({ deviceId, actions }: { deviceId: string; actions?: CommandAction[] }) {
+export function CommandHistory({ deviceId, actions, limit, footer }: {
+  deviceId: string; actions?: CommandAction[];
+  /** 展示上限（概览首屏用：右栏不该拉到 20 行把左栏踢出空洞）；缺省全显 */
+  limit?: number;
+  /** 被截断时的出口（如「到控制页看全部」） */
+  footer?: ReactNode
+}) {
   const { data, isLoading } = useQuery({
     queryKey: ['device-commands', deviceId],
     queryFn: () => api.commands({ device: deviceId, limit: 20 }),
     refetchInterval: 5000,
   })
   const rows = data?.commands ?? []
+  const shown = limit ? rows.slice(0, limit) : rows
 
   return (
     <Panel
@@ -26,8 +34,9 @@ export function CommandHistory({ deviceId, actions }: { deviceId: string; action
       ) : rows.length === 0 ? (
         <p className="py-4 text-center text-sm text-ink-3">还没有下发过命令</p>
       ) : (
+        <>
         <ul className="divide-y divide-hairline">
-          {rows.map((c) => {
+          {shown.map((c) => {
             const st = cmdStatusMeta(c.status)
             const meta = cmdMeta(c.cmd, actions)
             return (
@@ -52,6 +61,8 @@ export function CommandHistory({ deviceId, actions }: { deviceId: string; action
             )
           })}
         </ul>
+        {footer && rows.length > shown.length && <div className="mt-2 border-t border-hairline pt-2">{footer}</div>}
+        </>
       )}
     </Panel>
   )

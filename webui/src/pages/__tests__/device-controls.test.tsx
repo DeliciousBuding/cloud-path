@@ -172,7 +172,7 @@ describe('列表页的关键读数同样来自声明', () => {
     renderWithProviders(<Devices />)
     // 主观测：温度探针 current=26.5（CATEGORY_ORDER 里 sensor 优先）
     expect(await screen.findByText('温度探针')).toBeInTheDocument()
-    expect(screen.getByText('26.5 Cel')).toBeInTheDocument()
+    expect(screen.getByText('26.5 °C')).toBeInTheDocument()
     // 旧芯片墙文案彻底退出列表行
     expect(screen.queryByText('能力未知（未上报声明）')).not.toBeInTheDocument()
     expect(screen.queryByText('未声明能力')).not.toBeInTheDocument()

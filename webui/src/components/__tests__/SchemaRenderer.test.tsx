@@ -153,6 +153,12 @@ describe('quality / status 状态提示', () => {
     }
   })
 
+  it('MetricTile 布尔主值渲染为状态胶囊（不是大字号：半屏大的「否」是排版错误）', () => {
+    const { container } = render(<MetricTile v={{ label: '开关', text: '否', tone: 'idle', kind: 'boolean' }} />)
+    expect(container.querySelector('p.num')).toBeNull()
+    expect(screen.getByText('否').className).toContain('badge')
+  })
+
   it('MetricTile 告警 tone 走 token 文字色类（颜色只走 token 类，不是内联色值）', () => {
     const { container } = render(<MetricTile v={{ label: '偏差', text: '0.4', tone: 'warn', title: 'drift' }} />)
     const value = container.querySelector('p.num')

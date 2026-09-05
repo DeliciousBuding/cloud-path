@@ -222,7 +222,6 @@ export default function DeviceDetail() {
                   ? <p className="py-6 text-center text-sm text-ink-3">还没有事件上报</p>
                   : <EventFeed events={events} showDevice={false} limit={8} />}
               </Panel>
-              <div className="space-y-5">
               <Panel title="设备状况">
                 <dl className="space-y-2.5">
                   <KeyValue k="在线" v={d.online ? '是' : '否'} />
@@ -235,10 +234,16 @@ export default function DeviceDetail() {
                   <KeyValue k="可下发命令" v={`${commands.actions.length} 条`} />
                 </dl>
               </Panel>
-              {/* 右栏第二块：最近命令的成败反馈（复用控制页同一组件，不新造概念） */}
-              <CommandHistory deviceId={key} actions={commands.actions} />
-              </div>
             </div>
+            {/* 命令成败是「最近发生了什么」的一半（用户自己的操作）：通栏置底，
+                避免 8+4 两栏高度互相牵制踢出空洞；概览只看最近 8 条，全部历史在控制页 */}
+            <CommandHistory deviceId={key} actions={commands.actions} limit={8}
+              footer={
+                <button type="button" onClick={() => setTab('controls')}
+                  className="link flex items-center gap-0.5 text-xs">
+                  到控制页看全部 <ArrowRight size={12} />
+                </button>
+              } />
           </div>
         </TabPanel>
       )}

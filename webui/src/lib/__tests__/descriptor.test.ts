@@ -5,9 +5,9 @@ import {
   CATEGORY_LABEL, CATEGORY_ORDER, EMPTY_INDEX, QUALITY_LABEL,
   capabilityLabel, commandActions, commandDecl, entityTitle, eventDecl, formatTimestamp, formatValue,
   humanize, indexCapabilities, inferWidget, isScalar, normalizeCapabilityDocs,
-  normalizeDescriptor, observationsOf, parseCapabilityRef, pickDescriptorFor,
+  metricTiles, normalizeDescriptor, observationsOf, parseCapabilityRef, pickDescriptorFor,
   presentationOf, primaryObservation, qualityTone, rawRows, readInlineDescriptor,
-  resolveCapability, statusMeta, summarizeRaw, toneFromHint, widgetFor,
+  resolveCapability, statusMeta, summarizeRaw, toneFromHint, unitLabel, widgetFor,
 } from '@/lib/descriptor'
 import {
   CAP_CLOCK, CAP_RELAY, CAP_TEMPERATURE, UNKNOWN_CAP,
@@ -414,5 +414,21 @@ describe('commandDecl（跨设备命令声明查找）', () => {
     expect(commandDecl('not_declared_anywhere', idx)).toBeUndefined()
     expect(commandDecl('relay_on', EMPTY_INDEX)).toBeUndefined()
     expect(commandDecl('', idx)).toBeUndefined()
+  })
+})
+
+describe('metricTiles（概览 KPI 摘要）', () => {
+  it('携带值类型与人话单位：布尔主值标记 boolean，科学单位原样', () => {
+    const t = metricTiles(makeDescriptor())
+    expect(t[0]).toMatchObject({ label: '温度探针', text: '26.5', unit: '°C' })
+    expect(t[1]).toMatchObject({ text: '否', kind: 'boolean' })
+  })
+
+  it('unitLabel 只转时频/温度符号，其余原样（科学单位翻中文反而啰嗦）', () => {
+    expect(unitLabel('s')).toBe('秒')
+    expect(unitLabel('ms')).toBe('毫秒')
+    expect(unitLabel('Cel')).toBe('°C')
+    expect(unitLabel('lux')).toBe('lux')
+    expect(unitLabel()).toBeUndefined()
   })
 })
