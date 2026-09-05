@@ -180,8 +180,9 @@ func TestRequestAndJobDispatch(t *testing.T) {
 }
 
 // TestStopInstanceStreamOnlySkipsShutdownRPC 锁定共享进程多实例的停机语义：
-// 只拆本实例会话（state → stopped），绝不发进程级 Shutdown RPC——参考应用
-// 把 Shutdown 当进程退出信号，共享进程上任何实例发送都会连带杀死兄弟。
+// 只拆本实例会话（不发进程级 Shutdown RPC——参考应用把 Shutdown 当进程退出
+// 信号，共享进程上任何实例发送都会连带杀死兄弟）。停机后记录即移除
+// （GetInstance → NotFound）：Stop→Start 重建是 reconcile 自愈的基础。
 func TestStopInstanceStreamOnlySkipsShutdownRPC(t *testing.T) {
 	exec := &fakeExecutor{}
 	stream := newFakeStream()
@@ -196,9 +197,13 @@ func TestStopInstanceStreamOnlySkipsShutdownRPC(t *testing.T) {
 	if n := cli.ShutdownCount(); n != 0 {
 		t.Fatalf("Shutdown RPC 次数 = %d, want 0（共享进程禁发进程级关停）", n)
 	}
-	inst, err := rt.GetInstance("inst-1")
-	if err != nil || inst.State != StateStopped {
-		t.Fatalf("state = %s err=%v, want stopped", inst.State, err)
+	if _, err := rt.GetInstance("inst-1"); !errors.Is(err, ErrInstanceNotFound) {
+		t.Fatalf("GetInstance after stop = %v, want ErrInstanceNotFound（记录已移除，可重建）", err)
+	}
+	// Stop → Start 重建必须可行
+	inst := startTestInstance(t, rt, testSpec())
+	if inst.State != StateRunning {
+		t.Fatalf("restarted state = %s, want running", inst.State)
 	}
 }
 
@@ -231,19 +236,45 @@ func TestGracefulApplicationShutdown(t *testing.T) {
 		t.Fatalf("StopInstance: %v", err)
 	}
 
-	inst, err := rt.GetInstance("inst-1")
-	if err != nil {
-		t.Fatalf("GetInstance: %v", err)
-	}
-	if inst.State != StateStopped {
-		t.Fatalf("state = %s, want stopped", inst.State)
-	}
 	if cli.ShutdownCount() != 1 || cli.LastShutdown().Reason != "maintenance" {
 		t.Fatalf("shutdown calls = %d, last = %+v", cli.ShutdownCount(), cli.LastShutdown())
 	}
+	// 停机后记录移除（新契约）：可重建，事件派发不再接受
+	if _, err := rt.GetInstance("inst-1"); !errors.Is(err, ErrInstanceNotFound) {
+		t.Fatalf("GetInstance after stop = %v, want ErrInstanceNotFound", err)
+	}
+	if err := rt.DispatchEvent(ctx, "inst-1", &sdkapplication.ApplicationEvent{Union: &sdkapplication.InstanceLifecycle{State: "running"}}); err == nil {
+		t.Fatal("dispatch after shutdown should fail")
+	}
+}
 
-	if err := rt.DispatchEvent(ctx, "inst-1", &sdkapplication.ApplicationEvent{Union: &sdkapplication.InstanceLifecycle{State: "running"}}); !errors.Is(err, ErrInstanceNotRunning) {
-		t.Fatalf("dispatch after shutdown error = %v, want ErrInstanceNotRunning", err)
+// TestFailedInstanceCanBeRestarted 锁定进程内自愈的基础（AppHost reconcile
+// heal 依赖）：StartInstance 失败留下的 failed 记录，经 StopInstance 清场后
+// 必须能重建。2026-09-05 D3 真板实测：此前失败记录永远占位，heal 重试全部
+// 撞 ErrInstanceExists——「自愈」实际只在 server 整体重启时生效。
+func TestFailedInstanceCanBeRestarted(t *testing.T) {
+	exec := &fakeExecutor{}
+	stream := newFakeStream()
+	cli := newFakeClient(testDescriptor(), stream)
+	rt := newTestRuntime(t, cli, exec, 0)
+	defer rt.Close(context.Background())
+
+	// 第一次启动失败：配置被拒（fake client 返回 INVALID_ARGUMENT）
+	cli.configureErr = errors.New("rpc status INVALID_ARGUMENT: bad config")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := rt.StartInstance(ctx, testSpec()); err == nil {
+		t.Fatal("StartInstance should fail on bad config")
+	}
+	if _, err := rt.GetInstance("inst-1"); !errors.Is(err, ErrInstanceNotFound) {
+		t.Fatalf("failed record still occupies the slot: %v", err)
+	}
+
+	// 修复配置后直接重建即成功（heal 的 stop+start 路径等价于此）
+	cli.configureErr = nil
+	inst := startTestInstance(t, rt, testSpec())
+	if inst.State != StateRunning {
+		t.Fatalf("restarted state = %s, want running", inst.State)
 	}
 }
 

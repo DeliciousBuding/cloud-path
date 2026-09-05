@@ -112,6 +112,10 @@ func (r *Runtime) StartInstance(ctx context.Context, spec InstanceSpec) (*Instan
 		rec.err = err
 		rec.mu.Unlock()
 		close(rec.done)
+		// 失败即回滚记录：调用方拿到错误快照后，下次 StartInstance 必须能
+		// 直接重建（AppHost reconcile 每轮重试，占位记录会让它永远撞
+		// ErrInstanceExists——2026-09-05 D3 真板实测）。
+		r.forgetInstance(spec.PluginInstanceID)
 		return rec.snapshot(), err
 	}
 	return rec.snapshot(), nil
@@ -478,6 +482,8 @@ func (r *Runtime) StopInstanceStreamOnly(instanceID string) error {
 	rec.mu.Lock()
 	rec.state = StateStopped
 	rec.mu.Unlock()
+	// 与 stopRecord 同语义：停机即移除记录，保证 Stop→Start 重建可行
+	r.forgetInstance(instanceID)
 	return nil
 }
 
@@ -509,6 +515,7 @@ func (r *Runtime) stopRecord(ctx context.Context, rec *instanceRecord, reason st
 	rec.mu.Lock()
 	if rec.state == StateStopped {
 		rec.mu.Unlock()
+		r.forgetInstance(rec.spec.PluginInstanceID)
 		return nil
 	}
 	if rec.state != StateStopping {
@@ -539,7 +546,20 @@ func (r *Runtime) stopRecord(ctx context.Context, rec *instanceRecord, reason st
 	rec.mu.Lock()
 	rec.state = StateStopped
 	rec.mu.Unlock()
+	// 停机即移除记录：失败/停止的实例必须能被 StartInstance 重建，否则
+	// AppHost reconcile 的进程内自愈永远撞 ErrInstanceExists（2026-09-05
+	// D3 真板实测：首次启动失败后每 15s 重试全部 "instance already
+	// exists"——此前 box-prod 的自愈实际靠部署重启清空内存态，heal 路径
+	// 从未被走过）。
+	r.forgetInstance(rec.spec.PluginInstanceID)
 	return shutdownErr
+}
+
+// forgetInstance 幂等地移除实例记录（已不存在时 no-op）。
+func (r *Runtime) forgetInstance(instanceID string) {
+	r.mu.Lock()
+	delete(r.instances, instanceID)
+	r.mu.Unlock()
 }
 
 func (r *Runtime) instance(instanceID string) (*instanceRecord, error) {
