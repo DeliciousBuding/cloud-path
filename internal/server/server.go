@@ -750,6 +750,10 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/api/plugins/{pluginID}", s.handleGetPlugin)
 			r.Get("/api/plugin-instances", s.handleListPluginInstances)
 			r.Get("/api/plugin-instances/{id}", s.handleGetPluginInstance)
+			// Application Data Plane（Milestone D1）：应用产出通用读面。
+			r.Get("/api/plugin-instances/{id}/records", s.handlePluginInstanceRecords)
+			r.Get("/api/plugin-instances/{id}/bindings", s.handlePluginInstanceBindings)
+			r.Get("/api/plugin-instances/{id}/jobs", s.handlePluginInstanceJobs)
 		})
 		r.Post("/api/devices/{edgeID}/{deviceID}/commands", s.authWrite(s.handlePostCommand))
 		// 插件实例管理写面（control-plane-sync §6）：viewer 只读，operator 可写，

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -82,10 +83,11 @@ const AppHostEdgeID = "server"
 type appInstanceRun struct {
 	row         store.PluginInstanceRow
 	tenantStr   string
-	reqByEntity map[string]string // entityID → requirementID（事件扇入路由）
-	jobIDs      []string          // 应用声明的 job（每分钟驱动一次）
-	tz          *time.Location    // 应用配置时区
-	windows     []appWindowSpec   // 应用配置的每日窗口
+	reqByEntity map[string]string    // entityID → requirementID（事件扇入路由）
+	bindings    []api.AppBindingView // 启动时 Binder 权威匹配的绑定快照（D1 读面）
+	jobIDs      []string             // 应用声明的 job（每分钟驱动一次）
+	tz          *time.Location       // 应用配置时区
+	windows     []appWindowSpec      // 应用配置的每日窗口
 }
 
 // appWindowSpec 是应用配置里的一个每日窗口（HH:MM，配置时区）。
@@ -202,6 +204,66 @@ func (h *AppHost) ctxOrBackground() context.Context {
 		return h.ctx
 	}
 	return context.Background()
+}
+
+// ---- D1 Application Data Plane：运行态内省（bindings / jobs）----
+
+// InstanceBindings 返回实例的 Capability 绑定投影（运行态）。ok=false 表示
+// 实例未运行或 AppHost 未启用——绑定只存在于实例运行期间。
+// instance id 不跨租户全局唯一，必须带 tenantID 过滤。
+func (h *AppHost) InstanceBindings(tenantID int64, instanceID string) ([]api.AppBindingView, bool) {
+	if h == nil {
+		return nil, false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	run, ok := h.running[instanceID]
+	if !ok || run.row.TenantID != tenantID {
+		return nil, false
+	}
+	out := append([]api.AppBindingView(nil), run.bindings...)
+	return out, true
+}
+
+// InstanceJobs 返回实例声明的 job id 列表（运行态）。
+func (h *AppHost) InstanceJobs(tenantID int64, instanceID string) ([]string, bool) {
+	if h == nil {
+		return nil, false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	run, ok := h.running[instanceID]
+	if !ok || run.row.TenantID != tenantID {
+		return nil, false
+	}
+	out := append([]string(nil), run.jobIDs...)
+	return out, true
+}
+
+// broadcastDomainRecord 把领域记录写入投影成 WS 消息，按租户广播给浏览器。
+// 投影失败（slug 解析 / 序列化）只记日志，绝不影响记录落库主路径。
+func (h *AppHost) broadcastDomainRecord(tenantID int64, instanceID string, p *appruntime.CreateDomainRecord, created bool, updatedAt int64) {
+	t, err := h.srv.cfg.Store.GetTenantByID(tenantID)
+	if err != nil {
+		h.logger.Warn("apphost domain record projection: tenant lookup", "tenant", tenantID, "err", err)
+		return
+	}
+	data, err := json.Marshal(api.DomainRecordData{
+		InstanceID: instanceID,
+		RecordType: p.RecordType,
+		RecordID:   p.RecordID,
+		DataJSON:   p.DataJSON,
+		Version:    p.Version,
+		UpdatedAt:  updatedAt,
+		Created:    created,
+	})
+	if err != nil {
+		h.logger.Warn("apphost domain record projection: marshal", "instance", instanceID, "err", err)
+		return
+	}
+	h.srv.broadcastAs(api.Envelope{
+		V: api.Version, Type: api.MsgDomainRecord, Ts: updatedAt, Data: data,
+	}, t.Slug)
 }
 
 // ---- reconcile：DB desired → 进程面 + 协议面 ----
@@ -398,8 +460,17 @@ func (h *AppHost) startInstance(ctx context.Context, row store.PluginInstanceRow
 	}
 
 	run := &appInstanceRun{row: row, tenantStr: tenantStr, reqByEntity: map[string]string{}}
+	reqCap := make(map[string]string, len(reqs))
+	for _, rq := range reqs {
+		reqCap[rq.ID] = rq.Capability
+	}
 	for _, b := range bs.Bindings {
 		run.reqByEntity[b.EntityID] = b.RequirementID
+		run.bindings = append(run.bindings, api.AppBindingView{
+			RequirementID: b.RequirementID,
+			Capability:    reqCap[b.RequirementID],
+			EntityID:      b.EntityID,
+		})
 	}
 	for _, j := range desc.Jobs {
 		run.jobIDs = append(run.jobIDs, j.ID)
@@ -754,8 +825,21 @@ func (e *appEffectExecutor) Execute(ctx context.Context, effect appruntime.Effec
 			return fmt.Errorf("apphost: effect tenant %q: %w", effect.TenantID, err)
 		}
 		p := effect.CreateDomainRecord
-		return e.host.srv.cfg.Store.UpsertAppDomainRecord(tid, effect.PluginInstanceID,
-			p.RecordType, p.RecordID, p.DataJSON, p.Version, time.Now().Unix())
+		now := time.Now().Unix()
+		// 先查再写以区分 created/updated：并发下可能误判为 updated，投影
+		// 语义无损（消费端按 (instance, type, id) upsert 收敛最终态）。
+		_, getErr := e.host.srv.cfg.Store.GetAppDomainRecord(tid, effect.PluginInstanceID, p.RecordType, p.RecordID)
+		created := getErr == sql.ErrNoRows
+		if getErr != nil && getErr != sql.ErrNoRows {
+			// 读失败不阻断主路径：记录落库优先，投影降级为 updated
+			created = false
+		}
+		if err := e.host.srv.cfg.Store.UpsertAppDomainRecord(tid, effect.PluginInstanceID,
+			p.RecordType, p.RecordID, p.DataJSON, p.Version, now); err != nil {
+			return err
+		}
+		e.host.broadcastDomainRecord(tid, effect.PluginInstanceID, p, created, now)
+		return nil
 	case appruntime.EffectScheduleJob:
 		// 任务簿记：应用声明的定时任务记录在册（cancel_job 可撤销）。
 		// 声明 job（descriptor.Jobs）由分钟循环驱动执行；schedule payload 的

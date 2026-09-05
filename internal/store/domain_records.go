@@ -62,6 +62,50 @@ func (s *Store) ListAppDomainRecords(tenantID int64, instanceID string, limit in
 	return out, rows.Err()
 }
 
+// ListAppDomainRecordsFiltered 按实例列领域记录，支持 record_type 过滤与
+// limit/offset 分页（按更新时间倒序）。recordType 为空 = 不过滤；limit<=0
+// 默认 100、上限 1000；offset<0 归零。offset 分页在本表规模（单实例数百条）
+// 下语义足够，不引入游标。
+func (s *Store) ListAppDomainRecordsFiltered(tenantID int64, instanceID, recordType string, limit, offset int) ([]AppDomainRecordRow, error) {
+	tid, err := s.normalizeTenantID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	q := `
+		SELECT tenant_id, instance_id, record_type, record_id, data_json, version, updated_at
+		FROM app_domain_records WHERE tenant_id=? AND instance_id=?`
+	args := []any{tid, instanceID}
+	if recordType != "" {
+		q += ` AND record_type=?`
+		args = append(args, recordType)
+	}
+	q += ` ORDER BY updated_at DESC, record_id LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AppDomainRecordRow
+	for rows.Next() {
+		var r AppDomainRecordRow
+		if err := rows.Scan(&r.TenantID, &r.InstanceID, &r.RecordType, &r.RecordID, &r.DataJSON, &r.Version, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 // GetAppDomainRecord 取单条领域记录；不存在返回 sql.ErrNoRows。
 func (s *Store) GetAppDomainRecord(tenantID int64, instanceID, recordType, recordID string) (AppDomainRecordRow, error) {
 	tid, err := s.normalizeTenantID(tenantID)

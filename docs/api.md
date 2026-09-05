@@ -54,6 +54,9 @@
 | `GET /api/plugins/{pluginID}` | 读 | 单插件视图（§5.2） |
 | `GET /api/plugin-instances` | 读 | 插件实例列表（§5.3） |
 | `GET /api/plugin-instances/{id}` | 读 | 单插件实例（§5.3） |
+| `GET /api/plugin-instances/{id}/records` | 读 | 实例领域记录（§5.5） |
+| `GET /api/plugin-instances/{id}/bindings` | 读 | Capability 绑定投影（§5.5） |
+| `GET /api/plugin-instances/{id}/jobs` | 读 | 应用 job 列表（§5.5） |
 | `GET /api/audit?since=&action=&limit=` | admin | 审计日志（本租户，limit 上限 1000） |
 | `GET /api/stats` | 读 | 计数/保留期/`auth_enabled`/`schema_version` |
 | `GET /ws` | 读 | 浏览器实时通道（快照 + fan-out）；Origin 策略见下 |
@@ -177,7 +180,56 @@ WebUI 首屏一次性聚合。所有计数来自真实 Edge 上报与 Server 权
 5. `reconcile` 时目标 Edge 离线或发送队列满 → `409 plugin_edge_offline`（期望态已保存，
    Edge 重连后自动收敛）。
 
-### 5.5 插件写面稳定错误码
+### 5.5 Application Data Plane（D1，viewer 只读）
+
+应用产出（领域记录、绑定、任务）的**设备无关、业务无关**读面。`app_domain_records`
+是 Application 数据 SSOT——本节只读不写，不建第二套业务 store，也没有任何业务特例
+API（没有 `/api/pillbox/*`，永远不会有）。
+
+| 方法 路径 | 权限 | 说明 |
+|---|---|---|
+| `GET /api/plugin-instances/{id}/records` | viewer | 实例领域记录（见下） |
+| `GET /api/plugin-instances/{id}/bindings` | viewer | Capability 绑定投影（运行态） |
+| `GET /api/plugin-instances/{id}/jobs` | viewer | 应用声明的 job 列表（运行态） |
+
+**records 查询参数**：`record_type`（可选过滤，形状同插件 id 段）、`limit`
+（默认 100，上限 1000）、`offset`（默认 0）。非法值显式 `400`。响应：
+
+```json
+{
+  "instance_id": "box-prod",
+  "records": [
+    {"record_type":"window","record_id":"w-0630","data_json":"{\"state\":\"missed\",…}",
+     "version":"1","updated_at":1756960200}
+  ],
+  "record_type": "window",
+  "limit": 100, "offset": 0
+}
+```
+
+排序 `updated_at DESC, record_id`。`data_json` 原样透传应用写入的 JSON 字符串
+（消费端自行 parse）。
+
+**租户隔离语义**：记录按 `(tenant, instance)` 复合键过滤——跨租户查同一实例
+返回 `200 + 空列表`，与「实例不存在」同形，探测得不到存在性信息。
+
+**bindings/jobs 运行态语义**：绑定在实例启动时由 Binder 权威匹配、job 来自应用
+descriptor——两者只在实例运行期间存在。AppHost 未启用或实例未运行 →
+`200 {"running":false,"bindings":[]}`，不伪造持久态。绑定视图字段：
+`{requirement_id, capability, entity_id}`。
+
+**WS 实时投影**：领域记录每次写入向**本租户**浏览器广播（信封复用 §6）：
+
+```json
+{"v":1,"type":"domain_record","ts":1756960200,
+ "data":{"instance_id":"box-prod","record_type":"window","record_id":"w-0630",
+         "data_json":"{…}","version":"1","updated_at":1756960200,"created":false}}
+```
+
+`created:true` = 首次写入，`false` = 同键覆盖（upsert）。历史记录从 REST 补
+（同 `/api/events` 模式），快照不内嵌领域记录。
+
+### 5.6 插件写面稳定错误码
 
 错误响应统一 `{"error":"<code>","code":"<code>","message":"<人读文本>","request_id":"…"}`。
 前端按 `code` 呈现，绝不解析 `message`。
@@ -194,7 +246,7 @@ WebUI 首屏一次性聚合。所有计数来自真实 Edge 上报与 Server 权
 | `plugin_quota_exceeded` | 429 | 租户插件实例配额已满 |
 | `plugin_store_unavailable` | 503 / 500 | 插件存储未接线（503）或写入失败（500） |
 
-### 5.6 已知边界（v0.1 接受）
+### 5.7 已知边界（v0.1 接受）
 
 - **令牌会话无实时通道**：用租户服务令牌登录的 WebUI 只有 REST（Authorization header）。
   浏览器 `WebSocket` 无法携带自定义 header，而账号模式下 `/ws` 以会话 cookie 鉴权，因此令牌会话

@@ -28,6 +28,7 @@ const (
 	MsgPluginDesired MsgType = "plugin_desired" // server→edge：租户/edge 插件期望态全量快照
 	MsgPluginAck     MsgType = "plugin_ack"     // edge→server：期望态 revision 应用结果
 	MsgCapabilities  MsgType = "capabilities"   // edge→server：Capability 文档全量上报（外部 Driver 的能力说明）
+	MsgDomainRecord  MsgType = "domain_record"  // server→浏览器：Application 领域记录投影（created/updated）
 	MsgPing          MsgType = "ping"
 	MsgPong          MsgType = "pong"
 )
@@ -314,6 +315,64 @@ type PluginAckData struct {
 	SnapshotDigest string                  `json:"snapshot_digest"`
 	Status         string                  `json:"status"`
 	Results        []PluginApplyResultData `json:"results,omitempty"`
+}
+
+// ---- Application Plane（Milestone D1：设备无关、业务无关的应用读面）----
+
+// DomainRecordData 是领域记录 WS 投影载荷。created=true 表示首次写入，
+// false 表示同键覆盖（upsert 语义）。Device 字段为空——记录属于应用实例，
+// 不属于设备；消费端按 instance_id + record_type + record_id 定位。
+type DomainRecordData struct {
+	InstanceID string `json:"instance_id"`
+	RecordType string `json:"record_type"`
+	RecordID   string `json:"record_id"`
+	DataJSON   string `json:"data_json"`
+	Version    string `json:"version,omitempty"`
+	UpdatedAt  int64  `json:"updated_at"` // unix 秒
+	Created    bool   `json:"created"`
+}
+
+// AppBindingView 是一个 Application 实例的 Capability 绑定投影（运行态）。
+// 绑定在实例启动时由 Binder 权威匹配，只在实例运行期间存在。
+type AppBindingView struct {
+	RequirementID string `json:"requirement_id"`
+	Capability    string `json:"capability"`
+	EntityID      string `json:"entity_id"`
+}
+
+// AppDomainRecordView 是领域记录 REST 行。
+type AppDomainRecordView struct {
+	RecordType string `json:"record_type"`
+	RecordID   string `json:"record_id"`
+	DataJSON   string `json:"data_json"`
+	Version    string `json:"version,omitempty"`
+	UpdatedAt  int64  `json:"updated_at"` // unix 秒
+}
+
+// AppDomainRecordsView 是 GET /api/plugin-instances/{id}/records 响应。
+// 空列表与「实例不存在于本租户」同形：跨租户探测得不到存在性信息。
+type AppDomainRecordsView struct {
+	InstanceID string                `json:"instance_id"`
+	Records    []AppDomainRecordView `json:"records"`
+	RecordType string                `json:"record_type,omitempty"` // 生效的过滤条件
+	Limit      int                   `json:"limit"`
+	Offset     int                   `json:"offset"`
+}
+
+// AppBindingsView 是 GET /api/plugin-instances/{id}/bindings 响应。
+// Running=false 表示 AppHost 未启用或实例未在运行——绑定是运行态，非持久态。
+type AppBindingsView struct {
+	InstanceID string           `json:"instance_id"`
+	Running    bool             `json:"running"`
+	Bindings   []AppBindingView `json:"bindings"`
+}
+
+// AppJobsView 是 GET /api/plugin-instances/{id}/jobs 响应。
+// Jobs 为应用声明并注册到分钟调度的 job id（运行态投影）。
+type AppJobsView struct {
+	InstanceID string   `json:"instance_id"`
+	Running    bool     `json:"running"`
+	Jobs       []string `json:"jobs"`
 }
 
 // ---- 鉴权与多租户（docs/api.md §2）----
