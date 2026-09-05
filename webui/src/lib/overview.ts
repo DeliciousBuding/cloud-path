@@ -118,7 +118,7 @@ export function overviewAlerts(o: OverviewView): OverviewAlert[] {
     out.push({
       id: 'plugins-gap', tone: 'warn', count: pluginGap, to: '/plugins',
       title: `${pluginGap} 个插件实例未达到活跃`,
-      hint: '期望态已提交但边缘节点还没上报活跃。可能是节点离线、正在应用，或实际态与期望态不一致。',
+      hint: '期望态已提交但运行宿主还没上报活跃。可能是宿主不可用、正在应用，或实际态与期望态不一致。',
     })
   }
 

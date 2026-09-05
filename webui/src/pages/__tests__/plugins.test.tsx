@@ -10,7 +10,7 @@ import { installFetch, stubResponse } from '@/test/http'
 import { renderWithProviders, resetStores } from '@/test/render'
 import type { PluginCatalogView, PluginInstanceView } from '@/lib/types'
 import { useAuth } from '@/store/auth'
-import { appUser } from '@/test/application-plane'
+import { appInstance, appUser } from '@/test/application-plane'
 
 const LOCAL_PATH = 'C:\\Users\\someone\\plugins\\acme-driver'
 
@@ -81,6 +81,22 @@ async function gotoTab(name: RegExp) {
 beforeEach(() => { resetStores() })
 
 describe('插件列表只读权限', () => {
+  it('viewer 在空目录下仍区分中心服务与真实边缘节点，说明不限定 Edge', async () => {
+    useAuth.setState({ status: 'in', user: appUser })
+    route({ catalog: [], instances: [appInstance('app-a', 'app-a'), appInstance('app-b', 'server/app-b'), instance()] })
+    const { container } = renderWithProviders(<Plugins />)
+    expect(await screen.findByText('插件目录为空')).toBeInTheDocument()
+    expect(screen.getByText('插件声明同步到目录后，这里会显示版本、摘要、权限和贡献。目录为空不代表没有已安装或运行的实例。')).toBeInTheDocument()
+    await gotoTab(/实例/)
+    const locations = await screen.findAllByText(/^中心服务 · 最后回执/)
+    expect(locations).toHaveLength(2)
+    locations.forEach((location) => expect(location).toHaveAttribute('title', '中心服务 · 最后回执 尚无回执'))
+    expect(screen.getByText(/^边缘节点 edge-a · 最后回执/)).toBeInTheDocument()
+    expect(container.textContent).not.toContain('边缘节点 server')
+    expect(container.querySelector('[title^="边缘节点 server"]')).toBeNull()
+    expect(screen.getByText('每行都分开写「期望态」与「实际态」：期望已启用不等于运行宿主已运行该实例。尚未收到实际态时，明确标注未上报。')).toBeInTheDocument()
+  })
+
   it('viewer 可查看实例，但不显示新建、创建或编辑表单入口', async () => {
     useAuth.setState({ status: 'in', user: appUser })
     const http = route({ instances: [instance()] })
