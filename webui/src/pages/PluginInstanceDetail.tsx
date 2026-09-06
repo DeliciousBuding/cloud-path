@@ -38,7 +38,7 @@ export default function PluginInstanceDetail() {
   if (loading) {
     return (
       <>
-        <BackLink to="/plugins" label="插件" />
+        <BackLink to="/plugins" label="应用与插件" />
         <Panel><RowSkeleton rows={5} /></Panel>
       </>
     )

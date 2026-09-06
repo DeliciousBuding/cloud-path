@@ -5,7 +5,7 @@ import { Badge, ErrorState, Panel } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { APP_RECORD_PAGE_SIZE, useApplicationPlane } from '@/hooks/useApplicationPlane'
 import { ApiError } from '@/lib/api'
-import { appTime, bindingLabels, recordFieldLabel, scheduleSummary, scheduleZone } from '@/lib/application-plane'
+import { appTime, bindingLabels, emptyRecordValue, recordEntries, recordFieldLabel, recordTimestamp, scheduleSummary, scheduleZone } from '@/lib/application-plane'
 import type { AppDomainRecordView, AppScheduledJobView } from '@/lib/types'
 import { useAuth } from '@/store/auth'
 
@@ -43,30 +43,43 @@ function TechnicalDetails({ children }: { children: ReactNode }) {
   </div>
 }
 
-/** 数据只按结构展示；未知字段给序号，未知业务枚举保留应用原值，不在平台维护词典。 */
+/** 应用内容是数据，不是可执行展示代码；普通视图保留字段身份与结构。 */
 function StructuredValue({ value, depth = 0 }: { value: unknown; depth?: number }) {
-  if (value === null) return <span className="text-ink-3">未填写</span>
-  if (typeof value !== 'object') return <span className="whitespace-pre-wrap break-all">{
-    typeof value === 'boolean' ? value ? '是' : '否' : value === '' ? '空文本' : String(value)
-  }</span>
-  const entries = Object.entries(value as object)
-  if (entries.length === 0) return <span className="text-ink-3">暂无内容</span>
+  if (value === null || value === '') return <span className="text-ink-3">未填写</span>
+  if (typeof value !== 'object') {
+    const time = typeof value === 'string' ? recordTimestamp(value) : undefined
+    return time && typeof value === 'string'
+      ? <time dateTime={value} title={value} className="num break-words">{time}</time>
+      : <span className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{
+        typeof value === 'boolean' ? value ? '是' : '否' : String(value)
+      }</span>
+  }
+  const entries = recordEntries(value)
+  if (!entries.length) return <span className="text-ink-3">暂无内容</span>
   if (depth >= 2) return <span className="text-ink-3">{entries.length} 项嵌套内容，详见技术详情</span>
-  return <dl className="min-w-0 space-y-2">
-    {entries.slice(0, 6).map(([key, item], index) => <div key={key} className="min-w-0">
-      <dt className="break-all text-xs text-ink-3">{Array.isArray(value) ? '第 ' + (index + 1) + ' 项' : recordFieldLabel(key, index)}</dt>
-      <dd className="mt-0.5 min-w-0 break-all"><StructuredValue value={item} depth={depth + 1} /></dd>
-    </div>)}
-    {entries.length > 6 && <div className="text-xs text-ink-3"><dt className="sr-only">其余内容</dt>
-      <dd>另有 {entries.length - 6} 项，详见技术详情</dd></div>}
-  </dl>
+  const preview = Array.isArray(value) ? entries.slice(0, 6) : entries.filter(([, item]) => !emptyRecordValue(item)).slice(0, 6)
+  const shown = new Set(preview.map(([key]) => key))
+  const rest = entries.filter(([key]) => !shown.has(key))
+  const field = ([key, item]: [string, unknown]) => <div key={key} className="min-w-0">
+    <dt className="break-words text-xs text-ink-3 [overflow-wrap:anywhere]" title={key}>{Array.isArray(value) ? '第 ' + (Number(key) + 1) + ' 项' : recordFieldLabel(key)}</dt>
+    <dd className="mt-1 min-w-0 text-sm leading-relaxed text-ink-2"><StructuredValue value={item} depth={depth + 1} /></dd>
+  </div>
+  return <div className="min-w-0">
+    {preview.length ? <dl className={depth === 0 ? 'grid min-w-0 gap-x-8 gap-y-4 sm:grid-cols-2' : 'grid min-w-0 gap-3'}>{preview.map(field)}</dl>
+      : <p className="text-sm text-ink-3">暂无已填写内容</p>}
+    {rest.length > 0 && <details className="mt-4 min-w-0 border-t border-hairline pt-3">
+      <summary className="cursor-pointer text-xs text-ink-2">其余字段（{rest.length}）</summary>
+      <dl className="mt-3 grid min-w-0 gap-x-8 gap-y-4 sm:grid-cols-2">{rest.slice(0, 40).map(field)}</dl>
+      {rest.length > 40 && <p className="mt-3 text-xs text-ink-3">另有 {rest.length - 40} 项，完整内容见技术详情。</p>}
+    </details>}
+  </div>
 }
 
 function RecordRow({ record, number }: { record: AppDomainRecordView; number: number }) {
   let content: unknown
   let readable = true
   try { content = JSON.parse(record.data_json) } catch { readable = false }
-  return <article className="min-w-0 border-t border-hairline py-4 first:border-0 first:pt-0">
+  return <article className="min-w-0 border-t border-hairline py-5 first:border-0 first:pt-0">
     <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
       <h3 className="text-sm font-medium">记录 {number}</h3>
       <p className="text-xs text-ink-3">更新于 <time>{appTime(record.updated_at)}</time></p>
@@ -154,7 +167,7 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey }: Props) {
         <p className="mt-2 text-xs text-ink-3">分类标识由应用提供，可在记录的技术详情中查看。</p>
       </details>
       <ReadContent title="应用记录" query={records} empty={!rows.length} emptyText={filter ? '此分类暂无记录' : undefined}>
-        <p className="mb-4 text-xs text-ink-3">内容按应用原值展示。未提供中文名称的字段以数据项编号区分，原始标识见技术详情。</p>
+        <p className="mb-4 text-xs text-ink-3">名称与状态类字段优先显示；未声明的字段名和业务状态保留原值，时间按当前时区显示。</p>
         {rows.map((row, index) => <RecordRow key={JSON.stringify([row.record_type, row.record_id])} record={row} number={offset + index + 1} />)}
       </ReadContent>
       <nav aria-label="应用记录分页" className="mt-3 flex flex-wrap items-center gap-2 text-xs text-ink-3">
@@ -165,6 +178,7 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey }: Props) {
           onClick={() => setOffset(offset + APP_RECORD_PAGE_SIZE)}>下一页</button>
       </nav>
     </Panel>
+    <div className="grid min-w-0 items-start gap-5 lg:grid-cols-2">
     <Panel title="设备绑定">
       <ReadContent title="设备绑定" query={bindings} empty={!bindings.data?.bindings.length}>
         <p className="mb-3 text-xs text-ink-3">以下是应用当前使用的设备能力；绑定会随应用停止而清空。</p>
@@ -172,7 +186,7 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey }: Props) {
           const labels = bindingLabels(binding, presentation)
           return <li key={JSON.stringify([binding.requirement_id, binding.entity_id])} className="min-w-0 py-3 first:pt-0">
             <p className="break-all text-sm font-medium">{labels.entity || '设备绑定 ' + (index + 1)}</p>
-            <p className="mt-1 break-words text-xs text-ink-2">{labels.capability}</p>
+            {labels.capability !== labels.entity && <p className="mt-1 break-words text-xs text-ink-2">{labels.capability}</p>}
             <TechnicalDetails><p>实体标识：{binding.entity_id}</p><p>能力标识：{binding.capability}</p><p>需求标识：{binding.requirement_id}</p></TechnicalDetails>
           </li>
         })}</ul>
@@ -191,5 +205,6 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey }: Props) {
           : <p className="mt-2 text-xs text-ink-3">暂无已保存的计划</p>}
       </ReadContent>
     </Panel>
+    </div>
   </section>
 }
