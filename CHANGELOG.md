@@ -86,4 +86,5 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 | `v0.2.10` | 已发布（2026-09-05） | appruntime 修复：实例停机/启动失败即移除记录——此前 failed 记录永远占位，AppHost reconcile 的进程内自愈每轮撞 `ErrInstanceExists`（D3 真板实测：自愈实际只在 server 整体重启时生效）；Stop→Start 重建成为受测契约 |
 | `v0.2.11` | 已发布（2026-09-05） | 绑定确定性修复（D3 真板实测根因）：Edge descriptor 实体按 EntityID 排序、Server appCandidates 按 (device, entity) 排序——此前 map 随机迭代让 Binder first-match 每次绑到不同实体（button-indicator 重启后绑到 key2，用户按 K1 全部静默丢弃），且 descriptor 指纹每拍抖动导致整份 descriptor 每 poll 周期重发；AppHost 事件路由增加 dispatch/unrouted 观测日志（静默丢弃盲区） |
 | `v0.2.12` | 已发布（2026-09-06） | Application Plane Web 三读面与实时/重连恢复；身份及只读权限隔离；中心服务宿主展示与概览活跃统计修复；容器 AppHost 持久化路径统一。发布源码经 500 项前端测试、Go tests/vet、CI 和真实浏览器隔离联调验证；本次浏览器设备输入为合成设备，不代表新增真板验收 |
+| `v0.2.13` | 已发布（2026-09-07） | Driver 动作 RPC 透传可选标题、说明与危险确认元数据；`oneOf`/`anyOf`/`allOf` 三态校验；Host 完成认证连接计数后再发布 `ready`。18 二进制 + checksums.txt 与容器镜像已发布，linux/arm64 镜像来源提交与 tag 一致。发布源码同树 CI 13/13（含 Linux race、Windows、六平台），WebUI 36 文件 658/658 与构建通过；浏览器验证限于既有隔离联调，不代表新增真板验收或 Edge/Driver 更新后验完成 |
 | `dev` | 本地 | `task build` / `task build:matrix` 的未打标产物（`git describe` 兜底） |
