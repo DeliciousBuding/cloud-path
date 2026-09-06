@@ -371,8 +371,8 @@ export default function DeviceDetail() {
         <TabPanel value={tab}>
           <div className="min-w-0 space-y-5">
             {/* 观测值与命令输入分离：只读现状与命令区并排，避免「看着像已执行」 */}
-            <div className="grid items-start gap-5 lg:grid-cols-2">
-              <ActionPanel deviceId={key} set={commands} adapterName={d.adapter} />
+            <div className="grid items-start gap-5 lg:grid-cols-3">
+              <ActionPanel deviceId={key} set={commands} adapterName={d.adapter} className="lg:col-span-2" />
               {actuators.length > 0 && (
                 <Panel title={<span className="flex items-center gap-1.5"><Zap size={14} />当前状态（只读）</span>}>
                   <dl className="space-y-2.5">

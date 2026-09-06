@@ -138,7 +138,7 @@ describe('actions.inputSchema → 参数输入', () => {
     expect(enabled).toHaveValue('')
     expect(screen.getByRole('button', { name: '设置' })).toBeDisabled()
     fireEvent.change(number, { target: { value: '0' } })
-    expect(screen.getByRole('alert')).toHaveTextContent('缺少必填参数 mode')
+    expect(screen.getByRole('alert')).toHaveTextContent('缺少必填参数 工作模式')
     await user.selectOptions(mode, '0')
     expect(screen.getByRole('alert')).toHaveTextContent('缺少必填参数 enabled')
     await user.selectOptions(enabled, 'false')
@@ -147,8 +147,8 @@ describe('actions.inputSchema → 参数输入', () => {
   })
 
   it.each([
-    ['{}', '缺少必填参数 n'], ['[]', '需要 object 类型'],
-    ['{"n":"1","mode":"a","enabled":false}', '需要 integer 类型'],
+    ['{}', '缺少必填参数 数量'], ['[]', '需要对象'],
+    ['{"n":"1","mode":"a","enabled":false}', '需要整数'],
     ['{"n":10,"mode":"a","enabled":false}', '不能大于 9'],
     ['{"n":1,"mode":"other","enabled":false}', '枚举'],
   ])('JSON 技术入口也拒绝 schema 违约：%s', async (args, error) => {
@@ -376,4 +376,12 @@ describe('命令按钮说明（title/description）', () => {
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     expect(screen.getByText(/点动 · 按毫秒脉冲/)).toBeInTheDocument()
   })
+})
+
+it('危险操作不抢占首个快捷操作位置，保留完整确认与名称', () => {
+  renderWithProviders(<ActionPanel deviceId={KEY} set={{ source: 'descriptor', actions: [
+    { cmd: 'risky', label: '恢复设置', variant: 'danger', confirmText: '不可撤销' },
+    { cmd: 'inspect', label: '检查连接' },
+  ] }} />)
+  expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual(['检查连接', '恢复设置'])
 })

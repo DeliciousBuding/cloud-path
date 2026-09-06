@@ -3,7 +3,8 @@
 import { argsError } from './format'
 
 type Schema = Record<string, unknown>
-const TYPES = ['object', 'array', 'string', 'number', 'integer', 'boolean', 'null']
+const TYPE_NAMES: Record<string, string> = { object: '对象', array: '数组', string: '文本', number: '数值', integer: '整数', boolean: '布尔值', null: '空值' }
+const TYPES = Object.keys(TYPE_NAMES)
 const ANNOTATIONS = new Set(['title', 'description', 'default', 'examples', '$schema', '$id', '$comment', '$defs', 'definitions', 'readOnly', 'writeOnly', 'deprecated'])
 
 function object(v: unknown): v is Record<string, unknown> {
@@ -76,13 +77,21 @@ export function unsupportedSchemaKeywords(schema: Schema): string[] {
   return [...unsupported].sort()
 }
 
-function validate(value: unknown, schema: unknown, at = '$'): string | undefined {
+function propertyLabel(key: string, schema: unknown): string {
+  if (!object(schema)) return key
+  for (const label of [schema.title, schema.description]) {
+    if (typeof label === 'string' && label.trim()) return label
+  }
+  return key
+}
+
+function validate(value: unknown, schema: unknown, at = '参数'): string | undefined {
   const fail = (why: string) => at + '：' + why
   if (schema === false) return fail('不允许此值')
   if (!object(schema)) return undefined
   const declaredTypes = types(schema.type)
   if (declaredTypes && !declaredTypes.some((t) => matchesType(value, t))) {
-    return fail('需要 ' + declaredTypes.join(' / ') + ' 类型')
+    return fail('需要' + declaredTypes.map((type) => TYPE_NAMES[type]).join('或') + '类型')
   }
   if (Array.isArray(schema.enum) && !schema.enum.some((v) => equal(value, v))) return fail('请选择声明的枚举值')
   if (Object.hasOwn(schema, 'const') && !equal(value, schema.const)) return fail('必须等于 ' + JSON.stringify(schema.const))
@@ -121,13 +130,14 @@ function validate(value: unknown, schema: unknown, at = '$'): string | undefined
     const properties = object(schema.properties) ? schema.properties : {}
     if (Array.isArray(schema.required) && schema.required.every((k) => typeof k === 'string')) {
       for (const key of schema.required) {
-        if (!Object.hasOwn(value, key)) return fail('缺少必填参数 ' + key)
+        if (!Object.hasOwn(value, key)) return fail('缺少必填参数 ' + propertyLabel(key, properties[key]))
       }
     }
     if (count(schema.minProperties) && keys.length < schema.minProperties) return fail('至少填写 ' + schema.minProperties + ' 个参数')
     if (count(schema.maxProperties) && keys.length > schema.maxProperties) return fail('最多填写 ' + schema.maxProperties + ' 个参数')
     for (const key of keys) {
-      const child = at + '[' + JSON.stringify(key) + ']'
+      const label = propertyLabel(key, properties[key])
+      const child = at === '参数' ? label : at + ' / ' + label
       if (Object.hasOwn(properties, key)) {
         const error = validate(value[key], properties[key], child)
         if (error) return error
@@ -182,7 +192,7 @@ export function commandFields(schema: Schema): CommandField[] | null {
     if (type !== 'string' && type !== 'number' && type !== 'integer' && type !== 'boolean' && type !== 'enum') return null
     const title = typeof prop.title === 'string' && prop.title.trim() ? prop.title : undefined
     const description = typeof prop.description === 'string' && prop.description.trim() ? prop.description : undefined
-    fields.push({ key, label: title ?? description ?? key, description: title && description !== title ? description : undefined,
+    fields.push({ key, label: propertyLabel(key, prop), description: title && description !== title ? description : undefined,
       required: Array.isArray(schema.required) && schema.required.includes(key), type, schema: prop, choices })
   }
   return fields

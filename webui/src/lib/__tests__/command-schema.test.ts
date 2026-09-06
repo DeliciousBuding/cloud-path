@@ -71,7 +71,7 @@ describe('数值、字符串、数组与对象的声明边界', () => {
       rows: { type: 'array', minItems: 1, items: { type: 'object', required: ['n'], properties: { n: { type: 'integer', minimum: 1 } } } },
     } }
     expect(commandFields(schema)).toBeNull()
-    expect(commandArgsError('{"rows":[{}]}', schema)).toContain('$["rows"][0]：缺少必填参数 n')
+    expect(commandArgsError('{"rows":[{}]}', schema)).toContain('rows[0]：缺少必填参数 n')
     expect(commandArgsError('{"rows":[{"n":0}]}', schema)).toContain('不能小于 1')
     expect(commandArgsError('{"rows":[{"n":1}]}', schema)).toBeUndefined()
   })
@@ -131,4 +131,12 @@ describe('字段选择与诚实的 JSON 回落', () => {
     expect(unsupportedSchemaKeywords(pattern)).toEqual(['additionalProperties', 'patternProperties'])
     expect(commandArgsError('{"x":1}', pattern)).toBeUndefined()
   })
+})
+
+it('错误沿用字段展示名，无展示声明时保留真实字段名', () => {
+  const schema = { type: 'object', required: ['level'], properties: { level: { type: 'integer', title: '输出强度', maximum: 10 } } }
+  expect(commandArgsError('{}', schema)).toBe('参数：缺少必填参数 输出强度')
+  expect(commandArgsError('{"level":11}', schema)).toBe('输出强度：不能大于 10')
+  expect(commandArgsError('{"level":"1"}', schema)).toBe('输出强度：需要整数类型')
+  expect(commandArgsError('{"raw_key":11}', { type: 'object', properties: { raw_key: { type: 'number', maximum: 10 } } })).toBe('raw_key：不能大于 10')
 })

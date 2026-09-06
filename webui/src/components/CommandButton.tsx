@@ -137,7 +137,7 @@ function ScopedCommandButton({ deviceId, action, args, className, disabled, scop
           </p>
         </>}
         confirmLabel={label} busy={busy}
-        requireAck={action.variant === 'danger' ? '我已确认该操作会作用于真实设备，且可能无法撤销。' : undefined}
+        requireAck={action.variant === 'danger' ? '我已确认操作目标，并知悉此操作可能无法撤销。' : undefined}
         onCancel={() => setConfirming(null)}
         onConfirm={() => {
           if (!confirming || confirming.args !== args || blocked || !current()) return

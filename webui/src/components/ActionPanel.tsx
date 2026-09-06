@@ -21,6 +21,7 @@ function WritableActions({ deviceId, set }: { deviceId: string; set: CommandSet 
   const [advArgs, setAdvArgs] = useState('')
   const advErr = argsError(advArgs)
   const simple = set.actions.filter((a) => !a.needsInput && !a.inputSchema)
+    .sort((a, b) => Number(a.variant === 'danger') - Number(b.variant === 'danger'))
   const withInput = set.actions.filter((a) => a.needsInput || a.inputSchema)
   const advanced = set.source === 'adapter' ? set.actions.filter((a) => !a.inputSchema) : []
   const advAction = advanced.find((a) => a.cmd === advCmd)
