@@ -47,7 +47,7 @@ export default function PluginInstanceDetail() {
   if (!instance) {
     return (
       <>
-        <BackLink to="/plugins" label="插件" />
+        <BackLink to="/plugins" label="应用与插件" />
         {error ? (
           <ErrorState icon={<Boxes size={20} />} title="实例加载失败"
             hint={`拿不到 ${key} 的实例投影。可能实例已删除、不属于当前租户，或 server 不可达。`} />
@@ -106,7 +106,7 @@ export default function PluginInstanceDetail() {
 
   return (
     <>
-      <BackLink to="/plugins" label="插件" />
+      <BackLink to="/plugins" label="应用与插件" />
 
       <header className="mb-5 flex flex-wrap items-center gap-2.5 fade-up">
         <h1 className="metric num min-w-0 max-w-full truncate text-[24px] font-semibold" title={instance.id}>
