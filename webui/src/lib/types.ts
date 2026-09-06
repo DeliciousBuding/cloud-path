@@ -335,9 +335,11 @@ export interface OverviewView {
   edges_total: number
   plugins_active: number
   plugins_desired: number
+  /** [server_time-86400, server_time] 内 failed/timeout 完整计数；失败时间为 acked_at，缺失回退 created_at。 */
   commands_failed: number
   recent_events: EventView[]
   offline_devices: DeviceView[]
+  /** 同窗最新20条，按失败时间、ID 倒序；聚合来源不可用时接口返回 503 而非零计数。 */
   failed_commands: CommandView[]
   server_time: number
 }

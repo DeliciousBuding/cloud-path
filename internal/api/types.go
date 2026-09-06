@@ -445,6 +445,8 @@ type TokenView struct {
 
 // OverviewView 是 WebUI Overview 页的一次性聚合读面。
 // 所有计数都来自真实 edge 上报与 Server 权威态，禁止用占位/假数据填充。
+// CommandsFailed 为 [ServerTime-86400, ServerTime] 内 failed/timeout 的完整计数；
+// FailedCommands 取同窗最新20条，失败时间为 acked_at（缺失时 created_at）。
 type OverviewView struct {
 	DevicesOnline  int           `json:"devices_online"`
 	DevicesTotal   int           `json:"devices_total"`
