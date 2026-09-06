@@ -51,7 +51,9 @@ describe('应用数据读取和通用展示', () => {
     expect(screen.getByText('每天 08:30')).toBeVisible()
     expect(screen.getByText(/调度时间不代表执行成功/)).toBeVisible()
     expect(container.querySelector('pre')).toBeNull()
-    for (const machine of ['custom_key', 'saved-1', 'input-source', 'minute-check', 'recurring-check']) {
+    expect(screen.getByText('custom_key')).toBeVisible()
+    expect(container.textContent).not.toContain('数据项 1')
+    for (const machine of ['saved-1', 'input-source', 'minute-check', 'recurring-check']) {
       expect(container.textContent).not.toContain(machine)
     }
     const record = screen.getByRole('heading', { name: '记录 1' }).closest('article')!
@@ -60,6 +62,37 @@ describe('应用数据读取和通用展示', () => {
     expect(within(record).getByRole('group', { name: '记录原文' })).toHaveTextContent('custom_key')
     await user.click(within(record).getByRole('button', { name: '收起技术详情' }))
     expect(container.querySelector('pre')).toBeNull()
+  })
+
+  it('状态与有用值优先，空字段按需展开而不是占据首屏', async () => {
+    installFetch((url) => appResponse(url, { records: [appRecord('actual-result', {
+      closed_at: '', opened_at: '', a: 'A', b: 'B', c: 'C', d: 'D',
+      e: 'E', reminder_state: 'succeeded', state: 'missed',
+    })] }))
+    const user = userEvent.setup()
+    const { container } = renderWithProviders(<ApplicationPlane instanceID="app-a" />)
+    expect(await screen.findByText('missed')).toBeVisible()
+    expect(screen.getByText('succeeded')).toBeVisible()
+    expect(screen.getByText('reminder_state')).toBeVisible()
+    expect(screen.getByText('closed_at')).not.toBeVisible()
+    expect(container.querySelector('pre')).toBeNull()
+    expect(screen.queryByText('漏服')).not.toBeInTheDocument()
+    await user.click(screen.getByText(/^其余字段（/))
+    expect(screen.getByText('closed_at')).toBeVisible()
+    expect(screen.getByText('E')).toBeVisible()
+    expect(container.querySelector('pre')).toBeNull()
+  })
+
+  it('时间字段可读且保留原时区值，普通文本不被猜成时间', async () => {
+    const iso = '2026-09-05T22:30:03Z'
+    installFetch((url) => appResponse(url, { records: [appRecord('time', { happened_at: iso, note: '06:30' })] }))
+    const { container } = renderWithProviders(<ApplicationPlane instanceID="app-a" />)
+    await screen.findByText('happened_at')
+    const time = container.querySelector(`time[datetime="${iso}"]`)
+    expect(time).not.toBeNull()
+    expect(time).toHaveAttribute('title', iso)
+    expect(time?.textContent).not.toBe(iso)
+    expect(screen.getByText('06:30')).toBeVisible()
   })
 
   it('200 空列表与停止状态保持真实空态，不伪造运行绑定或任务', async () => {

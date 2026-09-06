@@ -162,3 +162,22 @@ func TestCapabilitiesMsgRejectsOversizedBatch(t *testing.T) {
 		t.Fatal("超限批次应被整批拒绝并保留旧文档，实际旧文档被清掉了")
 	}
 }
+
+func TestEdgeActionSafetyMetadataReachesREST(t *testing.T) {
+	_, ts := setup(t)
+	ws := dial(t, wsURL(ts.URL, "/ws/edge"))
+	writeEnv(t, ws, api.Envelope{V: api.Version, Type: api.MsgHello, Ts: time.Now().Unix(),
+		Data: rawData(t, api.HelloData{EdgeID: "safety-review", Version: "test", Devices: []api.DeviceMeta{{ID: "one", Adapter: "ext-driver"}}}),
+	})
+	cap := extCapability("External controls")
+	cap.Spec.Actions["restore"] = model.ActionDecl{Title: "Restore", Destructive: true, Confirmation: "Changes cannot be undone.", InputSchema: map[string]any{"type": "object"}}
+	reportCapabilities(t, ws, oneSource(cap))
+	waitCatalog(t, ts.URL, func(catalog map[string]model.Capability) bool {
+		action := catalog[extCapID].Spec.Actions["restore"]
+		return action.Destructive && action.Confirmation == "Changes cannot be undone." && action.InputSchema["type"] == "object"
+	}, "action safety metadata was lost between Edge WebSocket and REST")
+	legacy := fetchCatalog(t, ts.URL)[extCapID].Spec.Actions["diag"]
+	if legacy.Destructive || legacy.Confirmation != "" {
+		t.Fatalf("safety was guessed for an undeclared action: %+v", legacy)
+	}
+}

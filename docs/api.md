@@ -126,11 +126,16 @@ WebUI 首屏一次性聚合。所有计数来自真实 Edge 上报与 Server 权
 | `devices_online` / `devices_total` | 设备在线数 / 总数 |
 | `edges_online` / `edges_total` | Edge 在线数 / 总数 |
 | `plugins_active` / `plugins_desired` | 未过期的实际运行数（Edge 健康/降级或中心 AppHost `running`）/ 期望启用数；期望启用不计作已运行 |
-| `commands_failed` | 失败命令数 |
+| `commands_failed` | 近24小时 `failed` / `timeout` 命令的完整计数，不受预览条数限制 |
 | `recent_events` | 近期事件（`EventView[]`，新→旧） |
 | `offline_devices` | 离线设备（`DeviceView[]`） |
-| `failed_commands` | 失败命令（`CommandView[]`） |
-| `server_time` | 服务器当前 Unix 秒 |
+| `failed_commands` | 同一时间窗内最新20条失败或超时命令（`CommandView[]`），按失败时间、ID 降序 |
+| `server_time` | 本次聚合采样的服务器 Unix 秒 |
+
+失败时间优先取 `acked_at`，缺失时回退 `created_at`；计数与预览共用闭区间
+`[server_time - 86400, server_time]` 与同一 SQL 读快照。鉴权请求始终按租户过滤，
+只有明确的无鉴权访问使用全局视图。此窗口不改变 `/api/commands` 的历史查询或数据保留。
+聚合来源读取失败返回 `503`，不伪装成零计数；无持久层的 API-only 模式仍返回空历史列表。
 
 ### 5.2 插件目录（读）
 

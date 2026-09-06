@@ -17,12 +17,13 @@ export function InstanceRow({ v, catalog, onEdit }: {
   const s = syncState(v)
   const st = stateMeta(v.observed?.state)
   const hl = healthMeta(v.observed?.health)
-  const hostLocation = v.edge_id === 'server' ? '中心服务' : `边缘节点 ${v.edge_id || '—'}`
+  const serverHosted = v.edge_id === 'server'
+  const hostLocation = serverHosted ? '中心服务' : `边缘节点 ${v.edge_id || '—'}`
 
   return (
     <section className="card p-4 fade-up sm:p-5">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <StatusDot online={v.edge_online && v.has_observed && st.tone === 'ok'} />
+        <StatusDot online={(serverHosted || v.edge_online) && v.has_observed && !v.stale && st.tone === 'ok'} />
         <Link to={`/plugins/${encodeURIComponent(v.id)}`}
           className="num min-w-0 max-w-full truncate text-[14px] font-semibold tracking-[-0.01em] no-underline hover:text-accent"
           title={`${v.id} · 查看详情`}>
@@ -63,15 +64,15 @@ export function InstanceRow({ v, catalog, onEdit }: {
                 <span className="num min-w-0 truncate">{v.observed?.version || '未给出'}</span>
               </p>
               <p className="num mt-0.5 truncate text-[12px] text-ink-3">
-                已应用 {v.applied_revision} · {hl.label}
-                {v.stale ? ' · stale' : ''}
+                已应用 {v.applied_revision}{v.observed?.health ? ' · ' + hl.label : ''}
+                {v.stale ? ' · 状态已过期' : ''}
               </p>
             </>
           ) : (
             <>
-              <p className="mt-1 truncate text-[12px] font-medium text-ink-2">边缘节点未上报</p>
+              <p className="mt-1 truncate text-[12px] font-medium text-ink-2">{serverHosted ? '应用宿主未上报' : '边缘节点未上报'}</p>
               <p className="mt-0.5 min-w-0 truncate text-[12px] text-ink-3">
-                {v.edge_online ? '节点在线但还没回过' : '节点离线'}
+                {serverHosted ? '尚未收到实例运行状态' : v.edge_online ? '节点在线但还没回过' : '节点离线'}
               </p>
             </>
           )}

@@ -11,12 +11,11 @@ import (
 	"github.com/DeliciousBuding/cloud-path/internal/store"
 )
 
-// 聚合读面的长度约束：列表只回最近若干条（一次拉全量会拖垮首屏），
-// 计数在 overviewCountLimit 内为真实值（保留期清理保证该窗口足够覆盖）。
+// 聚合读面只返回有界列表；失败计数由同一时间窗的完整匹配集聚合，不受列表上限影响。
 const (
-	overviewEventLimit  = 20
-	overviewFailedLimit = 20
-	overviewCountLimit  = 1000
+	overviewEventLimit   = 20
+	overviewFailedLimit  = 20
+	overviewFailedWindow = 24 * time.Hour
 )
 
 // handleOverview GET /api/overview：WebUI 首屏的一次性聚合读面。
@@ -25,11 +24,14 @@ const (
 // Store 为 nil（API-only 形态）时事件/命令列表为空、计数只反映真实内存态——
 // 这仍是真实事实，不做任何编造填充。
 func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
+	sampledAt := time.Now().Unix()
 	p := auth.FromContext(r.Context())
 	tenant := ""
 	var tenantID int64
+	var commandTenant *int64
 	if p != nil {
 		tenant, tenantID = p.TenantSlug, p.TenantID
+		commandTenant = &tenantID
 	}
 	s.primePluginTenant(r)
 
@@ -44,7 +46,7 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 		RecentEvents:   []api.EventView{},
 		OfflineDevices: []api.DeviceView{},
 		FailedCommands: []api.CommandView{},
-		ServerTime:     time.Now().Unix(),
+		ServerTime:     sampledAt,
 	}
 	for _, d := range devices {
 		if d.Online {
@@ -66,6 +68,8 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 		instances, err := plugincatalog.InstanceViews(pluginProjection{s}, tenant)
 		if err != nil {
 			slog.Warn("overview: plugin instances unavailable", "err", err)
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "overview unavailable"})
+			return
 		} else {
 			for _, in := range instances {
 				if in.Desired.Enabled {
@@ -79,9 +83,19 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s.cfg.Store != nil {
-		view.RecentEvents = s.overviewEvents(tenantID, p)
-		failed, total := s.overviewFailedCommands(tenantID, p)
-		view.FailedCommands, view.CommandsFailed = failed, total
+		events, err := s.overviewEvents(tenantID, p)
+		if err != nil {
+			slog.Warn("overview: recent events unavailable", "err", err)
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "overview unavailable"})
+			return
+		}
+		failed, total, err := s.overviewFailedCommands(commandTenant, sampledAt)
+		if err != nil {
+			slog.Warn("overview: failed commands unavailable", "err", err)
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "overview unavailable"})
+			return
+		}
+		view.RecentEvents, view.FailedCommands, view.CommandsFailed = events, failed, total
 	}
 	writeJSON(w, http.StatusOK, view)
 }
@@ -106,7 +120,7 @@ func pluginObservedActive(in api.PluginInstanceView) bool {
 }
 
 // overviewEvents 取本租户最近事件（真实 DB 行）。
-func (s *Server) overviewEvents(tenantID int64, p *auth.Principal) []api.EventView {
+func (s *Server) overviewEvents(tenantID int64, p *auth.Principal) ([]api.EventView, error) {
 	var rows []store.EventRow
 	var err error
 	if p != nil {
@@ -115,53 +129,32 @@ func (s *Server) overviewEvents(tenantID int64, p *auth.Principal) []api.EventVi
 		rows, err = s.cfg.Store.ListEvents("", 0, overviewEventLimit)
 	}
 	if err != nil {
-		return []api.EventView{}
+		return nil, err
 	}
 	out := make([]api.EventView, 0, len(rows))
 	for _, e := range rows {
 		out = append(out, api.EventView{ID: e.ID, DeviceID: e.DeviceID, Ts: e.Ts,
 			Type: e.Type, Payload: e.Payload})
 	}
-	return out
+	return out, nil
 }
 
-// overviewFailedCommands 取本租户 failed/timeout 命令：列表用于 UI，计数用于卡片。
-func (s *Server) overviewFailedCommands(tenantID int64, p *auth.Principal) ([]api.CommandView, int) {
-	list := func(status string, limit int) []store.CommandRow {
-		var rows []store.CommandRow
-		var err error
-		if p != nil {
-			rows, err = s.cfg.Store.ListCommandsTenant(tenantID, "", status, limit)
-		} else {
-			rows, err = s.cfg.Store.ListCommands("", status, limit)
-		}
-		if err != nil {
-			return nil
-		}
-		return rows
+// overviewFailedCommands 取本租户滚动近24小时的 failed/timeout 命令。
+// 以 server_time 为同一次采样的上界，两端都包含；失败时间优先 acked_at，缺失才回退 created_at。
+func (s *Server) overviewFailedCommands(tenantID *int64, sampledAt int64) ([]api.CommandView, int, error) {
+	since := sampledAt - int64(overviewFailedWindow/time.Second)
+	rows, total, err := s.cfg.Store.FailedCommandsWindow(tenantID, since, sampledAt, overviewFailedLimit)
+	if err != nil {
+		return nil, 0, err
 	}
-	failed := list("failed", overviewCountLimit)
-	timeout := list("timeout", overviewCountLimit)
-	out := make([]api.CommandView, 0, len(failed)+len(timeout))
-	appendRows := func(rows []store.CommandRow) {
-		for _, c := range rows {
-			cv := api.CommandView{ID: c.ID, DeviceID: c.DeviceID, Cmd: c.Cmd, Args: c.Args,
-				Status: c.Status, CreatedAt: c.CreatedAt, Result: c.Result}
-			if c.AckedAt.Valid {
-				cv.AckedAt = c.AckedAt.Int64
-			}
-			out = append(out, cv)
+	out := make([]api.CommandView, 0, len(rows))
+	for _, c := range rows {
+		cv := api.CommandView{ID: c.ID, DeviceID: c.DeviceID, Cmd: c.Cmd, Args: c.Args,
+			Status: c.Status, CreatedAt: c.CreatedAt, Result: c.Result}
+		if c.AckedAt.Valid {
+			cv.AckedAt = c.AckedAt.Int64
 		}
+		out = append(out, cv)
 	}
-	appendRows(capped(failed, overviewFailedLimit))
-	appendRows(capped(timeout, overviewFailedLimit))
-	return out, len(failed) + len(timeout)
-}
-
-// capped 裁剪列表到响应上限（计数仍用完整长度）。
-func capped[T any](in []T, max int) []T {
-	if len(in) > max {
-		return in[:max]
-	}
-	return in
+	return out, total, nil
 }

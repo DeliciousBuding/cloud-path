@@ -7,6 +7,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { ActionPanel } from '@/components/ActionPanel'
 import { commandActions, indexCapabilities, normalizeCapabilityDocs } from '@/lib/descriptor'
 import { useLive } from '@/store/ws'
+import { useAuth } from '@/store/auth'
+import type { CommandSet } from '@/lib/descriptor'
 import { useToasts } from '@/store/toast'
 import { catalogPayload, makeDescriptor } from '@/test/fixtures'
 import { installFetch, stubResponse } from '@/test/http'
@@ -24,7 +26,22 @@ function okPost() {
   }))
 }
 
-beforeEach(() => { resetStores() })
+beforeEach(() => {
+  resetStores()
+  useAuth.setState({ status: 'in', user: { id: 1, username: 'operator', name: '操作员', role: 'operator', tenant_id: 1, tenant_slug: 'default' } })
+})
+
+function schemaSet(inputSchema: Record<string, unknown>): CommandSet {
+  return { source: 'descriptor', actions: [{ cmd: 'configure', label: '设置', inputSchema, needsInput: true }] }
+}
+const simpleSchema = {
+  type: 'object', required: ['n', 'mode', 'enabled'], additionalProperties: false,
+  properties: {
+    n: { type: 'integer', title: '数量', description: '允许零值', minimum: 0, maximum: 9, default: 7 },
+    mode: { type: 'string', description: '工作模式', enum: ['a', 'b'], default: 'b' },
+    enabled: { type: 'boolean', default: true },
+  },
+}
 
 describe('命令集来源与空态', () => {
   it('无声明 → 明确空态文案 + 「无声明」徽标，不摆一排猜出来的按钮', () => {
@@ -48,47 +65,165 @@ describe('命令集来源与空态', () => {
     expect(screen.getByRole('button', { name: '闭合' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '断开' })).toBeInTheDocument()
     const danger = screen.getByRole('button', { name: '恢复出厂' })
-    expect(danger.className).toContain('col-span-2')
+    expect(danger.parentElement?.className).toContain('sm:col-span-2')
     expect(danger.className).toContain('text-bad')
     expect(danger).toHaveAttribute('title', expect.stringContaining('cmd=factory_reset'))
   })
 })
 
 describe('actions.inputSchema → 参数输入', () => {
-  it('声明了 inputSchema 的动作给出带标签的输入框，占位符即参数模板，长度受限', () => {
+  it('默认展示空白的标量字段，不注入 0/false/模板或展示 JSON 编辑器', () => {
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
-    const input = screen.getByPlaceholderText('{"ms":0,"note":""}')
-    expect(input).not.toHaveAttribute('maxlength')
-    expect(input).toHaveAccessibleName(expect.stringContaining('点动'))
-    // label 与 input 通过 for/id 关联（不是靠视觉相邻）
-    const label = document.querySelector(`label[for="${input.id}"]`)
-    expect(label?.textContent).toContain('≤64 字符')
+    expect(screen.getByRole('spinbutton', { name: 'ms' })).toHaveValue(null)
+    expect(screen.getByRole('textbox', { name: 'note' })).toHaveValue('')
+    expect(screen.getByRole('textbox', { name: 'note' })).not.toHaveAttribute('maxlength')
+    expect(screen.queryByRole('textbox', { name: '点动 JSON 参数' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '点动' })).toBeDisabled()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByText('填写参数后可下发。')).toBeInTheDocument()
+    expect(screen.getByText(/≤64 UTF-8 字节/)).toBeInTheDocument()
   })
 
-  it('无效输入保留原文并显式报错 + 禁用下发（不静默剥离/截断）', () => {
+  it('单个左括号必须报错并禁用下发；修正 JSON 才恢复', async () => {
+    const http = okPost()
+    const user = userEvent.setup()
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
-    const input = screen.getByPlaceholderText('{"ms":0,"note":""}')
-    // 单行 input 的值净化由 HTML spec 负责（换行进不来）；前端可见契约是超长不截断 + 显式报错 + 禁用下发
-    fireEvent.change(input, { target: { value: 'x'.repeat(70) } })
-    expect(input).toHaveValue('x'.repeat(70))
-    expect(screen.getByText(/参数 70 字符，超过 64 字符上限/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '点动' })).toBeDisabled()
-    fireEvent.change(input, { target: { value: 'ok' } })
+    await user.click(screen.getByRole('button', { name: '点动 编辑 JSON' }))
+    const input = screen.getByRole('textbox', { name: '点动 JSON 参数' })
+    fireEvent.change(input, { target: { value: '{' } })
+    expect(input).toHaveValue('{')
+    expect(input).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('alert')).toHaveTextContent('JSON 格式无效')
+    await user.click(screen.getByRole('button', { name: '点动' }))
+    expect(http.calls).toHaveLength(0)
+    fireEvent.change(input, { target: { value: '{"ms":100}' } })
     expect(screen.getByRole('button', { name: '点动' })).toBeEnabled()
   })
 
-  it('合法参数原文下发到冻结路径（超长/换行已在框下被拦）', async () => {
+  it('字段输入的 UTF-8 超限保留原文，反馈实际序列化后的字节数', () => {
+    renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
+    const input = screen.getByRole('textbox', { name: 'note' })
+    fireEvent.change(input, { target: { value: '汉'.repeat(22) } })
+    expect(input).toHaveValue('汉'.repeat(22))
+    expect(screen.getByRole('alert')).toHaveTextContent('参数 77 UTF-8 字节，超过 64 字节上限')
+    expect(screen.getByRole('button', { name: '点动' })).toBeDisabled()
+  })
+
+  it('合法 JSON 按原文下发到既有路径，不重排、压缩或截断', async () => {
     const user = userEvent.setup()
     const http = okPost()
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
-    const input = screen.getByPlaceholderText('{"ms":0,"note":""}')
-    fireEvent.change(input, { target: { value: 'x'.repeat(64) } })
+    await user.click(screen.getByRole('button', { name: '点动 编辑 JSON' }))
+    const args = '{"note":"' + 'x'.repeat(51) + '"}  '
+    expect(new TextEncoder().encode(args)).toHaveLength(64)
+    fireEvent.change(screen.getByRole('textbox', { name: '点动 JSON 参数' }), { target: { value: args } })
     await user.click(screen.getByRole('button', { name: '点动' }))
-    expect(http.last()).toMatchObject({
-      url: `/api/devices/edge-1/dev-9/commands`, method: 'POST',
-    })
-    expect((http.last()?.body as { cmd: string; args: string }).cmd).toBe('pulse')
-    expect(((http.last()?.body as { args: string }).args)).toHaveLength(64)
+    expect(http.last()).toMatchObject({ url: '/api/devices/edge-1/dev-9/commands', method: 'POST', body: { cmd: 'pulse', args } })
+  })
+
+  it('title/description/key 标签与合适控件，required/enum/布尔均不自动选值', async () => {
+    const http = okPost()
+    const user = userEvent.setup()
+    renderWithProviders(<ActionPanel deviceId={KEY} set={schemaSet(simpleSchema)} />)
+    const number = screen.getByRole('spinbutton', { name: '数量' })
+    const mode = screen.getByRole('combobox', { name: '工作模式' })
+    const enabled = screen.getByRole('combobox', { name: 'enabled' })
+    expect(number).toHaveValue(null)
+    expect(number).toBeRequired()
+    expect(number).toHaveAttribute('min', '0')
+    expect(number).toHaveAttribute('max', '9')
+    expect(number).toHaveAttribute('step', '1')
+    expect(number).toHaveAccessibleDescription(expect.stringContaining('允许零值'))
+    expect(mode).toHaveValue('')
+    expect(enabled).toHaveValue('')
+    expect(screen.getByRole('button', { name: '设置' })).toBeDisabled()
+    fireEvent.change(number, { target: { value: '0' } })
+    expect(screen.getByRole('alert')).toHaveTextContent('缺少必填参数 工作模式')
+    await user.selectOptions(mode, '0')
+    expect(screen.getByRole('alert')).toHaveTextContent('缺少必填参数 enabled')
+    await user.selectOptions(enabled, 'false')
+    await user.click(screen.getByRole('button', { name: '设置' }))
+    expect(http.last()?.body).toEqual({ cmd: 'configure', args: '{"n":0,"mode":"a","enabled":false}' })
+  })
+
+  it.each([
+    ['{}', '缺少必填参数 数量'], ['[]', '需要对象'],
+    ['{"n":"1","mode":"a","enabled":false}', '需要整数'],
+    ['{"n":10,"mode":"a","enabled":false}', '不能大于 9'],
+    ['{"n":1,"mode":"other","enabled":false}', '枚举'],
+  ])('JSON 技术入口也拒绝 schema 违约：%s', async (args, error) => {
+    const user = userEvent.setup()
+    const http = okPost()
+    renderWithProviders(<ActionPanel deviceId={KEY} set={schemaSet(simpleSchema)} />)
+    await user.click(screen.getByRole('button', { name: '设置 编辑 JSON' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '设置 JSON 参数' }), { target: { value: args } })
+    expect(screen.getByRole('alert')).toHaveTextContent(error)
+    expect(screen.getByRole('button', { name: '设置' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: '设置' }))
+    expect(http.calls).toHaveLength(0)
+  })
+
+  it('JSON 换行不静默压缩，保留输入并遵守后端拒绝规则', () => {
+    renderWithProviders(<ActionPanel deviceId={KEY} set={schemaSet({ type: 'object' })} />)
+    const input = screen.getByRole('textbox', { name: '设置 JSON 参数' })
+    const raw = '{\n"n":1}'
+    fireEvent.change(input, { target: { value: raw } })
+    expect(input).toHaveValue(raw)
+    expect(screen.getByRole('alert')).toHaveTextContent('换行')
+    expect(screen.getByRole('button', { name: '设置' })).toBeDisabled()
+  })
+
+  it('字段与 JSON 双向同步，不复活上次字段值', async () => {
+    const user = userEvent.setup()
+    const http = okPost()
+    renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'ms' }), { target: { value: '100' } })
+    await user.click(screen.getByRole('button', { name: '点动 编辑 JSON' }))
+    const input = screen.getByRole('textbox', { name: '点动 JSON 参数' })
+    expect(input).toHaveValue('{"ms":100}')
+    fireEvent.change(input, { target: { value: '{"ms":200,"note":""}' } })
+    await user.click(screen.getByRole('button', { name: '点动 使用字段' }))
+    expect(screen.getByRole('spinbutton', { name: 'ms' })).toHaveValue(200)
+    await user.click(screen.getByRole('button', { name: '点动' }))
+    expect(http.last()?.body).toEqual({ cmd: 'pulse', args: '{"ms":200,"note":""}' })
+  })
+
+  it('未声明但 schema 允许的额外字段保留在 JSON，不在切回字段时丢失', async () => {
+    const user = userEvent.setup()
+    const http = okPost()
+    renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
+    await user.click(screen.getByRole('button', { name: '点动 编辑 JSON' }))
+    const args = '{"ms":100,"extra":2}'
+    fireEvent.change(screen.getByRole('textbox', { name: '点动 JSON 参数' }), { target: { value: args } })
+    expect(screen.getByRole('button', { name: '点动 使用字段' })).toBeDisabled()
+    expect(screen.getByText(/无法无损转为字段/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '点动' }))
+    expect(http.last()?.body).toEqual({ cmd: 'pulse', args })
+  })
+
+  it('嵌套与数组回落 JSON，仍反馈递归校验结果', () => {
+    renderWithProviders(<ActionPanel deviceId={KEY} set={schemaSet({ type: 'object', required: ['rows'], properties: {
+      rows: { type: 'array', minItems: 1, items: { type: 'object', required: ['n'], properties: { n: { type: 'number' } } } },
+    } })} />)
+    expect(screen.queryByRole('button', { name: '设置 编辑 JSON' })).not.toBeInTheDocument()
+    const input = screen.getByRole('textbox', { name: '设置 JSON 参数' })
+    fireEvent.change(input, { target: { value: '{"rows":[{}]}' } })
+    expect(screen.getByRole('alert')).toHaveTextContent('缺少必填参数 n')
+    fireEvent.change(input, { target: { value: '{"rows":[{"n":1}]}' } })
+    expect(screen.getByRole('button', { name: '设置' })).toBeEnabled()
+  })
+
+  it('组合中的未知约束显式标记为未校验，不把未知分支当作失败', async () => {
+    const user = userEvent.setup()
+    const http = okPost()
+    renderWithProviders(<ActionPanel deviceId={KEY} set={schemaSet({ type: 'object', required: ['id'], oneOf: [{ $ref: '#/$defs/choice' }, { required: ['b'] }] })} />)
+    expect(screen.getByText(/未校验：\$ref/)).toBeInTheDocument()
+    const input = screen.getByRole('textbox', { name: '设置 JSON 参数' })
+    fireEvent.change(input, { target: { value: '{}' } })
+    expect(screen.getByRole('alert')).toHaveTextContent('缺少必填参数 id')
+    fireEvent.change(input, { target: { value: '{"id":1}' } })
+    await user.click(screen.getByRole('button', { name: '设置' }))
+    expect(http.last()?.body).toEqual({ cmd: 'configure', args: '{"id":1}' })
   })
 })
 
@@ -134,8 +269,9 @@ describe('危险动作与回执', () => {
   it('非危险动作不要求勾选：确认键直接可点', async () => {
     const user = userEvent.setup()
     const http = okPost()
-    // pulse 有 inputSchema 但没有 destructive/confirmation → 不进对话框
+    // pulse 有 inputSchema 但没有 destructive/confirmation → 填写合法参数后直接下发
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'ms' }), { target: { value: '100' } })
     await user.click(screen.getByRole('button', { name: '点动' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect((http.last()?.body as { cmd: string }).cmd).toBe('pulse')
@@ -200,9 +336,13 @@ describe('键盘与焦点', () => {
     const user = userEvent.setup()
     const http = okPost()
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
-    const input = screen.getByPlaceholderText('{"ms":0,"note":""}')
-    fireEvent.change(input, { target: { value: '{"ms":100}' } })
+    const input = screen.getByRole('spinbutton', { name: 'ms' })
+    fireEvent.change(input, { target: { value: '100' } })
     input.focus()
+    await user.tab()
+    expect(screen.getByRole('textbox', { name: 'note' })).toHaveFocus()
+    await user.tab()
+    expect(screen.getByRole('button', { name: '点动 编辑 JSON' })).toHaveFocus()
     await user.tab()
     expect(screen.getByRole('button', { name: '点动' })).toHaveFocus()
     await user.keyboard('{Enter}')
@@ -236,4 +376,38 @@ describe('命令按钮说明（title/description）', () => {
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     expect(screen.getByText(/点动 · 按毫秒脉冲/)).toBeInTheDocument()
   })
+})
+
+it('危险操作不抢占首个快捷操作位置，保留完整确认与名称', () => {
+  renderWithProviders(<ActionPanel deviceId={KEY} set={{ source: 'descriptor', actions: [
+    { cmd: 'risky', label: '恢复设置', variant: 'danger', confirmText: '不可撤销' },
+    { cmd: 'inspect', label: '检查连接' },
+  ] }} />)
+  expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual(['检查连接', '恢复设置'])
+})
+
+
+it('LED 组合 JSON 输入阻止双参数 POST，修正后按原文下发', async () => {
+  const user = userEvent.setup()
+  const http = okPost()
+  renderWithProviders(<ActionPanel deviceId={KEY} set={schemaSet({
+    type: 'object', properties: {
+      mask: { type: 'integer', minimum: 0, maximum: 255 },
+      pattern: { type: 'integer', minimum: 0, maximum: 9 },
+    }, oneOf: [{ required: ['mask'] }, { required: ['pattern'] }],
+  })} />)
+  expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '设置 编辑 JSON' })).not.toBeInTheDocument()
+  expect(screen.queryByText(/未校验/)).not.toBeInTheDocument()
+  const input = screen.getByRole('textbox', { name: '设置 JSON 参数' })
+  fireEvent.change(input, { target: { value: '{"mask":1,"pattern":2}' } })
+  expect(screen.getByRole('alert')).toHaveTextContent('oneOf')
+  expect(screen.getByRole('button', { name: '设置' })).toBeDisabled()
+  await user.click(screen.getByRole('button', { name: '设置' }))
+  expect(http.calls).toHaveLength(0)
+  const args = ' { "mask": 0 } '
+  fireEvent.change(input, { target: { value: args } })
+  expect(screen.getByRole('button', { name: '设置' })).toBeEnabled()
+  await user.click(screen.getByRole('button', { name: '设置' }))
+  expect(http.last()).toMatchObject({ url: '/api/devices/edge-1/dev-9/commands', method: 'POST', body: { cmd: 'configure', args } })
 })

@@ -2,7 +2,7 @@
 //
 // 三条硬约束（docs/architecture/control-plane-sync.md 不变量 5/6，任务书 §6.5）：
 //   ① desired 与 observed **永远分别呈现**：desired.enabled 绝不可渲染成「运行中/健康」。
-//   ② `has_observed=false` → 显式「Edge 未上报」；`stale` / `drift` 各有独立视觉状态。
+//   ② `has_observed=false` → 显式呈现对应运行宿主未上报；`stale` / `drift` 各有独立视觉状态。
 //   ③ 错误一律按 api.PluginErr* **稳定码**呈现文案，不解析服务端错误文本；
 //      secret 只显示 handle 名，不显示明文；不呈现本机绝对路径与插件 stdout/stderr 原文。
 import { ApiError } from './api'

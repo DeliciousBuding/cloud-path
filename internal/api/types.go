@@ -91,6 +91,7 @@ type AckData struct {
 
 // CapabilitySource 是一个 Capability 文档声明者：外部 Driver Plugin 的 driver ID，
 // 或进程内适配器名。Server 只按声明者归组存储，不解释其中任何硬件语义。
+// Actions 的 destructive/confirmation 与 inputSchema 同属公开契约，须保留到 REST 读面。
 type CapabilitySource struct {
 	Source       string             `json:"source"`
 	Capabilities []model.Capability `json:"capabilities"`
@@ -445,6 +446,8 @@ type TokenView struct {
 
 // OverviewView 是 WebUI Overview 页的一次性聚合读面。
 // 所有计数都来自真实 edge 上报与 Server 权威态，禁止用占位/假数据填充。
+// CommandsFailed 为 [ServerTime-86400, ServerTime] 内 failed/timeout 的完整计数；
+// FailedCommands 取同窗最新20条，失败时间为 acked_at（缺失时 created_at）。
 type OverviewView struct {
 	DevicesOnline  int           `json:"devices_online"`
 	DevicesTotal   int           `json:"devices_total"`

@@ -61,7 +61,7 @@ describe('概览：有数据', () => {
     expect(await screen.findByText('在线设备')).toBeInTheDocument()
     expect(screen.getByText('在线边缘')).toBeInTheDocument()
     expect(screen.getByText('活跃插件')).toBeInTheDocument()
-    expect(screen.getByText('失败命令')).toBeInTheDocument()
+    expect(screen.getByText('近24小时失败命令')).toBeInTheDocument()
     // 2/3、1/2、1/2 成对呈现；失败命令只有计数
     expect(screen.getByText('2').parentElement?.textContent).toMatch(/2\/3/)
     expect(screen.getByText('需要关注')).toBeInTheDocument()
@@ -71,7 +71,7 @@ describe('概览：有数据', () => {
     route(FULL)
     const { container } = renderWithProviders(<Overview />)
     expect(await screen.findByText('1 台设备离线')).toBeInTheDocument()
-    expect(screen.getByText('1 条命令执行失败')).toBeInTheDocument()
+    expect(screen.getByText('近24小时 1 条命令失败或超时')).toBeInTheDocument()
     // 机器命令名/状态徽章/明细时间不在概览二次出现（同屏同一答案只留一处）
     expect(screen.queryByText('Relay On')).not.toBeInTheDocument()
     expect(screen.queryByText('失败')).not.toBeInTheDocument()

@@ -12,12 +12,12 @@ import EdgeDetail from '@/pages/EdgeDetail'
 import Edges from '@/pages/Edges'
 import Overview from '@/pages/Overview'
 import PluginInstanceDetail from '@/pages/PluginInstanceDetail'
-import Pillbox from '@/pages/Pillbox'
 import Plugins from '@/pages/Plugins'
 import Settings from '@/pages/Settings'
 import { installFetch, stubResponse } from '@/test/http'
 import { LONG, expectContained, expectNoInlinePixelWidth } from '@/test/narrow'
 import { renderWithProviders, resetStores } from '@/test/render'
+import { useAuth } from '@/store/auth'
 import type { DeviceView, OverviewView, PluginCatalogView, PluginInstanceView } from '@/lib/types'
 
 const health = { ok: true, version: LONG, uptime_s: 60, devices_online: 1, devices_total: 1, edges_online: 1 }
@@ -27,7 +27,10 @@ const longDevice: DeviceView = {
   online: true, state: {}, updated_at: 0, last_seen: 0,
 }
 
-beforeEach(() => { resetStores() })
+beforeEach(() => {
+  resetStores()
+  useAuth.setState({ status: 'in', user: { id: 1, username: 'operator', name: '操作员', role: 'operator', tenant_id: 1, tenant_slug: 'default' } })
+})
 
 describe('Edges 页', () => {
   it('edge_id / 版本 / 所辖设备键都收口', async () => {
@@ -141,6 +144,7 @@ describe('Plugins 页（三分都要过）', () => {
     pluginFetch()
     const user = userEvent.setup()
     renderWithProviders(<Plugins />)
+    await user.click(screen.getByRole('tab', { name: /目录/ }))
     await screen.findAllByText(LONG)
     expectContained(LONG)
     expectNoInlinePixelWidth()
@@ -233,33 +237,3 @@ describe('DeviceDetail / EdgeDetail 页', () => {
     expectNoInlinePixelWidth()
   })
 })
-/** 药盒控制面板：长设备名/命令名/实体名在 390px 下必须收口 */
-describe('Pillbox 页', () => {
-  const longEntity = {
-    entity_id: LONG, unique_key: LONG, name: LONG, category: 'sensor' as const,
-    capabilities: [LONG],
-    observations: { state: { capability: LONG, property: 'state', value: LONG, quality: 'good' as const } },
-  }
-  const longPillboxDescriptor = {
-    device_id: `edge-1/${LONG}`, external_id: LONG, status: 'online' as const,
-    entities: [longEntity],
-  }
-
-  it('药格卡片 / 命令 / 状态横幅都被长标识符收口', async () => {
-    installFetch((url) => {
-      if (url === '/api/devices') return stubResponse(200, { devices: [longDevice] })
-      if (url === '/api/adapters') return stubResponse(200, { adapters: [{ name: LONG, commands: [LONG] }] })
-      if (url === '/api/descriptors') return stubResponse(404, {})
-      if (url.endsWith('/descriptor')) return stubResponse(200, longPillboxDescriptor)
-      if (url === '/api/capabilities') return stubResponse(404, {})
-      if (url.startsWith('/api/events?')) return stubResponse(200, { events: [] })
-      if (url.startsWith('/api/commands?')) return stubResponse(200, { commands: [] })
-      return stubResponse(404, {})
-    })
-    renderWithProviders(<Pillbox />)
-    await screen.findAllByText(LONG)
-    expectContained(LONG)
-    expectNoInlinePixelWidth()
-  })
-})
-

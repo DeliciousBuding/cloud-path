@@ -192,7 +192,13 @@ func capabilityDocs(driverID string, in []driver.CapabilityDescriptor) []model.C
 				if name == "" {
 					continue
 				}
-				acts[name] = model.ActionDecl{InputSchema: schemaJSON(act.InputSchemaJSON)}
+				acts[name] = model.ActionDecl{
+					Title:        act.Title,
+					Description:  act.Description,
+					InputSchema:  schemaJSON(act.InputSchemaJSON),
+					Destructive:  act.Destructive,
+					Confirmation: act.Confirmation,
+				}
 			}
 			doc.Spec.Actions = acts
 		}

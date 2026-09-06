@@ -69,13 +69,17 @@ type EventDecl struct {
 	PayloadSchema map[string]any `json:"payloadSchema,omitempty"`
 }
 
-// ActionDecl 声明一个动作及可选 title/description/inputSchema。
+// ActionDecl 声明一个动作及可选 title/description/inputSchema 与交互安全提示。
 // title/description 是纯呈现提示（schema-driven UI 用它们渲染说明与参数控件），
 // 不是语义真相；前端不得因其缺失而存不到可下发命令（命令集仍以 action 键为准）。
 type ActionDecl struct {
 	Title       string         `json:"title,omitempty"`
 	Description string         `json:"description,omitempty"`
 	InputSchema map[string]any `json:"inputSchema,omitempty"`
+	// Destructive 和 Confirmation 必须跨 Driver/Edge/Server 转发，不能在 UI 前丢失。
+	// 它们驱动操作确认，不替代服务端权限或设备侧校验。
+	Destructive  bool   `json:"destructive,omitempty"`
+	Confirmation string `json:"confirmation,omitempty"`
 }
 
 // Validate 按 capability.schema.json 校验 Capability：

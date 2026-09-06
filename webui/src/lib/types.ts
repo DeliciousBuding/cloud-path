@@ -273,9 +273,11 @@ export interface CapabilityActionDecl {
   inputSchema?: Record<string, unknown>
   /** 下发到 POST commands 的 cmd 字段（缺省用 action key） */
   command?: string
-  /** UI Hint（非语义真相）：primary / destructive / confirmation 文案 */
+  /** 兼容展示提示；不会代替危险性声明。 */
   primary?: boolean
+  /** 正式 Capability 交互安全声明：Driver → Edge → Server 必须保留，不替代授权。 */
   destructive?: boolean
+  /** 执行前展示的确认说明；破坏性动作未填写时使用通用确认。 */
   confirmation?: string
   [k: string]: unknown
 }
@@ -335,9 +337,11 @@ export interface OverviewView {
   edges_total: number
   plugins_active: number
   plugins_desired: number
+  /** [server_time-86400, server_time] 内 failed/timeout 完整计数；失败时间为 acked_at，缺失回退 created_at。 */
   commands_failed: number
   recent_events: EventView[]
   offline_devices: DeviceView[]
+  /** 同窗最新20条，按失败时间、ID 倒序；聚合来源不可用时接口返回 503 而非零计数。 */
   failed_commands: CommandView[]
   server_time: number
 }
@@ -471,7 +475,7 @@ export interface PluginInstanceDesiredView {
   updated_at: number
 }
 
-/** 实例的**实际态**（Edge 上报投影）；缺席即「Edge 未上报」 */
+/** 实例的**实际态**（Edge / AppHost 运行投影）；缺席即「运行宿主未上报」 */
 export interface PluginInstanceObservedView {
   state: string
   health: string
@@ -484,7 +488,7 @@ export interface PluginInstanceObservedView {
 
 /**
  * 单个插件实例。desired 与 observed **永远分别渲染**（control-plane-sync.md 不变量 5）：
- * `has_observed=false` → 必须显式呈现「Edge 未上报」，不得把 desired.enabled 当成运行中；
+ * `has_observed=false` → 必须显式呈现对应运行宿主未上报，不得把 desired.enabled 当成运行中；
  * `stale=true` / `drift=true` → 必须有清晰视觉状态。
  */
 export interface PluginInstanceView {

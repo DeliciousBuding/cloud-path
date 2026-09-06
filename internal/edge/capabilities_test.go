@@ -1,13 +1,16 @@
 package edge
 
 import (
+	"context"
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/model"
 	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/driver"
+	"github.com/DeliciousBuding/cloud-path/sdk/go/transport"
 )
 
 // ---- Capability 文档上报（外部 Driver 能力进入 Server catalog 的唯一通道）----
@@ -150,5 +153,102 @@ func TestCapabilityVersionParsing(t *testing.T) {
 		if got := capabilityVersion(id); got != want {
 			t.Fatalf("capabilityVersion(%q) = %d, want %d", id, got, want)
 		}
+	}
+}
+
+// This fixture uses the real SDK RPC server/client over a byte-body transport.
+// Only unused lifecycle methods are embedded; Describe is not a fake client call.
+type actionMetadataRPCDriver struct {
+	driver.DriverServer
+	descriptor *driver.DriverDescriptor
+}
+
+func (d *actionMetadataRPCDriver) Initialize(context.Context, *driver.InitializeRequest) (*driver.InitializeResponse, error) {
+	return &driver.InitializeResponse{NegotiatedProtocolVersion: driver.ProtocolVersion}, nil
+}
+
+func (d *actionMetadataRPCDriver) Describe(context.Context) (*driver.DriverDescriptor, error) {
+	return d.descriptor, nil
+}
+
+type actionMetadataRPCHost struct {
+	PluginHost
+	client driver.DriverClient
+}
+
+func (h *actionMetadataRPCHost) DriverClient(string) (driver.DriverClient, error) {
+	return h.client, nil
+}
+
+// Driver JSON -> SDK decode -> RPC encode/decode -> externalAdapter -> Edge
+// capability catalog -> public JSON. Losing any hop must fail this test.
+func TestDriverActionMetadataRPCCatalogRoundTrip(t *testing.T) {
+	const wire = `{"driver_id":"metadata-fixture","version":"1.0.0","schema_versions":["1"],"capabilities":[{"id":"io.test/capability/settings@1","title":"Settings","properties":[],"events":[],"actions":[{"name":"calibrate","input_schema_json":"{\"type\":\"object\",\"required\":[\"offset\"]}","result_schema_json":"{\"type\":\"boolean\"}","title":"标定","description":"  更新偏移量  ","destructive":true,"confirmation":"执行「标定」？\n设备设置将更新。"},{"name":"preview","input_schema_json":"{}","result_schema_json":"{}","title":"预览","description":"不修改配置","destructive":false,"confirmation":"确认预览？"},{"name":"legacy_action","input_schema_json":"{\"type\":\"object\"}","result_schema_json":"{}"},{"name":"opaque","input_schema_json":"not-json","result_schema_json":"{}","title":"不透明参数","destructive":true,"confirmation":"确认执行该声明动作？"},{"name":"  ","input_schema_json":"{}","result_schema_json":"{}","title":"空名不进命令集","destructive":true}]}]}`
+	var descriptor driver.DriverDescriptor
+	if err := json.Unmarshal([]byte(wire), &descriptor); err != nil {
+		t.Fatalf("decode driver fixture: %v", err)
+	}
+	clientEnd, serverEnd := transport.Pipe(4)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	server := driver.NewRPCServer(serverEnd, &actionMetadataRPCDriver{descriptor: &descriptor})
+	done := make(chan error, 1)
+	go func() { done <- server.Serve(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		_ = clientEnd.Close()
+		_ = serverEnd.Close()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Error("RPC server did not stop")
+		}
+	})
+	adapter := newExternalAdapter(&actionMetadataRPCHost{client: driver.NewClient(clientEnd)}, descriptor.DriverID)
+	caps := adapter.Capabilities()
+	if len(caps) != 1 {
+		t.Fatalf("Describe RPC did not yield the capability: %+v", caps)
+	}
+	if got := caps[0].Spec.Actions["calibrate"]; got.Title != "标定" || got.Description != "  更新偏移量  " || !got.Destructive || got.Confirmation != "执行「标定」？\n设备设置将更新。" {
+		t.Fatalf("action metadata lost between Driver RPC and Edge: %+v", got)
+	}
+	if got := adapter.SupportedCommands(); !reflect.DeepEqual(got, []string{"calibrate", "preview", "legacy_action", "opaque"}) {
+		t.Fatalf("metadata changed the command whitelist: %v", got)
+	}
+
+	// Serialize the same typed envelope/payload as reportCapabilities. Inspect
+	// public JSON keys rather than decoding back into the same model struct.
+	data, err := json.Marshal(api.CapabilitiesData{Sources: []api.CapabilitySource{{Source: adapter.Name(), Capabilities: caps}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(api.Envelope{V: api.Version, Type: api.MsgCapabilities, Data: data})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var received struct {
+		Type string `json:"type"`
+		Data struct {
+			Sources []struct {
+				Capabilities []struct {
+					Spec struct {
+						Actions map[string]any `json:"actions"`
+					} `json:"spec"`
+				} `json:"capabilities"`
+			} `json:"sources"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(encoded, &received); err != nil {
+		t.Fatalf("decode capability envelope: %v", err)
+	}
+	if received.Type != string(api.MsgCapabilities) || len(received.Data.Sources) != 1 || len(received.Data.Sources[0].Capabilities) != 1 {
+		t.Fatalf("unexpected capability envelope: %s", encoded)
+	}
+	var want map[string]any
+	if err := json.Unmarshal([]byte(`{"calibrate":{"title":"标定","description":"  更新偏移量  ","inputSchema":{"type":"object","required":["offset"]},"destructive":true,"confirmation":"执行「标定」？\n设备设置将更新。"},"preview":{"title":"预览","description":"不修改配置","confirmation":"确认预览？"},"legacy_action":{"inputSchema":{"type":"object"}},"opaque":{"title":"不透明参数","destructive":true,"confirmation":"确认执行该声明动作？"}}`), &want); err != nil {
+		t.Fatal(err)
+	}
+	got := received.Data.Sources[0].Capabilities[0].Spec.Actions
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("public action metadata changed:\n got %#v\nwant %#v\nwire %s", got, want, encoded)
 	}
 }

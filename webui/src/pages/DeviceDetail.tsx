@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import {Activity, ArrowRight, Braces, Command, Grid3x3, History, LayoutDashboard, Radio, RadioTower, Sparkles, Terminal, Zap} from 'lucide-react'
 import {
@@ -43,7 +43,16 @@ export default function DeviceDetail() {
   const key = `${decodeURIComponent(edgeId)}/${decodeURIComponent(deviceId)}`
   const now = useNow()
   const nowSec = Math.floor(now.getTime() / 1000)
-  const [tab, setTab] = useState<Tab>('overview')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedTab = searchParams.get('tab')
+  const tab: Tab = (['overview', 'state', 'controls', 'events', 'capabilities', 'diagnostics'] as const)
+    .find((value) => value === requestedTab) ?? 'overview'
+  const setTab = (value: Tab) => setSearchParams((previous) => {
+    const next = new URLSearchParams(previous)
+    if (value === 'overview') next.delete('tab')
+    else next.set('tab', value)
+    return next
+  })
   const [kindFilter, setKindFilter] = useState('')
   const [stateView, setStateView] = useState<'rows' | 'table' | 'trend'>('rows')
   const [rangeMin, setRangeMin] = useState(0)
@@ -362,8 +371,8 @@ export default function DeviceDetail() {
         <TabPanel value={tab}>
           <div className="min-w-0 space-y-5">
             {/* 观测值与命令输入分离：只读现状与命令区并排，避免「看着像已执行」 */}
-            <div className="grid items-start gap-5 lg:grid-cols-2">
-              <ActionPanel deviceId={key} set={commands} adapterName={d.adapter} />
+            <div className="grid items-start gap-5 lg:grid-cols-3">
+              <ActionPanel deviceId={key} set={commands} adapterName={d.adapter} className="lg:col-span-2" />
               {actuators.length > 0 && (
                 <Panel title={<span className="flex items-center gap-1.5"><Zap size={14} />当前状态（只读）</span>}>
                   <dl className="space-y-2.5">

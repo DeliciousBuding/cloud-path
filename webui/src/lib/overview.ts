@@ -65,10 +65,10 @@ export function overviewStats(o: OverviewView): OverviewStat[] {
       emptyHint: '还没有插件实例', tone: o.plugins_desired === 0 ? 'idle'
         : o.plugins_active === 0 ? 'warn' : 'ok',
     },
-    // 失败命令是「越小越好」的量：没有 total，只有计数
+    // 固定近24小时的完整失败/超时计数，来自服务端；不以有界列表长度推算
     {
-      key: 'commands', label: '失败命令', online: o.commands_failed, total: -1,
-      emptyHint: '没有失败的命令', tone: o.commands_failed === 0 ? 'ok' : 'bad',
+      key: 'commands', label: '近24小时失败命令', online: o.commands_failed, total: -1,
+      emptyHint: '近24小时没有失败或超时的命令', tone: o.commands_failed === 0 ? 'ok' : 'bad',
     },
   ]
 }
@@ -104,12 +104,12 @@ export function overviewAlerts(o: OverviewView): OverviewAlert[] {
     })
   }
 
-  if (o.commands_failed > 0 || o.failed_commands.length > 0) {
-    const n = Math.max(o.commands_failed, o.failed_commands.length)
+  if (o.commands_failed > 0) {
+    const n = o.commands_failed
     out.push({
       id: 'commands-failed', tone: 'bad', count: n, to: '/activity',
-      title: `${n} 条命令执行失败`,
-      hint: '失败原因见命令回执；可先在设备详情页重发一次，或检查目标设备是否在线。',
+      title: `近24小时 ${n} 条命令失败或超时`,
+      hint: '查看失败或超时记录及回执，核对原因和发生时间；活动页保留全部历史记录。',
     })
   }
 

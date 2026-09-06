@@ -113,6 +113,11 @@ type ActionDescriptor struct {
 	Name             string `json:"name"`
 	InputSchemaJSON  string `json:"input_schema_json"`
 	ResultSchemaJSON string `json:"result_schema_json"`
+	// Optional Capability metadata; omitted values preserve legacy descriptors.
+	Title        string `json:"title,omitempty"`
+	Description  string `json:"description,omitempty"`
+	Destructive  bool   `json:"destructive,omitempty"`
+	Confirmation string `json:"confirmation,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

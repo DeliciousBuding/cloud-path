@@ -53,6 +53,9 @@ func (s *runtimeSession) handler(onEstablished func()) pluginruntime.Handler {
 		if onEstablished != nil {
 			onEstablished()
 		}
+		// Publish readiness only after authenticated-connection accounting, so
+		// a HEALTHY snapshot cannot still report zero connections.
+		close(s.established)
 		<-ctx.Done()
 		return nil
 	}
@@ -75,7 +78,6 @@ func (s *runtimeSession) tryEstablish(conn transport.Transport) bool {
 		s.driverCli = driver.NewClient(conn)
 	}
 	s.mu.Unlock()
-	close(s.established)
 	return true
 }
 

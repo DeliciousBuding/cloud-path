@@ -161,6 +161,7 @@ body {
 /* 模态对话框：抬到最高阴影层级 */
 .dialog { box-shadow: var(--shadow-lift); }
 .dialog-backdrop { background: color-mix(in srgb, var(--color-ink) 42%, transparent); }
+.dark .dialog-backdrop { background: color-mix(in srgb, var(--color-canvas) 70%, transparent); }
 
 /* 徽标 */
 .badge {

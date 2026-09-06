@@ -5,9 +5,9 @@ import { appBinding, appPresentation } from '@/test/application-plane'
 
 describe('通用应用展示，不猜业务或设备', () => {
   it('未知机器字段不进入主视图，通用中文名称可复用', () => {
-    expect(recordFieldLabel('count', 0)).toBe('计数')
-    expect(recordFieldLabel('opaque_domain_flag', 1)).toBe('数据项 2')
-    expect(recordFieldLabel('应用说明', 0)).toBe('应用说明')
+    expect(recordFieldLabel('count')).toBe('计数')
+    expect(recordFieldLabel('opaque_domain_flag')).toBe('opaque_domain_flag')
+    expect(recordFieldLabel('应用说明')).toBe('应用说明')
   })
   it('名称只取公开声明；重复的局部实体标识不能认成某一台设备', () => {
     expect(bindingLabels(appBinding, appPresentation)).toEqual({ entity: '入口信号', capability: '输入信号' })

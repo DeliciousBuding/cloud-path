@@ -1,6 +1,7 @@
 package server
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 
 	_ "github.com/DeliciousBuding/cloud-path/examples/demo"
 	"github.com/DeliciousBuding/cloud-path/internal/api"
+	"github.com/DeliciousBuding/cloud-path/internal/auth"
 	"github.com/DeliciousBuding/cloud-path/internal/server/storeport"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
 )
@@ -34,7 +36,11 @@ func setupOverview(t *testing.T) (*store.Store, *Server, *httptest.Server, *stor
 
 func getOverview(t *testing.T, ts *httptest.Server, token string) (api.OverviewView, string) {
 	t.Helper()
-	resp := doJSON(t, http.MethodGet, ts.URL+"/api/overview", "", bearerJSON(token), nil)
+	var headers map[string]string
+	if token != "" {
+		headers = bearerJSON(token)
+	}
+	resp := doJSON(t, http.MethodGet, ts.URL+"/api/overview", "", headers, nil)
 	raw := readBody(t, resp)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /api/overview = %d body=%s", resp.StatusCode, raw)
@@ -279,5 +285,245 @@ func TestPluginObservedActiveAppHost(t *testing.T) {
 				t.Fatalf("pluginObservedActive = %t, want %t", got, tt.want)
 			}
 		})
+	}
+}
+
+// openOverviewCommandStore also exposes a fixture-only SQL connection so exact historical
+// timestamps can be seeded without adding a production clock or mutation API.
+func openOverviewCommandStore(t *testing.T) (*store.Store, *sql.DB) {
+	t.Helper()
+	dbPath := filepath.Join(t.TempDir(), "command-window.db")
+	st, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(dbPath)+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return st, db
+}
+
+func seedOverviewCommand(t *testing.T, db *sql.DB, tenantID int64, name, status string, createdAt int64, ackedAt any) int64 {
+	t.Helper()
+	res, err := db.Exec(`INSERT INTO commands(tenant_id, device_id, cmd, args, status, created_at, acked_at, result)
+		VALUES(?, 'edge/device', 'ping', '', ?, ?, ?, ?)`, tenantID, status, createdAt, ackedAt, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func TestOverviewFailedCommandsWindow(t *testing.T) {
+	st, db := openOverviewCommandStore(t)
+	a := ensureTenantSlug(t, st, "tenant-a")
+	b := ensureTenantSlug(t, st, "tenant-b")
+	srv := New(Config{Store: st})
+	t.Cleanup(srv.CloseAll)
+	const sampledAt int64 = 1_800_000_000
+	const since = sampledAt - 86_400
+	for _, c := range []struct {
+		name, status string
+		createdAt    int64
+		ackedAt      any
+	}{
+		{"expired-failed", "failed", since - 100, since - 1},
+		{"expired-timeout", "timeout", since - 1, nil},
+		{"lower-failed", "failed", since - 100, since},
+		{"lower-timeout-fallback", "timeout", since, nil},
+		{"recent-failed", "failed", sampledAt - 100, sampledAt - 20},
+		{"recent-timeout", "timeout", sampledAt - 100, sampledAt - 10},
+		{"delayed-failed", "failed", since - 100, sampledAt - 5},
+		{"upper-failed", "failed", sampledAt - 100, sampledAt},
+		{"upper-timeout-fallback", "timeout", sampledAt, nil},
+		{"future-failed", "failed", sampledAt, sampledAt + 1},
+		{"future-timeout", "timeout", sampledAt + 1, nil},
+		{"success", "ok", sampledAt - 100, sampledAt},
+		{"sent", "sent", sampledAt - 100, sampledAt},
+		{"pending", "pending", sampledAt, nil},
+	} {
+		seedOverviewCommand(t, db, a, c.name, c.status, c.createdAt, c.ackedAt)
+	}
+	seedOverviewCommand(t, db, b, "other-tenant", "failed", sampledAt, sampledAt)
+
+	rows, total, err := srv.overviewFailedCommands(&a, sampledAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"upper-timeout-fallback", "upper-failed", "delayed-failed", "recent-timeout", "recent-failed", "lower-timeout-fallback", "lower-failed"}
+	if total != len(want) || len(rows) != len(want) {
+		t.Fatalf("window: total=%d rows=%+v, want %d", total, rows, len(want))
+	}
+	for i, row := range rows {
+		if row.Result != want[i] {
+			t.Fatalf("row %d = %+v, want %q", i, row, want[i])
+		}
+	}
+	if rows[0].AckedAt != 0 || rows[0].CreatedAt != sampledAt || rows[1].AckedAt != sampledAt {
+		t.Fatalf("failure timestamps were not preserved: %+v", rows[:2])
+	}
+	rows, total, err = srv.overviewFailedCommands(&a, sampledAt+2*86_400)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 0 || rows == nil || len(rows) != 0 {
+		t.Fatalf("failures did not age out of rolling window: total=%d rows=%+v", total, rows)
+	}
+}
+
+func TestOverviewCommandWindowHTTPKeepsHistory(t *testing.T) {
+	st, db := openOverviewCommandStore(t)
+	a := ensureTenantSlug(t, st, "tenant-a")
+	b := ensureTenantSlug(t, st, "tenant-b")
+	now := time.Now().Unix()
+	oldFailed := seedOverviewCommand(t, db, a, "old-failed", "failed", now-90_000, now-86_401)
+	oldTimeout := seedOverviewCommand(t, db, a, "old-timeout", "timeout", now-90_000, nil)
+	success := seedOverviewCommand(t, db, a, "success", "ok", now-100, now-2)
+	seedOverviewCommand(t, db, a, "future-failed", "failed", now, now+3600)
+	seedOverviewCommand(t, db, a, "recent-timeout", "timeout", now-100, now-1)
+	for i := 0; i < 24; i++ {
+		seedOverviewCommand(t, db, a, "recent-failed", "failed", now-90_000, now-int64(i)-2)
+	}
+	other := seedOverviewCommand(t, db, b, "other-tenant", "timeout", now-100, now-1)
+	readA := issueTenantToken(t, st, a, `["read"]`)
+	readB := issueTenantToken(t, st, b, `["read"]`)
+	for _, tc := range []struct {
+		name        string
+		requireAuth bool
+		token       string
+		wantTotal   int
+	}{
+		{"tenant-a", true, readA, 25},
+		{"tenant-b", true, readB, 1},
+		{"unscoped", false, "", 26},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := New(Config{Store: st, RequireAuth: tc.requireAuth})
+			ts := httptest.NewServer(srv.Routes())
+			t.Cleanup(func() { ts.Close(); srv.CloseAll() })
+			before := time.Now().Unix()
+			view, _ := getOverview(t, ts, tc.token)
+			if view.ServerTime < before || view.ServerTime > time.Now().Unix() {
+				t.Fatalf("invalid sample time: %d", view.ServerTime)
+			}
+			if view.CommandsFailed != tc.wantTotal || len(view.FailedCommands) != min(tc.wantTotal, 20) {
+				t.Fatalf("count/preview mismatch: %+v", view)
+			}
+			for _, row := range view.FailedCommands {
+				if row.AckedAt < view.ServerTime-86_400 || row.AckedAt > view.ServerTime || (row.Status != "failed" && row.Status != "timeout") {
+					t.Fatalf("row outside the advertised sample/window: %+v", row)
+				}
+				if (tc.name == "tenant-a" && row.ID == other) || (tc.name == "tenant-b" && row.ID != other) {
+					t.Fatalf("cross-tenant failure: %+v", row)
+				}
+			}
+			if tc.name != "tenant-a" {
+				return
+			}
+			// Overview filtering is read-only and must never become the activity API's default.
+			for _, query := range []string{"", "?status=failed", "?status=timeout"} {
+				resp := doJSON(t, http.MethodGet, ts.URL+"/api/commands"+query, "", bearerJSON(readA), nil)
+				raw := readBody(t, resp)
+				var history struct {
+					Commands []api.CommandView `json:"commands"`
+				}
+				if resp.StatusCode != http.StatusOK {
+					t.Fatalf("command history = %d: %s", resp.StatusCode, raw)
+				}
+				if err := json.Unmarshal([]byte(raw), &history); err != nil {
+					t.Fatal(err)
+				}
+				ids := map[int64]bool{}
+				for _, row := range history.Commands {
+					ids[row.ID] = true
+				}
+				wantCount, wantID := 29, oldFailed
+				if query == "?status=failed" {
+					wantCount = 26
+				} else if query == "?status=timeout" {
+					wantCount, wantID = 2, oldTimeout
+				}
+				if len(history.Commands) != wantCount || !ids[wantID] || ids[other] || (query == "" && (!ids[oldTimeout] || !ids[success])) {
+					t.Fatalf("historical commands hidden or leaked for %q: %+v", query, history.Commands)
+				}
+			}
+		})
+	}
+}
+
+func TestOverviewWithoutStore(t *testing.T) {
+	srv := New(Config{})
+	ts := httptest.NewServer(srv.Routes())
+	t.Cleanup(func() { ts.Close(); srv.CloseAll() })
+	before := time.Now().Unix()
+	view, raw := getOverview(t, ts, "")
+	if view.CommandsFailed != 0 || view.FailedCommands == nil || len(view.FailedCommands) != 0 || view.RecentEvents == nil {
+		t.Fatalf("store-free overview is not an empty read model: %s", raw)
+	}
+	if view.ServerTime < before || view.ServerTime > time.Now().Unix() {
+		t.Fatalf("store-free overview lost its sample time: %d", view.ServerTime)
+	}
+}
+
+func TestOverviewPrincipalWithoutTenantIsNotGlobal(t *testing.T) {
+	st, db := openOverviewCommandStore(t)
+	a := ensureTenantSlug(t, st, "tenant-a")
+	now := time.Now().Unix()
+	seedOverviewCommand(t, db, a, "private-failure", "failed", now, now)
+	srv := New(Config{Store: st})
+	t.Cleanup(srv.CloseAll)
+	for _, tenantID := range []int64{0, -1} {
+		req := httptest.NewRequest(http.MethodGet, "/api/overview", nil)
+		req = req.WithContext(auth.WithPrincipal(req.Context(), &auth.Principal{TenantID: tenantID, Role: "admin"}))
+		w := httptest.NewRecorder()
+		srv.handleOverview(w, req)
+		var view api.OverviewView
+		if err := json.Unmarshal(w.Body.Bytes(), &view); err != nil {
+			t.Fatal(err)
+		}
+		if w.Code != http.StatusOK || view.CommandsFailed != 0 || len(view.FailedCommands) != 0 {
+			t.Fatalf("principal tenant %d received global commands: %d %s", tenantID, w.Code, w.Body.String())
+		}
+	}
+}
+
+func TestOverviewStoreFailureIsUnavailableNotEmpty(t *testing.T) {
+	for _, table := range []string{"events", "commands"} {
+		t.Run(table, func(t *testing.T) {
+			st, db := openOverviewCommandStore(t)
+			if _, err := db.Exec("DROP TABLE " + table); err != nil {
+				t.Fatal(err)
+			}
+			srv := New(Config{Store: st})
+			t.Cleanup(srv.CloseAll)
+			w := httptest.NewRecorder()
+			srv.handleOverview(w, httptest.NewRequest(http.MethodGet, "/api/overview", nil))
+			if w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "overview unavailable") || strings.Contains(w.Body.String(), "commands_failed") {
+				t.Fatalf("unavailable %s presented as a healthy empty overview: %d %s", table, w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestOverviewLegacyTokenKeepsDefaultTenant(t *testing.T) {
+	st, db := openOverviewCommandStore(t)
+	defaultTenant := ensureTenantSlug(t, st, "default")
+	otherTenant := ensureTenantSlug(t, st, "other")
+	now := time.Now().Unix()
+	want := seedOverviewCommand(t, db, defaultTenant, "default-failure", "failed", now, now)
+	seedOverviewCommand(t, db, otherTenant, "other-failure", "failed", now, now)
+	const token = "test-overview-legacy"
+	srv := New(Config{Store: st, RequireAuth: true, Token: token})
+	ts := httptest.NewServer(srv.Routes())
+	t.Cleanup(func() { ts.Close(); srv.CloseAll() })
+	view, _ := getOverview(t, ts, token)
+	if view.CommandsFailed != 1 || len(view.FailedCommands) != 1 || view.FailedCommands[0].ID != want {
+		t.Fatalf("legacy token lost its default tenant scope: %+v", view)
 	}
 }
