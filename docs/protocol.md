@@ -104,7 +104,12 @@ UI 都跑在 Server 侧。本消息就是这条通道；没有它，装了新 Dr
 - 不向浏览器广播：前端消费路径是 `GET /api/capabilities` 与 `/api/descriptors` 的随行
   `capabilities` 字段，保持单一事实源。
 - Action 的 `destructive` 与 `confirmation` 必须与 `inputSchema` 一同跨传输保留。
+  Driver RPC `ActionDescriptor` 的 `title`、`description`、`destructive`、`confirmation` 为可选字段，
+  对应 proto 字段号 4–7；字段号 1–3 及旧 JSON 形状保持不变。Edge 把这些字段原样转换为
+  Capability Action，`input_schema_json` 转换为 `inputSchema`，再由 `capabilities` 消息传到 Server。
+  旧 Driver 缺省这些字段时仍兼容，不由 Edge 补造标题或危险性。
   破坏性标记触发交互确认，确认文案原样展示；二者不是命令权限或硬件安全校验的替代。
+
 ## Reference: 设备侧协议归属
 
 平台契约到 `capabilities` / `descriptor` / `state` / `event` / `command` 为止。**具体设备的线协议

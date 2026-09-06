@@ -250,12 +250,16 @@ server 退化为 API-only 并返回可读提示）。
 
 命令及危险性只来自 Descriptor / Capability 或适配器白名单，不由前端猜测。Capability
 action 的 `destructive`（可选布尔值）与 `confirmation`（可选字符串）是正式交互安全声明，
-必须随 SDK 模型、Edge 上报与 REST 文档完整往返；未声明时不按命令名猜测危险性，声明本身
+必须随 Driver RPC `ActionDescriptor`、SDK 模型、Edge 上报与 REST 文档完整往返；动作的
+`title` / `description` 同样来自 Driver 声明。旧 Driver 可省略新增字段，未声明时不按命令名猜测危险性；声明本身
 不替代服务端权限与设备端检查。参数声明完整
 保留：简单标量对象显示有标签的字段，嵌套或复杂结构回落 JSON；不预填可能产生副作用的
 零值、布尔值或 schema default。首次显示使用中性填写提示，编辑后才显示具体错误。
-前端校验 JSON 语法、已支持的 required/type/enum 与数值、字符串、数组边界，并遵守
-64 UTF-8 字节及换行/NUL 传输门禁；未知 schema 关键字明确提示未校验，设备端仍为最终裁决者。
+前端校验 JSON 语法、已支持的 required/type/enum、数值/字符串/数组边界以及
+`oneOf` / `anyOf` / `allOf`（包括布尔与嵌套子 schema），并遵守 64 UTF-8 字节及换行/NUL 传输门禁。
+组合结构始终保留 JSON 编辑，不展开不完整的字段选择器。未知约束参与组合匹配时使用未知态，
+不冒充匹配或不匹配；只有能确定违反约束时才拒绝，界面仍明确提示未校验的关键字。
+设备端仍为最终裁决者，前端校验不替代 Driver 的参数及帧边界检查。
 参数与 JSON 切换不得丢弃额外字段，原始 JSON 不静默压缩或截断。
 
 命令面板及独立按钮都检查当前身份：viewer、加载中、未登录或无效身份无写表单；
