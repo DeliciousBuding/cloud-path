@@ -475,7 +475,7 @@ export interface PluginInstanceDesiredView {
   updated_at: number
 }
 
-/** 实例的**实际态**（Edge 上报投影）；缺席即「Edge 未上报」 */
+/** 实例的**实际态**（Edge / AppHost 运行投影）；缺席即「运行宿主未上报」 */
 export interface PluginInstanceObservedView {
   state: string
   health: string
@@ -488,7 +488,7 @@ export interface PluginInstanceObservedView {
 
 /**
  * 单个插件实例。desired 与 observed **永远分别渲染**（control-plane-sync.md 不变量 5）：
- * `has_observed=false` → 必须显式呈现「Edge 未上报」，不得把 desired.enabled 当成运行中；
+ * `has_observed=false` → 必须显式呈现对应运行宿主未上报，不得把 desired.enabled 当成运行中；
  * `stale=true` / `drift=true` → 必须有清晰视觉状态。
  */
 export interface PluginInstanceView {

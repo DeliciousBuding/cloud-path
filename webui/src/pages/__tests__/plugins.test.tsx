@@ -266,12 +266,12 @@ describe('实例分区：desired 与 observed 永远分别渲染', () => {
     expect(screen.getByText('节点在线但还没回过')).toBeInTheDocument()
   })
 
-  it('stale=true → 实际态标 stale，并说明是历史事实', async () => {
+  it('stale=true → 实际态明确标记过期，而不是当前在线事实', async () => {
     route({ instances: [instance({ stale: true })] })
     renderWithProviders(<Plugins />)
     await gotoTab(/实例/)
     expect(await screen.findByText('实际态已过期')).toBeInTheDocument()
-    expect(screen.getAllByText(/stale/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/状态已过期/).length).toBeGreaterThan(0)
   })
 
   it('详情页的完整分离视图把 stale 说清是历史事实（含绝对上报时间）', async () => {
@@ -452,4 +452,16 @@ describe('实例分区的空态与错误态', () => {
     await gotoTab(/实例/)
     expect(await screen.findByText('还没有插件实例')).toBeInTheDocument()
   })
+})
+it('未曾上报的中心服务实例不被解释成离线 Edge，停用期望也不冒充实际停止', async () => {
+  useAuth.setState({ status: 'in', user: appUser })
+  const app = appInstance('never-started')
+  route({ catalog: [], instances: [{ ...app, edge_online: false, has_observed: false, observed: undefined, desired: { ...app.desired, enabled: false } }] })
+  renderWithProviders(<Plugins />)
+  expect(await screen.findByText('尚未收到实例运行状态')).toBeInTheDocument()
+  expect(screen.getAllByText('应用宿主未上报').length).toBeGreaterThan(0)
+  expect(screen.getByText('已停用')).toBeInTheDocument()
+  for (const text of ['边缘节点未上报', '节点离线', '节点在线但还没回过', '运行中', '已停止']) {
+    expect(screen.queryByText(text)).not.toBeInTheDocument()
+  }
 })
