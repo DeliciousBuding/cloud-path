@@ -1,8 +1,12 @@
-// 命令输入使用的 JSON Schema 子集：不代入 default，不转换类型，不解析引用/组合。
+// 命令输入使用的 JSON Schema 子集：不代入 default，不转换类型；支持组合，不解析引用。
 // 不支持的关键字显式反馈，仍允许 JSON 编辑；设备端才是完整契约的最终裁决者。
 import { argsError } from './format'
 
 type Schema = Record<string, unknown>
+type Validation = { state: 'valid' | 'unknown' } | { state: 'invalid'; error: string }
+const VALID: Validation = { state: 'valid' }
+const UNKNOWN: Validation = { state: 'unknown' }
+const COMBINATORS = ['oneOf', 'anyOf', 'allOf'] as const
 const TYPE_NAMES: Record<string, string> = { object: '对象', array: '数组', string: '文本', number: '数值', integer: '整数', boolean: '布尔值', null: '空值' }
 const TYPES = Object.keys(TYPE_NAMES)
 const ANNOTATIONS = new Set(['title', 'description', 'default', 'examples', '$schema', '$id', '$comment', '$defs', 'definitions', 'readOnly', 'writeOnly', 'deprecated'])
@@ -38,6 +42,33 @@ function equal(a: unknown, b: unknown): boolean {
   return false
 }
 
+function isSchema(value: unknown): value is Schema | boolean {
+  return typeof value === 'boolean' || object(value)
+}
+function schemaList(value: unknown): value is (Schema | boolean)[] {
+  return Array.isArray(value) && value.length > 0 && value.every(isSchema)
+}
+
+// 静态反馈与动态匹配共用同一份支持范围，未知/无效约束不能被当作通过。
+function supportedKeyword(key: string, value: unknown, schema: Schema): boolean {
+  if (ANNOTATIONS.has(key)) return true
+  switch (key) {
+    case 'type': return types(value) !== null
+    case 'enum': return Array.isArray(value)
+    case 'const': return true
+    case 'minimum': case 'maximum': case 'exclusiveMinimum': case 'exclusiveMaximum': return number(value)
+    case 'multipleOf': return number(value) && value > 0
+    case 'minLength': case 'maxLength': case 'minItems': case 'maxItems': case 'minProperties': case 'maxProperties': return count(value)
+    case 'uniqueItems': return typeof value === 'boolean'
+    case 'required': return Array.isArray(value) && value.every((v) => typeof v === 'string')
+    case 'properties': return object(value) && Object.values(value).every(isSchema)
+    case 'items': return isSchema(value) && !('prefixItems' in schema)
+    case 'additionalProperties': return isSchema(value) && !('patternProperties' in schema)
+    case 'oneOf': case 'anyOf': case 'allOf': return schemaList(value)
+    default: return false
+  }
+}
+
 /** 未实现或形状不合法的关键字，不冒充为已通过的约束。 */
 export function unsupportedSchemaKeywords(schema: Schema): string[] {
   const unsupported = new Set<string>()
@@ -45,32 +76,10 @@ export function unsupportedSchemaKeywords(schema: Schema): string[] {
     if (typeof s === 'boolean') return
     if (!object(s)) { unsupported.add('schema'); return }
     for (const [key, value] of Object.entries(s)) {
-      if (ANNOTATIONS.has(key)) continue
-      let supported = false
-      switch (key) {
-        case 'type': supported = types(value) !== null; break
-        case 'enum': supported = Array.isArray(value); break
-        case 'const': supported = true; break
-        case 'minimum': case 'maximum': case 'exclusiveMinimum': case 'exclusiveMaximum':
-          supported = number(value); break
-        case 'multipleOf': supported = number(value) && value > 0; break
-        case 'minLength': case 'maxLength': case 'minItems': case 'maxItems': case 'minProperties': case 'maxProperties':
-          supported = count(value); break
-        case 'uniqueItems': supported = typeof value === 'boolean'; break
-        case 'required': supported = Array.isArray(value) && value.every((v) => typeof v === 'string'); break
-        case 'properties':
-          supported = object(value)
-          if (supported) Object.values(value as Schema).forEach(visit)
-          break
-        case 'items': case 'additionalProperties':
-          supported = typeof value === 'boolean' || object(value)
-          // prefixItems / patternProperties 会改变对应关键字的作用域，不能半懂半猜。
-          if (key === 'items' && 'prefixItems' in s) supported = false
-          if (key === 'additionalProperties' && 'patternProperties' in s) supported = false
-          if (supported) visit(value)
-          break
-      }
-      if (!supported) unsupported.add(key)
+      if (!supportedKeyword(key, value, s)) unsupported.add(key)
+      if (key === 'properties' && object(value)) Object.values(value).forEach(visit)
+      else if ((key === 'oneOf' || key === 'anyOf' || key === 'allOf') && Array.isArray(value)) value.forEach(visit)
+      else if ((key === 'items' || key === 'additionalProperties') && isSchema(value)) visit(value)
     }
   }
   visit(schema)
@@ -85,10 +94,12 @@ function propertyLabel(key: string, schema: unknown): string {
   return key
 }
 
-function validate(value: unknown, schema: unknown, at = '参数'): string | undefined {
-  const fail = (why: string) => at + '：' + why
+function validate(value: unknown, schema: unknown, at = '参数'): Validation {
+  const fail = (why: string): Validation => ({ state: 'invalid', error: at + '：' + why })
   if (schema === false) return fail('不允许此值')
-  if (!object(schema)) return undefined
+  if (schema === true) return VALID
+  if (!object(schema)) return UNKNOWN
+  let uncertain = Object.entries(schema).some(([key, v]) => !supportedKeyword(key, v, schema))
   const declaredTypes = types(schema.type)
   if (declaredTypes && !declaredTypes.some((t) => matchesType(value, t))) {
     return fail('需要' + declaredTypes.map((type) => TYPE_NAMES[type]).join('或') + '类型')
@@ -118,10 +129,11 @@ function validate(value: unknown, schema: unknown, at = '参数'): string | unde
     if (schema.uniqueItems === true && value.some((v, i) => value.slice(0, i).some((other) => equal(v, other)))) {
       return fail('数组项不能重复')
     }
-    if (!('prefixItems' in schema)) {
+    if (Object.hasOwn(schema, 'items') && !('prefixItems' in schema)) {
       for (const [i, item] of value.entries()) {
-        const error = validate(item, schema.items, at + '[' + i + ']')
-        if (error) return error
+        const result = validate(item, schema.items, at + '[' + i + ']')
+        if (result.state === 'invalid') return result
+        if (result.state === 'unknown') uncertain = true
       }
     }
   }
@@ -139,16 +151,38 @@ function validate(value: unknown, schema: unknown, at = '参数'): string | unde
       const label = propertyLabel(key, properties[key])
       const child = at === '参数' ? label : at + ' / ' + label
       if (Object.hasOwn(properties, key)) {
-        const error = validate(value[key], properties[key], child)
-        if (error) return error
-      } else if (!('patternProperties' in schema)) {
+        const result = validate(value[key], properties[key], child)
+        if (result.state === 'invalid') return result
+        if (result.state === 'unknown') uncertain = true
+      } else if (Object.hasOwn(schema, 'additionalProperties') && !('patternProperties' in schema)) {
         if (schema.additionalProperties === false) return fail('未声明的参数 ' + key)
-        const error = validate(value[key], schema.additionalProperties, child)
-        if (error) return error
+        const result = validate(value[key], schema.additionalProperties, child)
+        if (result.state === 'invalid') return result
+        if (result.state === 'unknown') uncertain = true
       }
     }
   }
-  return undefined
+  for (const keyword of COMBINATORS) {
+    const branches = schema[keyword]
+    if (!schemaList(branches)) continue // 形状无效已标记 unknown，不能只执行其中一部分。
+    const results = branches.map((branch) => validate(value, branch, at))
+    const matches = results.filter((result) => result.state === 'valid').length
+    const possible = matches + results.filter((result) => result.state === 'unknown').length
+    if (keyword === 'allOf') {
+      const failure = results.find((result) => result.state === 'invalid')
+      if (failure) return failure
+      if (matches !== results.length) uncertain = true
+    } else if (keyword === 'anyOf') {
+      if (possible === 0) return fail('至少满足一个参数方案（anyOf）')
+      if (matches === 0) uncertain = true
+    } else {
+      if (matches > 1) return fail('只能满足一个参数方案（oneOf），当前至少匹配 ' + matches + ' 个')
+      if (possible === 0) return fail('未满足任何参数方案（oneOf）')
+      // 未知方案既不算匹配，也不算失败；只在所有可能性都不合法时拒绝。
+      if (matches !== 1 || possible !== 1) uncertain = true
+    }
+  }
+  return uncertain ? UNKNOWN : VALID
 }
 
 /** JSON 语法 + 已知 schema 约束 + 未改变的传输门禁。没有 schema 的原始参数不强制 JSON。 */
@@ -165,7 +199,8 @@ export function commandArgsError(args: string, schema?: Schema, maxBytes?: numbe
   } catch {
     return 'JSON 格式无效，请检查括号、引号和数值'
   }
-  return validate(value, schema)
+  const result = validate(value, schema)
+  return result.state === 'invalid' ? result.error : undefined
 }
 
 export interface CommandField {
@@ -178,9 +213,16 @@ export interface CommandField {
   choices?: unknown[]
 }
 
+function containsCombinator(schema: unknown): boolean {
+  if (!object(schema)) return false
+  return COMBINATORS.some((key) => Object.hasOwn(schema, key))
+    || (object(schema.properties) && Object.values(schema.properties).some(containsCombinator))
+    || containsCombinator(schema.items) || containsCombinator(schema.additionalProperties)
+}
+
 /** 仅把能无损表示的平铺标量对象变成字段；嵌套、数组、组合、未知约束保留 JSON。 */
 export function commandFields(schema: Schema): CommandField[] | null {
-  if (schema.type !== 'object' || !object(schema.properties) || unsupportedSchemaKeywords(schema).length) return null
+  if (schema.type !== 'object' || !object(schema.properties) || containsCombinator(schema) || unsupportedSchemaKeywords(schema).length) return null
   const entries = Object.entries(schema.properties)
   if (!entries.length) return null
   if (Array.isArray(schema.required) && schema.required.some((k) => !Object.hasOwn(schema.properties as Schema, k))) return null

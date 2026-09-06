@@ -213,11 +213,11 @@ describe('actions.inputSchema → 参数输入', () => {
     expect(screen.getByRole('button', { name: '设置' })).toBeEnabled()
   })
 
-  it('未知/组合约束显式标记为未校验，保留 JSON 可用回落且不捏造分支必填', async () => {
+  it('组合中的未知约束显式标记为未校验，不把未知分支当作失败', async () => {
     const user = userEvent.setup()
     const http = okPost()
-    renderWithProviders(<ActionPanel deviceId={KEY} set={schemaSet({ type: 'object', required: ['id'], oneOf: [{ required: ['a'] }, { required: ['b'] }] })} />)
-    expect(screen.getByText(/未校验：oneOf/)).toBeInTheDocument()
+    renderWithProviders(<ActionPanel deviceId={KEY} set={schemaSet({ type: 'object', required: ['id'], oneOf: [{ $ref: '#/$defs/choice' }, { required: ['b'] }] })} />)
+    expect(screen.getByText(/未校验：\$ref/)).toBeInTheDocument()
     const input = screen.getByRole('textbox', { name: '设置 JSON 参数' })
     fireEvent.change(input, { target: { value: '{}' } })
     expect(screen.getByRole('alert')).toHaveTextContent('缺少必填参数 id')
@@ -384,4 +384,30 @@ it('危险操作不抢占首个快捷操作位置，保留完整确认与名称'
     { cmd: 'inspect', label: '检查连接' },
   ] }} />)
   expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual(['检查连接', '恢复设置'])
+})
+
+
+it('LED 组合 JSON 输入阻止双参数 POST，修正后按原文下发', async () => {
+  const user = userEvent.setup()
+  const http = okPost()
+  renderWithProviders(<ActionPanel deviceId={KEY} set={schemaSet({
+    type: 'object', properties: {
+      mask: { type: 'integer', minimum: 0, maximum: 255 },
+      pattern: { type: 'integer', minimum: 0, maximum: 9 },
+    }, oneOf: [{ required: ['mask'] }, { required: ['pattern'] }],
+  })} />)
+  expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '设置 编辑 JSON' })).not.toBeInTheDocument()
+  expect(screen.queryByText(/未校验/)).not.toBeInTheDocument()
+  const input = screen.getByRole('textbox', { name: '设置 JSON 参数' })
+  fireEvent.change(input, { target: { value: '{"mask":1,"pattern":2}' } })
+  expect(screen.getByRole('alert')).toHaveTextContent('oneOf')
+  expect(screen.getByRole('button', { name: '设置' })).toBeDisabled()
+  await user.click(screen.getByRole('button', { name: '设置' }))
+  expect(http.calls).toHaveLength(0)
+  const args = ' { "mask": 0 } '
+  fireEvent.change(input, { target: { value: args } })
+  expect(screen.getByRole('button', { name: '设置' })).toBeEnabled()
+  await user.click(screen.getByRole('button', { name: '设置' }))
+  expect(http.last()).toMatchObject({ url: '/api/devices/edge-1/dev-9/commands', method: 'POST', body: { cmd: 'configure', args } })
 })

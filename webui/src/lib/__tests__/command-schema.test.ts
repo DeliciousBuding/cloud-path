@@ -110,13 +110,13 @@ describe('字段选择与诚实的 JSON 回落', () => {
   ])('不能安全变成字段的 schema 保留 JSON：%j', (schema) => {
     expect(commandFields(schema)).toBeNull()
   })
-  it('引用、组合、条件、pattern/format 和未知扩展显式列出；不拼凑分支语义', () => {
+  it('引用、pattern/format 和未知扩展仍显式列出，组合内已知约束独立生效', () => {
     const schema = { type: 'object', required: ['id'], properties: { id: { type: 'string', pattern: '^x', format: 'uuid' } },
       oneOf: [{ required: ['a'] }, { required: ['b'] }], $ref: '#/$defs/example', 'vendor-check': true }
-    expect(unsupportedSchemaKeywords(schema)).toEqual(['$ref', 'format', 'oneOf', 'pattern', 'vendor-check'])
+    expect(unsupportedSchemaKeywords(schema)).toEqual(['$ref', 'format', 'pattern', 'vendor-check'])
     expect(commandFields(schema)).toBeNull()
     expect(commandArgsError('{}', schema)).toContain('缺少必填参数 id')
-    expect(commandArgsError('{"id":"x"}', schema)).toBeUndefined()
+    expect(commandArgsError('{"id":"x","a":1}', schema)).toBeUndefined()
   })
   it('未知类型和非法约束值不伪造语义，注释/default 不是校验错误', () => {
     const schema = { type: 'opaque', minLength: '2', default: 'hello', title: '标题', $defs: { x: { type: 'number' } } }
@@ -139,4 +139,140 @@ it('错误沿用字段展示名，无展示声明时保留真实字段名', () =
   expect(commandArgsError('{"level":11}', schema)).toBe('输出强度：不能大于 10')
   expect(commandArgsError('{"level":"1"}', schema)).toBe('输出强度：需要整数类型')
   expect(commandArgsError('{"raw_key":11}', { type: 'object', properties: { raw_key: { type: 'number', maximum: 10 } } })).toBe('raw_key：不能大于 10')
+})
+
+// Shapes supplied by real Driver descriptors; command names never enter the validator.
+const ledSchema = {
+  type: 'object', properties: {
+    mask: { type: 'integer', minimum: 0, maximum: 255 },
+    pattern: { type: 'integer', minimum: 0, maximum: 9 },
+  }, oneOf: [{ required: ['mask'] }, { required: ['pattern'] }],
+}
+const displaySchema = {
+  type: 'object', properties: {
+    digits: { type: 'array', minItems: 8, maxItems: 8, items: { type: 'integer', minimum: 0, maximum: 9 } },
+    codes: { type: 'array', minItems: 8, maxItems: 8, items: { type: 'integer', minimum: 0, maximum: 25 } },
+    mode: { enum: ['clock'] },
+  }, oneOf: [{ required: ['digits'] }, { required: ['codes'] }, { required: ['mode'] }],
+}
+
+describe('组合参数方案', () => {
+  it('LED oneOf 只接受一个方案，缺省和双参数都不能下发', () => {
+    for (const value of [{ mask: 0 }, { mask: 255 }, { pattern: 0 }, { pattern: 9 }]) {
+      expect(commandArgsError(JSON.stringify(value), ledSchema)).toBeUndefined()
+    }
+    expect(commandArgsError('{}', ledSchema)).toContain('oneOf')
+    expect(commandArgsError('{"mask":1,"pattern":2}', ledSchema)).toContain('oneOf')
+    for (const value of [{ mask: -1 }, { mask: 256 }, { mask: 1.5 }, { mask: '1' }, { pattern: 10 }]) {
+      expect(commandArgsError(JSON.stringify(value), ledSchema)).toBeDefined()
+    }
+  })
+  it('display 三种方案分别可发，零方案和每一对组合都拒绝', () => {
+    const digits = { digits: [0, 1, 2, 3, 4, 5, 6, 9] }
+    const codes = { codes: [0, 1, 2, 3, 4, 5, 6, 25] }
+    const mode = { mode: 'clock' }
+    for (const value of [digits, codes, mode]) expect(commandArgsError(JSON.stringify(value), displaySchema)).toBeUndefined()
+    for (const value of [{}, { ...digits, ...codes }, { ...digits, ...mode }, { ...codes, ...mode }]) {
+      const args = JSON.stringify(value)
+      expect(new TextEncoder().encode(args).length).toBeLessThanOrEqual(64)
+      expect(commandArgsError(args, displaySchema)).toContain('oneOf')
+    }
+    for (const value of [{ digits: Array(7).fill(0) }, { digits: Array(9).fill(0) },
+      { digits: Array(8).fill(10) }, { codes: Array(8).fill(26) }, { codes: Array(8).fill(0.5) }, { mode: 'other' }]) {
+      expect(commandArgsError(JSON.stringify(value), displaySchema)).toBeDefined()
+    }
+  })
+  it.each([
+    ['oneOf', [true, false], true], ['oneOf', [true, true], false], ['oneOf', [false, false], false], ['oneOf', [{}], true],
+    ['anyOf', [false, true], true], ['anyOf', [false, false], false], ['anyOf', [true, true], true],
+    ['allOf', [true, {}], true], ['allOf', [true, false], false], ['allOf', [false, false], false],
+  ] as const)('%s 接受布尔子 schema：%j', (keyword, branches, valid) => {
+    const schema = { [keyword]: branches }
+    expect(unsupportedSchemaKeywords(schema)).toEqual([])
+    expect(commandArgsError('0', schema) === undefined).toBe(valid)
+  })
+  it('三种组合可以彼此嵌套，并继续递归到 properties/items', () => {
+    const choice = { oneOf: [
+      { allOf: [{ type: 'integer' }, { minimum: 0 }] },
+      { anyOf: [{ const: 'auto' }, { const: false }] },
+    ] }
+    const schema = { type: 'object', properties: { values: { type: 'array', items: choice } } }
+    expect(commandArgsError('{"values":[0,"auto",false]}', schema)).toBeUndefined()
+    for (const args of ['{"values":[-1]}', '{"values":[0.5]}', '{"values":[null]}']) {
+      expect(commandArgsError(args, schema)).toContain('values[0]')
+    }
+    expect(commandArgsError('2', { allOf: [{ minimum: 1 }, { maximum: 3 }] })).toBeUndefined()
+    expect(commandArgsError('4', { allOf: [{ minimum: 1 }, { maximum: 3 }] })).toContain('不能大于 3')
+  })
+  it.each(['oneOf', 'anyOf', 'allOf'])('%s 的形状无效时明确未校验，不猜测或部分执行方案', (keyword) => {
+    for (const branches of [null, true, {}, 'schema', [], [null], [false, 1], [true, true, null], [false, []]]) {
+      const schema = { [keyword]: branches }
+      expect(unsupportedSchemaKeywords(schema)).toContain(keyword)
+      expect(commandArgsError('0', schema)).toBeUndefined()
+      expect(commandArgsError('"bad"', { type: 'number', ...schema })).toContain('数值类型')
+    }
+  })
+  it('保留 UTF-8/JSON 门禁与原文，不从 default 补出一个方案', () => {
+    const before = structuredClone(ledSchema)
+    const raw = '{"mask":0}' + ' '.repeat(54)
+    expect(new TextEncoder().encode(raw)).toHaveLength(64)
+    expect(commandArgsError(raw, ledSchema)).toBeUndefined()
+    expect(commandArgsError(raw + ' ', ledSchema, 1024)).toContain('64 字节上限')
+    expect(commandArgsError('{', ledSchema)).toContain('JSON 格式无效')
+    expect(commandArgsError('{\n"mask":0}', ledSchema)).toContain('换行')
+    expect(commandArgsError(JSON.stringify('汉'.repeat(21)), { anyOf: [{ type: 'string' }, false] })).toContain('65 UTF-8 字节')
+    expect(commandArgsError('{}', { ...ledSchema, default: { mask: 0 } })).toContain('oneOf')
+    expect(ledSchema).toEqual(before)
+  })
+})
+
+describe('组合中的未知约束不冒充匹配或不匹配', () => {
+  it.each([
+    { oneOf: [{ type: 'string', pattern: '^a' }, { type: 'string', pattern: '^b' }] },
+    { oneOf: [{ type: 'string' }, { type: 'string', pattern: '^b' }] },
+    { oneOf: [{ $ref: '#/$defs/value' }, false] },
+    { anyOf: [{ type: 'string', format: 'email' }, { type: 'number' }] },
+    { oneOf: [{ anyOf: [{ type: 'string', pattern: '^a' }, false] }, true] },
+    { oneOf: [{ allOf: [true, { pattern: '^a' }] }, true] },
+    { oneOf: [{ oneOf: [true, { pattern: '^a' }] }, false] },
+    { anyOf: [{ allOf: [true, { oneOf: [false, { pattern: '^a' }] }] }, false] },
+  ])('无法确定的子方案必须保留 JSON 可用回落：%j', (schema) => {
+    expect(commandArgsError('"apple"', schema)).toBeUndefined()
+    expect(unsupportedSchemaKeywords(schema).length).toBeGreaterThan(0)
+  })
+  it('嵌套 properties/items 的未知性也必须上传，不能误算多个匹配', () => {
+    const properties = { oneOf: [{ properties: { v: { pattern: '^a' } } }, true] }
+    expect(commandArgsError('{"v":"apple"}', properties)).toBeUndefined()
+    expect(commandArgsError('["apple"]', { oneOf: [{ items: { format: 'email' } }, true] })).toBeUndefined()
+    expect(commandArgsError('{"v":"apple"}', { oneOf: [{ additionalProperties: { $ref: '#/$defs/value' } }, true] })).toBeUndefined()
+    // 未出现的属性不参与校验；这里两个方案都确定通过，应拒绝。
+    expect(commandArgsError('{}', properties)).toContain('oneOf')
+  })
+  it('已确定的失败和匹配数仍然生效，未知约束不能遮蔽它们', () => {
+    const unknown = { $ref: '#/$defs/value' }
+    expect(commandArgsError('0', { oneOf: [true, true, unknown] })).toContain('oneOf')
+    expect(commandArgsError('0', { anyOf: [false, { type: 'string', ...unknown }] })).toContain('anyOf')
+    expect(commandArgsError('0', { allOf: [false, unknown] })).toBeDefined()
+    // anyOf 有一个确定匹配即可确定通过，即使另一个方案未知。
+    expect(commandArgsError('0', { oneOf: [{ anyOf: [true, unknown] }, true] })).toContain('oneOf')
+    // allOf 有一个确定失败即可确定失败，不把它误算为可能匹配。
+    expect(commandArgsError('0', { oneOf: [{ allOf: [false, unknown] }, true] })).toBeUndefined()
+  })
+  it('未知关键字从任意组合深度继续列出，已支持组合本身不再列为未知', () => {
+    expect(unsupportedSchemaKeywords({ oneOf: [
+      { properties: { v: { $ref: '#/$defs/value' } } },
+      { anyOf: [{ format: 'email' }, { allOf: [{ pattern: '^x' }, { 'vendor-check': true }] }] },
+    ] })).toEqual(['$ref', 'format', 'pattern', 'vendor-check'])
+  })
+  it.each(['oneOf', 'anyOf', 'allOf'])('%s 即使完全可校验，字段 UI 也不展开组合或嵌套组合', (keyword) => {
+    const flat = { type: 'object', properties: { n: { type: 'integer' } } }
+    const root = { ...flat, [keyword]: [{ required: ['n'] }] }
+    expect(unsupportedSchemaKeywords(root)).toEqual([])
+    expect(commandFields(root)).toBeNull()
+    expect(commandFields({ ...flat, properties: { n: { type: 'integer', [keyword]: [true] } } })).toBeNull()
+    expect(commandFields({ ...flat, additionalProperties: { [keyword]: [true] } })).toBeNull()
+    expect(commandFields(ledSchema)).toBeNull()
+    expect(commandFields(displaySchema)).toBeNull()
+    expect(commandFields(flat)).not.toBeNull()
+  })
 })
