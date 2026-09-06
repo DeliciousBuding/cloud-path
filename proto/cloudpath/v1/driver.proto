@@ -122,6 +122,11 @@ message ActionDescriptor {
   string name = 1;                             // 如 calibrate
   string input_schema_json = 2;                // JSON Schema
   string result_schema_json = 3;               // JSON Schema
+  // 可选 Capability 元数据；缺省为空/false，不改变命令执行语义。
+  string title = 4;
+  string description = 5;
+  bool destructive = 6;
+  string confirmation = 7;
 }
 
 // ---------------------------------------------------------------------------
