@@ -273,9 +273,11 @@ export interface CapabilityActionDecl {
   inputSchema?: Record<string, unknown>
   /** 下发到 POST commands 的 cmd 字段（缺省用 action key） */
   command?: string
-  /** UI Hint（非语义真相）：primary / destructive / confirmation 文案 */
+  /** 兼容展示提示；不会代替危险性声明。 */
   primary?: boolean
+  /** 正式 Capability 交互安全声明：Driver → Edge → Server 必须保留，不替代授权。 */
   destructive?: boolean
+  /** 执行前展示的确认说明；破坏性动作未填写时使用通用确认。 */
   confirmation?: string
   [k: string]: unknown
 }

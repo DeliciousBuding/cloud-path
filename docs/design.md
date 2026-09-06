@@ -247,7 +247,10 @@ server 退化为 API-only 并返回可读提示）。
 
 ### 设备命令
 
-命令及危险性只来自 Descriptor / Capability 或适配器白名单，不由前端猜测。参数声明完整
+命令及危险性只来自 Descriptor / Capability 或适配器白名单，不由前端猜测。Capability
+action 的 `destructive`（可选布尔值）与 `confirmation`（可选字符串）是正式交互安全声明，
+必须随 SDK 模型、Edge 上报与 REST 文档完整往返；未声明时不按命令名猜测危险性，声明本身
+不替代服务端权限与设备端检查。参数声明完整
 保留：简单标量对象显示有标签的字段，嵌套或复杂结构回落 JSON；不预填可能产生副作用的
 零值、布尔值或 schema default。首次显示使用中性填写提示，编辑后才显示具体错误。
 前端校验 JSON 语法、已支持的 required/type/enum 与数值、字符串、数组边界，并遵守

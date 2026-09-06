@@ -37,6 +37,15 @@
       }
     },
     "EventDecl": {"type": "object", "properties": {"payloadSchema": {"type": "object"}}},
-    "ActionDecl": {"type": "object", "properties": {"title": {"type": "string"}, "description": {"type": "string"}, "inputSchema": {"type": "object"}}}
+    "ActionDecl": {
+      "type": "object",
+      "properties": {
+        "title": {"type": "string"},
+        "description": {"type": "string"},
+        "inputSchema": {"type": "object"},
+        "destructive": {"type": "boolean", "description": "破坏性动作需要显式确认，不替代权限或设备侧校验"},
+        "confirmation": {"type": "string", "description": "执行前展示的确认说明"}
+      }
+    }
   }
 }

@@ -103,6 +103,8 @@ UI 都跑在 Server 侧。本消息就是这条通道；没有它，装了新 Dr
   平台契约不被插件改写；
 - 不向浏览器广播：前端消费路径是 `GET /api/capabilities` 与 `/api/descriptors` 的随行
   `capabilities` 字段，保持单一事实源。
+- Action 的 `destructive` 与 `confirmation` 必须与 `inputSchema` 一同跨传输保留。
+  破坏性标记触发交互确认，确认文案原样展示；二者不是命令权限或硬件安全校验的替代。
 ## Reference: 设备侧协议归属
 
 平台契约到 `capabilities` / `descriptor` / `state` / `event` / `command` 为止。**具体设备的线协议

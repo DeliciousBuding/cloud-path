@@ -114,3 +114,29 @@ func TestCapabilityValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestActionSafetyMetadataRoundTrip(t *testing.T) {
+	const raw = `{"title":"Restore","inputSchema":{"type":"object"},"destructive":true,"confirmation":"Changes cannot be undone."}`
+	var action ActionDecl
+	if err := json.Unmarshal([]byte(raw), &action); err != nil {
+		t.Fatal(err)
+	}
+	if !action.Destructive || action.Confirmation != "Changes cannot be undone." {
+		t.Fatalf("safety declaration dropped on decode: %+v", action)
+	}
+	encoded, err := json.Marshal(action)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output map[string]any
+	if err := json.Unmarshal(encoded, &output); err != nil {
+		t.Fatal(err)
+	}
+	if output["destructive"] != true || output["confirmation"] != action.Confirmation || output["inputSchema"] == nil {
+		t.Fatalf("safety declaration dropped on encode: %s", encoded)
+	}
+	legacy, err := json.Marshal(ActionDecl{Title: "Read"})
+	if err != nil || strings.Contains(string(legacy), "destructive") || strings.Contains(string(legacy), "confirmation") {
+		t.Fatalf("optional fields changed legacy payload: %s err=%v", legacy, err)
+	}
+}

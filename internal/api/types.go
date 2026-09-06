@@ -91,6 +91,7 @@ type AckData struct {
 
 // CapabilitySource 是一个 Capability 文档声明者：外部 Driver Plugin 的 driver ID，
 // 或进程内适配器名。Server 只按声明者归组存储，不解释其中任何硬件语义。
+// Actions 的 destructive/confirmation 与 inputSchema 同属公开契约，须保留到 REST 读面。
 type CapabilitySource struct {
 	Source       string             `json:"source"`
 	Capabilities []model.Capability `json:"capabilities"`
