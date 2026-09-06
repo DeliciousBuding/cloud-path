@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import DeviceDetail from '@/pages/DeviceDetail'
 import { installFetch, stubResponse } from '@/test/http'
 import { renderWithProviders, resetStores } from '@/test/render'
+import { useAuth } from '@/store/auth'
 import { makeDeviceView, catalogPayload, makeDescriptor } from '@/test/fixtures'
 
 const KEY = 'edge-1/dev-9'
@@ -60,7 +61,10 @@ function commandButtons(): string[] {
     .filter((n) => n && !/带参数|下发$/.test(n))
 }
 
-beforeEach(() => { resetStores() })
+beforeEach(() => {
+  resetStores()
+  useAuth.setState({ status: 'in', user: { id: 1, username: 'operator', name: '操作员', role: 'operator', tenant_id: 1, tenant_slug: 'default' } })
+})
 
 describe('命令集来自适配器白名单', () => {
   it('白名单里的命令逐条渲染成按钮，标注「适配器白名单」', async () => {
@@ -192,4 +196,15 @@ describe('设备分区深链接', () => {
     renderDetail(ROUTE + '?tab=unknown')
     expect(await screen.findByRole('tab', { name: /概览/ })).toHaveAttribute('aria-selected', 'true')
   })
+})
+
+it('只读身份可进入控制分区但没有参数表单或下发按钮', async () => {
+  useAuth.setState({ status: 'in', user: { id: 2, username: 'viewer', name: '只读', role: 'viewer', tenant_id: 1, tenant_slug: 'default' } })
+  route({ descriptor: makeDescriptor(), capabilities: catalogPayload })
+  renderDetail(ROUTE + '?tab=controls')
+  expect(await screen.findByText(/只读：需要 operator 或 admin/)).toBeInTheDocument()
+  const panel = screen.getByText('命令').closest('section') as HTMLElement
+  expect(within(panel).queryByRole('button')).not.toBeInTheDocument()
+  expect(within(panel).queryByRole('textbox')).not.toBeInTheDocument()
+  expect(within(panel).queryByRole('spinbutton')).not.toBeInTheDocument()
 })

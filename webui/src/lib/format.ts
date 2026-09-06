@@ -182,12 +182,18 @@ export function optionLabel(s: string, max = 32): string {
   return v.length > max ? `${v.slice(0, max)}…` : v
 }
 
-/**
- * 参数校验（Vercel field 纪律：保留用户原文，不静默剥离/截断，错在框下显式说）。
- *  返回人话错误；合法返回 undefined。后端契约：不含换行/NUL、长度上限（docs/api.md）。 */
+/** 后端 len(args) 按 UTF-8 字节计数；声明只能收紧，不能放宽传输上限。 */
+export function argsMaxBytes(declared?: number): number {
+  return typeof declared === 'number' && Number.isFinite(declared) && declared >= 0
+    ? Math.min(64, Math.floor(declared)) : 64
+}
+
+/** 保留原文，不静默剥离、截断或压缩 JSON；与服务端的换行/NUL 门禁一致。 */
 export function argsError(args: string, max = 64): string | undefined {
   if (/[\r\n\0]/.test(args)) return '参数不能包含换行或控制字符'
-  if (args.length > max) return `参数 ${args.length} 字符，超过 ${max} 字符上限`
+  const bytes = new TextEncoder().encode(args).length
+  const limit = argsMaxBytes(max)
+  if (bytes > limit) return '参数 ' + bytes + ' UTF-8 字节，超过 ' + limit + ' 字节上限'
   return undefined
 }
 

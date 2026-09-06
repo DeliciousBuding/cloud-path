@@ -56,8 +56,25 @@ describe('argsError（参数校验：保留原文、显式报错）', () => {
   it('合法无错误；换行/超长各自说人话，边界恰好放行', () => {
     expect(argsError('{"ms":100}')).toBeUndefined()
     expect(argsError('a\nb')).toBe('参数不能包含换行或控制字符')
-    expect(argsError('x'.repeat(65), 64)).toContain('超过 64 字符上限')
+    expect(argsError('x'.repeat(65), 64)).toContain('超过 64 字节上限')
     expect(argsError('x'.repeat(64), 64)).toBeUndefined()
+  })
+  it('UTF-8 字节而不是 JS 字符数，且声明不能放宽后端上限', () => {
+    expect(argsError('汉'.repeat(21) + 'a')).toBeUndefined()
+    expect(argsError('汉'.repeat(22))).toContain('参数 66 UTF-8 字节')
+    expect(argsError('😀'.repeat(16))).toBeUndefined()
+    expect(argsError('😀'.repeat(17))).toContain('参数 68 UTF-8 字节')
+    expect(argsError('x'.repeat(65), 4096)).toContain('超过 64 字节上限')
+    expect(argsError('汉', 2)).toContain('超过 2 字节上限')
+    expect(argsError('a', 0)).toContain('超过 0 字节上限')
+    expect(argsError('x'.repeat(65), Number.NaN)).toContain('超过 64 字节上限')
+    expect(argsError('x'.repeat(65), -1)).toContain('超过 64 字节上限')
+  })
+  it('只沿用换行/NUL 的 wire 门禁，不把合法转义字符或制表符擅自禁止', () => {
+    expect(argsError('a\rb')).toBeDefined()
+    expect(argsError('a\0b')).toBeDefined()
+    expect(argsError('a\tb')).toBeUndefined()
+    expect(argsError('"\\n"')).toBeUndefined()
   })
 })
 

@@ -189,7 +189,7 @@ INDEX idx_commands_device(device_id, created_at) -- 设备详情页命令历史
 8. **命令闭环**：`pending → sent → ok|failed`；90 秒未回执由 sweeper 标 `timeout`；
    前端按钮跟踪 `command_id` 的 ack，另有 15 秒超时兜底提示。
 9. **重启不空白**：server 启动从 SQLite 水合设备与最后状态，一律标离线，等 edge 重新上报。
-10. **输入收口**：命令白名单（适配器声明）、参数长度 ≤64 且不含换行/NUL、
+10. **输入收口**：命令白名单（适配器声明）、参数长度 ≤64 UTF-8 字节且不含换行/NUL、
     `edge_id` 形状校验（字母数字 `-_`，1–64）、设备归属校验（edge 只能上报自己注册过的键）、
     请求体 `MaxBytesReader(4096)`、WS 读上限（edge 64KB / 浏览器 4KB）、SPA 路径穿越防护。
 
@@ -211,7 +211,7 @@ INDEX idx_commands_device(device_id, created_at) -- 设备详情页命令历史
 |---|---|---|
 | `/` | 概览 | 在线设备/边缘、运行实例、近24小时失败命令、需要关注的状态、设备与事件 |
 | `/devices` | 设备 | 全部设备卡片（WS 快照优先，REST 轮询兜底） |
-| `/devices/:edgeId/:deviceId` | 设备详情 | 大时钟 + 漂移/时/分、命令面板（白名单驱动 + raw 输入）、槽位、漂移趋势、事件时间线、命令历史、原始状态 |
+| `/devices/:edgeId/:deviceId` | 设备详情 | 声明驱动的观测概览、能力、命令控制、事件与历史、技术诊断 |
 | `/events` | 事件 | 设备/类型筛选、WS 实时 + REST 历史合并去重、上限提示 |
 | `/edges` | 边缘节点 | 在线/离线节点、版本、最后在线、所辖设备跳转 |
 | `/settings` | 系统 | 服务状态、实时连接、令牌、存储统计、适配器清单、关于 |
@@ -244,6 +244,20 @@ ack map）；TanStack Query 管 REST（设备/事件/命令/统计）。`store/w
 开发态：Vite dev server（:5173）代理 `/api` `/ws` `/healthz` 到 :8080；
 生产态：`vite build` → `webui/dist` → `go:embed`（构建标签 `embed_ui`，未启用时有 stub 兜底，
 server 退化为 API-only 并返回可读提示）。
+
+### 设备命令
+
+命令及危险性只来自 Descriptor / Capability 或适配器白名单，不由前端猜测。参数声明完整
+保留：简单标量对象显示有标签的字段，嵌套或复杂结构回落 JSON；不预填可能产生副作用的
+零值、布尔值或 schema default。首次显示使用中性填写提示，编辑后才显示具体错误。
+前端校验 JSON 语法、已支持的 required/type/enum 与数值、字符串、数组边界，并遵守
+64 UTF-8 字节及换行/NUL 传输门禁；未知 schema 关键字明确提示未校验，设备端仍为最终裁决者。
+参数与 JSON 切换不得丢弃额外字段，原始 JSON 不静默压缩或截断。
+
+命令面板及独立按钮都检查当前身份：viewer、加载中、未登录或无效身份无写表单；
+保留显式开放模式和合法服务身份 id=0 的既有设备命令契约。更换设备、账号、租户、角色
+或声明会卸载参数与确认状态，旧请求/回执不能污染新身份。危险动作保留声明确认，
+发送后沿用 POST → WS ACK → 历史刷新或超时反馈。
 
 ### 应用实例详情
 

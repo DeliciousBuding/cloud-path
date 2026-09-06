@@ -336,9 +336,26 @@ describe('commandActions：命令集只来自声明', () => {
     expect(byCmd.factory_reset).toMatchObject({ label: '恢复出厂', variant: 'danger', confirmText: '确认恢复出厂？设备侧配置将被清空。' })
   })
 
-  it('GAP-1：action 未声明 command → cmd 回落 action key；inputSchema → needsInput + 参数模板', () => {
+  it('GAP-1：action 未声明 command → cmd 回落 action key；inputSchema 原样保留而不生成参数默认值', () => {
     const pulse = commandActions({ descriptor: d, index: idx }).actions.find((a) => a.cmd === 'pulse')
-    expect(pulse).toMatchObject({ label: '点动', needsInput: true, inputPlaceholder: '{"ms":0,"note":""}', inputMaxLength: 64 })
+    expect(pulse).toMatchObject({ label: '点动', needsInput: true, inputMaxLength: 64,
+      inputSchema: { type: 'object', properties: { ms: { type: 'integer' }, note: { type: 'string' } } },
+    })
+    expect(pulse?.inputPlaceholder).toBeUndefined()
+  })
+
+  it.each([
+    {}, { type: 'object', required: ['offset'] }, { type: 'string', minLength: 1 },
+    { type: 'array', items: { type: 'integer' } }, { oneOf: [{ type: 'number' }, { type: 'boolean' }] },
+  ])('所有声明 schema 都需要输入，不能因缺少 properties 被当作无参按钮：%j', (schema) => {
+    const i = indexCapabilities([{ metadata: { id: CAP_RELAY, version: 1 }, spec: { actions: { custom: { inputSchema: schema } } } }])
+    const a = commandActions({ descriptor: d, index: i }).actions.find((v) => v.cmd === 'custom')
+    expect(a).toMatchObject({ needsInput: true, inputSchema: schema })
+    expect(a?.inputSchema).toBe(schema)
+    expect(a?.inputPlaceholder).toBeUndefined()
+    const rootAction = commandActions({ descriptor: withRootCommands([{ cmd: 'custom', inputSchema: schema }]) }).actions[0]
+    expect(rootAction).toMatchObject({ needsInput: true, inputSchema: schema })
+    expect(rootAction?.inputSchema).toBe(schema)
   })
 
   it('GAP-2：Descriptor 顶层 commands 扩展（对象与裸字符串都接受），破坏性动作自动生成确认文案', () => {

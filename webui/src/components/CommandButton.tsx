@@ -1,144 +1,149 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { api } from '@/lib/api'
+import { useAuth } from '@/store/auth'
 import { useLive } from '@/store/ws'
 import { toast } from '@/store/toast'
 import { cn } from '@/lib/cn'
 import { ConfirmDialog } from './ConfirmDialog'
+import { commandScope } from './command/scope'
+import { commandArgsError } from '@/lib/command-schema'
 import { commandErrorCopy } from '@/lib/format'
 import type { CommandAction } from '@/lib/descriptor'
 
 const ACK_TIMEOUT_MS = 15000
 
-/**
- * 命令按钮：POST 下发 → 记录 command_id → 订阅 WS ack → 轻提示反馈 + 超时兜底。
- *
- * 文案、危险确认、是否需要参数全部来自 `action`（由 lib/descriptor.ts 从 Capability actions /
- * Descriptor commands / 适配器白名单推导）。本组件不认识任何具体命令名。
- *
- * 危险命令的二次确认走设计系统里的 ConfirmDialog（不用 window.confirm 这类默认浏览器样式）：
- * 确认文案逐字取自声明的 `confirmation`，`variant==='danger'` 时还必须显式勾选才允许执行。
- */
-export function CommandButton({ deviceId, action, args, className, disabled }: {
+interface CommandButtonProps {
   /** "<edge>/<dev>" */
   deviceId: string
   action: CommandAction
-  /** 受控参数（带输入框的动作用）；undefined 表示不带 args 下发 */
+  /** 保留受控参数原文；undefined 表示不带 args 下发。 */
   args?: string
   className?: string
-  /** 参数校验不过等外部原因禁用下发（原因由调用方在框下说明） */
   disabled?: boolean
-}) {
+}
+
+/** 独立使用按钮也受同一权限边界保护；身份/设备/声明变化会卸载旧确认与回执状态。 */
+export function CommandButton(props: CommandButtonProps) {
+  const scope = useAuth((s) => commandScope(s, props.deviceId))
+  if (!scope) return null
+  return <ScopedCommandButton key={JSON.stringify([scope, props.action])} {...props} scope={scope} />
+}
+
+/** POST → WS ACK → 历史刷新/超时；危险确认只取声明，不认识设备或具体命令名。 */
+function ScopedCommandButton({ deviceId, action, args, className, disabled, scope }: CommandButtonProps & { scope: string }) {
   const acks = useLive((s) => s.acks)
   const qc = useQueryClient()
-  // 下发与 ack 结算后立即刷新历史与事件，不让用户等 5s 轮询
-  const refreshHistory = () => {
+  const refreshHistory = useCallback(() => {
     void qc.invalidateQueries({ queryKey: ['device-commands', deviceId] })
     void qc.invalidateQueries({ queryKey: ['device-events', deviceId] })
-  }
+  }, [qc, deviceId])
   const [busy, setBusy] = useState(false)
-  const [confirming, setConfirming] = useState(false)
+  const [confirming, setConfirming] = useState<{ args?: string } | null>(null)
   const [pendingId, setPendingId] = useState<number | null>(null)
   const settled = useRef<Set<number>>(new Set())
+  const active = useRef(true)
+  const sending = useRef(false)
   const label = action.label
+  const error = commandArgsError(args ?? '', action.inputSchema, action.inputMaxLength)
+  const blocked = !!disabled || !!error
+  const current = useCallback(() => active.current && commandScope(useAuth.getState(), deviceId) === scope, [deviceId, scope])
 
-  // ack 到达 → 结算
   useEffect(() => {
-    if (pendingId == null || settled.current.has(pendingId)) return
+    active.current = true
+    return () => { active.current = false }
+  }, [])
+  // 参数或有效性变化后必须重新确认；即使后来改回原参数，也不能复活已勾选的确认。
+  useEffect(() => { setConfirming(null) }, [args, blocked])
+
+  useEffect(() => {
+    if (pendingId == null || settled.current.has(pendingId) || !current()) return
     const ack = acks[pendingId]
     if (!ack) return
     settled.current.add(pendingId)
+    sending.current = false
     setBusy(false)
     setPendingId(null)
     refreshHistory()
-    if (ack.status === 'ok') toast.ok(`${label}已执行`, ack.detail || undefined)
-    else toast.bad(`${label}失败`, ack.detail || '边缘节点返回失败但未附原因，可在命令历史查看原始回执')
-  }, [acks, pendingId, label])
+    if (ack.status === 'ok') toast.ok(label + '已执行', ack.detail || undefined)
+    else toast.bad(label + '失败', ack.detail || '边缘节点返回失败但未附原因，可在命令历史查看原始回执')
+  }, [acks, pendingId, label, current, refreshHistory])
 
-  // 超时兜底（edge 未回执）
   useEffect(() => {
     if (pendingId == null) return
     const t = setTimeout(() => {
-      if (settled.current.has(pendingId)) return
+      if (settled.current.has(pendingId) || !current()) return
       settled.current.add(pendingId)
+      sending.current = false
       setBusy(false)
       setPendingId(null)
-      toast.bad(`${label}超时`, '边缘节点未回执（设备可能离线或通道忙）')
+      refreshHistory()
+      toast.bad(label + '超时', '边缘节点未回执（设备可能离线或通道忙）')
     }, ACK_TIMEOUT_MS)
     return () => clearTimeout(t)
-  }, [pendingId, label])
-
-  /** 点击入口：声明了确认文案的先开对话框，其余直接下发 */
-  const onClick = () => {
-    if (busy) return
-    if (action.confirmText) { setConfirming(true); return }
-    void send()
-  }
+  }, [pendingId, label, current, refreshHistory])
 
   const send = async () => {
-    if (busy) return
+    // DOM 的 disabled 不是最后一道门：确认回调与异步响应也必须属于当前身份。
+    if (sending.current || blocked || !current()) return
     const [edgeId, devId] = deviceId.split('/')
+    sending.current = true
     setBusy(true)
     try {
-      // 用户原文逐字下发：校验单一出口在 ActionPanel（argsError 显式报错+禁用），
-      // 前端不做静默二次截断；后端仍有自己的长度/字符门禁兜底拒收
       const cv = await api.sendCommand(edgeId ?? '', devId ?? '', action.cmd, args)
+      if (!current()) return
       setPendingId(cv.id)
       refreshHistory()
     } catch (e) {
+      if (!current()) return
+      sending.current = false
       setBusy(false)
-      // 按 HTTP 状态说人话（权限不足 / 节点离线 / 限流 …），不把服务端原文甩给用户
-      toast.bad(`${label}未下发`, commandErrorCopy(e))
+      toast.bad(label + '未下发', commandErrorCopy(e))
     }
   }
 
+  const onClick = () => {
+    if (sending.current || blocked || !current()) return
+    if (action.confirmText || action.variant === 'danger') { setConfirming({ args }); return }
+    void send()
+  }
   const title = [
-    action.hint,
-    action.capability ? `Capability ${action.capability}` : '',
-    action.entityLabel ? `Entity ${action.entityLabel}` : '',
-    `cmd=${action.cmd}`,
+    error, action.hint,
+    action.capability ? 'Capability ' + action.capability : '',
+    action.entityLabel ? 'Entity ' + action.entityLabel : '',
+    'cmd=' + action.cmd,
   ].filter(Boolean).join(' · ')
 
   return (
     <>
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={busy || disabled}
-      title={title}
-      aria-busy={busy}
-      aria-label={label}
-      className={cn('btn min-w-0', {
-        'btn-primary': action.variant === 'primary',
-        'btn-ghost': !action.variant || action.variant === 'ghost',
-        'bg-bad/10 text-bad hover:bg-bad/16': action.variant === 'danger',
-      }, className)}
-    >
-      {busy && <Loader2 size={14} className="shrink-0 animate-spin" />}
-      <span className="truncate">{label}</span>
-    </button>
-    <ConfirmDialog
-      open={confirming}
-      tone={action.variant === 'danger' ? 'danger' : 'warn'}
-      title={`确认执行「${label}」？`}
-      body={
-        <>
-          <p>{action.confirmText}</p>
+      <button type="button" onClick={onClick} disabled={busy || blocked} title={title}
+        aria-busy={busy} aria-label={label}
+        className={cn('btn min-w-0', {
+          'btn-primary': action.variant === 'primary',
+          'btn-ghost': !action.variant || action.variant === 'ghost',
+          'bg-bad/10 text-bad hover:bg-bad/16': action.variant === 'danger',
+        }, className)}>
+        {busy && <Loader2 size={14} className="shrink-0 animate-spin" />}
+        <span className="truncate">{label}</span>
+      </button>
+      <ConfirmDialog open={confirming !== null && confirming.args === args && !blocked}
+        tone={action.variant === 'danger' ? 'danger' : 'warn'} title={'确认执行「' + label + '」？'}
+        body={<>
+          <p>{action.confirmText ?? '请确认要向该设备执行此命令。'}</p>
           <p className="num mt-2 text-xs text-ink-3">
             目标设备 <span className="break-all">{deviceId}</span> · 命令 <span className="font-mono">{action.cmd}</span>
             {args ? <> · 参数 <span className="font-mono break-all">{args}</span></> : null}
           </p>
-        </>
-      }
-      confirmLabel={label}
-      busy={busy}
-      requireAck={action.variant === 'danger'
-        ? '我已确认该操作会作用于真实设备，且可能无法撤销。'
-        : undefined}
-      onCancel={() => setConfirming(false)}
-      onConfirm={() => { setConfirming(false); void send() }}
-    />
+        </>}
+        confirmLabel={label} busy={busy}
+        requireAck={action.variant === 'danger' ? '我已确认该操作会作用于真实设备，且可能无法撤销。' : undefined}
+        onCancel={() => setConfirming(null)}
+        onConfirm={() => {
+          if (!confirming || confirming.args !== args || blocked || !current()) return
+          setConfirming(null)
+          void send()
+        }} />
     </>
   )
 }

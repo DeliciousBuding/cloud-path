@@ -17,6 +17,7 @@ import Settings from '@/pages/Settings'
 import { installFetch, stubResponse } from '@/test/http'
 import { LONG, expectContained, expectNoInlinePixelWidth } from '@/test/narrow'
 import { renderWithProviders, resetStores } from '@/test/render'
+import { useAuth } from '@/store/auth'
 import type { DeviceView, OverviewView, PluginCatalogView, PluginInstanceView } from '@/lib/types'
 
 const health = { ok: true, version: LONG, uptime_s: 60, devices_online: 1, devices_total: 1, edges_online: 1 }
@@ -26,7 +27,10 @@ const longDevice: DeviceView = {
   online: true, state: {}, updated_at: 0, last_seen: 0,
 }
 
-beforeEach(() => { resetStores() })
+beforeEach(() => {
+  resetStores()
+  useAuth.setState({ status: 'in', user: { id: 1, username: 'operator', name: '操作员', role: 'operator', tenant_id: 1, tenant_slug: 'default' } })
+})
 
 describe('Edges 页', () => {
   it('edge_id / 版本 / 所辖设备键都收口', async () => {

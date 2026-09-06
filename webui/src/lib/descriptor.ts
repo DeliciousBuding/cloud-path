@@ -528,6 +528,8 @@ export interface CommandAction {
   confirmText?: string
   needsInput?: boolean
   inputPlaceholder?: string
+  /** 原始 JSON Schema；仅作为参数校验与表单提示，不生成默认参数。 */
+  inputSchema?: Record<string, unknown>
   inputMaxLength?: number
   /** 来源 Capability 引用与 Entity（展示用，便于运维定位） */
   capability?: string
@@ -560,22 +562,6 @@ function confirmOf(decl: Record<string, unknown>, label: string): string | undef
   return undefined
 }
 
-function inputTemplate(schema: unknown): string {
-  const props = obj(obj(schema)?.properties)
-  if (!props) return ''
-  const seed: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(props)) {
-    const t = str(obj(v)?.type)
-    seed[k] = t === 'number' || t === 'integer' ? 0
-      : t === 'boolean' ? false
-      : t === 'array' ? []
-      : t === 'object' ? {}
-      : ''
-  }
-  if (!Object.keys(seed).length) return ''
-  try { return JSON.stringify(seed) } catch { return '' }
-}
-
 /** Descriptor 顶层/Entity 上宽容声明的命令集（schema 未强制，但允许扩展字段） */
 function declaredCommands(container: Record<string, unknown>): CommandAction[] {
   const out: CommandAction[] = []
@@ -596,8 +582,7 @@ function declaredCommands(container: Record<string, unknown>): CommandAction[] {
       const hint = str(o.description) ?? str(o.hint); if (hint) a.hint = hint
       const confirmText = confirmOf(o, label); if (confirmText) a.confirmText = confirmText
       const schema = obj(o.inputSchema) ?? obj(o.input) ?? obj(o.args)
-      const template = inputTemplate(schema)
-      if (schema || template) { a.needsInput = true; a.inputPlaceholder = template || undefined }
+      if (schema) { a.needsInput = true; a.inputSchema = schema }
       else if (o.args === true || o.needsInput === true) a.needsInput = true
       const maxLen = typeof o.maxArgsLength === 'number' ? o.maxArgsLength : DEFAULT_ARGS_MAX
       a.inputMaxLength = maxLen
@@ -629,8 +614,8 @@ function actionsFromCapabilities(
         }
         const hint = str(decl.description) ?? str(decl.hint); if (hint) a.hint = hint
         const confirmText = confirmOf(decl, label); if (confirmText) a.confirmText = confirmText
-        const template = inputTemplate(decl.inputSchema)
-        if (template) { a.needsInput = true; a.inputPlaceholder = template }
+        const schema = obj(decl.inputSchema)
+        if (schema) { a.needsInput = true; a.inputSchema = schema }
         a.inputMaxLength = typeof decl.maxArgsLength === 'number' ? decl.maxArgsLength : DEFAULT_ARGS_MAX
         out.push(a)
       }
