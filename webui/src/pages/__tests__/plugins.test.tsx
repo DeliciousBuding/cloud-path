@@ -85,6 +85,8 @@ describe('插件列表只读权限', () => {
     useAuth.setState({ status: 'in', user: appUser })
     route({ catalog: [], instances: [appInstance('app-a', 'app-a'), appInstance('app-b', 'server/app-b'), instance()] })
     const { container } = renderWithProviders(<Plugins />)
+    expect(screen.getByRole('tab', { name: /实例/ })).toHaveAttribute('aria-selected', 'true')
+    await gotoTab(/目录/)
     expect(await screen.findByText('插件目录为空')).toBeInTheDocument()
     expect(screen.getByText('插件声明同步到目录后，这里会显示版本、摘要、权限和贡献。目录为空不代表没有已安装或运行的实例。')).toBeInTheDocument()
     await gotoTab(/实例/)
@@ -95,6 +97,11 @@ describe('插件列表只读权限', () => {
     expect(container.textContent).not.toContain('边缘节点 server')
     expect(container.querySelector('[title^="边缘节点 server"]')).toBeNull()
     expect(screen.getByText('每行都分开写「期望态」与「实际态」：期望已启用不等于运行宿主已运行该实例。尚未收到实际态时，明确标注未上报。')).toBeInTheDocument()
+    await gotoTab(/已安装/)
+    const host = screen.getByRole('heading', { name: '中心服务' }).closest('section') as HTMLElement
+    expect(within(host).getByText('应用宿主')).toBeInTheDocument()
+    expect(within(host).queryByText('边缘节点离线')).not.toBeInTheDocument()
+    expect(screen.getByText('边缘节点在线')).toBeInTheDocument()
   })
 
   it('viewer 可查看实例，但不显示新建、创建或编辑表单入口', async () => {
@@ -133,9 +140,10 @@ describe('插件列表只读权限', () => {
 })
 
 describe('插件面三分', () => {
-  it('三个分区都在，且默认目录呈现插件声明事实', async () => {
+  it('三个分区都在，实例优先且目录按需呈现插件声明事实', async () => {
     route({ catalog: CATALOG })
     renderWithProviders(<Plugins />)
+    await gotoTab(/目录/)
     for (const n of ['目录', '已安装', '实例']) {
       expect(screen.getByRole('tab', { name: new RegExp(n) })).toBeInTheDocument()
     }
@@ -154,6 +162,7 @@ describe('插件面三分', () => {
   it('安全边界：目录里的 source（可能是本机绝对路径）绝不渲染', async () => {
     route({ catalog: CATALOG })
     const { container } = renderWithProviders(<Plugins />)
+    await gotoTab(/目录/)
     await screen.findByText('io.github.acme.driver')
     expect(container.textContent).not.toContain(LOCAL_PATH)
     expect(container.textContent).not.toContain('someone')
@@ -162,17 +171,21 @@ describe('插件面三分', () => {
   it('目录明确声明「这不代表正在运行」，不与实际态混淆', async () => {
     route({ catalog: CATALOG })
     renderWithProviders(<Plugins />)
-    await screen.findByText(/不代表任何 Edge 上正在运行/)
+    await gotoTab(/目录/)
+    await screen.findByText(/不代表任何运行宿主上正在运行/)
   })
 
   it('目录为空 / 加载失败都是设计过的状态', async () => {
     route({ catalog: [] })
-    renderWithProviders(<Plugins />)
+    const first = renderWithProviders(<Plugins />)
+    await gotoTab(/目录/)
     expect(await screen.findByText('插件目录为空')).toBeInTheDocument()
 
+    first.unmount()
     installFetch((url) => (url === '/api/plugins'
       ? stubResponse(500, { error: 'boom' }) : stubResponse(404, {})))
     renderWithProviders(<Plugins />)
+    await gotoTab(/目录/)
     expect(await screen.findByRole('alert')).toBeInTheDocument()
     expect(screen.getByText('插件目录加载失败')).toBeInTheDocument()
   })

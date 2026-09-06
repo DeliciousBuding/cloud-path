@@ -52,6 +52,16 @@ describe('地标与键盘入口', () => {
   })
 })
 
+describe('任务导向导航', () => {
+  it('设备调试和应用实例各有单一入口，不再把通用观测叫药盒控制', () => {
+    renderLayout()
+    const nav = screen.getAllByRole('navigation', { name: '主导航' })[0] as HTMLElement
+    expect(within(nav).getByRole('link', { name: '设备' })).toHaveAttribute('href', '/devices')
+    expect(within(nav).getByRole('link', { name: '应用与插件' })).toHaveAttribute('href', '/plugins')
+    expect(within(nav).queryByRole('link', { name: '药盒控制' })).not.toBeInTheDocument()
+  })
+})
+
 describe('实时通道状态提示', () => {
   it('断开时给出系统级提示条并说明会自动重连', () => {
     renderLayout()

@@ -34,9 +34,9 @@ const LIST_CAP = 200
  * 不渲染目录里的 source 字段：它可能是安装来源的本机路径，属于不得外泄的信息。
  */
 export default function Plugins() {
-  usePageTitle('插件')
+  usePageTitle('应用与插件')
 
-  const [tab, setTab] = useState<Tab>('catalog')
+  const [tab, setTab] = useState<Tab>('instances')
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<PluginInstanceView | null>(null)
   const readOnly = useAuth((s) => s.status === 'in' && s.user?.role === 'viewer')
@@ -54,19 +54,19 @@ export default function Plugins() {
   const byEdge = useMemo(() => groupByEdge(instances), [instances])
 
   const tabs: TabItem<Tab>[] = [
-    { value: 'catalog', label: '目录', icon: <Puzzle size={13} />, count: plugins.length },
-    { value: 'installed', label: '已安装', icon: <Server size={13} />, count: byEdge.size },
     { value: 'instances', label: '实例', icon: <Boxes size={13} />, count: instances.length },
+    { value: 'installed', label: '已安装', icon: <Server size={13} />, count: byEdge.size },
+    { value: 'catalog', label: '目录', icon: <Puzzle size={13} />, count: plugins.length },
   ]
 
   return (
     <>
       <PageHeader
-        title="插件"
+        title="应用与插件"
         subtitle={
           catLoading || insLoading
-            ? '正在加载插件面…'
-            : `目录 ${plugins.length} 个 · 运行实例 ${instances.length} 个`
+            ? '正在加载实例…'
+            : `${instances.length} 个实例 · ${plugins.length} 个目录条目`
         }
         actions={!readOnly && (
           <button type="button" className="btn btn-primary" onClick={() => { setCreating(true); setTab('instances') }}>
@@ -153,7 +153,7 @@ export default function Plugins() {
                     )}
 
                     <p className="mt-3 border-t border-hairline pt-2.5 text-[12px] leading-relaxed text-ink-3">
-                      以上是插件的声明目录，不代表任何 Edge 上正在运行；运行事实见「已安装」与「实例」分区。
+                      以上是插件的声明目录，不代表任何运行宿主上正在运行；运行事实见「已安装」与「实例」分区。
                     </p>
                   </Panel>
                 )
@@ -177,23 +177,25 @@ export default function Plugins() {
             <Panel><RowSkeleton rows={4} /></Panel>
           ) : instances.length === 0 ? (
             <EmptyState icon={<Server size={24} />} title="还没有插件实例"
-              hint="在「实例」分区新建一个实例，指定目标 Edge 与插件版本；Edge 应用快照并上报后，这里会显示它实际装了什么。" />
+              hint="在「实例」分区新建实例并指定运行宿主与版本；收到实际上报后，这里会显示安装与运行结果。" />
           ) : (
             <div className="space-y-5">
               {[...byEdge.entries()].map(([edgeId, list]) => {
+                const serverHosted = edgeId === 'server'
                 const edgeOnline = list[0]?.edge_online ?? false
                 return (
                   <Panel key={edgeId}
                     title={
                       <span className="flex min-w-0 items-center gap-2">
-                        <StatusDot online={edgeOnline} />
-                        <span className="num min-w-0 truncate" title={edgeId}>{edgeId || '未知 Edge'}</span>
+                        {serverHosted ? <Server size={14} className="shrink-0 text-ink-3" /> : <StatusDot online={edgeOnline} />}
+                        <span className="num min-w-0 truncate" title={serverHosted ? '中心服务' : edgeId}>{serverHosted ? '中心服务' : edgeId || '未知宿主'}</span>
                       </span>
                     }
                     right={
-                      <Badge tone={edgeOnline ? 'ok' : 'idle'}>{edgeOnline ? '边缘节点在线' : '边缘节点离线'}</Badge>
+                      serverHosted ? <Badge tone="idle">应用宿主</Badge>
+                        : <Badge tone={edgeOnline ? 'ok' : 'idle'}>{edgeOnline ? '边缘节点在线' : '边缘节点离线'}</Badge>
                     }>
-                    {!edgeOnline && (
+                    {!serverHosted && !edgeOnline && (
                       <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-ink-3/10 px-3 py-2.5 text-[12px] leading-relaxed text-ink-2">
                         <CloudOff size={12} className="mt-0.5 shrink-0" />
                         <span className="min-w-0">该边缘节点离线：下面是它最后一次上报的实际态，不代表当前运行状况。其他节点不受影响。</span>
@@ -231,9 +233,9 @@ export default function Plugins() {
                               </>
                             ) : (
                               <>
-                                <Badge tone="idle">边缘节点未上报</Badge>
+                                <Badge tone="idle">{serverHosted ? '尚无运行上报' : '边缘节点未上报'}</Badge>
                                 <span className="ml-auto shrink-0 text-[12px] text-ink-3">
-                                  {v.edge_online ? '节点在线但还没回过' : '节点离线'}
+                                  {serverHosted ? '不以期望态代替运行结果' : v.edge_online ? '节点在线但还没回过' : '节点离线'}
                                 </span>
                               </>
                             )}
@@ -245,7 +247,7 @@ export default function Plugins() {
                 )
               })}
               <p className="text-[12px] leading-relaxed text-ink-3">
-                「已安装」只呈现 Edge 上报的实际态；没有上报就写「Edge 未上报」，不用期望态顶替。
+                「已安装」展示运行宿主的实际上报；未上报时明确说明，不以期望态补齐。
               </p>
             </div>
           )}

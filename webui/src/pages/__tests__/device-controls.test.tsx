@@ -15,12 +15,12 @@ import { makeDeviceView, catalogPayload, makeDescriptor } from '@/test/fixtures'
 const KEY = 'edge-1/dev-9'
 const ROUTE = '/devices/edge-1/dev-9'
 
-function renderDetail() {
+function renderDetail(path = ROUTE) {
   return renderWithProviders(
     <Routes>
       <Route path="/devices/:edgeId/:deviceId" element={<DeviceDetail />} />
     </Routes>,
-    ROUTE,
+    path,
   )
 }
 
@@ -176,5 +176,20 @@ describe('列表页的关键读数同样来自声明', () => {
     // 旧芯片墙文案彻底退出列表行
     expect(screen.queryByText('能力未知（未上报声明）')).not.toBeInTheDocument()
     expect(screen.queryByText('未声明能力')).not.toBeInTheDocument()
+  })
+})
+
+
+describe('设备分区深链接', () => {
+  it('controls 查询参数直接打开正确设备的控制区', async () => {
+    route({ adapters: [{ name: 'demo', commands: ['identify'] }] })
+    renderDetail(ROUTE + '?tab=controls')
+    expect(await screen.findByRole('button', { name: 'Identify' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /控制/ })).toHaveAttribute('aria-selected', 'true')
+  })
+  it('未知分区回落概览，不显示错误控制区', async () => {
+    route()
+    renderDetail(ROUTE + '?tab=unknown')
+    expect(await screen.findByRole('tab', { name: /概览/ })).toHaveAttribute('aria-selected', 'true')
   })
 })

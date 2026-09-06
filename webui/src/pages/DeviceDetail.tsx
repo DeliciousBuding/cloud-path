@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import {Activity, ArrowRight, Braces, Command, Grid3x3, History, LayoutDashboard, Radio, RadioTower, Sparkles, Terminal, Zap} from 'lucide-react'
 import {
@@ -43,7 +43,16 @@ export default function DeviceDetail() {
   const key = `${decodeURIComponent(edgeId)}/${decodeURIComponent(deviceId)}`
   const now = useNow()
   const nowSec = Math.floor(now.getTime() / 1000)
-  const [tab, setTab] = useState<Tab>('overview')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedTab = searchParams.get('tab')
+  const tab: Tab = (['overview', 'state', 'controls', 'events', 'capabilities', 'diagnostics'] as const)
+    .find((value) => value === requestedTab) ?? 'overview'
+  const setTab = (value: Tab) => setSearchParams((previous) => {
+    const next = new URLSearchParams(previous)
+    if (value === 'overview') next.delete('tab')
+    else next.set('tab', value)
+    return next
+  })
   const [kindFilter, setKindFilter] = useState('')
   const [stateView, setStateView] = useState<'rows' | 'table' | 'trend'>('rows')
   const [rangeMin, setRangeMin] = useState(0)
