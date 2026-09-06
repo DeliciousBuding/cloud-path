@@ -655,6 +655,10 @@ func (s *Server) pluginInstanceView(tenantID int64, slug, edgeID, instanceID str
 	if o, ok := ep.observed[instanceID]; ok {
 		pi.HasObserved = true
 		pi.ObservedVersion = o.Version
+		// An applied ack cannot override a known enabled-version mismatch.
+		if pi.Enabled && pi.Version != "" && o.Version != "" && pi.Version != o.Version {
+			pi.Drift = true
+		}
 		pi.State, pi.Health, pi.Detail = o.State, o.Health, o.Detail
 		pi.RestartCount, pi.LastHealthy, pi.MessageRate = o.RestartCount, o.LastHealthy, o.MessageRate
 		pi.ReportedAt = ep.lastReportAt

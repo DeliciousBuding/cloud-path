@@ -490,7 +490,8 @@ func (pr pluginProjection) Installations(tenant string) ([]api.PluginInstallatio
 }
 
 // Instances 返回租户可见的插件实例合成事实：desired 与 observed 分别取自
-// Server 权威存储与 Edge 上报投影，Drift/Stale 由真实 revision 与上报时间计算。
+// Server 权威存储与 Edge 上报投影。Drift 结合 revision 与已知启用版本差异，
+// Stale 由在线状态与上报时间计算。
 func (pr pluginProjection) Instances(tenant string) ([]plugincatalog.ProjectionInstance, error) {
 	s := pr.s
 	p := s.plugin
@@ -535,6 +536,10 @@ func (pr pluginProjection) Instances(tenant string) ([]plugincatalog.ProjectionI
 				if o, ok := ep.observed[row.InstanceID]; ok {
 					pi.HasObserved = true
 					pi.ObservedVersion = o.Version
+					// An applied ack cannot override a known enabled-version mismatch.
+					if pi.Enabled && pi.Version != "" && o.Version != "" && pi.Version != o.Version {
+						pi.Drift = true
+					}
 					pi.State, pi.Health, pi.Detail = o.State, o.Health, o.Detail
 					pi.RestartCount, pi.LastHealthy = o.RestartCount, o.LastHealthy
 					pi.ReportedAt, pi.MessageRate = ep.lastReportAt, o.MessageRate
