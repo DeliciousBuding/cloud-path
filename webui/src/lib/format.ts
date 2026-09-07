@@ -74,6 +74,30 @@ export function payloadLabel(payload: string | undefined): string | undefined {
   return undefined
 }
 
+/**
+ * 载荷相对**行内已展示内容**是否还有增量信息。
+ *
+ * 事件行已经把 `type` 渲染成徽标，把 `label/message/reason/text` 之一渲染成行内摘要，
+ * 所以只剩这些键的载荷展开后是零增量。真实数据里这恰好是最常见的形状——
+ * `{"type":"device-booted"}` 展开就是它自己，「展开原始载荷」于是变成一个骗点击的按钮。
+ *
+ * 判据刻意只排除 `type`：其余键一律算增量，包括已被摘出来的 `label` 等——原始 JSON 是
+ * 取证面，展示层不该替用户决定哪个键「已经看过了」。解析不了也不是 JSON 的载荷一律
+ * 保留展开（原文本身就是证据）。
+ */
+export function payloadHasMore(payload: string | undefined): boolean {
+  if (!payload) return false
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(payload)
+  } catch {
+    return true // 不是 JSON：原文即取证材料，保留展开入口
+  }
+  if (Array.isArray(parsed)) return parsed.length > 0
+  if (!parsed || typeof parsed !== 'object') return true // 裸标量：行内没有对应展示位
+  return Object.keys(parsed as Record<string, unknown>).some((k) => k !== 'type')
+}
+
 /** 事件动词平台词典（声明缺席时的回退层）：机器动词 → 中文；未知动词回落 humanize，不猜业务语义 */
 const EVENT_VERB: Record<string, string> = {
   press: '按下', pressed: '按下', release: '释放', released: '释放',
