@@ -188,7 +188,11 @@ function validate(value: unknown, schema: unknown, at = '参数'): Validation {
 /** JSON 语法 + 已知 schema 约束 + 未改变的传输门禁。没有 schema 的原始参数不强制 JSON。 */
 export function commandArgsError(args: string, schema?: Schema, maxBytes?: number): string | undefined {
   const wireError = argsError(args, maxBytes)
-  if (wireError || !schema) return wireError
+  return wireError ?? (schema ? schemaArgsError(args, schema) : undefined)
+}
+
+/** JSON/schema validation only; each action transport owns its byte/control-character limits. */
+export function schemaArgsError(args: string, schema: Schema): string | undefined {
   if (!args.trim()) return '请填写 JSON 参数'
   let value: unknown
   try {

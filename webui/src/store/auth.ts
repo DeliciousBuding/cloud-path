@@ -16,6 +16,11 @@ export interface AuthState {
 
 export const useAuth = create<AuthState>(() => ({ status: 'loading', user: null }))
 
+/** Cache and in-flight UI state are scoped to the complete authenticated identity, not just status. */
+export function authIdentity({ status, user }: AuthState): string {
+  return JSON.stringify([status, user?.tenant_id, user?.tenant_slug, user?.id, user?.username, user?.role, user?.disabled])
+}
+
 /** 数据请求/实时通道是否放行（已登录或开放访问） */
 export function authReady(status: AuthStatus): boolean {
   return status === 'in' || status === 'open'

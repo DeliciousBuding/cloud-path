@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError, api } from '@/lib/api'
 import { useLive } from '@/store/ws'
-import { useAuth } from '@/store/auth'
+import { authIdentity, useAuth } from '@/store/auth'
 
 export const APP_RECORD_PAGE_SIZE = 20
 
@@ -15,8 +15,9 @@ export function useApplicationPlane(instanceID: string, offset = 0, recordType =
   // 服务令牌没有账号 ID（id=0），仍可拥有已认证的租户身份。
   const canRead = authenticated && (tenantID ?? 0) > 0 && userID != null && Boolean(instanceID)
   const status = useLive((s) => s.status)
-  const scope = ['application-plane', tenantID, userID, instanceID] as const
-  const previousLifecycle = useRef(lifecycleKey)
+  const identity = useAuth(authIdentity)
+  // Lifecycle is part of the key: a slow response from the previous run cannot restore its actions.
+  const scope = ['application-plane', tenantID, userID, instanceID, identity, lifecycleKey] as const
 
   useEffect(() => {
     if (!canRead) return
@@ -35,12 +36,6 @@ export function useApplicationPlane(instanceID: string, offset = 0, recordType =
     })
     return () => { unsubscribe(); clearTimeout(timer) }
   }, [qc, canRead, tenantID, userID, instanceID])
-
-  useEffect(() => {
-    if (previousLifecycle.current === lifecycleKey) return
-    previousLifecycle.current = lifecycleKey
-    if (canRead) void qc.invalidateQueries({ queryKey: ['application-plane', tenantID, userID, instanceID] })
-  }, [qc, canRead, tenantID, userID, instanceID, lifecycleKey])
 
   const shared = {
     enabled: canRead,
@@ -64,12 +59,14 @@ export function useApplicationPlane(instanceID: string, offset = 0, recordType =
   })
   // 只复用公开批量描述符里的名称；没有名称时回落，不猜实体对应的设备。
   const presentation = useQuery({
-    queryKey: ['application-plane-labels', tenantID, userID],
+    queryKey: ['application-plane-labels', tenantID, userID, identity],
     queryFn: api.descriptors,
     enabled: canRead && bindings.isSuccess && bindings.data.bindings.length > 0,
     staleTime: 60_000, refetchInterval: 60_000, retry: false,
   })
-  const running = bindings.isSuccess && jobs.isSuccess && bindings.data.running === jobs.data.running
+  const running = bindings.isSuccess && jobs.isSuccess && bindings.isFetchedAfterMount && jobs.isFetchedAfterMount
+    && bindings.data.instance_id === instanceID && jobs.data.instance_id === instanceID
+    && typeof bindings.data.running === 'boolean' && bindings.data.running === jobs.data.running
     ? bindings.data.running : undefined
   return { records, bindings, jobs, presentation: presentation.data, status, running, canRead }
 }

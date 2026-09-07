@@ -331,3 +331,161 @@ describe('Application Plane 实时通知', () => {
     expect(useLive.getState().domainRecord?.instanceID).toBe('new-account')
   })
 })
+
+
+const sampleCapability = 'example.dev/capability/counter@1'
+function sample(overrides: Record<string, unknown> = {}) {
+  return { capability: sampleCapability, property: 'value', value: 7,
+    quality: 'good', observed_at: '2026-09-08T00:00:00Z', received_at: '2026-09-08T00:00:01Z', sequence: 1, ...overrides }
+}
+function sampleDescriptor(deviceID: string) {
+  return { device_id: deviceID, external_id: deviceID, status: 'online', entities: [
+    { entity_id: 'shared', unique_key: 'shared', category: 'sensor', capabilities: [sampleCapability], observations: { value: sample() } },
+    { entity_id: 'sibling', unique_key: 'sibling', category: 'sensor', capabilities: [sampleCapability], observations: { value: sample({ value: 9 }) } },
+  ] }
+}
+function observationSocket() {
+  connectLive()
+  const socket = lastSocket()
+  socket.simulateOpen()
+  for (const device of ['e1/d1', 'e1/d2']) socket.simulateMessage({ v: 1, type: 'descriptor', device, data: sampleDescriptor(device) })
+  return socket
+}
+function stateFrame(observations: unknown, device = 'e1/d1', online = true) {
+  return { v: 1, type: 'state', device, ts: 1_800_000_001, data: { online, updated_at: 1_800_000_001,
+    raw: { counter: 7, diagnostic: 'raw preserved' }, observations } }
+}
+
+describe('typed StateData observations refresh with strict descriptor scope', () => {
+  it('相同值也替换时间/quality/sequence，只改变本设备目标实体并保留 Raw', () => {
+    const socket = observationSocket()
+    const before = useLive.getState().descriptors['e1/d1']
+    const other = useLive.getState().descriptors['e1/d2']
+    const update = sample({ quality: 'uncertain', observed_at: '2026-09-08T00:01:00Z', received_at: '2026-09-08T00:01:01Z', sequence: 2 })
+    socket.simulateMessage(stateFrame([{ entity_id: 'shared', observations: { value: update } }]))
+    const state = useLive.getState()
+    expect(state.descriptors['e1/d1'].entities[0].observations?.value).toEqual(update)
+    expect(state.descriptors['e1/d1']).not.toBe(before)
+    expect(before.entities[0].observations?.value.sequence).toBe(1)
+    expect(state.descriptors['e1/d1'].entities[1]).toBe(before.entities[1])
+    expect(state.descriptors['e1/d2']).toBe(other)
+    expect(state.devices['e1/d1'].state).toEqual({ counter: 7, diagnostic: 'raw preserved' })
+    expect(state.series['e1/d1'].counter[0].v).toBe(7)
+  })
+
+  it('不创建未声明实体，不串到其他设备同名实体，也不接受跨 capability/property 的样本', () => {
+    const socket = observationSocket()
+    const before = useLive.getState().descriptors
+    socket.simulateMessage(stateFrame([
+      { entity_id: 'foreign-entity', observations: { value: sample() } },
+      { entity_id: 'shared', observations: { value: sample({ capability: 'example.dev/capability/other@1' }) } },
+      { entity_id: 'shared', observations: { wrong: sample() } },
+      { entity_id: 'shared', observations: { value: sample({ entity_id: 'sibling' }) } },
+    ]))
+    expect(useLive.getState().descriptors).toBe(before)
+    socket.simulateMessage(stateFrame([{ entity_id: 'shared', observations: { value: sample() } }], 'e2/d1'))
+    expect(useLive.getState().descriptors['e2/d1']).toBeUndefined()
+    expect(useLive.getState().descriptors).toBe(before)
+  })
+
+  it('descriptor frame 与 state 内联 descriptor 的 device_id 必须严格匹配消息设备', () => {
+    const socket = observationSocket()
+    const before = useLive.getState().descriptors
+    socket.simulateMessage({ v: 1, type: 'descriptor', device: 'e1/d1', data: sampleDescriptor('e1/d2') })
+    expect(useLive.getState().descriptors).toBe(before)
+    const frame = stateFrame([{ entity_id: 'foreign', observations: { value: sample() } }])
+    socket.simulateMessage({ ...frame, data: { ...frame.data, descriptor: sampleDescriptor('e1/d2') } })
+    expect(useLive.getState().descriptors).toBe(before)
+  })
+
+  it('旧短 ID descriptor 仍可展示，但新 typed 增量不会靠短 ID 推断归属', () => {
+    connectLive()
+    const socket = lastSocket()
+    socket.simulateMessage({ v: 1, type: 'descriptor', device: 'e1/d1', data: sampleDescriptor('d1') })
+    const before = useLive.getState().descriptors['e1/d1']
+    expect(before.device_id).toBe('d1')
+    socket.simulateMessage(stateFrame([{ entity_id: 'shared', observations: { value: sample({ sequence: 9 }) } }]))
+    expect(useLive.getState().descriptors['e1/d1']).toBe(before)
+    expect(useLive.getState().devices['e1/d1'].state.diagnostic).toBe('raw preserved')
+  })
+
+  it('同帧合法内联 descriptor 可先声明再接收观测，不靠 raw 猜实体', () => {
+    connectLive()
+    const frame = stateFrame([{ entity_id: 'shared', observations: { value: sample({ sequence: 3 }) } }])
+    lastSocket().simulateMessage({ ...frame, data: { ...frame.data, descriptor: sampleDescriptor('e1/d1') } })
+    expect(useLive.getState().descriptors['e1/d1'].entities[0].observations?.value.sequence).toBe(3)
+  })
+
+  it('畸形集合/样本不使 UI 崩溃或覆盖已知观测，其他合法实体仍可更新', () => {
+    const socket = observationSocket()
+    const before = useLive.getState().descriptors
+    for (const observations of [null, {}, 'bad', [null], [{ entity_id: 'shared', observations: [] }]]) {
+      socket.simulateMessage(stateFrame(observations))
+    }
+    for (const invalid of [null, 8, [], sample({ value: null }), sample({ quality: 'invented' }),
+      sample({ observed_at: 'not-a-time' }), sample({ received_at: 7 }), sample({ unit: {} }), sample({ sequence: '4' })]) {
+      socket.simulateMessage(stateFrame([{ entity_id: 'shared', observations: { value: invalid } }]))
+    }
+    expect(useLive.getState().descriptors).toBe(before)
+    socket.simulateMessage(stateFrame([
+      { entity_id: 'shared', observations: { value: null } },
+      { entity_id: 'sibling', observations: { value: sample({ sequence: 8 }) } },
+    ]))
+    expect(useLive.getState().descriptors['e1/d1'].entities[0]).toBe(before['e1/d1'].entities[0])
+    expect(useLive.getState().descriptors['e1/d1'].entities[1].observations?.value.sequence).toBe(8)
+  })
+
+  it('离线样本不能标成 good；重新联机后的同值新观测恢复明确 quality', () => {
+    const socket = observationSocket()
+    const sets = [{ entity_id: 'shared', observations: { value: sample({ sequence: 2 }) } }]
+    socket.simulateMessage(stateFrame(sets, 'e1/d1', false))
+    expect(useLive.getState().descriptors['e1/d1'].entities[0].observations?.value.quality).toBe('unavailable')
+    socket.simulateMessage(stateFrame(sets, 'e1/d1', true))
+    expect(useLive.getState().descriptors['e1/d1'].entities[0].observations?.value.quality).toBe('good')
+  })
+
+  it('旧包/空增量不刷新观测时间；新样本缺失 metadata 不继承旧的时间与 quality', () => {
+    const socket = observationSocket()
+    const before = useLive.getState().descriptors
+    socket.simulateMessage(stateFrame(undefined))
+    socket.simulateMessage(stateFrame([]))
+    socket.simulateMessage({ ...stateFrame([{ entity_id: 'shared', observations: { value: sample({ sequence: 9 }) } }]), v: 2 })
+    expect(useLive.getState().descriptors).toBe(before)
+    const partial = { capability: sampleCapability, property: 'value', value: 7 }
+    socket.simulateMessage(stateFrame([{ entity_id: 'shared', observations: { value: partial } }]))
+    expect(useLive.getState().descriptors['e1/d1'].entities[0].observations?.value).toEqual(partial)
+    expect(useLive.getState().devices['e1/d1'].state.diagnostic).toBe('raw preserved')
+  })
+
+  it('重复实体/属性只取本帧第一个合法样本，与服务端去重一致', () => {
+    const socket = observationSocket()
+    socket.simulateMessage(stateFrame([
+      { entity_id: 'shared', observations: { value: sample({ sequence: 2 }) } },
+      { entity_id: 'shared', observations: { value: sample({ sequence: 3 }) } },
+    ]))
+    expect(useLive.getState().descriptors['e1/d1'].entities[0].observations?.value.sequence).toBe(2)
+  })
+})
+
+
+describe('typed observation session isolation', () => {
+  it('同为 in 的账号/租户切换也清理实时缓存并重新拨号，旧 socket 不能恢复旧观测', () => {
+    const user = { id: 1, username: 'a', name: 'A', role: 'operator' as const, tenant_id: 1, tenant_slug: 'one' }
+    useAuth.setState({ status: 'in', user })
+    const old = observationSocket()
+    old.simulateMessage(stateFrame([{ entity_id: 'shared', observations: { value: sample() } }]))
+    expect(useLive.getState().descriptors['e1/d1']).toBeDefined()
+    useAuth.setState({ status: 'in', user: { ...user, id: 2, tenant_id: 2, username: 'b', tenant_slug: 'two' } })
+    expect(useLive.getState().descriptors).toEqual({})
+    expect(useLive.getState().devices).toEqual({})
+    expect(old.closed).toBe(true)
+    expect(lastSocket()).not.toBe(old)
+    old.simulateMessage(stateFrame([{ entity_id: 'shared', observations: { value: sample({ sequence: 99 }) } }]))
+    expect(useLive.getState().descriptors).toEqual({})
+    const current = lastSocket()
+    current.simulateOpen()
+    current.simulateMessage({ v: 1, type: 'descriptor', device: 'e1/d1', data: sampleDescriptor('e1/d1') })
+    current.simulateMessage(stateFrame([{ entity_id: 'shared', observations: { value: sample({ sequence: 2 }) } }]))
+    expect(useLive.getState().descriptors['e1/d1'].entities[0].observations?.value.sequence).toBe(2)
+  })
+})
