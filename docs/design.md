@@ -147,7 +147,8 @@ RBAC、插件控制面写面、Application Data Plane 与稳定错误码都在�
   409 edge 离线或状态冲突、429 限流、503 存储不可用或 edge 队列满。
 - **两段设备路径**：设备键本身含 `/`（`{edgeID}/{deviceID}`），用两段路径参数而不是转义单段。
 - **实时通道**：浏览器 `GET /ws`（会话 cookie 优先，`?token=` 只用于带不了 header 的场景）、
-  边缘 `GET /ws/edge`；内嵌 SPA 由 `/*` 兜底并做路径穿越防护。
+  边缘 `GET /ws/edge`；内嵌 SPA 由 `/*` 兜底并做路径穿越防护，但兜底**不含** `/api/*`
+  与缺失的 `/assets/*`——那两类回 404，否则不存在的端点会用 200 + HTML 谎报成功。
 
 ## SQLite Schema（`PRAGMA user_version` 逐级迁移）
 
@@ -343,7 +344,7 @@ devices 为空），运行中不热加载（P1 有意为之：热加载与串口
 | 协议解析 | `cloud-path-driver-stcb/plugin/parser_test.go`（独立仓） | 黄金样本（真实捕获行：损坏分隔符、噪声前缀、越界值）、事件归一、漂移回绕、HHMM 校验、标签 |
 | 存储 | `internal/store/store_test.go` | 迁移到当前版本 + 幂等、设备/状态生命周期、事件过滤、命令过滤与超时、保留期清理（不误删在途命令）、统计、limit 夹取 |
 | 服务链路 | `internal/server/server_test.go` | WS 全链路（快照→hello→state fan-out+落库→REST 命令→edge 收令→ack 落库+广播→白名单拒绝）、令牌鉴权、重启水合、healthz |
-| 服务加固 | `internal/server/hardening_test.go` | 适配器/统计端点、nil-store 不 panic、命令限流、参数校验、未知设备与离线 edge、命令设备过滤、查询参数夹取、保留期、edge_id 校验、重连挤占不误标离线、安全头、SPA 回落与路径穿越 |
+| 服务加固 | `internal/server/hardening_test.go` | 适配器/统计端点、nil-store 不 panic、命令限流、参数校验、未知设备与离线 edge、命令设备过滤、查询参数夹取、保留期、edge_id 校验、重连挤占不误标离线、安全头、SPA 回落与路径穿越、未路由 `/api/*` 与缺失 `/assets/*` 回 404 而非 index.html、鉴权形态三档如实上报 |
 | Origin 策略 | `internal/server/origin_test.go` | 开发策略放行 localhost/无 Origin、拒绝外站；显式清单生效且防后缀伪装 |
 | 边缘运行时 | `internal/edge/{config_test.go,wsclient_test.go}` | 配置默认值/`${ENV}` 展开/各类错误、离线只缓冲事件、在线入队、队满回落缓冲、缓冲溢出丢最旧、回放（含部分回放）、状态 diff 抑制与心跳兜底、重连强制补报 |
 | 前端 | `pnpm exec tsc --noEmit` | 类型门禁（`strict` + `noUnusedLocals`） |

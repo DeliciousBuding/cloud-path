@@ -151,6 +151,104 @@ func TestStatsAuthModeReportsRealEnforcement(t *testing.T) {
 	}
 }
 
+// TestUnroutedPathsDoNotFallBackToSPA 未路由的 /api/* 必须回 JSON 404、缺失的 /assets/*
+// 必须回标准 404，两者都不得回落 index.html；而前端深链仍必须回落 index.html。
+//
+// 回归点：chi 的 `r.Handle("/*", spaHandler)` 兜底把 API 路径一起吞了。真实探针
+// （账号模式演示栈）：
+//
+//	DELETE /api/devices/nope/nope → 200 text/html 1574B <!doctype html>…
+//	POST   /api/nonexistent       → 200 text/html
+//	GET    /assets/missing.js      → 200 text/html
+//
+// 一个不存在的删除端点回 200，等于对客户端谎报成功。
+func TestUnroutedPathsDoNotFallBackToSPA(t *testing.T) {
+	// 测试构建默认没有 embed_ui（webui.Dist 为零值），用 WebUIDir 指一个最小前端，
+	// 这样 index.html 兜底分支是真实可达的，断言不依赖构建标签。
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "assets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "index.html"),
+		[]byte(`<!doctype html><html><body><div id="root"></div></body></html>`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "assets", "app.js"), []byte("// ok"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(filepath.Join(t.TempDir(), "spa.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	srv := New(Config{Store: st, Version: "test", WebUIDir: dir})
+	ts := httptest.NewServer(srv.Routes())
+	t.Cleanup(func() { ts.Close(); srv.CloseAll(); time.Sleep(50 * time.Millisecond) })
+
+	apiCases := []struct{ method, path string }{
+		{http.MethodGet, "/api"},
+		{http.MethodGet, "/api/"},
+		{http.MethodGet, "/api/nonexistent"},
+		{http.MethodPost, "/api/nonexistent"},
+		{http.MethodDelete, "/api/devices/nope/nope"},
+		{http.MethodGet, "/api/auth/nope"},
+	}
+	for _, tc := range apiCases {
+		t.Run("API "+tc.method+" "+tc.path, func(t *testing.T) {
+			resp := doJSON(t, tc.method, ts.URL+tc.path, "", nil, nil)
+			if resp.StatusCode != http.StatusNotFound {
+				t.Fatalf("status = %d, want 404", resp.StatusCode)
+			}
+			if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+				t.Fatalf("Content-Type = %q, want application/json（不得回落 index.html）", ct)
+			}
+			body := readBody(t, resp)
+			if strings.Contains(body, "<!doctype html") {
+				t.Fatalf("响应体是 SPA index.html 而非 JSON 404: %.120q", body)
+			}
+			var e map[string]string
+			if err := json.Unmarshal([]byte(body), &e); err != nil || e["error"] == "" {
+				t.Fatalf("错误体不是 {\"error\":...}: %q err=%v", body, err)
+			}
+		})
+	}
+
+	t.Run("缺失的 assets 回标准 404 而非 index.html", func(t *testing.T) {
+		resp := doJSON(t, http.MethodGet, ts.URL+"/assets/definitely-missing.js", "", nil, nil)
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status = %d, want 404", resp.StatusCode)
+		}
+		if body := readBody(t, resp); strings.Contains(body, "<!doctype html") {
+			t.Fatalf("缺失资源回落了 index.html: %.120q", body)
+		}
+	})
+
+	// 存在的资源与前端深链照旧：前者 200 内容，后者 200 + index.html（SPA 客户端路由）。
+	t.Run("已存在的 assets 照常服务", func(t *testing.T) {
+		resp := doJSON(t, http.MethodGet, ts.URL+"/assets/app.js", "", nil, nil)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status = %d, want 200", resp.StatusCode)
+		}
+		if body := readBody(t, resp); !strings.Contains(body, "ok") {
+			t.Fatalf("资源内容 = %q", body)
+		}
+	})
+	for _, p := range []string{"/", "/devices", "/settings/deep/link"} {
+		t.Run("SPA 深链回落 index.html "+p, func(t *testing.T) {
+			resp := doJSON(t, http.MethodGet, ts.URL+p, "", nil, nil)
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d, want 200", resp.StatusCode)
+			}
+			if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+				t.Fatalf("Content-Type = %q, want text/html", ct)
+			}
+			if body := readBody(t, resp); !strings.Contains(body, `<div id="root">`) {
+				t.Fatalf("不是 index.html: %.120q", body)
+			}
+		})
+	}
+}
+
 // Store 为 nil 时（API-only）任何端点都不得 panic，必须优雅降级。
 func TestNilStoreModeDoesNotPanic(t *testing.T) {
 	srv := New(Config{Version: "test"})
