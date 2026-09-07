@@ -6,13 +6,14 @@ import { Badge } from './ui'
 import { useCapabilityIndex } from '@/hooks/useDescriptor'
 import { useDevices } from '@/hooks/useDevices'
 import { cn } from '@/lib/cn'
-import { eventLabel, eventTone, fmtDay, fmtDateTime, fmtTime, payloadLabel } from '@/lib/format'
+import { eventLabel, eventTone, fmtDay, fmtDateTime, fmtTime, payloadHasMore, payloadLabel } from '@/lib/format'
 
 /**
  * 事件流（新→旧）。来源可为 WS 实时环形缓冲、REST 历史，或两者合并结果。
  * 事件类型属于 Capability/Application 命名空间：标签优先取后端给的 label，
  * 其次 Capability 声明的 title，最后 humanize(类型名)——前端不维护事件枚举。
- * 单行高密度：类型 / 对象 / 载荷展开 / 时刻一行放下；原始载荷按需展开（取证面，不污染扫读）。
+ * 单行高密度：类型 / 对象 / 载荷展开 / 时刻一行放下；原始载荷按需展开（取证面，不污染扫读），
+ * 且只在载荷确有增量信息时才给展开入口——见 payloadHasMore。
  */
 export function EventFeed({ events, showDevice = true, limit = 30, dayGrouped = false }: {
   events: EventView[]
@@ -72,7 +73,9 @@ function EventRow({ e, first, showDevice, name }: {
   const label = eventLabel(e.type, index, payloadLabel(e.payload))
   const tone = eventTone(e.type, index)
   const [edgeId, devId] = e.device_id.split('/')
-  const hasPayload = !!e.payload && e.payload !== '{}'
+  // 只有载荷相对行内已有内容还有增量时才给展开入口：{"type":"device-booted"} 这种
+  // 展开就是它自己，给按钮等于骗点击（真实数据里 9/9 行都是这个形状）。
+  const hasPayload = payloadHasMore(e.payload)
   // 行内摘要只取载荷里的人话字段（label/message/reason/text）：机器 key 不进默认视图
   const summary = payloadLabel(e.payload)
   return (

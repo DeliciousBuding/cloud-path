@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { argsError, bucketEventDensity, cmdMeta, fmtDay } from '@/lib/format'
+import { argsError, bucketEventDensity, cmdMeta, fmtDay, payloadHasMore } from '@/lib/format'
 import { indexCapabilities, normalizeCapabilityDocs } from '@/lib/descriptor'
 import { catalogPayload } from '@/test/fixtures'
 
@@ -106,5 +106,29 @@ describe('bucketEventDensity（事件密度分桶）', () => {
   it('少于两条事件 → null（不画假图）', () => {
     expect(bucketEventDensity([], t0)).toBeNull()
     expect(bucketEventDensity([t0], t0 + 10)).toBeNull()
+  })
+})
+
+describe('payloadHasMore（载荷相对行内已展示内容是否还有增量）', () => {
+  it('只剩 type（徽标已经展示它）→ false：不给零增量的展开入口', () => {
+    // 真实数据里这就是最常见形状：{"type":"device-booted"} 展开后就是它自己
+    expect(payloadHasMore('{"type":"device-booted"}')).toBe(false)
+    expect(payloadHasMore('{}')).toBe(false)
+    expect(payloadHasMore('')).toBe(false)
+    expect(payloadHasMore(undefined)).toBe(false)
+  })
+
+  it('有 type 以外的键 → true，包括已被摘成行内摘要的 label（原始 JSON 是取证面，不替用户判断）', () => {
+    expect(payloadHasMore('{"type":"remind","label":"第 1 槽提醒"}')).toBe(true)
+    expect(payloadHasMore('{"type":"set","value":7}')).toBe(true)
+    expect(payloadHasMore('{"value":7}')).toBe(true)
+    expect(payloadHasMore('{"type":"x","label":""}')).toBe(true)
+  })
+
+  it('不是 JSON / 裸标量 / 非空数组 → true（原文本身就是证据）；空数组 → false', () => {
+    expect(payloadHasMore('RAW-SERIAL-GARBAGE')).toBe(true)
+    expect(payloadHasMore('"just-a-string"')).toBe(true)
+    expect(payloadHasMore('[1,2]')).toBe(true)
+    expect(payloadHasMore('[]')).toBe(false)
   })
 })
