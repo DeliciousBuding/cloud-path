@@ -205,8 +205,8 @@ func TestAppJobsPersistentProjectionSurvivesStop(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	h := &AppHost{running: map[string]*appInstanceRun{"sample": {
-		row: store.PluginInstanceRow{TenantID: 1, InstanceID: "sample"}, jobIDs: []string{"minute-tick"},
+	h := &AppHost{running: map[appInstKey]*appInstanceRun{{1, "sample"}: {
+		row: store.PluginInstanceRow{TenantID: 1, InstanceID: "sample"}, tenantStr: "1", jobIDs: []string{"minute-tick"},
 	}}}
 	srv.SetAppHost(h)
 	get := func() api.AppJobsView {
@@ -222,7 +222,7 @@ func TestAppJobsPersistentProjectionSurvivesStop(t *testing.T) {
 		t.Fatalf("active projection = %+v", active)
 	}
 	h.mu.Lock()
-	delete(h.running, "sample")
+	delete(h.running, appInstKey{1, "sample"})
 	h.mu.Unlock()
 	stopped := get()
 	if stopped.Running || len(stopped.Jobs) != 0 || len(stopped.Scheduled) != 1 || stopped.Scheduled[0].NextRunAt != 1700000060 {

@@ -191,8 +191,12 @@ v0.1 最小写面：
 | Server 重启 | 从 SQLite 恢复 desired/revision/projection；Edge 重连后完整重放 |
 | Edge 重启 | 从本地 applied cache 启动；用新 boot id 上报；Server 发送当前 desired |
 | 重复/倒序消息 | 幂等忽略；相同 revision 不同摘要拒绝并审计协议异常 |
-| 单实例应用失败 | 整个 revision 不确认；ack 返回逐实例结果；保留上一个完整已应用快照 |
-| 插件崩溃 | desired 不变；observed state/health/restart count 更新 |
+| 单实例应用失败 | 整个 revision 不确认；ack 返回逐实例结果；完整 revision 缓存保留旧值，但已成功的实例或运行绑定不作事务回滚 |
+| 旧进程退出未确认 | 保留待退出进程的所有权，返回失败；相同 desired 的重试先等待退出确认，不能走幂等捷径冒充成功 |
+| 实例文件保存失败 | 运行绑定可能已切换；旧实例文件与完整 revision 缓存不前进。重试复用已收敛运行态，再补写文件，不承诺完整运行态回滚 |
+| 删除实例失败 | 确认停止后才移除本地实例文件；停止、枚举或删除失败会拒绝整个 revision，包括空的删除全部快照 |
+| 完整 revision 缓存写盘失败 | 运行态和实例文件已应用，保留内存中的 applied 并记录 DEGRADED；此时不能声称离线恢复缓存已更新 |
+| 插件崩溃 | desired 不变；已应用管理配置在新会话发布为 HEALTHY 前恢复；恢复失败消耗既有重启预算，observed 如实更新 |
 | 权限扩大 | 未显式确认不生成新 desired revision |
 | 秘密已吊销 | reconcile 失败；不回落旧明文；审计只记录 handle 名称/版本 |
 

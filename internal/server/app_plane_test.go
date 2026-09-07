@@ -227,8 +227,8 @@ func TestAppBindingsJobsRuntimeProjection(t *testing.T) {
 	row := store.PluginInstanceRow{TenantID: 1, InstanceID: "box-1", PluginID: "app-x", Enabled: true}
 	srv.SetAppHost(&AppHost{
 		logger: slog.Default(),
-		running: map[string]*appInstanceRun{
-			"box-1": {
+		running: map[appInstKey]*appInstanceRun{
+			{1, "box-1"}: {
 				row:         row,
 				tenantStr:   "1",
 				reqByEntity: map[string]string{"alarm-1": "reminder-output"},

@@ -233,6 +233,28 @@ PluginInstallation（节点上某版本）
 
 默认一个安装版本启动一个共享进程，服务多个实例；需要更强隔离时可选择 `isolation: per-instance`。同一节点可并存两个版本用于滚动迁移，但同一 Instance 同时只绑定一个版本。
 
+### 实例身份
+
+实例的完整身份是 `(tenant_id, edge_id, instance_id)`，与 store 主键一致：instance id 只在租户内唯一，两个租户各自创建同名实例完全合法。因此任何运行态映射都必须带租户——进程面的实例记录、协议面的运行记录与开窗去重键、Application Runtime 的实例表都是如此。按裸 instance id 建键会让后写入的租户覆盖先写入的：被覆盖的实例静默不运行，而 revision 比较跨租户串味，看起来像“实例自己挂了”。
+
+Server 侧 AppHost 只收敛 `edge_id` 为伪 edge `server` 的期望态行。真实 Edge 的行由该 Edge 自己收敛；Server 再应用一遍就会在本地多跑一份属于 Edge 的实例。这条部署边界与「真实 Edge 不会收到 server 侧实例的期望态」对称，且进程面与协议面共用同一次过滤，不各自判断。
+
+### 实例重配置与会话恢复
+
+Host 收敛既有实例时，以完整定义比较版本、插件、隔离方式及配置；先验证候选会话与配置，再替换运行绑定。配置通过租户限定实例 ID 的 `ConfigureInstance` RPC 下发，不使用共享进程环境变量承载各实例的配置。`ConfigPath` / 保留键 `path` 仍只作本地引用，不传给插件，也不在此处引入文件读取或合并规则。
+
+Supervisor 自动重启后，Manager 已应用的实例配置会在新会话对外可用、状态变为 `HEALTHY` 之前恢复。恢复失败按既有崩溃预算重试，不能让未配置的新进程冒充成功；共享进程只恢复仍启用的实例，并保留显式清空配置的语义。裸 `CreateInstance` / `Start` 仍只负责传输启动；设备绑定与 Application 的结构化配置继续由各自上层协议调用方负责，不由 Manager 猜测或展开。
+
+切换运行绑定不是跨进程、实例文件和 revision 缓存的事务。旧进程退出超时会保留待清理记录，重复请求必须先完成退出确认；实例文件保存失败不回滚已运行的新进程，而是在相同 desired 重试时补齐持久化。失败期间不推进完整 applied revision；详见[控制面故障恢复](control-plane-sync.md#8-故障与恢复)。
+
+### 客户端寻址
+
+map 遍历顺序不是路由规则。插件级查询 `DriverClient(pluginID)` / `ApplicationClient(pluginID)` 只服务尚未持有实例身份的既有调用方：当该插件所有已启用绑定都落在同一个进程上时返回该进程的会话客户端，否则以 `ErrAmbiguousInstance` 失败关闭，不静默挑选一个版本。共享进程内的多个实例仍然无歧义；并存两个版本时必须改用实例级查询。
+
+`DriverClientForInstance(tenant, id)` / `ApplicationClientForInstance(tenant, id)` 解析唯一一条已启用的租户/实例绑定，不向其他版本、进程或租户回落；实例被禁用时返回 `ErrInstanceNotFound`，而不是交给同插件的兄弟实例。两类客户端都绑定当前会话，进程重启后必须重新解析。
+
+上层协议按收敛定义解析进程，不按插件 ID 匹配。AppHost 在把客户端交给 Application Runtime 之前，先核对该实例的进程快照处于启用态，且插件 ID 与版本等于本次期望值；进程面尚未收敛到期望版本时拒绝下发，避免把新版本的 `Initialize` / `ConfigureInstance` 送进陈旧进程。同理，进程面 apply 未成功的实例不会在协议面被晋升为运行实例。
+
 ## 11. 数据和升级
 
 - Core 数据迁移与插件数据迁移分开。

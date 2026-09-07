@@ -150,7 +150,7 @@ func TestScheduledJobStoreLifecycle(t *testing.T) {
 func newSchedulerTestHost(t *testing.T, srv *Server) *AppHost {
 	t.Helper()
 	rt, err := appruntime.NewRuntime(appruntime.RuntimeOptions{
-		Dialer: func(string) (sdkapplication.ApplicationClient, error) {
+		Dialer: func(appruntime.InstanceSpec) (sdkapplication.ApplicationClient, error) {
 			return nil, errors.New("no app in scheduler unit test")
 		},
 		Executor: noopEffectExecutor{},

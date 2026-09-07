@@ -27,7 +27,7 @@ type Runtime struct {
 	mu        sync.Mutex
 	ctx       context.Context
 	cancel    context.CancelFunc
-	instances map[string]*instanceRecord
+	instances map[string]*instanceRecord // instanceKey(tenant, id) -> record
 	closed    bool
 }
 
@@ -98,12 +98,13 @@ func (r *Runtime) StartInstance(ctx context.Context, spec InstanceSpec) (*Instan
 		r.mu.Unlock()
 		return nil, ErrRuntimeClosed
 	}
-	if _, ok := r.instances[spec.PluginInstanceID]; ok {
+	key := instanceKey(spec.TenantID, spec.PluginInstanceID)
+	if _, ok := r.instances[key]; ok {
 		r.mu.Unlock()
-		return nil, fmt.Errorf("%w: %s", ErrInstanceExists, spec.PluginInstanceID)
+		return nil, fmt.Errorf("%w: %s/%s", ErrInstanceExists, spec.TenantID, spec.PluginInstanceID)
 	}
 	rec := newInstanceRecord(spec, r.opts.EventQueueSize)
-	r.instances[spec.PluginInstanceID] = rec
+	r.instances[key] = rec
 	r.mu.Unlock()
 
 	if err := r.startRecord(ctx, rec); err != nil {
@@ -115,7 +116,7 @@ func (r *Runtime) StartInstance(ctx context.Context, spec InstanceSpec) (*Instan
 		// 失败即回滚记录：调用方拿到错误快照后，下次 StartInstance 必须能
 		// 直接重建（AppHost reconcile 每轮重试，占位记录会让它永远撞
 		// ErrInstanceExists——2026-09-05 D3 真板实测）。
-		r.forgetInstance(spec.PluginInstanceID)
+		r.forgetInstance(spec.TenantID, spec.PluginInstanceID)
 		return rec.snapshot(), err
 	}
 	return rec.snapshot(), nil
@@ -135,7 +136,7 @@ func newInstanceRecord(spec InstanceSpec, queueSize int) *instanceRecord {
 }
 
 func (r *Runtime) startRecord(ctx context.Context, rec *instanceRecord) error {
-	cli, err := r.opts.Dialer(rec.spec.PluginID)
+	cli, err := r.opts.Dialer(rec.spec)
 	if err != nil {
 		return fmt.Errorf("dial plugin %s: %w", rec.spec.PluginID, err)
 	}
@@ -228,7 +229,7 @@ func (r *Runtime) startRecord(ctx context.Context, rec *instanceRecord) error {
 	// （如 AppHost 分钟循环驱动的 descriptor job）——没有这个首事件，此类
 	// 调用产生的 effect 会被「无 writer」路径静默丢弃（2026-09-05 button-
 	// indicator bootstrap 实测：heartbeat 声明在无人按键时永远无法送达）。
-	_ = r.DispatchEvent(context.Background(), rec.spec.PluginInstanceID,
+	_ = r.DispatchEvent(context.Background(), rec.spec.TenantID, rec.spec.PluginInstanceID,
 		&sdkapplication.ApplicationEvent{Union: &sdkapplication.InstanceLifecycle{State: "running"}})
 	return nil
 }
@@ -333,8 +334,8 @@ func (rec *instanceRecord) snapshot() *Instance {
 }
 
 // GetInstance returns a point-in-time snapshot of one instance.
-func (r *Runtime) GetInstance(instanceID string) (*Instance, error) {
-	rec, err := r.instance(instanceID)
+func (r *Runtime) GetInstance(tenantID, instanceID string) (*Instance, error) {
+	rec, err := r.instance(tenantID, instanceID)
 	if err != nil {
 		return nil, err
 	}
@@ -342,8 +343,8 @@ func (r *Runtime) GetInstance(instanceID string) (*Instance, error) {
 }
 
 // Describe returns the plugin descriptor recorded during startup.
-func (r *Runtime) Describe(instanceID string) (*sdkapplication.ApplicationDescriptor, error) {
-	rec, err := r.instance(instanceID)
+func (r *Runtime) Describe(tenantID, instanceID string) (*sdkapplication.ApplicationDescriptor, error) {
+	rec, err := r.instance(tenantID, instanceID)
 	if err != nil {
 		return nil, err
 	}
@@ -355,11 +356,11 @@ func (r *Runtime) Describe(instanceID string) (*sdkapplication.ApplicationDescri
 // DispatchEvent enqueues one event for the instance's event stream. It blocks
 // while the queue is full (backpressure) and returns on ctx cancellation or
 // instance shutdown.
-func (r *Runtime) DispatchEvent(ctx context.Context, instanceID string, event *sdkapplication.ApplicationEvent) error {
+func (r *Runtime) DispatchEvent(ctx context.Context, tenantID, instanceID string, event *sdkapplication.ApplicationEvent) error {
 	if event == nil {
 		return fmt.Errorf("%w: nil event", ErrInvalidEffect)
 	}
-	rec, err := r.instance(instanceID)
+	rec, err := r.instance(tenantID, instanceID)
 	if err != nil {
 		return err
 	}
@@ -389,8 +390,8 @@ func (r *Runtime) DispatchEvent(ctx context.Context, instanceID string, event *s
 
 // HandleRequest forwards an HTTP subroute request to the instance's plugin and
 // injects the authoritative tenant/instance context.
-func (r *Runtime) HandleRequest(ctx context.Context, instanceID string, req *sdkapplication.PluginHTTPRequest) (*sdkapplication.PluginHTTPResponse, error) {
-	rec, err := r.instance(instanceID)
+func (r *Runtime) HandleRequest(ctx context.Context, tenantID, instanceID string, req *sdkapplication.PluginHTTPRequest) (*sdkapplication.PluginHTTPResponse, error) {
+	rec, err := r.instance(tenantID, instanceID)
 	if err != nil {
 		return nil, err
 	}
@@ -420,8 +421,8 @@ func (r *Runtime) HandleRequest(ctx context.Context, instanceID string, req *sdk
 }
 
 // RunJob forwards a job invocation to the instance's plugin.
-func (r *Runtime) RunJob(ctx context.Context, instanceID string, req *sdkapplication.RunJobRequest) (*sdkapplication.RunJobResponse, error) {
-	rec, err := r.instance(instanceID)
+func (r *Runtime) RunJob(ctx context.Context, tenantID, instanceID string, req *sdkapplication.RunJobRequest) (*sdkapplication.RunJobResponse, error) {
+	rec, err := r.instance(tenantID, instanceID)
 	if err != nil {
 		return nil, err
 	}
@@ -437,8 +438,8 @@ func (r *Runtime) RunJob(ctx context.Context, instanceID string, req *sdkapplica
 }
 
 // Health forwards a health probe to the instance's plugin.
-func (r *Runtime) Health(ctx context.Context, instanceID string) (*sdkapplication.HealthResponse, error) {
-	rec, err := r.instance(instanceID)
+func (r *Runtime) Health(ctx context.Context, tenantID, instanceID string) (*sdkapplication.HealthResponse, error) {
+	rec, err := r.instance(tenantID, instanceID)
 	if err != nil {
 		return nil, err
 	}
@@ -449,8 +450,8 @@ func (r *Runtime) Health(ctx context.Context, instanceID string) (*sdkapplicatio
 }
 
 // StopInstance gracefully shuts one instance down.
-func (r *Runtime) StopInstance(ctx context.Context, instanceID, reason string, grace time.Duration) error {
-	rec, err := r.instance(instanceID)
+func (r *Runtime) StopInstance(ctx context.Context, tenantID, instanceID, reason string, grace time.Duration) error {
+	rec, err := r.instance(tenantID, instanceID)
 	if err != nil {
 		return err
 	}
@@ -462,8 +463,8 @@ func (r *Runtime) StopInstance(ctx context.Context, instanceID, reason string, g
 // RPC 是参考应用的进程退出信号，对共享进程上的任一实例发送都会连带
 // 杀死全部兄弟实例（2026-09-05 jp1 生产实测：删除兄弟实例后 box-prod
 // 一起 died → state=failed 且无人自愈）。
-func (r *Runtime) StopInstanceStreamOnly(instanceID string) error {
-	rec, err := r.instance(instanceID)
+func (r *Runtime) StopInstanceStreamOnly(tenantID, instanceID string) error {
+	rec, err := r.instance(tenantID, instanceID)
 	if err != nil {
 		return err
 	}
@@ -483,7 +484,7 @@ func (r *Runtime) StopInstanceStreamOnly(instanceID string) error {
 	rec.state = StateStopped
 	rec.mu.Unlock()
 	// 与 stopRecord 同语义：停机即移除记录，保证 Stop→Start 重建可行
-	r.forgetInstance(instanceID)
+	r.forgetInstance(tenantID, instanceID)
 	return nil
 }
 
@@ -515,7 +516,7 @@ func (r *Runtime) stopRecord(ctx context.Context, rec *instanceRecord, reason st
 	rec.mu.Lock()
 	if rec.state == StateStopped {
 		rec.mu.Unlock()
-		r.forgetInstance(rec.spec.PluginInstanceID)
+		r.forgetInstance(rec.spec.TenantID, rec.spec.PluginInstanceID)
 		return nil
 	}
 	if rec.state != StateStopping {
@@ -551,23 +552,29 @@ func (r *Runtime) stopRecord(ctx context.Context, rec *instanceRecord, reason st
 	// D3 真板实测：首次启动失败后每 15s 重试全部 "instance already
 	// exists"——此前 box-prod 的自愈实际靠部署重启清空内存态，heal 路径
 	// 从未被走过）。
-	r.forgetInstance(rec.spec.PluginInstanceID)
+	r.forgetInstance(rec.spec.TenantID, rec.spec.PluginInstanceID)
 	return shutdownErr
 }
 
+// instanceKey is the runtime identity of one instance. Instance IDs are unique
+// only within a tenant -- the store primary key is (tenant_id, edge_id,
+// instance_id) -- so protocol state must never be keyed by bare instance ID.
+// The separator is NUL, mirroring pluginhost.instKey; errors render tenant/id.
+func instanceKey(tenantID, instanceID string) string { return tenantID + "\x00" + instanceID }
+
 // forgetInstance 幂等地移除实例记录（已不存在时 no-op）。
-func (r *Runtime) forgetInstance(instanceID string) {
+func (r *Runtime) forgetInstance(tenantID, instanceID string) {
 	r.mu.Lock()
-	delete(r.instances, instanceID)
+	delete(r.instances, instanceKey(tenantID, instanceID))
 	r.mu.Unlock()
 }
 
-func (r *Runtime) instance(instanceID string) (*instanceRecord, error) {
+func (r *Runtime) instance(tenantID, instanceID string) (*instanceRecord, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	rec, ok := r.instances[instanceID]
+	rec, ok := r.instances[instanceKey(tenantID, instanceID)]
 	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrInstanceNotFound, instanceID)
+		return nil, fmt.Errorf("%w: %s/%s", ErrInstanceNotFound, tenantID, instanceID)
 	}
 	return rec, nil
 }
