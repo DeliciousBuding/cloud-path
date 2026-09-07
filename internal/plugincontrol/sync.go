@@ -312,6 +312,10 @@ func normalizeResults(instances []api.PluginDesiredInstanceData, results []api.P
 }
 
 func allFailed(instances []api.PluginDesiredInstanceData, detail string) []api.PluginApplyResultData {
+	if len(instances) == 0 {
+		// Snapshot-wide failures (including delete-all) still need a diagnostic.
+		return []api.PluginApplyResultData{{Status: api.PluginAckFailed, Detail: SanitizeDetail(detail)}}
+	}
 	out := make([]api.PluginApplyResultData, 0, len(instances))
 	for _, inst := range instances {
 		out = append(out, api.PluginApplyResultData{

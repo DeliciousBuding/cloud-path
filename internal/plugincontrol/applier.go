@@ -44,6 +44,9 @@ func (h *Host) ApplySnapshot(ctx context.Context, tenant string, instances []api
 		// 让 Server 能看清到底哪些实例没应用上。
 		h.opts.Logger.Warn("plugin installations unavailable; snapshot not applied",
 			"tenant", tenant, "err", SanitizeDetail(err.Error()))
+		if len(instances) == 0 {
+			return nil, err // An empty deletion snapshot must not turn failure into success.
+		}
 		return allFailed(instances, err.Error()), nil
 	}
 	present := make(map[string]bool, len(instances))
@@ -54,8 +57,7 @@ func (h *Host) ApplySnapshot(ctx context.Context, tenant string, instances []api
 		}
 		results = append(results, h.applyOne(ctx, tenant, inst))
 	}
-	h.retireAbsent(tenant, present)
-	return results, nil
+	return results, h.retireAbsent(ctx, tenant, present)
 }
 
 // applyOne 应用单个期望实例：secret 双校验 → 收敛 Manager → 成功后才持久化。
@@ -139,33 +141,39 @@ func (h *Host) applyOne(ctx context.Context, tenant string, inst api.PluginDesir
 }
 
 // retireAbsent 停用并移除快照里已不存在的本地实例（Server 侧已删除）。
-func (h *Host) retireAbsent(tenant string, present map[string]bool) {
+func (h *Host) retireAbsent(ctx context.Context, tenant string, present map[string]bool) error {
 	states, err := h.opts.Store.ListTenant(tenant)
 	if err != nil {
-		h.opts.Logger.Warn("list local plugin instances failed", "tenant", tenant, "err", SanitizeDetail(err.Error()))
-		return
+		return fmt.Errorf("list local plugin instances: %w", err)
 	}
 	for _, state := range states {
 		if present[state.InstanceID] {
 			continue
 		}
-		if err := h.opts.Manager.Disable(tenant, state.InstanceID); err != nil && !errors.Is(err, pluginhost.ErrInstanceNotFound) {
-			h.opts.Logger.Warn("disable retired plugin instance failed",
-				"instance", state.InstanceID, "err", SanitizeDetail(err.Error()))
+		isolation, err := ParseIsolation(state.Isolation)
+		if err != nil {
+			return err
 		}
-		// 默认保留插件数据（不 purge）。
+		// Keep the replay file until the last process is confirmed stopped.
+		// Disable alone is asynchronous and cannot justify an applied ACK.
+		spec := pluginhost.InstanceSpec{
+			ID: state.InstanceID, Tenant: tenant, PluginID: state.PluginID,
+			Version: state.Version, Config: configForState(state), Isolation: isolation,
+		}
+		if err := h.reconcileInstance(ctx, spec, false); err != nil {
+			return fmt.Errorf("retire instance %s: %w", state.InstanceID, err)
+		}
+		// Preserve plugin data; removing a definition is not a purge.
 		if _, err := h.opts.Manager.Remove(tenant, state.InstanceID); err != nil && !errors.Is(err, pluginhost.ErrInstanceNotFound) {
-			h.opts.Logger.Warn("remove retired plugin instance failed",
-				"instance", state.InstanceID, "err", SanitizeDetail(err.Error()))
+			return fmt.Errorf("remove retired instance %s: %w", state.InstanceID, err)
 		}
 		if err := h.opts.Store.Delete(tenant, state.InstanceID); err != nil {
-			h.opts.Logger.Warn("delete retired plugin instance state failed",
-				"instance", state.InstanceID, "err", SanitizeDetail(err.Error()))
-			continue
+			return fmt.Errorf("delete retired instance state %s: %w", state.InstanceID, err)
 		}
 		h.opts.Logger.Info("plugin instance retired by server snapshot",
 			"tenant", tenant, "instance", state.InstanceID, "data", "preserved")
 	}
+	return nil
 }
 
 // Observe 返回本地安装物与实例实际态（Edge 是实际态的唯一观测源）。

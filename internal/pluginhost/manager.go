@@ -189,9 +189,11 @@ type Manager struct {
 	installations map[string]Installation
 	instances     map[string]*instanceRecord
 	procs         map[string]*procGroup
+	retiring      map[*procGroup]string // detached groups awaiting exit, keyed to the owning instance
 
 	healthDone chan struct{}
 	closeOnce  sync.Once
+	closeErr   error
 }
 
 // instanceRecord is the Manager-side bookkeeping for one instance. It is
@@ -257,6 +259,7 @@ func NewManager(opts ManagerOptions) *Manager {
 		installations: map[string]Installation{},
 		instances:     map[string]*instanceRecord{},
 		procs:         map[string]*procGroup{},
+		retiring:      map[*procGroup]string{},
 		healthDone:    make(chan struct{}),
 	}
 	go m.healthLoop()
@@ -270,25 +273,28 @@ func (m *Manager) Close() error {
 		m.cancel() // Interrupt an in-flight reconcile before waiting for it.
 		m.ops.Lock()
 		m.mu.Lock()
-		groups := make([]*procGroup, 0, len(m.procs))
+		groups := make(map[*procGroup]struct{}, len(m.procs)+len(m.retiring))
 		for _, g := range m.procs {
-			groups = append(groups, g)
+			groups[g] = struct{}{}
+		}
+		for g := range m.retiring {
+			groups[g] = struct{}{}
 		}
 		m.procs = map[string]*procGroup{}
+		m.retiring = map[*procGroup]string{}
 		m.mu.Unlock()
 		m.ops.Unlock()
 
-		m.cancel()
-		for _, g := range groups {
+		for g := range groups {
 			g.cancel()
 		}
 
 		<-m.healthDone
-		for _, g := range groups {
-			_ = m.stopProcGroup(g)
+		for g := range groups {
+			m.closeErr = errors.Join(m.closeErr, m.stopProcGroup(g))
 		}
 	})
-	return nil
+	return m.closeErr
 }
 
 // RegisterInstallation records one installed plugin version. It fails if the
@@ -368,6 +374,11 @@ func (m *Manager) ReconcileInstance(ctx context.Context, spec InstanceSpec, enab
 		inst.Isolation = IsolationShared
 	}
 	key := instKey(inst.Tenant, inst.ID)
+	// A prior attempt may have switched bindings but timed out waiting for
+	// retirement. The unchanged-spec fast path must not bypass that failure.
+	if err := m.retireProcGroups(key); err != nil {
+		return err
+	}
 	rec := &instanceRecord{inst: inst, enabled: enabled, procKey: procKeyFor(inst), health: HealthUnknown}
 
 	m.mu.Lock()
@@ -383,7 +394,7 @@ func (m *Manager) ReconcileInstance(ctx context.Context, spec InstanceSpec, enab
 		}
 		stop := m.unusedProcGroupLocked(previous)
 		m.mu.Unlock()
-		return m.stopProcGroup(stop)
+		return m.retireProcGroups(key, stop)
 	}
 	if _, ok := m.installations[installationKey(inst.PluginID, inst.Version)]; !ok {
 		m.mu.Unlock()
@@ -481,7 +492,7 @@ func (m *Manager) ReconcileInstance(ctx context.Context, spec InstanceSpec, enab
 			}
 		}
 		if created {
-			err = errors.Join(err, m.stopProcGroup(g))
+			err = errors.Join(err, m.retireProcGroups(key, g))
 		}
 		return fmt.Errorf("reconcile instance %s/%s: %w", inst.Tenant, inst.ID, err)
 	}
@@ -496,7 +507,7 @@ func (m *Manager) ReconcileInstance(ctx context.Context, spec InstanceSpec, enab
 		stopReplaced = m.unusedProcGroupLocked(replaced)
 	}
 	m.mu.Unlock()
-	return errors.Join(m.stopProcGroup(stopPrevious), m.stopProcGroup(stopReplaced))
+	return m.retireProcGroups(key, stopPrevious, stopReplaced)
 }
 
 func sameInstance(a, b Instance) bool {
@@ -523,6 +534,36 @@ func (m *Manager) unusedProcGroupLocked(g *procGroup) *procGroup {
 		delete(m.procs, g.key)
 	}
 	return g
+}
+
+// retireProcGroups retains detached process ownership until exit is confirmed.
+// An error can leave the new binding active, but retry/Close must still finish
+// stopping its predecessor before the same instance can be acknowledged.
+func (m *Manager) retireProcGroups(owner string, groups ...*procGroup) error {
+	m.mu.Lock()
+	for _, g := range groups {
+		if g != nil {
+			m.retiring[g] = owner
+		}
+	}
+	var pending []*procGroup
+	for g, key := range m.retiring {
+		if key == owner {
+			pending = append(pending, g)
+		}
+	}
+	m.mu.Unlock()
+	var result error
+	for _, g := range pending {
+		if err := m.stopProcGroup(g); err != nil {
+			result = errors.Join(result, err)
+			continue
+		}
+		m.mu.Lock()
+		delete(m.retiring, g)
+		m.mu.Unlock()
+	}
+	return result
 }
 
 func (m *Manager) stopProcGroup(g *procGroup) error {

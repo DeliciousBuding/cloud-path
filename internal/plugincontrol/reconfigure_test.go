@@ -226,3 +226,234 @@ func TestApplySnapshotLegacyManagerDoesNotClaimReconfigure(t *testing.T) {
 		t.Fatalf("unsupported reconfigure persisted: %v", err)
 	}
 }
+
+// A stopped child whose Wait confirmation is delayed must not be forgotten.
+// The fake child still speaks the real authenticated RPC protocol; only the
+// OS exit confirmation is controlled, with no production devices involved.
+type delayedExitRunner struct {
+	inner   *pluginharness.FakeRunner
+	release <-chan struct{}
+}
+
+func (r *delayedExitRunner) Start(spec pluginhost.CommandSpec) (pluginhost.Process, error) {
+	p, err := r.inner.Start(spec)
+	if err != nil || r.inner.StartedCount() != 1 {
+		return p, err
+	}
+	return &delayedExitProcess{Process: p, release: r.release}, nil
+}
+
+type delayedExitProcess struct {
+	pluginhost.Process
+	release <-chan struct{}
+}
+
+func (p *delayedExitProcess) Wait() error {
+	err := p.Process.Wait()
+	<-p.release
+	return err
+}
+
+func TestReconfigureWaitsForRetiredProcessOnRetry(t *testing.T) {
+	for _, change := range []string{"version", "disable", "delete"} {
+		t.Run(change, func(t *testing.T) {
+			release := make(chan struct{})
+			var releaseOnce sync.Once
+			unblock := func() { releaseOnce.Do(func() { close(release) }) }
+			defer unblock()
+			runner := &delayedExitRunner{inner: pluginharness.NewFakeRunner(), release: release}
+			manager := pluginhost.NewManager(pluginhost.ManagerOptions{Runner: runner, HandshakeTimeout: time.Second, ShutdownTimeout: 10 * time.Millisecond})
+			t.Cleanup(func() { _ = manager.Close() })
+			host, store, pluginsDir, lockPath := newApplierHost(t, manager, nil)
+			syncer, cachePath := newTestSyncer(t, host)
+			old := api.PluginDesiredInstanceData{InstanceID: "worker", PluginID: testPluginID, Version: "0.1.0", Enabled: true}
+			first := api.PluginDesiredData{Revision: 1, SnapshotDigest: "revision-one", Instances: []api.PluginDesiredInstanceData{old}}
+			if ack := syncer.HandleDesired(context.Background(), first); ack.Status != api.PluginAckApplied {
+				t.Fatalf("initial ACK=%+v", ack)
+			}
+			statePath := filepath.Join(store.Dir, "tenant-a", "worker.json")
+			oldState, err := os.ReadFile(statePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			oldCache, err := os.ReadFile(cachePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			next := old
+			wantLaunches := 1
+			if change == "version" {
+				writeTestPlugin(t, pluginsDir, lockPath, "0.2.0", nil, nil)
+				next.Version = "0.2.0"
+				wantLaunches = 2
+			} else {
+				next.Enabled = false
+			}
+			desired := api.PluginDesiredData{Revision: 2, SnapshotDigest: "revision-two", Instances: []api.PluginDesiredInstanceData{next}}
+			if change == "delete" {
+				desired.Instances = nil
+			}
+			for attempt := 1; attempt <= 2; attempt++ {
+				ack := syncer.HandleDesired(context.Background(), desired)
+				if ack.Status != api.PluginAckFailed || syncer.AppliedRevision() != 1 {
+					t.Fatalf("attempt %d acknowledged before old exit was confirmed: ACK=%+v applied=%d", attempt, ack, syncer.AppliedRevision())
+				}
+				for path, want := range map[string][]byte{statePath: oldState, cachePath: oldCache} {
+					got, err := os.ReadFile(path)
+					if err != nil || string(got) != string(want) {
+						t.Fatalf("attempt %d rewrote durable state/cache: %v", attempt, err)
+					}
+				}
+			}
+			// A runtime change may already have happened: failure is not rollback.
+			if change != "delete" {
+				if snap, err := manager.Snapshot("tenant-a", "worker"); err != nil || snap.Version != next.Version || snap.Enabled != next.Enabled {
+					t.Fatalf("unexpected forward-converged runtime: %+v %v", snap, err)
+				}
+			}
+			unblock()
+			if ack := syncer.HandleDesired(context.Background(), desired); ack.Status != api.PluginAckApplied || syncer.AppliedRevision() != 2 {
+				t.Fatalf("same revision did not finish after confirmed exit: %+v", ack)
+			}
+			if runner.inner.StartedCount() != wantLaunches {
+				t.Fatalf("retry needlessly launched another process: %d", runner.inner.StartedCount())
+			}
+			saved, err := store.Load("tenant-a", "worker")
+			if change == "delete" {
+				if !errors.Is(err, plugincontrol.ErrNotFound) {
+					t.Fatalf("confirmed deletion left state behind: %+v %v", saved, err)
+				}
+			} else if err != nil || saved.Version != next.Version || saved.Enabled != next.Enabled {
+				t.Fatalf("successful retry did not persist runtime: %+v %v", saved, err)
+			}
+		})
+	}
+}
+
+// Force Store.Save to fail only after the real Manager has switched. This does
+// not add production hooks or replace the Store/Syncer with mocks.
+type afterReconcileManager struct {
+	*pluginhost.Manager
+	after func()
+}
+
+func (m *afterReconcileManager) ReconcileInstance(ctx context.Context, spec pluginhost.InstanceSpec, enabled bool) error {
+	if err := m.Manager.ReconcileInstance(ctx, spec, enabled); err != nil {
+		return err
+	}
+	if m.after != nil {
+		m.after()
+	}
+	return nil
+}
+
+func TestReconfigureStoreFailureRetriesWithoutRuntimeRollbackClaim(t *testing.T) {
+	runner := pluginharness.NewFakeRunner()
+	manager := &afterReconcileManager{Manager: pluginhost.NewManager(pluginhost.ManagerOptions{Runner: runner, HandshakeTimeout: time.Second, ShutdownTimeout: 100 * time.Millisecond})}
+	t.Cleanup(func() { _ = manager.Close() })
+	host, store, pluginsDir, lockPath := newApplierHost(t, manager, nil)
+	syncer, cachePath := newTestSyncer(t, host)
+	old := api.PluginDesiredInstanceData{InstanceID: "worker", PluginID: testPluginID, Version: "0.1.0", Enabled: true, Config: map[string]string{"mode": "initial"}}
+	if ack := syncer.HandleDesired(context.Background(), api.PluginDesiredData{Revision: 1, SnapshotDigest: "revision-one", Instances: []api.PluginDesiredInstanceData{old}}); ack.Status != api.PluginAckApplied {
+		t.Fatalf("initial ACK=%+v", ack)
+	}
+	stateDir := store.Dir
+	statePath := filepath.Join(stateDir, "tenant-a", "worker.json")
+	oldState, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldCache, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blockedDir := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(blockedDir, []byte("block Save"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager.after = func() { store.Dir = blockedDir }
+	writeTestPlugin(t, pluginsDir, lockPath, "0.2.0", nil, nil)
+	next := old
+	next.Version = "0.2.0"
+	next.Config = map[string]string{"mode": "updated"}
+	desired := api.PluginDesiredData{Revision: 2, SnapshotDigest: "revision-two", Instances: []api.PluginDesiredInstanceData{next}}
+	if ack := syncer.HandleDesired(context.Background(), desired); ack.Status != api.PluginAckFailed || syncer.AppliedRevision() != 1 {
+		t.Fatalf("failed Store.Save was acknowledged: %+v", ack)
+	}
+	for path, want := range map[string][]byte{statePath: oldState, cachePath: oldCache} {
+		got, err := os.ReadFile(path)
+		if err != nil || string(got) != string(want) {
+			t.Fatalf("failed save rewrote last persisted state/cache: %v", err)
+		}
+	}
+	if snap, err := manager.Snapshot("tenant-a", "worker"); err != nil || snap.Version != next.Version || !reflect.DeepEqual(snap.Config, next.Config) || !runner.Started()[0].Exited() {
+		t.Fatalf("test did not reach switched runtime before Save failed: %+v %v", snap, err)
+	}
+	manager.after = nil
+	store.Dir = stateDir
+	if ack := syncer.HandleDesired(context.Background(), desired); ack.Status != api.PluginAckApplied || syncer.AppliedRevision() != 2 {
+		t.Fatalf("same failed revision could not be retried: %+v", ack)
+	}
+	if runner.StartedCount() != 2 {
+		t.Fatalf("durability-only retry restarted runtime: %d", runner.StartedCount())
+	}
+	if saved, err := store.Load("tenant-a", "worker"); err != nil || saved.Version != next.Version || !reflect.DeepEqual(saved.Config, next.Config) {
+		t.Fatalf("retry failed to persist matching runtime: %+v %v", saved, err)
+	}
+}
+
+func TestEmptySnapshotFailuresDoNotAdvanceRevision(t *testing.T) {
+	for _, failure := range []string{"registry", "state-read"} {
+		t.Run(failure, func(t *testing.T) {
+			runner := pluginharness.NewFakeRunner()
+			manager := pluginhost.NewManager(pluginhost.ManagerOptions{Runner: runner, HandshakeTimeout: time.Second, ShutdownTimeout: 100 * time.Millisecond})
+			t.Cleanup(func() { _ = manager.Close() })
+			host, store, _, lockPath := newApplierHost(t, manager, nil)
+			syncer, _ := newTestSyncer(t, host)
+			old := api.PluginDesiredInstanceData{InstanceID: "worker", PluginID: testPluginID, Version: "0.1.0", Enabled: true}
+			if ack := syncer.HandleDesired(context.Background(), api.PluginDesiredData{Revision: 1, SnapshotDigest: "one", Instances: []api.PluginDesiredInstanceData{old}}); ack.Status != api.PluginAckApplied {
+				t.Fatalf("initial ACK=%+v", ack)
+			}
+			lock, err := os.ReadFile(lockPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			stateDir := store.Dir
+			if failure == "registry" {
+				if err := os.WriteFile(lockPath, []byte("invalid: ["), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				store.Dir = t.TempDir()
+				tenantDir := filepath.Join(store.Dir, "tenant-a")
+				if err := os.Mkdir(tenantDir, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(tenantDir, "worker.json"), []byte("invalid JSON"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			desired := api.PluginDesiredData{Revision: 2, SnapshotDigest: "empty"}
+			ack := syncer.HandleDesired(context.Background(), desired)
+			if ack.Status != api.PluginAckFailed || syncer.AppliedRevision() != 1 || len(ack.Results) != 1 || ack.Results[0].Status != api.PluginAckFailed || ack.Results[0].Detail == "" {
+				t.Fatalf("empty snapshot lost failure or diagnostic: %+v applied=%d", ack, syncer.AppliedRevision())
+			}
+			store.Dir = stateDir
+			if err := os.WriteFile(lockPath, lock, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := store.Load("tenant-a", "worker"); err != nil {
+				t.Fatalf("failed retirement removed state: %v", err)
+			}
+			if runner.Started()[0].Exited() {
+				t.Fatal("failed preflight stopped the existing process")
+			}
+			if ack := syncer.HandleDesired(context.Background(), desired); ack.Status != api.PluginAckApplied || syncer.AppliedRevision() != 2 {
+				t.Fatalf("empty snapshot retry failed: %+v", ack)
+			}
+			if _, err := store.Load("tenant-a", "worker"); !errors.Is(err, plugincontrol.ErrNotFound) {
+				t.Fatalf("retry did not delete state: %v", err)
+			}
+		})
+	}
+}
