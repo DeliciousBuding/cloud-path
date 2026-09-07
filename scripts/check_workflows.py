@@ -147,6 +147,7 @@ CI_REQUIRED = (
     "pnpm build",
     "public_audit.py",
     "check_links.py",
+    "check_contract.py",
     "setup-go",
     "setup-node",
     "pnpm/action-setup",
@@ -305,6 +306,7 @@ jobs:
       - run: pnpm build
       - run: python scripts/public_audit.py
       - run: python scripts/check_links.py
+      - run: python scripts/check_contract.py
 """
 
 

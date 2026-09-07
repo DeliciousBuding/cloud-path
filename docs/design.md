@@ -347,6 +347,7 @@ devices 为空），运行中不热加载（P1 有意为之：热加载与串口
 | Origin 策略 | `internal/server/origin_test.go` | 开发策略放行 localhost/无 Origin、拒绝外站；显式清单生效且防后缀伪装 |
 | 边缘运行时 | `internal/edge/{config_test.go,wsclient_test.go}` | 配置默认值/`${ENV}` 展开/各类错误、离线只缓冲事件、在线入队、队满回落缓冲、缓冲溢出丢最旧、回放（含部分回放）、状态 diff 抑制与心跳兜底、重连强制补报 |
 | 前端 | `pnpm exec tsc --noEmit` | 类型门禁（`strict` + `noUnusedLocals`） |
+| 契约 | `scripts/check_contract.py` | Go `internal/api/types.go` ↔ TS `webui/src/lib/types.ts` 同名类型的 JSON 字段集合一致（含 `extends` 平面化）；`--self-test` 是解析器红队自检 |
 | e2e | 真机手工清单 | 见下；证据记录在 `.local/STATE.md`（不进公开仓库） |
 
 真机验收清单（一台接串口的设备即可跑完）：
@@ -402,3 +403,4 @@ devices 为空），运行中不热加载（P1 有意为之：热加载与串口
 3. **私有信息不入库**：构想、设备清单、验证证据只写 `.local/`（gitignored）。
 4. **契约三处同步**：`internal/api/types.go` ↔ `webui/src/lib/types.ts` ↔ 本文档的 WS 信封表；
    HTTP 路由与 DTO 的文档家是 `api.md`。同一条契约只允许一个文档落点，别处只放指针。
+   代码那一半由 `scripts/check_contract.py` 机器守（CI `public-boundary`）：同名类型字段集不一致就失败。
