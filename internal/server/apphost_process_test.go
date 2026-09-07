@@ -105,6 +105,9 @@ func (s *appRoutingServer) HandleEvents(ctx context.Context, reader application.
 	}
 }
 func (s *appRoutingServer) RunJob(_ context.Context, req *application.RunJobRequest) (*application.RunJobResponse, error) {
+	if req.ArgsJSON == `{"rpc_reject":true}` {
+		return nil, status.Errorf(status.CodeNotFound, "no such request")
+	}
 	if req.ArgsJSON == `{"reject":true}` {
 		return &application.RunJobResponse{Status: status.Errorf(status.CodeInvalidArgument, "rejected argument")}, nil
 	}

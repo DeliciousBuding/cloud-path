@@ -91,6 +91,7 @@ func TestManualApplicationActionsAreExplicitScopedAndHonest(t *testing.T) {
 		{"trailing request", path, valid + " {}", admin, 400},
 		{"array arguments", path, `{"args_json":"[]","idempotency_key":"x"}`, admin, 400},
 		{"plugin rejection", path, `{"args_json":"{\"reject\":true}","idempotency_key":"reject"}`, admin, 400},
+		{"RPC status rejection", path, `{"args_json":"{\"rpc_reject\":true}","idempotency_key":"rpc-reject"}`, admin, 404},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			response := doJSON(t, http.MethodPost, tc.url, tc.body, jsonHeaders(), tc.cookies)

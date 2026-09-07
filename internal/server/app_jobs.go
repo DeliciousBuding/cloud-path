@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -108,6 +109,11 @@ func (s *Server) handleRunApplicationJob(w http.ResponseWriter, r *http.Request)
 		IdempotencyKey: key, Deadline: time.Now().Add(10 * time.Second).UTC().Format(time.RFC3339Nano),
 	})
 	if err != nil {
+		var rejection *status.Status
+		if errors.As(err, &rejection) && rejection != nil && !rejection.IsOK() {
+			fail(status.CodeString(rejection.Code), applicationStatusHTTP(rejection.Code), rejection.Message)
+			return
+		}
 		fail("application_unavailable", http.StatusServiceUnavailable, "application action did not complete; reconcile its records before retrying with the same key")
 		return
 	}
@@ -116,24 +122,31 @@ func (s *Server) handleRunApplicationJob(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if !response.Status.IsOK() {
-		httpStatus := http.StatusBadGateway
-		switch response.Status.Code {
-		case status.CodeInvalidArgument, status.CodeOutOfRange:
-			httpStatus = http.StatusBadRequest
-		case status.CodeNotFound:
-			httpStatus = http.StatusNotFound
-		case status.CodeAlreadyExists, status.CodeFailedPrecondition, status.CodeAborted:
-			httpStatus = http.StatusConflict
-		case status.CodeResourceExhausted:
-			httpStatus = http.StatusTooManyRequests
-		case status.CodePermissionDenied, status.CodeUnauthenticated:
-			httpStatus = http.StatusForbidden
-		case status.CodeUnavailable, status.CodeDeadlineExceeded:
-			httpStatus = http.StatusServiceUnavailable
-		}
+		httpStatus := applicationStatusHTTP(response.Status.Code)
 		fail(status.CodeString(response.Status.Code), httpStatus, response.Status.Message)
 		return
 	}
 	s.auditPluginWrite(r, ctx, "application.job.run", instanceID, audit.OutcomeSuccess, "", audit.NewMetadata().String("job", jobID))
 	writeJSON(w, http.StatusOK, api.AppJobRunView{InstanceID: instanceID, JobID: jobID, ResultJSON: response.ResultJSON})
+}
+
+// Plugins may reject via an RPC status error or an explicit response status;
+// both are the same contract, not a transport outage.
+func applicationStatusHTTP(code status.Code) int {
+	switch code {
+	case status.CodeInvalidArgument, status.CodeOutOfRange:
+		return http.StatusBadRequest
+	case status.CodeNotFound:
+		return http.StatusNotFound
+	case status.CodeAlreadyExists, status.CodeFailedPrecondition, status.CodeAborted:
+		return http.StatusConflict
+	case status.CodeResourceExhausted:
+		return http.StatusTooManyRequests
+	case status.CodePermissionDenied, status.CodeUnauthenticated:
+		return http.StatusForbidden
+	case status.CodeUnavailable, status.CodeDeadlineExceeded:
+		return http.StatusServiceUnavailable
+	default:
+		return http.StatusBadGateway
+	}
 }
