@@ -71,6 +71,56 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
   其它站点的 `map` 冲突，并指向可直接安装的站点示例。
 - `.gitignore`：忽略 Python 字节码缓存与拆仓脚本的临时输出。
 
+## v0.2.14 — 2026-09-07
+
+主题：**插件实例重配置与身份收口（P1）**。真机升级暴露「PATCH 返回成功、applied revision 前进，旧进程却继续运行」；
+排查发现另有三处同源缺陷（实例身份在某个平面上被部分折叠），在原质量范围内一并收口，未新增架构。
+
+### 契约变更（读面不再对用户说谎）
+
+- `GET /api/stats`：`auth_enabled: bool` → `auth_mode ∈ account|token|open`，报告 server **实际执行**的鉴权形态。
+  此前账号模式被系统页显示为「未启用（本机模式）」。字段在 [docs/api.md](docs/api.md) §2.2，档位定义见 §1。
+- 路由表之外的 `/api/*`（含 `/api/auth/*` 下不存在的子路径）与缺失的 `/assets/*` 回 `404`，不再被 SPA 兜底成
+  `200 + index.html`——此前一个不存在的 `DELETE` 端点也答 200。见 [docs/api.md](docs/api.md) §2.2。
+- `PluginInstanceView.drift`：启用实例双方版本已知且不一致时如实标记，列表、详情与写响应同形，
+  不被错误的 applied ACK 掩盖。见 [docs/api.md](docs/api.md) §5.3。
+- 首装建号即交接会话；会话没有落地时不再谎报「用户名或密码错误」。
+
+### 行为修复
+
+- 既有实例的 version / pluginID / config / isolation 变更走可校验的重配置入口，不再被 `CreateInstance` 的
+  `ErrInstanceExists` 路径静默忽略；幂等重放与保留键语义不变。
+- Supervisor 自动重启后经 `prepareSession` 在状态转 `HEALTHY` **之前**恢复全部已应用配置；
+  恢复失败消耗既有重启预算，不让未配置的新进程冒充成功。
+- 插件退出失败不再被当成功；快照收敛可重试，失败期间不推进 applied revision。
+- `DriverClient` / `ApplicationClient` 遇歧义即以 `ErrAmbiguousInstance` 失败关闭，另补按 `(tenant, instance)` 的
+  实例级精确寻址；map 遍历顺序不再是事实上的路由规则。
+- AppHost 运行记录、开窗去重键与 appruntime 实例表统一按 `(tenant, instance)` 建键，与 store 主键一致——
+  两租户同名实例不再互相覆盖并静默饿死。`reconcile` 抽出 `serverHostedRows` 作为进程面与协议面共用的唯一 edge 过滤点。
+- 设置向导第 3 步补「全鉴权会掐断已接入边缘」的可执行恢复步骤（仅在探到已有边缘/设备时出现）；
+  事件载荷无增量信息时不再给「展开原始载荷」；`AppHostEdgeID` 取代生产代码里的裸 `"server"` 字面量。
+- 实现语义与故障恢复边界见 [docs/architecture/plugin-system.md](docs/architecture/plugin-system.md)
+  （实例身份／实例重配置与会话恢复／客户端寻址）与
+  [docs/architecture/control-plane-sync.md](docs/architecture/control-plane-sync.md) §8。
+
+### 发布工程
+
+- `.gitattributes` 补 `*.yml text eol=lf`（此前只写 `*.yaml`，12 个 `.yml` 落在规则外），两批共 11 个文件行尾归一化，
+  消除跨 worktree 的幻影 diff；零语义改动由 `yaml.safe_load` 前后比对证明。
+- 消除 `TestOverviewTenantIsolation` 约 5% 的闪断（tenant-b 事件断言前补一次等待）；修复后 120 连跑 0 失败。
+- 18 二进制 + `checksums.txt` 与多架构 GHCR 镜像已发布；`linux/arm64` 镜像来源提交与 tag 一致。
+- 发布源码同树 CI 13/13（含 Linux race、Windows、六平台构建与产物校验），Go 27 包全绿、`go vet` / `gofmt` 干净，
+  WebUI 36 文件 676/676 与 `tsc` / 构建通过，契约漂移（44 个同名类型）/ 公开审计 / 链接三门禁 PASS。
+
+### 验证边界（不外推）
+
+- 重配置、重启后配置恢复、退出失败与跨租户隔离已有**真实子进程**回归，并以变异测试证明回归有效
+  （`instanceKey` 退回裸 id、去掉 edge 过滤，均先红后绿）。
+- 「不靠 Edge 重启」的**真机热更新后验在部署之后**进行，本节不代表其已通过；此前用受控 Edge 重启恢复版本一致，
+  不作为补丁验收证据。
+- 无第二种硬件，设备侧证据仍来自既有 STC-B 单链路；未接步进电机实物，不宣称电机物理动作完成。
+- 生产浏览器 UI 验收需登录后进行，本轮只有测试、`tsc`/构建与真实 API/硬件证据，不冒充新 UI 已在浏览器验收。
+
 ## 版本状态
 
 | 版本 | 状态 | 说明 |
@@ -87,4 +137,5 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 | `v0.2.11` | 已发布（2026-09-05） | 绑定确定性修复（D3 真板实测根因）：Edge descriptor 实体按 EntityID 排序、Server appCandidates 按 (device, entity) 排序——此前 map 随机迭代让 Binder first-match 每次绑到不同实体（button-indicator 重启后绑到 key2，用户按 K1 全部静默丢弃），且 descriptor 指纹每拍抖动导致整份 descriptor 每 poll 周期重发；AppHost 事件路由增加 dispatch/unrouted 观测日志（静默丢弃盲区） |
 | `v0.2.12` | 已发布（2026-09-06） | Application Plane Web 三读面与实时/重连恢复；身份及只读权限隔离；中心服务宿主展示与概览活跃统计修复；容器 AppHost 持久化路径统一。发布源码经 500 项前端测试、Go tests/vet、CI 和真实浏览器隔离联调验证；本次浏览器设备输入为合成设备，不代表新增真板验收 |
 | `v0.2.13` | 已发布（2026-09-07） | Driver 动作 RPC 透传可选标题、说明与危险确认元数据；`oneOf`/`anyOf`/`allOf` 三态校验；Host 完成认证连接计数后再发布 `ready`。18 二进制 + checksums.txt 与容器镜像已发布，linux/arm64 镜像来源提交与 tag 一致。发布源码同树 CI 13/13（含 Linux race、Windows、六平台），WebUI 36 文件 658/658 与构建通过；浏览器验证限于既有隔离联调，不代表新增真板验收或 Edge/Driver 更新后验完成 |
+| `v0.2.14` | 已发布（2026-09-07） | 插件实例重配置与身份收口（P1）：既有实例变更不再被静默忽略、重启后在 `HEALTHY` 前恢复已应用配置、退出失败不冒充成功、实例身份统一带租户键并如实标记 drift；另修 `auth_mode`、未路由 404、首装会话三处会说谎的读面。详见 [§v0.2.14](#v0214--2026-09-07)。**验证边界**：真机「不靠 Edge 重启」的热更新后验在部署之后进行，本行不代表其已通过 |
 | `dev` | 本地 | `task build` / `task build:matrix` 的未打标产物（`git describe` 兜底） |
