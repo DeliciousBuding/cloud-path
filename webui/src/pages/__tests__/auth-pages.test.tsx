@@ -129,7 +129,7 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
     expect(screen.queryByRole('heading', { name: '首页占位' })).not.toBeInTheDocument()
   })
 
-  it('login 200 但 me 复核失败 → 不算登录成功（会话没真正落地）', async () => {
+  it('login 200 但 me 复核失败 → 不算登录成功，且不得谎报「用户名或密码错误」', async () => {
     const user = userEvent.setup()
     routeWith((url) => {
       if (url === '/api/auth/login') return stubResponse(200, { user: admin })
@@ -140,9 +140,15 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
     await user.type(screen.getByLabelText('用户名'), 'admin')
     await user.type(screen.getByLabelText('密码'), 'pw')
     await user.click(screen.getByRole('button', { name: '登录' }))
-    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    const alert = await screen.findByRole('alert')
+    // 服务端已经认了这套凭据：文案必须指向会话没落地，而不是让人重输正确密码
+    expect(alert).toHaveTextContent('账号和密码是对的，但会话没有建立')
+    expect(alert.textContent).not.toContain('用户名或密码错误')
     expect(screen.queryByRole('heading', { name: '首页占位' })).not.toBeInTheDocument()
     expect(useAuth.getState().status).not.toBe('in')
+    // 凭据是对的：不清空密码、不进冷却（按钮仍可立刻重试）
+    expect(screen.getByLabelText('密码')).toHaveValue('pw')
+    expect(screen.getByRole('button', { name: '登录' })).toBeEnabled()
   })
 
   it('429 → 用服务端 Retry-After 报秒数，按钮禁用并倒计时', async () => {
@@ -282,6 +288,30 @@ describe('Setup：真实创建首个账号', () => {
 
     await user.click(screen.getByRole('button', { name: '进入管理台' }))
     expect(await screen.findByRole('heading', { name: '首页占位' })).toBeInTheDocument()
+  })
+
+  it('setup 200 但 me 复核失败 → 说清账号已创建并导流登录页，绝不报「用户名或密码错误」', async () => {
+    const user = userEvent.setup()
+    routeWith((url) => {
+      if (url === '/api/auth/setup') return stubResponse(200, { user: admin })
+      if (url === '/api/auth/me') return stubResponse(401, { error: 'not authenticated' })
+      return stubResponse(404, {})
+    })
+    renderPage(<Setup />, '/setup')
+    await user.click(await screen.findByRole('button', { name: /下一步/ }))
+    await user.type(screen.getByLabelText('用户名'), 'admin')
+    await user.type(screen.getByLabelText('密码'), 'pw-12345')
+    await user.type(screen.getByLabelText('确认密码'), 'pw-12345')
+    await user.click(screen.getByRole('button', { name: /创建账号并继续/ }))
+
+    const alert = await screen.findByRole('alert')
+    // 账号已不可逆落库：必须承认这件事，并把人送去登录页（重试 setup 只会 409）
+    expect(alert).toHaveTextContent('管理员账号已创建')
+    expect(alert.textContent).not.toContain('用户名或密码错误')
+    expect(within(alert).getByRole('link', { name: /去登录页/ })).toHaveAttribute('href', '/login')
+    // 会话没落地就不算完成：不得进「设置完成」，auth store 也不能是 in
+    expect(screen.queryByText('设置完成')).not.toBeInTheDocument()
+    expect(useAuth.getState().status).not.toBe('in')
   })
 
   it('两次密码不一致 → 本地先拦，不发请求', async () => {

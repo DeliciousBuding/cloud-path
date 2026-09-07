@@ -97,7 +97,8 @@ func (s *Server) auditSetupRejected(r *http.Request, reason string) {
 	})
 }
 
-// handleAuthSetup 首装引导：仅当用户数为 0（原子判定），创建 default 租户 + 首个 admin。
+// handleAuthSetup 首装引导：仅当用户数为 0（原子判定），创建 default 租户 + 首个 admin，
+// 成功即按 login 的同一套语义交接会话（下发 cp_session），让向导不必再登录一次。
 func (s *Server) handleAuthSetup(w http.ResponseWriter, r *http.Request) {
 	if !s.setupAuthorized(r) {
 		s.auditSetupRejected(r, "not_local_client")
@@ -176,6 +177,13 @@ func (s *Server) handleAuthSetup(w http.ResponseWriter, r *http.Request) {
 		Action: audit.ActionSetup, TargetType: audit.TargetTenant, TargetID: u.TenantSlug,
 		Outcome: audit.OutcomeSuccess,
 	})
+	// 会话交接：账号就是这个请求刚创建的、密码由调用方自己设定，再逼它拿同一套凭据登录
+	// 一次没有安全收益，只会让向导最后一步（GET /api/auth/me 复核）失败并显示假错误。
+	// 本端点已由 setupAuthorized 收口（真实回环或一次性 setup token），这里不额外扩权。
+	// 失败只记日志、仍回 200：账号已不可逆落库，改状态码会让客户端以为初始化失败而重试（→409）。
+	if err := s.newSessionFor(w, r, u.ID); err != nil {
+		slog.Warn("setup: 会话未建立（账号已创建，请改走登录页）", "err", err)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"user": userView(u)})
 }
 
@@ -232,23 +240,33 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	sid, err := auth.NewSessionID()
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "create session"})
-		return
-	}
-	ttl := s.cfg.sessionTTL()
-	if err := s.cfg.Store.CreateSession(sid, u.ID, time.Now().Add(ttl).Unix()); err != nil {
+	if err := s.newSessionFor(w, r, u.ID); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	auth.SetSessionCookie(w, r, sid, int(ttl.Seconds()), s.trustedProxies)
 	s.audit(r, audit.Event{
 		TenantID: u.TenantID, ActorType: audit.ActorUser, ActorID: u.ID, ActorName: u.Username,
 		Action: audit.ActionLogin, TargetType: audit.TargetTenant, TargetID: u.TenantSlug,
 		Outcome: audit.OutcomeSuccess,
 	})
 	writeJSON(w, http.StatusOK, map[string]any{"user": userView(u)})
+}
+
+// newSessionFor 为「服务端已经认下这次认证」的用户创建会话并下发 cp_session。
+// login 与 setup 共用同一套 TTL 与 cookie 属性（契约 §2.1/§2.2），但失败策略留给调用方，
+// 因为两者不可逆副作用的程度不同：login 失败可以直接 500；setup 失败时账号已落库、
+// 实例已切入全鉴权模式，只能记日志并让前端用 me 复核后说真话。
+func (s *Server) newSessionFor(w http.ResponseWriter, r *http.Request, userID int64) error {
+	sid, err := auth.NewSessionID()
+	if err != nil {
+		return err
+	}
+	ttl := s.cfg.sessionTTL()
+	if err := s.cfg.Store.CreateSession(sid, userID, time.Now().Add(ttl).Unix()); err != nil {
+		return err
+	}
+	auth.SetSessionCookie(w, r, sid, int(ttl.Seconds()), s.trustedProxies)
+	return nil
 }
 
 // handleAuthLogout 登出：删服务端会话并清 cookie；无会话 → 401。

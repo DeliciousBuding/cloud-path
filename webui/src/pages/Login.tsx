@@ -14,7 +14,7 @@ import { Link, useNavigate } from 'react-router'
 import { ChevronDown, Eye, EyeOff, KeyRound } from 'lucide-react'
 import { AuthCard, Button, Spinner, TextField } from '@/components/ui'
 import { api, getToken, setToken } from '@/lib/api'
-import { loginErrorCopy } from '@/lib/authErrors'
+import { SESSION_NOT_ESTABLISHED, loginErrorCopy } from '@/lib/authErrors'
 import { confirmSession } from '@/store/auth'
 import { toast } from '@/store/toast'
 import { cn } from '@/lib/cn'
@@ -60,19 +60,27 @@ export default function Login() {
 
     setBusy(true)
     setFormError('')
+    // 复核：会话 cookie 是否真的生效（这一步失败就不能算登录成功）。
+    // 但 login 已 2xx 之后的失败**不是**凭据问题：既不能报「用户名或密码错误」，
+    // 也不该清空用户刚输对的密码或启动冷却倒计时（那会把可重试的会话问题变成死路）。
+    let accepted = false
     try {
       const r = await api.login(u, password)
-      // 复核：会话 cookie 是否真的生效（这一步失败就不能算登录成功）
+      accepted = true
       const user = await confirmSession(r?.user ?? null)
       toast.ok('登录成功', user?.name || user?.username || undefined)
       navigate('/', { replace: true })
     } catch (err) {
-      const copy = loginErrorCopy(err)
-      setFormError(copy.message)
-      if (copy.retryAfter) setCooldown(copy.retryAfter)
-      if (copy.badCredentials) {
-        // 密码错就清空密码（浏览器密码管理器仍会保留），并把焦点交回用户名
-        setPassword('')
+      if (accepted) {
+        setFormError(SESSION_NOT_ESTABLISHED.login)
+      } else {
+        const copy = loginErrorCopy(err)
+        setFormError(copy.message)
+        if (copy.retryAfter) setCooldown(copy.retryAfter)
+        if (copy.badCredentials) {
+          // 密码错就清空密码（浏览器密码管理器仍会保留），并把焦点交回用户名
+          setPassword('')
+        }
       }
       setBusy(false)
     }

@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { AuthCard, Button, Spinner, TextField } from '@/components/ui'
 import { api } from '@/lib/api'
-import { setupErrorCopy } from '@/lib/authErrors'
+import { SESSION_NOT_ESTABLISHED, setupErrorCopy } from '@/lib/authErrors'
 import { confirmSession } from '@/store/auth'
 import { cn } from '@/lib/cn'
 import type { HealthView } from '@/lib/types'
@@ -90,15 +90,25 @@ export default function Setup() {
 
     setBusy(true)
     setFormError('')
+    // 两段语义必须分开：setup 调用本身失败 → 按状态码给权限/格式文案；
+    // setup 已 2xx（账号不可逆落库、实例已进全鉴权）但会话复核失败 → 说真话并导流登录页，
+    // 绝不能报「用户名或密码错误」，那会让人重输一套刚设定、且完全正确的凭据（重试只会 409）。
+    let created = false
     try {
       const r = await api.setup(u, password)
+      created = true
       const user = await confirmSession(r?.user ?? null)
       setCreatedUser(user?.username || u)
       setStep(2)
     } catch (err) {
-      const copy = setupErrorCopy(err)
-      setFormError(copy.message)
-      if (copy.alreadySetup) setRedirectToLogin(true)
+      if (created) {
+        setFormError(SESSION_NOT_ESTABLISHED.setup)
+        setRedirectToLogin(true)
+      } else {
+        const copy = setupErrorCopy(err)
+        setFormError(copy.message)
+        if (copy.alreadySetup) setRedirectToLogin(true)
+      }
       setBusy(false)
     }
   }
