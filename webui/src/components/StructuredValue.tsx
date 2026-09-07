@@ -31,4 +31,3 @@ export function StructuredValue({ value, depth = 0 }: { value: unknown; depth?: 
     </details>}
   </div>
 }
-
