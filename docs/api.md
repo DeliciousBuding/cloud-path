@@ -34,7 +34,7 @@
 
 | 方法 路径 | 凭据 | 说明 |
 |---|---|---|
-| `POST /api/auth/setup` | 无（仅当用户数为 0） | 首装引导：创建 default 租户 + 首个 admin。已有用户 → `409` |
+| `POST /api/auth/setup` | 无（仅当用户数为 0） | 首装引导：创建 default 租户 + 首个 admin → `200 {user}` 并 set-cookie（会话交接与 login 同一套 TTL/cookie 属性；下发失败仍回 `200`，客户端以 `GET /api/auth/me` 复核为准）。已有用户 → `409` |
 | `POST /api/auth/login` | 无 | `{username,password}` → `200 {user}` 并 set-cookie；错 → `401`；限流 → `429` |
 | `POST /api/auth/logout` | 会话 | `204`，删会话清 cookie |
 | `GET /api/auth/me` | 会话/令牌 | `{user:{id,username,name,role,tenant_id,tenant_slug}}`；无 → `401` |

@@ -116,6 +116,52 @@ func TestAuthSetup(t *testing.T) {
 	}
 }
 
+// TestAuthSetupHandsBackSession 首装的会话交接：setup 200 必须同时下发可用的 cp_session，
+// 属性与 login 完全一致，且 GET /api/auth/me 立刻复核通过。
+// 反向意义（P1 缺陷）：旧实现只回 200 {user} 不下发 cookie，向导最后一步 me→401，
+// 用户看到「用户名或密码错误」——而账号其实已不可逆落库（重试只会 409），
+// 等于引导用户反复重输一套刚设定、且完全正确的凭据。
+func TestAuthSetupHandsBackSession(t *testing.T) {
+	_, ts := setup(t)
+
+	resp := doJSON(t, http.MethodPost, ts.URL+"/api/auth/setup",
+		`{"username":"admin","password":"secret123","name":"管理员"}`, jsonHeaders(), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("setup = %d, want 200", resp.StatusCode)
+	}
+	cookies := resp.Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("setup 应像 login 一样 set-cookie（否则向导最后一步 me 复核必然 401）")
+	}
+	c := cookies[0]
+	if c.Name != "cp_session" || !c.HttpOnly || c.Path != "/" || c.SameSite != http.SameSiteLaxMode || c.MaxAge <= 0 {
+		t.Fatalf("setup cookie 属性应与 login 一致: %+v", c)
+	}
+
+	// 会话真的可用：me 200 且就是刚创建的那个 admin（前端向导正是以 me 为成功判据）
+	me := doJSON(t, http.MethodGet, ts.URL+"/api/auth/me", "", nil, cookies)
+	if me.StatusCode != http.StatusOK {
+		t.Fatalf("带 setup 会话的 me = %d, want 200", me.StatusCode)
+	}
+	var body struct {
+		User api.UserView `json:"user"`
+	}
+	if err := json.NewDecoder(me.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.User.Username != "admin" || body.User.Role != "admin" {
+		t.Fatalf("me user = %+v, want the admin just created", body.User)
+	}
+
+	// 交接的是该用户自己的会话，不是额外权限：登出后立即失效
+	if resp := doJSON(t, http.MethodPost, ts.URL+"/api/auth/logout", "", nil, cookies); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("logout = %d, want 204", resp.StatusCode)
+	}
+	if resp := doJSON(t, http.MethodGet, ts.URL+"/api/auth/me", "", nil, cookies); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("登出后 me = %d, want 401", resp.StatusCode)
+	}
+}
+
 // TestAuthLogin 登录：错 401 / 对 200 + set-cookie；每次登录会话 ID 轮换（防固定）。
 func TestAuthLogin(t *testing.T) {
 	_, ts := setup(t)
