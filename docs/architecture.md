@@ -175,7 +175,7 @@ Topic 只是候选集合，不是信任证明。CLI 搜到仓库后还必须检�
 - [ADR-0001：能力中心的多契约插件模型](architecture/adr/0001-capability-centered-plugins.md)
 - [ADR-0002：GitHub Topic + Registry 混合发现](architecture/adr/0002-github-plugin-discovery.md)
 
-分阶段实施计划（A0–A8）跟踪在私有层 `.local/progress/`，不进入公开仓库。
+分阶段实施计划与当前进度跟踪在私有层（gitignored，不入库）。约定：公开文档只泛指「私有层」，不点名其中具体文件——clone 后 `.local/` 不存在，点名即坏链接。
 
 ## 12. 非目标
 
