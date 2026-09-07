@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -265,7 +266,7 @@ func TestAppHostObservedProjectionFeedsPlane(t *testing.T) {
 		PluginID: "app-x", Version: "1.0", Enabled: true, Revision: rev,
 	}
 	ah.mu.Lock()
-	ah.running["box-t"] = &appInstanceRun{row: runRow}
+	ah.running[appInstKey{tid, "box-t"}] = &appInstanceRun{row: runRow, tenantStr: strconv.FormatInt(tid, 10)}
 	ah.mu.Unlock()
 
 	ah.reportObserved()
@@ -329,8 +330,9 @@ func TestRouteDeviceEventIsolation(t *testing.T) {
 		t.Helper()
 		ah.mu.Lock()
 		defer ah.mu.Unlock()
-		ah.running[instance] = &appInstanceRun{
+		ah.running[appInstKey{tenant, instance}] = &appInstanceRun{
 			row:         store.PluginInstanceRow{TenantID: tenant, InstanceID: instance},
+			tenantStr:   strconv.FormatInt(tenant, 10),
 			reqByEntity: entities,
 		}
 	}
@@ -364,4 +366,35 @@ func TestRouteDeviceEventIsolation(t *testing.T) {
 	// nil 接收者安全（未启用 AppHost 的 Server 直接调用路径）
 	var nilHost *AppHost
 	nilHost.DispatchDeviceEvent(tid, "e1/d1", "key1", "cloudpath.dev/capability/key@1/press", 0)
+}
+
+// TestDesiredProtocolInstancesKeepsTenantAndEdgeIdentity 锁定协议面选择的两个身份
+// 边界：AppHost 只处理部署到 Server 伪 edge 的行，且运行键带租户。
+func TestDesiredProtocolInstancesKeepsTenantAndEdgeIdentity(t *testing.T) {
+	rows := []store.PluginInstanceRow{
+		{TenantID: 1, EdgeID: AppHostEdgeID, InstanceID: "worker", PluginID: "app-x", Enabled: true},
+		{TenantID: 2, EdgeID: AppHostEdgeID, InstanceID: "worker", PluginID: "app-x", Enabled: true},
+		{TenantID: 1, EdgeID: "edge-real", InstanceID: "worker", PluginID: "app-x", Enabled: true},
+		{TenantID: 1, EdgeID: AppHostEdgeID, InstanceID: "off", PluginID: "app-x", Enabled: false},
+		{TenantID: 1, EdgeID: AppHostEdgeID, InstanceID: "other", PluginID: "app-not-installed", Enabled: true},
+	}
+	hosted := serverHostedRows(rows)
+	if len(hosted) != 4 {
+		t.Fatalf("serverHostedRows = %d rows, want 4 (real-edge row must stay out)", len(hosted))
+	}
+	for _, r := range hosted {
+		if r.EdgeID != AppHostEdgeID {
+			t.Fatalf("real edge row leaked into AppHost scope: %+v", r)
+		}
+	}
+	desired := desiredProtocolInstances(hosted, map[string]string{"app-x": "1.0"})
+	if len(desired) != 2 {
+		t.Fatalf("desired = %d entries, want 2: disabled and uninstalled rows must not run", len(desired))
+	}
+	for _, tid := range []int64{1, 2} {
+		r, ok := desired[appInstKey{tid, "worker"}]
+		if !ok || r.TenantID != tid {
+			t.Fatalf("tenant %d lost its own instance: %+v (ok=%v)", tid, r, ok)
+		}
+	}
 }

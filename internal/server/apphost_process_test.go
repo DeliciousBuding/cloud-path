@@ -108,26 +108,7 @@ func (s *appRoutingServer) Shutdown(context.Context, *application.ShutdownReques
 }
 
 func TestAppHostRoutesProtocolToExactProcess(t *testing.T) {
-	exe, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	binary, err := os.ReadFile(exe)
-	if err != nil {
-		t.Fatal(err)
-	}
-	root := t.TempDir()
-	paths := map[string]string{}
-	for _, version := range []string{"0.1.0", "0.2.0"} {
-		dir := filepath.Join(root, version)
-		if err := os.Mkdir(dir, 0o700); err != nil {
-			t.Fatal(err)
-		}
-		paths[version] = filepath.Join(dir, "app-test.exe")
-		if err := os.WriteFile(paths[version], binary, 0o700); err != nil {
-			t.Fatal(err)
-		}
-	}
+	paths := versionedFixtureBinaries(t, "0.1.0", "0.2.0")
 	for _, isolation := range []pluginhost.Isolation{pluginhost.IsolationShared, pluginhost.IsolationPerInstance} {
 		t.Run(isolation.String(), func(t *testing.T) {
 			srv, _ := setup(t)
@@ -191,7 +172,7 @@ func TestAppHostRoutesProtocolToExactProcess(t *testing.T) {
 					t.Fatalf("wrong physical process/config for %s: %+v", spec.ID, report)
 				}
 				reports = append(reports, report)
-				if inst, err := h.rt.GetInstance(spec.ID); err != nil || inst.State != appruntime.StateRunning {
+				if inst, err := h.rt.GetInstance(spec.Tenant, spec.ID); err != nil || inst.State != appruntime.StateRunning {
 					t.Fatalf("protocol instance not running: %+v %v", inst, err)
 				}
 			}
@@ -208,5 +189,114 @@ func TestAppHostRoutesProtocolToExactProcess(t *testing.T) {
 				t.Fatal("unapplied desired version used stale process")
 			}
 		})
+	}
+}
+
+// versionedFixtureBinaries copies the test executable into one directory per
+// version. The fixture reports the name of its own directory as its version, so
+// a host cannot fake a version change through desired metadata alone.
+func versionedFixtureBinaries(t *testing.T, versions ...string) map[string]string {
+	t.Helper()
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	binary, err := os.ReadFile(exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	paths := make(map[string]string, len(versions))
+	for _, version := range versions {
+		dir := filepath.Join(root, version)
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		paths[version] = filepath.Join(dir, "app-test.exe")
+		if err := os.WriteFile(paths[version], binary, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return paths
+}
+
+// TestAppHostIsolatesSameInstanceIDAcrossTenants 锁定跨租户同名实例的隔离。store
+// 主键是 (tenant_id, edge_id, instance_id)，instance id 只在租户内唯一，两个租户
+// 各自创建 "worker" 完全合法。协议面若按裸 instance id 建键，后启动的实例会撞
+// ErrInstanceExists，先启动的运行记录被覆盖后静默饿死，revision 比较还会跨租户串味。
+func TestAppHostIsolatesSameInstanceIDAcrossTenants(t *testing.T) {
+	paths := versionedFixtureBinaries(t, "0.1.0")
+	srv, _ := setup(t)
+	h, err := NewAppHost(srv, AppHostConfig{Enabled: true, PluginsDir: t.TempDir(), LockPath: filepath.Join(t.TempDir(), "plugins.lock"), StateDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(h.Close)
+	if err := h.mgr.RegisterInstallation(pluginhost.Installation{PluginID: appRoutingPlugin, Version: "0.1.0", Path: paths["0.1.0"], Kind: pluginhost.KindApplication}); err != nil {
+		t.Fatal(err)
+	}
+
+	const sameID = "app-same-name"
+	tenants := []string{"1", "2"}
+	for i, tenant := range tenants {
+		spec := pluginhost.InstanceSpec{Tenant: tenant, ID: sameID, PluginID: appRoutingPlugin, Version: "0.1.0", Isolation: pluginhost.IsolationPerInstance}
+		if err := h.mgr.ReconcileInstance(context.Background(), spec, true); err != nil {
+			t.Fatal(err)
+		}
+		config, err := json.Marshal(map[string]string{"target": sameID, "version": "0.1.0", "tenant": tenant})
+		if err != nil {
+			t.Fatal(err)
+		}
+		wrapped, err := json.Marshal(map[string]string{appConfigKey: string(config)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		tid, _ := strconv.ParseInt(tenant, 10, 64)
+		row := store.PluginInstanceRow{
+			TenantID: tid, EdgeID: AppHostEdgeID, InstanceID: sameID, PluginID: appRoutingPlugin,
+			Version: "0.1.0", Enabled: true, Isolation: spec.Isolation.String(),
+			ConfigJSON: string(wrapped), Revision: uint64(i + 1),
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err = h.startInstance(ctx, row)
+		cancel()
+		if err != nil {
+			t.Fatalf("tenant %s start: %v", tenant, err)
+		}
+	}
+
+	h.mu.Lock()
+	running := len(h.running)
+	h.mu.Unlock()
+	if running != 2 {
+		t.Fatalf("running entries = %d, want 2: same instance id in two tenants must not collapse", running)
+	}
+	pids := map[string]int{}
+	for _, tenant := range tenants {
+		inst, err := h.rt.GetInstance(tenant, sameID)
+		if err != nil || inst.State != appruntime.StateRunning {
+			t.Fatalf("tenant %s protocol instance not running: %+v %v", tenant, inst, err)
+		}
+		cli, err := h.mgr.ApplicationClientForInstance(tenant, sameID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		health, err := cli.Health(ctx)
+		cancel()
+		if err != nil || len(health.Instances) != 1 {
+			t.Fatalf("tenant %s process report: %+v %v", tenant, health, err)
+		}
+		var report appRoutingReport
+		if err := json.Unmarshal([]byte(health.Instances[0].Detail), &report); err != nil {
+			t.Fatal(err)
+		}
+		if report.Configs[sameID]["tenant"] != tenant || report.Calls[sameID] != 1 {
+			t.Fatalf("tenant %s received another tenant's configuration: %+v", tenant, report)
+		}
+		pids[tenant] = report.PID
+	}
+	if pids[tenants[0]] == pids[tenants[1]] {
+		t.Fatal("per-instance isolation gave both tenants one shared process")
 	}
 }

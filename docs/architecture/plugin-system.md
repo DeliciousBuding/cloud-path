@@ -233,6 +233,12 @@ PluginInstallation（节点上某版本）
 
 默认一个安装版本启动一个共享进程，服务多个实例；需要更强隔离时可选择 `isolation: per-instance`。同一节点可并存两个版本用于滚动迁移，但同一 Instance 同时只绑定一个版本。
 
+### 实例身份
+
+实例的完整身份是 `(tenant_id, edge_id, instance_id)`，与 store 主键一致：instance id 只在租户内唯一，两个租户各自创建同名实例完全合法。因此任何运行态映射都必须带租户——进程面的实例记录、协议面的运行记录与开窗去重键、Application Runtime 的实例表都是如此。按裸 instance id 建键会让后写入的租户覆盖先写入的：被覆盖的实例静默不运行，而 revision 比较跨租户串味，看起来像“实例自己挂了”。
+
+Server 侧 AppHost 只收敛 `edge_id` 为伪 edge `server` 的期望态行。真实 Edge 的行由该 Edge 自己收敛；Server 再应用一遍就会在本地多跑一份属于 Edge 的实例。这条部署边界与「真实 Edge 不会收到 server 侧实例的期望态」对称，且进程面与协议面共用同一次过滤，不各自判断。
+
 ### 实例重配置与会话恢复
 
 Host 收敛既有实例时，以完整定义比较版本、插件、隔离方式及配置；先验证候选会话与配置，再替换运行绑定。配置通过租户限定实例 ID 的 `ConfigureInstance` RPC 下发，不使用共享进程环境变量承载各实例的配置。`ConfigPath` / 保留键 `path` 仍只作本地引用，不传给插件，也不在此处引入文件读取或合并规则。

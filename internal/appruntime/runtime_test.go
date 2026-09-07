@@ -143,7 +143,7 @@ func TestRequestAndJobDispatch(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	resp, err := rt.HandleRequest(ctx, "inst-1", &sdkapplication.PluginHTTPRequest{
+	resp, err := rt.HandleRequest(ctx, "tenant-a", "inst-1", &sdkapplication.PluginHTTPRequest{
 		RequestID: "req-1",
 		Method:    "GET",
 		Path:      "/",
@@ -159,7 +159,7 @@ func TestRequestAndJobDispatch(t *testing.T) {
 		t.Fatalf("request context not injected: %+v", cli.requestReqs)
 	}
 
-	job, err := rt.RunJob(ctx, "inst-1", &sdkapplication.RunJobRequest{JobID: "job-1", IdempotencyKey: "ik-1"})
+	job, err := rt.RunJob(ctx, "tenant-a", "inst-1", &sdkapplication.RunJobRequest{JobID: "job-1", IdempotencyKey: "ik-1"})
 	if err != nil {
 		t.Fatalf("RunJob: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestRequestAndJobDispatch(t *testing.T) {
 		t.Fatalf("job context not injected: %+v", cli.jobReqs)
 	}
 
-	if _, err := rt.HandleRequest(ctx, "inst-1", &sdkapplication.PluginHTTPRequest{
+	if _, err := rt.HandleRequest(ctx, "tenant-a", "inst-1", &sdkapplication.PluginHTTPRequest{
 		Method:  "GET",
 		Path:    "/",
 		Context: sdkapplication.RequestContext{TenantID: "tenant-b"},
@@ -191,13 +191,13 @@ func TestStopInstanceStreamOnlySkipsShutdownRPC(t *testing.T) {
 	defer rt.Close(context.Background())
 	startTestInstance(t, rt, testSpec())
 
-	if err := rt.StopInstanceStreamOnly("inst-1"); err != nil {
+	if err := rt.StopInstanceStreamOnly("tenant-a", "inst-1"); err != nil {
 		t.Fatalf("StopInstanceStreamOnly: %v", err)
 	}
 	if n := cli.ShutdownCount(); n != 0 {
 		t.Fatalf("Shutdown RPC 次数 = %d, want 0（共享进程禁发进程级关停）", n)
 	}
-	if _, err := rt.GetInstance("inst-1"); !errors.Is(err, ErrInstanceNotFound) {
+	if _, err := rt.GetInstance("tenant-a", "inst-1"); !errors.Is(err, ErrInstanceNotFound) {
 		t.Fatalf("GetInstance after stop = %v, want ErrInstanceNotFound（记录已移除，可重建）", err)
 	}
 	// Stop → Start 重建必须可行
@@ -232,7 +232,7 @@ func TestGracefulApplicationShutdown(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := rt.StopInstance(ctx, "inst-1", "maintenance", 2*time.Second); err != nil {
+	if err := rt.StopInstance(ctx, "tenant-a", "inst-1", "maintenance", 2*time.Second); err != nil {
 		t.Fatalf("StopInstance: %v", err)
 	}
 
@@ -240,10 +240,10 @@ func TestGracefulApplicationShutdown(t *testing.T) {
 		t.Fatalf("shutdown calls = %d, last = %+v", cli.ShutdownCount(), cli.LastShutdown())
 	}
 	// 停机后记录移除（新契约）：可重建，事件派发不再接受
-	if _, err := rt.GetInstance("inst-1"); !errors.Is(err, ErrInstanceNotFound) {
+	if _, err := rt.GetInstance("tenant-a", "inst-1"); !errors.Is(err, ErrInstanceNotFound) {
 		t.Fatalf("GetInstance after stop = %v, want ErrInstanceNotFound", err)
 	}
-	if err := rt.DispatchEvent(ctx, "inst-1", &sdkapplication.ApplicationEvent{Union: &sdkapplication.InstanceLifecycle{State: "running"}}); err == nil {
+	if err := rt.DispatchEvent(ctx, "tenant-a", "inst-1", &sdkapplication.ApplicationEvent{Union: &sdkapplication.InstanceLifecycle{State: "running"}}); err == nil {
 		t.Fatal("dispatch after shutdown should fail")
 	}
 }
@@ -266,7 +266,7 @@ func TestFailedInstanceCanBeRestarted(t *testing.T) {
 	if _, err := rt.StartInstance(ctx, testSpec()); err == nil {
 		t.Fatal("StartInstance should fail on bad config")
 	}
-	if _, err := rt.GetInstance("inst-1"); !errors.Is(err, ErrInstanceNotFound) {
+	if _, err := rt.GetInstance("tenant-a", "inst-1"); !errors.Is(err, ErrInstanceNotFound) {
 		t.Fatalf("failed record still occupies the slot: %v", err)
 	}
 
@@ -302,13 +302,13 @@ func TestEventBackpressure(t *testing.T) {
 		t.Fatal("sender never started the blocked Send")
 	}
 
-	if err := rt.DispatchEvent(ctx, "inst-1", event("one")); err != nil {
+	if err := rt.DispatchEvent(ctx, "tenant-a", "inst-1", event("one")); err != nil {
 		t.Fatalf("dispatch one: %v", err)
 	}
 
 	shortCtx, shortCancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer shortCancel()
-	err := rt.DispatchEvent(shortCtx, "inst-1", event("three"))
+	err := rt.DispatchEvent(shortCtx, "tenant-a", "inst-1", event("three"))
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("dispatch three error = %v, want DeadlineExceeded", err)
 	}
@@ -326,7 +326,7 @@ func TestEventBackpressure(t *testing.T) {
 	}
 	waitForSent(2) // 初始 lifecycle + one
 
-	if err := rt.DispatchEvent(ctx, "inst-1", event("three")); err != nil {
+	if err := rt.DispatchEvent(ctx, "tenant-a", "inst-1", event("three")); err != nil {
 		t.Fatalf("dispatch three after release: %v", err)
 	}
 	waitForSent(3)
@@ -352,7 +352,7 @@ func TestEffectIdempotency(t *testing.T) {
 			SendNotification: &SendNotification{Title: "hello", Body: "world", Severity: "info"},
 		}
 	}
-	res, err := rt.ExecuteEffects(ctx, "inst-1", []Effect{mk(), mk()})
+	res, err := rt.ExecuteEffects(ctx, "tenant-a", "inst-1", []Effect{mk(), mk()})
 	if err != nil {
 		t.Fatalf("ExecuteEffects: %v", err)
 	}
@@ -408,14 +408,14 @@ func TestDomainRecordUpsertKeyIsContentAddressed(t *testing.T) {
 	startTestInstance(t, rt, testSpec())
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	res, err := rt.ExecuteEffects(ctx, "inst-1", []Effect{opened, completed})
+	res, err := rt.ExecuteEffects(ctx, "tenant-a", "inst-1", []Effect{opened, completed})
 	if err != nil {
 		t.Fatalf("ExecuteEffects: %v", err)
 	}
 	if res.Executed != 2 {
 		t.Fatalf("executed = %d, want 2（状态更新不得被去重）", res.Executed)
 	}
-	res, err = rt.ExecuteEffects(ctx, "inst-1", []Effect{openedReplay})
+	res, err = rt.ExecuteEffects(ctx, "tenant-a", "inst-1", []Effect{openedReplay})
 	if err != nil {
 		t.Fatalf("ExecuteEffects replay: %v", err)
 	}
@@ -442,7 +442,7 @@ func TestRejectUnknownEffect(t *testing.T) {
 		Kind:             EffectKind("exec_sql"),
 		SendNotification: &SendNotification{Title: "x", Body: "DROP TABLE", Severity: "info"},
 	}
-	res, err := rt.ExecuteEffects(ctx, "inst-1", []Effect{bad})
+	res, err := rt.ExecuteEffects(ctx, "tenant-a", "inst-1", []Effect{bad})
 	if err == nil {
 		t.Fatal("ExecuteEffects accepted an unknown effect kind")
 	}
@@ -482,7 +482,7 @@ func TestRejectCrossTenantEffect(t *testing.T) {
 		Kind:             EffectSendNotification,
 		SendNotification: &SendNotification{Title: "x", Body: "y", Severity: "info"},
 	}
-	res, err := rt.ExecuteEffects(ctx, "inst-1", []Effect{bad})
+	res, err := rt.ExecuteEffects(ctx, "tenant-a", "inst-1", []Effect{bad})
 	if !errors.Is(err, ErrTenantMismatch) {
 		t.Fatalf("ExecuteEffects error = %v, want ErrTenantMismatch", err)
 	}
@@ -530,7 +530,7 @@ func TestBatchFailFastPartialSuccess(t *testing.T) {
 		Kind:             EffectSendNotification,
 		SendNotification: &SendNotification{Title: "bad", Body: "bad", Severity: "info"},
 	}
-	res, err := rt.ExecuteEffects(ctx, "inst-1", []Effect{good, bad})
+	res, err := rt.ExecuteEffects(ctx, "tenant-a", "inst-1", []Effect{good, bad})
 	if !errors.Is(err, ErrTenantMismatch) {
 		t.Fatalf("ExecuteEffects error = %v, want ErrTenantMismatch", err)
 	}

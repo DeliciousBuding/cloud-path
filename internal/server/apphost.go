@@ -57,10 +57,10 @@ type AppHost struct {
 	bootID string
 
 	mu      sync.Mutex
-	running map[string]*appInstanceRun // instanceID → 运行记录
-	ticked  map[string]bool            // "<instance>|<window>|<date>" → 已派发（防重复开窗）
-	appCmds map[int64]appCommandRef    // server 命令 id → 应用侧引用（RequestCompleted 用）
-	seq     uint64                     // observed 上报序号
+	running map[appInstKey]*appInstanceRun // (tenant, instanceID) → 运行记录
+	ticked  map[string]bool                // "<tenant>|<instance>|<window>|<date>" → 已派发（防重复开窗）
+	appCmds map[int64]appCommandRef        // server 命令 id → 应用侧引用（RequestCompleted 用）
+	seq     uint64                         // observed 上报序号
 }
 
 // AppHostConfig 是 Server 侧 Application Plugin Host 的配置（Config.AppHost）。
@@ -104,7 +104,20 @@ type appConfig struct {
 }
 
 // appCommandRef 把一条 server 命令关联回发起它的应用实例。
+// appInstKey 是协议面里一个实例的身份。store 主键是 (tenant_id, edge_id,
+// instance_id)，instance id 只在租户内唯一，所以运行记录、开窗去重与 appruntime
+// 都必须带租户；否则两个租户的同名实例会互相覆盖，其中一个被静默饿死。
+// edge_id 不进键：reconcile 只处理部署到伪 edge AppHostEdgeID 的实例。
+type appInstKey struct {
+	tenantID   int64
+	instanceID string
+}
+
+// tenantStr 返回 appruntime 使用的租户字符串（与 InstanceSpec.TenantID 同形）。
+func (k appInstKey) tenantStr() string { return strconv.FormatInt(k.tenantID, 10) }
+
 type appCommandRef struct {
+	TenantID   string
 	InstanceID string
 	RequestID  string // 应用侧幂等键（RequestCompleted.RequestID）
 	EntityID   string
@@ -139,7 +152,7 @@ func NewAppHost(srv *Server, cfg AppHostConfig) (*AppHost, error) {
 		ph:      ph,
 		done:    make(chan struct{}),
 		bootID:  fmt.Sprintf("server-apphost-%d", time.Now().UnixNano()),
-		running: map[string]*appInstanceRun{},
+		running: map[appInstKey]*appInstanceRun{},
 		ticked:  map[string]bool{},
 		appCmds: map[int64]appCommandRef{},
 	}
@@ -208,15 +221,15 @@ func (h *AppHost) ctxOrBackground() context.Context {
 
 // InstanceBindings 返回实例的 Capability 绑定投影（运行态）。ok=false 表示
 // 实例未运行或 AppHost 未启用——绑定只存在于实例运行期间。
-// instance id 不跨租户全局唯一，必须带 tenantID 过滤。
+// instance id 不跨租户全局唯一，因此运行记录按 (tenant, instance) 寻址。
 func (h *AppHost) InstanceBindings(tenantID int64, instanceID string) ([]api.AppBindingView, bool) {
 	if h == nil {
 		return nil, false
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	run, ok := h.running[instanceID]
-	if !ok || run.row.TenantID != tenantID {
+	run, ok := h.running[appInstKey{tenantID, instanceID}]
+	if !ok {
 		return nil, false
 	}
 	out := append([]api.AppBindingView(nil), run.bindings...)
@@ -230,8 +243,8 @@ func (h *AppHost) InstanceJobs(tenantID int64, instanceID string) ([]string, boo
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	run, ok := h.running[instanceID]
-	if !ok || run.row.TenantID != tenantID {
+	run, ok := h.running[appInstKey{tenantID, instanceID}]
+	if !ok {
 		return nil, false
 	}
 	out := append([]string(nil), run.jobIDs...)
@@ -281,11 +294,38 @@ func (h *AppHost) reconcileLoop(ctx context.Context) {
 	}
 }
 
+// serverHostedRows 只保留部署到 Server 伪 edge 的期望态行。真实 Edge 的 desired
+// 由该 Edge 自己收敛；AppHost 若也应用一遍，就会在 Server 上多跑一份属于 Edge 的
+// 实例。这是 AppHost 唯一的部署边界，进程面与协议面共用同一次过滤。
+func serverHostedRows(rows []store.PluginInstanceRow) []store.PluginInstanceRow {
+	out := make([]store.PluginInstanceRow, 0, len(rows))
+	for _, r := range rows {
+		if r.EdgeID == AppHostEdgeID {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// desiredProtocolInstances 选出协议面应当运行的实例：插件已安装且期望态 enabled。
+// 键带租户——instance id 只在租户内唯一，按裸 id 建键会让两个租户的同名实例互相
+// 覆盖，其中一个被静默饿死。
+func desiredProtocolInstances(rows []store.PluginInstanceRow, appPlugins map[string]string) map[appInstKey]store.PluginInstanceRow {
+	desired := map[appInstKey]store.PluginInstanceRow{}
+	for _, r := range rows {
+		if _, ok := appPlugins[r.PluginID]; ok && r.Enabled {
+			desired[appInstKey{r.TenantID, r.InstanceID}] = r
+		}
+	}
+	return desired
+}
+
 func (h *AppHost) reconcile(ctx context.Context) error {
 	rows, err := h.srv.cfg.Store.ListPluginInstancesAll()
 	if err != nil {
 		return fmt.Errorf("list instances: %w", err)
 	}
+	rows = serverHostedRows(rows)
 	appPlugins, err := InstalledApplicationPlugins(h.cfg.PluginsDir, h.cfg.LockPath)
 	if err != nil {
 		return fmt.Errorf("enumerate installed application plugins: %w", err)
@@ -325,38 +365,33 @@ func (h *AppHost) reconcile(ctx context.Context) error {
 	}
 
 	// 协议面：enabled 且已安装的实例 → appruntime 运行；其余 → 停止。
-	desired := map[string]store.PluginInstanceRow{}
-	for _, r := range rows {
-		if _, ok := appPlugins[r.PluginID]; ok && r.Enabled {
-			desired[r.InstanceID] = r
-		}
-	}
+	desired := desiredProtocolInstances(rows, appPlugins)
 
 	h.mu.Lock()
 	var toStop, toStart []store.PluginInstanceRow
-	for id := range h.running {
-		if _, ok := desired[id]; !ok {
-			toStop = append(toStop, h.running[id].row)
+	for key := range h.running {
+		if _, ok := desired[key]; !ok {
+			toStop = append(toStop, h.running[key].row)
 		}
 	}
-	for id, r := range desired {
-		if !applied[r.TenantID][id] {
+	for key, r := range desired {
+		if !applied[r.TenantID][key.instanceID] {
 			continue // Keep the prior protocol instance; do not promote a failed apply.
 		}
-		run, running := h.running[id]
+		run, running := h.running[key]
 		if running && run.row.Revision == r.Revision {
 			// desired 无变化，但实际态可能已失活（共享进程被连带杀死、
 			// 插件进程崩溃后流断开等）。reconcile 必须自愈：否则 failed
 			// 实例永远躺着（2026-09-05 jp1 生产实测：box-prod failed 后
 			// 90 分钟无人重启，窗口照开但 job/事件全部丢弃）。
 			alive := false
-			if inst, err := h.rt.GetInstance(id); err == nil {
+			if inst, err := h.rt.GetInstance(key.tenantStr(), key.instanceID); err == nil {
 				alive = inst.State == appruntime.StateRunning || inst.State == appruntime.StateStarting
 			}
 			if alive {
 				continue
 			}
-			h.logger.Warn("apphost instance not running, healing", "instance", id)
+			h.logger.Warn("apphost instance not running, healing", "instance", key.instanceID, "tenant", key.tenantID)
 			// 落到下面的 stop+start 路径重建会话
 		}
 		if running {
@@ -367,7 +402,7 @@ func (h *AppHost) reconcile(ctx context.Context) error {
 	h.mu.Unlock()
 
 	for _, r := range toStop {
-		h.stopInstance(r.InstanceID)
+		h.stopInstance(appInstKey{r.TenantID, r.InstanceID})
 	}
 	for _, r := range toStart {
 		if err := h.startInstance(ctx, r); err != nil {
@@ -378,13 +413,13 @@ func (h *AppHost) reconcile(ctx context.Context) error {
 	return nil
 }
 
-func (h *AppHost) stopInstance(instanceID string) {
+func (h *AppHost) stopInstance(key appInstKey) {
 	h.mu.Lock()
 	pluginID := ""
-	if run, ok := h.running[instanceID]; ok {
+	if run, ok := h.running[key]; ok {
 		pluginID = run.row.PluginID
 	}
-	delete(h.running, instanceID)
+	delete(h.running, key)
 	siblings := 0
 	if pluginID != "" {
 		for _, run := range h.running {
@@ -400,16 +435,16 @@ func (h *AppHost) stopInstance(instanceID string) {
 		// 是进程退出信号，此时发送才是安全的）
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := h.rt.StopInstance(ctx, instanceID, "desired removed or disabled", 3*time.Second); err != nil {
-			h.logger.Warn("apphost stop instance", "instance", instanceID, "err", err)
+		if err := h.rt.StopInstance(ctx, key.tenantStr(), key.instanceID, "desired removed or disabled", 3*time.Second); err != nil {
+			h.logger.Warn("apphost stop instance", "instance", key.instanceID, "tenant", key.tenantID, "err", err)
 		}
 		return
 	}
 	// 共享进程还有兄弟实例：只拆本实例会话。绝不能发 Shutdown RPC——
 	// 2026-09-05 jp1 生产实测：删除兄弟实例触发进程退出，同进程的
 	// box-prod 被连带杀死 → state=failed。
-	if err := h.rt.StopInstanceStreamOnly(instanceID); err != nil {
-		h.logger.Warn("apphost stop instance (stream only)", "instance", instanceID, "err", err)
+	if err := h.rt.StopInstanceStreamOnly(key.tenantStr(), key.instanceID); err != nil {
+		h.logger.Warn("apphost stop instance (stream only)", "instance", key.instanceID, "tenant", key.tenantID, "err", err)
 	}
 }
 
@@ -507,7 +542,7 @@ func (h *AppHost) startInstance(ctx context.Context, row store.PluginInstanceRow
 	}
 
 	h.mu.Lock()
-	h.running[row.InstanceID] = run
+	h.running[appInstKey{row.TenantID, row.InstanceID}] = run
 	h.mu.Unlock()
 	h.logger.Info("apphost instance running", "instance", row.InstanceID,
 		"plugin", row.PluginID, "version", row.Version, "bindings", len(bs.Bindings))
@@ -572,7 +607,7 @@ func (h *AppHost) DispatchDeviceEvent(deviceTenantID int64, deviceKey, entityID,
 	}
 	occurred := time.Unix(ts, 0).UTC().Format(time.RFC3339)
 	for _, route := range routes {
-		err := h.rt.DispatchEvent(h.ctxOrBackground(), route.run.row.InstanceID, &sdkapplication.ApplicationEvent{
+		err := h.rt.DispatchEvent(h.ctxOrBackground(), route.run.tenantStr, route.run.row.InstanceID, &sdkapplication.ApplicationEvent{
 			Union: &sdkapplication.CapabilityEvent{
 				RequirementID: route.req, EntityID: entityID, EventType: eventType,
 				PayloadJSON: "{}", OccurredAt: occurred,
@@ -611,7 +646,7 @@ func (h *AppHost) NotifyCommandAck(commandID int64, status, detail string) {
 	if !ok {
 		return
 	}
-	err := h.rt.DispatchEvent(h.ctxOrBackground(), ref.InstanceID, &sdkapplication.ApplicationEvent{
+	err := h.rt.DispatchEvent(h.ctxOrBackground(), ref.TenantID, ref.InstanceID, &sdkapplication.ApplicationEvent{
 		Union: &sdkapplication.RequestCompleted{
 			RequestID: ref.RequestID, EntityID: ref.EntityID, Action: ref.Action,
 			State: state, ResultJSON: detail,
@@ -639,10 +674,12 @@ func (h *AppHost) minuteLoop(ctx context.Context) {
 
 func (h *AppHost) minutePass(now time.Time) {
 	type tickDispatch struct {
+		tenantStr  string
 		instanceID string
 		tick       *sdkapplication.ScheduleTick
 	}
 	type jobDispatch struct {
+		tenantStr  string
 		instanceID string
 		req        *sdkapplication.RunJobRequest
 	}
@@ -650,7 +687,8 @@ func (h *AppHost) minutePass(now time.Time) {
 	var ticks []tickDispatch
 	var jobs []jobDispatch
 	minuteKey := strconv.FormatInt(now.Unix()/60, 10)
-	for id, run := range h.running {
+	for key, run := range h.running {
+		id := key.instanceID
 		local := now.In(run.tz)
 		hhmm := local.Format("15:04")
 		date := local.Format("2006-01-02")
@@ -658,17 +696,18 @@ func (h *AppHost) minutePass(now time.Time) {
 			if w.Start != hhmm {
 				continue
 			}
-			tickKey := id + "|" + w.ID + "|" + date
+			// 键含租户：两个租户的同名实例各自每日只开一次窗。
+			tickKey := run.tenantStr + "|" + id + "|" + w.ID + "|" + date
 			if h.ticked[tickKey] {
 				continue
 			}
 			h.ticked[tickKey] = true
 			if t := buildWindowTick(w, local, run.tz); t != nil {
-				ticks = append(ticks, tickDispatch{instanceID: id, tick: t})
+				ticks = append(ticks, tickDispatch{tenantStr: run.tenantStr, instanceID: id, tick: t})
 			}
 		}
 		for _, jobID := range run.jobIDs {
-			jobs = append(jobs, jobDispatch{instanceID: id, req: &sdkapplication.RunJobRequest{
+			jobs = append(jobs, jobDispatch{tenantStr: run.tenantStr, instanceID: id, req: &sdkapplication.RunJobRequest{
 				PluginInstanceID: id, JobID: jobID, IdempotencyKey: jobID + "-" + minuteKey,
 			}})
 		}
@@ -686,14 +725,14 @@ func (h *AppHost) minutePass(now time.Time) {
 	h.mu.Unlock()
 
 	for _, t := range ticks {
-		if err := h.rt.DispatchEvent(h.ctxOrBackground(), t.instanceID, &sdkapplication.ApplicationEvent{Union: t.tick}); err != nil {
+		if err := h.rt.DispatchEvent(h.ctxOrBackground(), t.tenantStr, t.instanceID, &sdkapplication.ApplicationEvent{Union: t.tick}); err != nil {
 			h.logger.Warn("apphost dispatch schedule tick", "instance", t.instanceID, "err", err)
 		} else {
 			h.logger.Info("apphost window opened", "instance", t.instanceID, "schedule", t.tick.ScheduleID)
 		}
 	}
 	for _, j := range jobs {
-		if _, err := h.rt.RunJob(h.ctx, j.instanceID, j.req); err != nil {
+		if _, err := h.rt.RunJob(h.ctx, j.tenantStr, j.instanceID, j.req); err != nil {
 			h.logger.Warn("apphost run job", "instance", j.instanceID, "job", j.req.JobID, "err", err)
 		}
 	}
@@ -773,7 +812,7 @@ func (h *AppHost) dispatchScheduledJob(st *store.Store, row store.ScheduledJobRo
 			"planned_at", row.NextRunAt, "next_run_at", next.Unix())
 		return
 	}
-	if _, err := h.rt.RunJob(h.ctxOrBackground(), row.InstanceID, &sdkapplication.RunJobRequest{
+	if _, err := h.rt.RunJob(h.ctxOrBackground(), strconv.FormatInt(row.TenantID, 10), row.InstanceID, &sdkapplication.RunJobRequest{
 		PluginInstanceID: row.InstanceID,
 		JobID:            row.ScheduleID,
 		JobType:          "scheduled",
@@ -791,10 +830,14 @@ func (h *AppHost) dispatchScheduledJob(st *store.Store, row store.ScheduledJobRo
 
 // instanceTimezone 返回实例配置时区（schedule_job 效果声明时取用）；实例不
 // 在运行（理论不可达：效果来自运行中的实例）或无配置 → UTC。
-func (h *AppHost) instanceTimezone(instanceID string) *time.Location {
+func (h *AppHost) instanceTimezone(tenantStr, instanceID string) *time.Location {
+	tid, err := strconv.ParseInt(tenantStr, 10, 64)
+	if err != nil {
+		return time.UTC
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if run, ok := h.running[instanceID]; ok && run.tz != nil {
+	if run, ok := h.running[appInstKey{tid, instanceID}]; ok && run.tz != nil {
 		return run.tz
 	}
 	return time.UTC
@@ -863,9 +906,9 @@ func (h *AppHost) reportObserved() {
 		st  appruntime.InstanceState
 	}
 	var items []item
-	for id, run := range h.running {
+	for _, run := range h.running {
 		st := appruntime.StateRunning
-		if inst, err := h.rt.GetInstance(id); err == nil && inst != nil {
+		if inst, err := h.rt.GetInstance(run.tenantStr, run.row.InstanceID); err == nil && inst != nil {
 			st = inst.State
 		}
 		items = append(items, item{row: run.row, st: st})
@@ -980,7 +1023,7 @@ func (e *appEffectExecutor) Execute(ctx context.Context, effect appruntime.Effec
 		if err != nil {
 			return fmt.Errorf("apphost: schedule %q: %w", p.ScheduleID, err)
 		}
-		tz := e.host.instanceTimezone(effect.PluginInstanceID)
+		tz := e.host.instanceTimezone(effect.TenantID, effect.PluginInstanceID)
 		next := expr.nextAfter(time.Now(), tz)
 		if next.IsZero() {
 			return fmt.Errorf("apphost: schedule %q: cron %q has no future occurrence", p.ScheduleID, p.Cron)
@@ -1034,6 +1077,7 @@ func (e *appEffectExecutor) execRequestCommand(ctx context.Context, effect appru
 	}
 	e.host.mu.Lock()
 	e.host.appCmds[cmdID] = appCommandRef{
+		TenantID:   effect.TenantID,
 		InstanceID: effect.PluginInstanceID, RequestID: p.IdempotencyKey,
 		EntityID: p.EntityID, Action: p.Action,
 	}
