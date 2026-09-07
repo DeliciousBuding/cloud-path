@@ -64,6 +64,14 @@ export interface AdapterView {
   commands: string[]
 }
 
+/**
+ * 鉴权形态（docs/api.md §1 三级安全模型）：
+ * `account` 账号模式（已有用户或 -require-auth），全部 /api/* 与 /ws 需凭据；
+ * `token`   仅共享 legacy 令牌（-token / CLOUDPATH_TOKEN），读开放、写需令牌或回环；
+ * `open`    L0 单机，读开放、写仅接受回环来源。
+ */
+export type AuthMode = 'account' | 'token' | 'open'
+
 /** 存储与运行统计 */
 export interface StatsView {
   devices: number
@@ -72,7 +80,7 @@ export interface StatsView {
   oldest_event: number
   schema_version: number
   retention_days: number
-  auth_enabled: boolean
+  auth_mode: AuthMode
 }
 
 /** WS 消息信封（浏览器视角）。后端可能新增类型（如 descriptor），故消费侧对未知 type 宽容。 */

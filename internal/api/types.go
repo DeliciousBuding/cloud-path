@@ -195,7 +195,11 @@ type StatsView struct {
 	OldestEvent   int64 `json:"oldest_event"`
 	SchemaVersion int   `json:"schema_version"`
 	RetentionDays int   `json:"retention_days"`
-	AuthEnabled   bool  `json:"auth_enabled"`
+	// AuthMode 是 server 当前**实际执行**的鉴权形态：`account`（账号模式，全部 /api/* 需凭据）、
+	// `token`（仅共享 legacy 令牌：读开放、写需令牌或回环）、`open`（L0 单机：写仅接受回环来源）。
+	// 取代旧的 `auth_enabled bool`——那个字段只看 legacy 令牌，账号模式下会把「必须登录」
+	// 说成「未启用鉴权」。形态定义见 docs/api.md §1 不变量 1-3。
+	AuthMode string `json:"auth_mode"`
 }
 
 // ---- 插件控制面同步（docs/architecture/control-plane-sync.md）----

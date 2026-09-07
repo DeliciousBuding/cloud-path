@@ -12,7 +12,7 @@ import { installFetch, stubResponse } from '@/test/http'
 import { renderWithProviders, resetStores } from '@/test/render'
 import { useAuth } from '@/store/auth'
 import { useLive } from '@/store/ws'
-import type { UserView } from '@/lib/types'
+import type { AuthMode, UserView } from '@/lib/types'
 
 const admin: UserView = {
   id: 1, username: 'ops-admin', name: '运维管理员', role: 'admin',
@@ -21,14 +21,14 @@ const admin: UserView = {
 const health = { ok: true, version: 'v0.1.0', uptime_s: 60, devices_online: 0, devices_total: 0, edges_online: 0 }
 const stats = {
   devices: 0, events: 0, commands: 0, oldest_event: 0, schema_version: 8,
-  retention_days: 30, auth_enabled: true,
+  retention_days: 30, auth_mode: 'account' as AuthMode,
 }
 
-function route(opts: { authEnabled?: boolean } = {}) {
+function route(opts: { authMode?: AuthMode } = {}) {
   return installFetch((url, init) => {
     if (url === '/healthz') return stubResponse(200, health)
     if (url === '/api/stats') {
-      return stubResponse(200, { ...stats, auth_enabled: opts.authEnabled ?? true })
+      return stubResponse(200, { ...stats, auth_mode: opts.authMode ?? 'account' })
     }
     if (url === '/api/auth/logout') return stubResponse(204, undefined)
     if (url === '/api/adapters') return stubResponse(200, { adapters: [] })
@@ -109,12 +109,44 @@ describe('Settings 账号与令牌面板', () => {
     expect(await screen.findByText('ops-admin')).toBeInTheDocument()
     expect(screen.getByText('管理员')).toBeInTheDocument()
     expect(screen.getByText('default')).toBeInTheDocument()
-    // stats 是异步的，等它落地再断言鉴权标注\n    expect(await screen.findByText('已启用账号鉴权')).toBeInTheDocument()
+    // stats 是异步的，等它落地再断言鉴权标注
+    expect(await screen.findByText('账号鉴权：全部接口需登录')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /登出/ })).toBeInTheDocument()
   })
 
+  // 回归：auth_enabled 时代只看「有没有配 legacy 令牌」，账号模式（已建用户、无 CLOUDPATH_TOKEN）
+  // 会被报成 false，系统页于是显示「未启用（本机模式）」——把必须登录的部署说成裸奔，
+  // 而同一页下方还写着「账号模式下浏览器靠会话 cookie 鉴权」，自相矛盾。
+  it('鉴权行照 server 实际形态说话：账号模式绝不说成未启用', async () => {
+    route({ authMode: 'account' })
+    useAuth.setState({ status: 'in', user: admin })
+    renderWithProviders(<Settings />)
+    expect(await screen.findByText('账号鉴权：全部接口需登录')).toBeInTheDocument()
+    expect(screen.queryByText(/未启用/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/本机模式/)).not.toBeInTheDocument()
+  })
+
+  it('仅共享 legacy 令牌 / L0 单机：各自如实说明读写边界，不共用一句含糊话', async () => {
+    route({ authMode: 'token' })
+    useAuth.setState({ status: 'in', user: admin })
+    const { unmount } = renderWithProviders(<Settings />)
+    expect(await screen.findByText('共享令牌（legacy）：读开放，写需令牌或本机回环')).toBeInTheDocument()
+    unmount()
+
+    route({ authMode: 'open' })
+    renderWithProviders(<Settings />)
+    expect(await screen.findByText('未启用：读开放，写仅限本机回环')).toBeInTheDocument()
+  })
+
+  it('未知鉴权形态回落原值展示，不伪造中文语义', async () => {
+    route({ authMode: 'future_mode' as AuthMode })
+    useAuth.setState({ status: 'in', user: admin })
+    renderWithProviders(<Settings />)
+    expect(await screen.findByText('future_mode')).toBeInTheDocument()
+  })
+
   it('开放访问：说明这是 me 不可用，而不是假装已登录', async () => {
-    route({ authEnabled: false })
+    route({ authMode: 'open' })
     useAuth.setState({ status: 'open', user: null })
     renderWithProviders(<Settings />)
     expect(await screen.findByText('开放访问')).toBeInTheDocument()
