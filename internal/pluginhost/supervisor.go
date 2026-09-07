@@ -149,6 +149,10 @@ type Supervisor struct {
 	runner Runner
 	logger *slog.Logger
 
+	// Installed by Manager before Run; restores managed config before a new
+	// session becomes available. Standalone Supervisors remain transport-only.
+	prepareSession func(context.Context, *runtimeSession) error
+
 	mu       sync.Mutex
 	state    State
 	disabled bool
@@ -492,6 +496,21 @@ func (s *Supervisor) runOnce(ctx context.Context) runOutcome {
 			// be re-issued by the Manager health loop if still needed.
 		case <-ctx.Done():
 			return s.shutdown(h, sess)
+		}
+	}
+
+	if s.prepareSession != nil {
+		prepareCtx, cancel := context.WithTimeout(ctx, s.cfg.HandshakeTimeout)
+		err := s.prepareSession(prepareCtx, sess)
+		cancel()
+		if err != nil {
+			s.logger.Error("plugin session restore failed", "plugin_id", s.cfg.PluginID, "error", err)
+			outcome := s.shutdown(h, sess)
+			if ctx.Err() != nil {
+				return outcome
+			}
+			s.setState(StateCrashed)
+			return runCrashed
 		}
 	}
 

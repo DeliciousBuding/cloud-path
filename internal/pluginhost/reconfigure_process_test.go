@@ -92,6 +92,9 @@ func (s *reconfigureDriver) ConfigureInstance(_ context.Context, req *driver.Con
 	if _, reserved := config[pluginhost.ConfigPathKey]; reserved {
 		return &driver.ConfigureInstanceResponse{Status: status.Errorf(status.CodeInvalidArgument, "Host-only path was forwarded as plugin config")}, nil
 	}
+	if _, err := os.Stat(filepath.Join(os.Getenv(reconfigureMarkerEnv), "reject-config")); err == nil {
+		return &driver.ConfigureInstanceResponse{Status: status.Errorf(status.CodeUnavailable, "configuration temporarily unavailable")}, nil
+	}
 	if !s.initialized {
 		return &driver.ConfigureInstanceResponse{Status: status.Errorf(status.CodeFailedPrecondition, "not initialized")}, nil
 	}
@@ -166,15 +169,19 @@ func TestManagerReconfigureProcess(t *testing.T) {
 		}
 		paths[version] = path
 	}
-	newHost := func(t *testing.T) (*pluginhost.Manager, *recordingRunner, string) {
+	newHost := func(t *testing.T, tune ...func(*pluginhost.ManagerOptions)) (*pluginhost.Manager, *recordingRunner, string) {
 		t.Helper()
 		markers := t.TempDir()
 		runner := newRecordingRunner()
-		m := pluginhost.NewManager(pluginhost.ManagerOptions{
+		opts := pluginhost.ManagerOptions{
 			Runner: runner, CommandArgs: []string{"-test.run=^TestReconfigureHelperProcess$"},
 			CommandEnv:       []string{reconfigureHelperEnv + "=1", reconfigureMarkerEnv + "=" + markers},
 			HandshakeTimeout: 3 * time.Second, ShutdownTimeout: time.Second, HealthCheckInterval: time.Hour,
-		})
+		}
+		for _, fn := range tune {
+			fn(&opts)
+		}
+		m := pluginhost.NewManager(opts)
 		t.Cleanup(func() {
 			_ = m.Close()
 			for i := 0; i < runner.StartCount(); i++ {
@@ -234,6 +241,131 @@ func TestManagerReconfigureProcess(t *testing.T) {
 		_, err := os.Stat(filepath.Join(markers, strconv.Itoa(pid)+suffix))
 		return err == nil
 	}
+
+	t.Run("supervisor-restart-restores-shared-configs", func(t *testing.T) {
+		m, r, _ := newHost(t, func(o *pluginhost.ManagerOptions) {
+			o.MaxRestarts = 1
+			o.BaseBackoff = time.Millisecond
+			o.MaxBackoff = time.Millisecond
+		})
+		a := spec("tenant-a", "worker", "initial")
+		a.Config[pluginhost.ConfigPathKey] = "local-config.json"
+		b := spec("tenant-b", "worker", "sibling")
+		reconcile(t, m, a)
+		reconcile(t, m, b)
+		// Restore the last applied configuration, not the original launch spec.
+		a.Config["mode"] = "updated"
+		reconcile(t, m, a)
+		cleared := spec("tenant-a", "cleared", "initial")
+		reconcile(t, m, cleared)
+		cleared.Config = nil
+		reconcile(t, m, cleared)
+		// Empty never-bound instances must not get an unsolicited {} config.
+		unbound := spec("tenant-a", "unbound", "")
+		unbound.Config = nil
+		reconcile(t, m, unbound)
+		oldClient := client(t, m)
+		old := readReport(t, oldClient)
+		if _, err := oldClient.Shutdown(context.Background(), &driver.ShutdownRequest{}); err != nil {
+			t.Fatal(err)
+		}
+		// This exit is handled by Supervisor, with no manual Reconcile/Start.
+		deadline := time.Now().Add(5 * time.Second)
+		var snap pluginhost.InstanceSnapshot
+		for time.Now().Before(deadline) {
+			snap, err = m.Snapshot(a.Tenant, a.ID)
+			if err == nil && snap.Launches == 2 && snap.State == pluginhost.StateHealthy {
+				break
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		if snap.Launches != 2 || snap.State != pluginhost.StateHealthy {
+			t.Fatalf("automatic restart did not become ready: %+v err=%v", snap, err)
+		}
+		got := readReport(t, client(t, m))
+		if got.PID == old.PID || r.StartCount() != 2 || !reflect.DeepEqual(got.Configs, old.Configs) {
+			t.Fatalf("new process exposed before restoring both tenants: before=%+v after=%+v launches=%d", old, got, r.StartCount())
+		}
+		for id := range old.Configs {
+			if got.Calls[id] != 1 || got.Revisions[id] <= old.Revisions[id] {
+				t.Fatalf("restart did not restore latest revision exactly once for %s: %+v", id, got)
+			}
+		}
+		reconcile(t, m, a)
+		reconcile(t, m, b)
+		if replay := readReport(t, client(t, m)); !reflect.DeepEqual(replay, got) {
+			t.Fatalf("unchanged replay reconfigured the restored session: before=%+v after=%+v", got, replay)
+		}
+	})
+
+	t.Run("restart-config-rejection-never-exposes-client", func(t *testing.T) {
+		m, r, markers := newHost(t, func(o *pluginhost.ManagerOptions) {
+			o.MaxRestarts = 1
+			o.BaseBackoff = time.Millisecond
+			o.MaxBackoff = time.Millisecond
+		})
+		s := spec("tenant-a", "worker", "initial")
+		reconcile(t, m, s)
+		oldClient := client(t, m)
+		denyPath := filepath.Join(markers, "reject-config")
+		if err := os.WriteFile(denyPath, []byte("reject next config"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := oldClient.Shutdown(context.Background(), &driver.ShutdownRequest{}); err != nil {
+			t.Fatal(err)
+		}
+		deadline := time.Now().Add(5 * time.Second)
+		var snap pluginhost.InstanceSnapshot
+		for time.Now().Before(deadline) {
+			snap, err = m.Snapshot(s.Tenant, s.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if snap.Launches == 2 && snap.State == pluginhost.StateHealthy {
+				t.Fatal("configuration rejection was advertised as a healthy restart")
+			}
+			if snap.State == pluginhost.StateDisabled {
+				break
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		if snap.State != pluginhost.StateDisabled || snap.Launches != 2 || r.StartCount() != 2 {
+			t.Fatalf("failed recovery bypassed restart budget: %+v launches=%d", snap, r.StartCount())
+		}
+		if _, err := m.DriverClient(s.PluginID); err == nil {
+			t.Fatal("rejected restored session still has a usable client")
+		}
+		if err := os.Remove(denyPath); err != nil {
+			t.Fatal(err)
+		}
+		if err := m.ReconcileInstance(context.Background(), s, false); err != nil {
+			t.Fatal(err)
+		}
+		reconcile(t, m, s)
+		if got := readReport(t, client(t, m)); got.Configs["tenant-a/worker"]["mode"] != "initial" {
+			t.Fatalf("explicit re-enable failed to recover: %+v", got)
+		}
+	})
+
+	t.Run("legacy-start-remains-transport-only", func(t *testing.T) {
+		m, _, _ := newHost(t)
+		s := spec("tenant-a", "worker", "initial")
+		if _, err := m.CreateInstance(s); err != nil {
+			t.Fatal(err)
+		}
+		if err := m.Start(s.Tenant, s.ID); err != nil {
+			t.Fatal(err)
+		}
+		waitInstanceState(t, m, s.Tenant, s.ID, pluginhost.StateHealthy)
+		health, err := client(t, m).Health(context.Background())
+		if err != nil || health.State != driver.HealthStateNotServing {
+			t.Fatalf("legacy Start unexpectedly initialized/configured plugin: %+v %v", health, err)
+		}
+		reconcile(t, m, s)
+		if got := readReport(t, client(t, m)); got.Calls["tenant-a/worker"] != 1 {
+			t.Fatalf("first explicit reconcile did not configure legacy instance: %+v", got)
+		}
+	})
 
 	t.Run("version-config-isolation-and-replay", func(t *testing.T) {
 		m, r, markers := newHost(t)

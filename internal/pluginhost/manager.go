@@ -426,10 +426,15 @@ func (m *Manager) ReconcileInstance(ctx context.Context, spec InstanceSpec, enab
 	}
 	config := pluginConfig(inst.Config)
 	var previousConfig map[string]string
+	previousConfigured := false
+	m.mu.Lock()
 	if old != nil {
 		previousConfig = pluginConfig(old.inst.Config)
+		previousConfigured = old.configuredSession == sess
+		rec.configRevision = old.configRevision
 	}
-	needsConfig := !maps.Equal(config, previousConfig) || len(config) > 0 && (old == nil || old.configuredSession != sess)
+	m.mu.Unlock()
+	needsConfig := !maps.Equal(config, previousConfig) || (len(config) > 0 || rec.configRevision > 0) && !previousConfigured
 	configured := false
 	if err == nil && needsConfig {
 		rec.configRevision++
@@ -452,13 +457,26 @@ func (m *Manager) ReconcileInstance(ctx context.Context, spec InstanceSpec, enab
 		// A rejected in-place config must not leave the Manager or the applied cache
 		// ahead. Restore the last config on the same session; report rollback failure
 		// too, since a transport error can leave the plugin's result uncertain.
-		if configured && !created && old != nil && old.configuredSession == sess {
+		m.mu.Lock()
+		restorePrevious := configured && !created && old != nil && old.configuredSession == sess
+		if restorePrevious {
+			old.configRevision = max(old.configRevision, rec.configRevision) + 1
+		}
+		rollbackRevision := uint32(0)
+		if old != nil {
+			rollbackRevision = old.configRevision
+		}
+		m.mu.Unlock()
+		if restorePrevious {
 			rollbackCtx, rollbackCancel := context.WithTimeout(m.ctx, timeout)
-			old.configRevision = rec.configRevision + 1
-			rollbackErr := configureInstance(rollbackCtx, sess, old.inst, old.configRevision)
+			rollbackErr := configureInstance(rollbackCtx, sess, old.inst, rollbackRevision)
 			rollbackCancel()
 			if rollbackErr != nil {
-				old.configuredSession = nil // An unchanged replay must retry an uncertain config.
+				m.mu.Lock()
+				if old.configuredSession == sess {
+					old.configuredSession = nil // An unchanged replay must retry an uncertain config.
+				}
+				m.mu.Unlock()
 				err = errors.Join(err, fmt.Errorf("restore previous config: %w", rollbackErr))
 			}
 		}
@@ -967,13 +985,71 @@ func (m *Manager) newProcGroupLocked(rec *instanceRecord) *procGroup {
 		)
 	}
 	gctx, cancel := context.WithCancel(m.ctx)
-	return &procGroup{
+	g := &procGroup{
 		key:        rec.procKey,
 		supervisor: NewSupervisor(cfg, m.opts.Runner, m.opts.Logger),
 		ctx:        gctx,
 		cancel:     cancel,
 		done:       make(chan struct{}),
 	}
+	g.supervisor.prepareSession = func(ctx context.Context, sess *runtimeSession) error {
+		return m.restoreInstanceSessions(ctx, g, sess)
+	}
+	return g
+}
+
+// restoreInstanceSessions runs after authentication but before a restarted
+// session is published or declared healthy. It replays only Manager-applied
+// configs; device bindings and application JSON remain owned by their callers.
+// It must not acquire ops: Reconcile may be waiting for this session while
+// holding that lock. A fresh candidate has no live bindings here and is still
+// configured by Reconcile before the Manager publishes its binding.
+func (m *Manager) restoreInstanceSessions(ctx context.Context, g *procGroup, sess *runtimeSession) error {
+	type restore struct {
+		key      string
+		record   *instanceRecord
+		inst     Instance
+		revision uint32
+	}
+	var targets []restore
+	m.mu.Lock()
+	for key, rec := range m.instances {
+		if rec.enabled && m.procs[rec.procKey] == g && (rec.configuredSession != nil || rec.configRevision > 0) {
+			targets = append(targets, restore{key: key, record: rec, inst: rec.inst, revision: rec.configRevision})
+		}
+	}
+	m.mu.Unlock()
+	if len(targets) == 0 {
+		return nil // Preserve CreateInstance/Start's transport-only contract.
+	}
+	sort.Slice(targets, func(i, j int) bool { return targets[i].key < targets[j].key })
+	if err := initializeInstanceSession(ctx, g, sess); err != nil {
+		return err
+	}
+	for i := range targets {
+		t := &targets[i]
+		// revision > 0 retains an explicit clear; a never-configured empty
+		// instance must still wait for its upper-layer device/app binding.
+		if t.revision > 0 || len(pluginConfig(t.inst.Config)) > 0 {
+			t.revision++
+			if err := configureInstance(ctx, sess, t.inst, t.revision); err != nil {
+				return fmt.Errorf("restore instance %s/%s: %w", t.inst.Tenant, t.inst.ID, err)
+			}
+		}
+	}
+	if err := sess.health(ctx); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, t := range targets {
+		rec := m.instances[t.key]
+		if rec == t.record && rec.enabled && m.procs[rec.procKey] == g {
+			rec.configuredSession = sess
+			rec.configRevision = max(rec.configRevision, t.revision)
+		}
+	}
+	return nil
 }
 
 // launchProcGroup starts the supervisor Run loop exactly once. It is called
