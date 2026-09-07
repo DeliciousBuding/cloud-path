@@ -91,8 +91,8 @@ type InstanceSpec struct {
 
 // RuntimeOptions configures a Runtime. Dialer and Executor are required.
 type RuntimeOptions struct {
-	// Dialer returns the SDK ApplicationClient for a plugin id. A process
-	// host supplies one client per installed plugin process.
+	// Dialer resolves the exact tenant/instance process for the requested
+	// definition, including plugin identity and version.
 	Dialer Dialer
 	// Executor is the Core-provided EffectExecutor.
 	Executor EffectExecutor
@@ -107,8 +107,8 @@ type RuntimeOptions struct {
 	Context context.Context
 }
 
-// Dialer returns the SDK ApplicationClient for a plugin id.
-type Dialer func(pluginID string) (sdkapplication.ApplicationClient, error)
+// Dialer resolves a client for the complete instance target, not just plugin ID.
+type Dialer func(spec InstanceSpec) (sdkapplication.ApplicationClient, error)
 
 // Sentinel errors returned by the runtime.
 var (

@@ -241,6 +241,14 @@ Supervisor 自动重启后，Manager 已应用的实例配置会在新会话对�
 
 切换运行绑定不是跨进程、实例文件和 revision 缓存的事务。旧进程退出超时会保留待清理记录，重复请求必须先完成退出确认；实例文件保存失败不回滚已运行的新进程，而是在相同 desired 重试时补齐持久化。失败期间不推进完整 applied revision；详见[控制面故障恢复](control-plane-sync.md#8-故障与恢复)。
 
+### 客户端寻址
+
+map 遍历顺序不是路由规则。插件级查询 `DriverClient(pluginID)` / `ApplicationClient(pluginID)` 只服务尚未持有实例身份的既有调用方：当该插件所有已启用绑定都落在同一个进程上时返回该进程的会话客户端，否则以 `ErrAmbiguousInstance` 失败关闭，不静默挑选一个版本。共享进程内的多个实例仍然无歧义；并存两个版本时必须改用实例级查询。
+
+`DriverClientForInstance(tenant, id)` / `ApplicationClientForInstance(tenant, id)` 解析唯一一条已启用的租户/实例绑定，不向其他版本、进程或租户回落；实例被禁用时返回 `ErrInstanceNotFound`，而不是交给同插件的兄弟实例。两类客户端都绑定当前会话，进程重启后必须重新解析。
+
+上层协议按收敛定义解析进程，不按插件 ID 匹配。AppHost 在把客户端交给 Application Runtime 之前，先核对该实例的进程快照处于启用态，且插件 ID 与版本等于本次期望值；进程面尚未收敛到期望版本时拒绝下发，避免把新版本的 `Initialize` / `ConfigureInstance` 送进陈旧进程。同理，进程面 apply 未成功的实例不会在协议面被晋升为运行实例。
+
 ## 11. 数据和升级
 
 - Core 数据迁移与插件数据迁移分开。

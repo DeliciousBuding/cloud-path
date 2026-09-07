@@ -3,6 +3,7 @@ package pluginhost_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -364,6 +365,43 @@ func TestManagerReconfigureProcess(t *testing.T) {
 		reconcile(t, m, s)
 		if got := readReport(t, client(t, m)); got.Calls["tenant-a/worker"] != 1 {
 			t.Fatalf("first explicit reconcile did not configure legacy instance: %+v", got)
+		}
+	})
+
+	t.Run("plugin-only-client-rejects-ambiguous-processes", func(t *testing.T) {
+		m, _, _ := newHost(t)
+		a := spec("tenant-a", "worker-a", "initial")
+		b := spec("tenant-a", "worker-b", "sibling")
+		reconcile(t, m, a)
+		reconcile(t, m, b)
+		// Two instances in one shared process still have an unambiguous client.
+		_ = readReport(t, client(t, m))
+		b.Version = "0.2.0"
+		reconcile(t, m, b)
+		if _, err := m.DriverClient(a.PluginID); !errors.Is(err, pluginhost.ErrAmbiguousInstance) {
+			t.Fatalf("plugin-only lookup silently chose a process: %v", err)
+		}
+		firstClient, err := m.DriverClientForInstance(a.Tenant, a.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		secondClient, err := m.DriverClientForInstance(b.Tenant, b.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		first := readReport(t, firstClient)
+		second := readReport(t, secondClient)
+		if first.PID == second.PID || first.Version != a.Version || second.Version != b.Version {
+			t.Fatalf("instance lookup selected wrong process: first=%+v second=%+v", first, second)
+		}
+		if _, err := m.DriverClientForInstance("another-tenant", a.ID); !errors.Is(err, pluginhost.ErrInstanceNotFound) {
+			t.Fatalf("wrong tenant was allowed or fell back: %v", err)
+		}
+		if err := m.ReconcileInstance(context.Background(), b, false); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := m.DriverClientForInstance(b.Tenant, b.ID); !errors.Is(err, pluginhost.ErrInstanceNotFound) {
+			t.Fatalf("disabled instance fell back to its sibling: %v", err)
 		}
 	})
 

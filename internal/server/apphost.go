@@ -144,9 +144,7 @@ func NewAppHost(srv *Server, cfg AppHostConfig) (*AppHost, error) {
 		appCmds: map[int64]appCommandRef{},
 	}
 	rt, err := appruntime.NewRuntime(appruntime.RuntimeOptions{
-		Dialer: func(pluginID string) (sdkapplication.ApplicationClient, error) {
-			return mgr.ApplicationClient(pluginID)
-		},
+		Dialer:   h.applicationClient,
 		Executor: &appEffectExecutor{host: h},
 		Logger:   logger,
 	})
@@ -309,6 +307,7 @@ func (h *AppHost) reconcile(ctx context.Context) error {
 		tenants = append(tenants, tid)
 	}
 	sort.Slice(tenants, func(i, j int) bool { return tenants[i] < tenants[j] })
+	applied := map[int64]map[string]bool{}
 	for _, tid := range tenants {
 		ts := strconv.FormatInt(tid, 10)
 		results, err := h.ph.ApplySnapshot(ctx, ts, byTenant[tid])
@@ -316,7 +315,9 @@ func (h *AppHost) reconcile(ctx context.Context) error {
 			h.logger.Warn("apphost apply snapshot failed", "tenant", ts, "err", err)
 			continue
 		}
+		applied[tid] = map[string]bool{}
 		for _, res := range results {
+			applied[tid][res.InstanceID] = res.Status == api.PluginAckApplied
 			if res.Status != api.PluginAckApplied {
 				h.logger.Warn("apphost instance apply result", "instance", res.InstanceID, "status", res.Status, "detail", res.Detail)
 			}
@@ -339,6 +340,9 @@ func (h *AppHost) reconcile(ctx context.Context) error {
 		}
 	}
 	for id, r := range desired {
+		if !applied[r.TenantID][id] {
+			continue // Keep the prior protocol instance; do not promote a failed apply.
+		}
 		run, running := h.running[id]
 		if running && run.row.Revision == r.Revision {
 			// desired 无变化，但实际态可能已失活（共享进程被连带杀死、
@@ -409,11 +413,30 @@ func (h *AppHost) stopInstance(instanceID string) {
 	}
 }
 
+// applicationClient pins protocol work to the same tenant/instance definition
+// that the process reconciler applied. A stale binding must not receive a new
+// desired version's Initialize/Configure calls merely because plugin IDs match.
+func (h *AppHost) applicationClient(spec appruntime.InstanceSpec) (sdkapplication.ApplicationClient, error) {
+	snap, err := h.mgr.Snapshot(spec.TenantID, spec.PluginInstanceID)
+	if err != nil {
+		return nil, err
+	}
+	if !snap.Enabled || snap.PluginID != spec.PluginID || snap.Version != spec.PluginVersion {
+		return nil, fmt.Errorf("apphost: process definition not converged for instance %s/%s", spec.TenantID, spec.PluginInstanceID)
+	}
+	return h.mgr.ApplicationClientForInstance(spec.TenantID, spec.PluginInstanceID)
+}
+
 func (h *AppHost) startInstance(ctx context.Context, row store.PluginInstanceRow) error {
 	tenantStr := strconv.FormatInt(row.TenantID, 10)
 	launchID := "server-apphost-" + row.InstanceID
+	spec := appruntime.InstanceSpec{
+		PluginInstanceID: row.InstanceID, PluginID: row.PluginID, TenantID: tenantStr,
+		PluginVersion: row.Version, LaunchID: launchID, NodeID: "server",
+		Config: appConfigBytes(row.ConfigJSON), ConfigRevision: uint32(row.Revision),
+	}
 
-	cli, err := h.mgr.ApplicationClient(row.PluginID)
+	cli, err := h.applicationClient(spec)
 	if err != nil {
 		return err
 	}
@@ -447,14 +470,10 @@ func (h *AppHost) startInstance(ctx context.Context, row store.PluginInstanceRow
 		return fmt.Errorf("bind: %w", err)
 	}
 
-	if _, err := h.rt.StartInstance(ctx, appruntime.InstanceSpec{
-		ApplicationID: desc.ApplicationID, PluginInstanceID: row.InstanceID,
-		PluginID: row.PluginID, TenantID: tenantStr, PluginVersion: row.Version,
-		LaunchID: launchID, NodeID: "server",
-		Config:         appConfigBytes(row.ConfigJSON),
-		ConfigRevision: uint32(row.Revision),
-		Candidates:     candidates, Bindings: bs.Bindings,
-	}); err != nil {
+	spec.ApplicationID = desc.ApplicationID
+	spec.Candidates = candidates
+	spec.Bindings = bs.Bindings
+	if _, err := h.rt.StartInstance(ctx, spec); err != nil {
 		return fmt.Errorf("start: %w", err)
 	}
 

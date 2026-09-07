@@ -135,7 +135,7 @@ func newInstanceRecord(spec InstanceSpec, queueSize int) *instanceRecord {
 }
 
 func (r *Runtime) startRecord(ctx context.Context, rec *instanceRecord) error {
-	cli, err := r.opts.Dialer(rec.spec.PluginID)
+	cli, err := r.opts.Dialer(rec.spec)
 	if err != nil {
 		return fmt.Errorf("dial plugin %s: %w", rec.spec.PluginID, err)
 	}

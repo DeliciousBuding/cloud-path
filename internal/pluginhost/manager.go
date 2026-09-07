@@ -43,6 +43,7 @@ var (
 	ErrInstanceNotFound     = errors.New("pluginhost: instance not found")
 	ErrInstanceExists       = errors.New("pluginhost: instance already exists")
 	ErrInvalidArgument      = errors.New("pluginhost: invalid argument")
+	ErrAmbiguousInstance    = errors.New("pluginhost: multiple running processes require an instance target")
 )
 
 // Installation is one installed version of a plugin on this node. It is the
@@ -1246,50 +1247,93 @@ func cloneMap(in map[string]string) map[string]string {
 	return out
 }
 
-// DriverClient returns the DriverClient of the first enabled instance of the
-// given plugin, or an error when none is running or its RPC session is not
-// established yet. The returned client is tied to the current session and must
-// be re-resolved after a process restart.
-func (m *Manager) DriverClient(pluginID string) (driver.DriverClient, error) {
+// pluginSupervisor serves legacy plugin-only callers only when every enabled
+// binding resolves to the same process. Map iteration is never a routing rule.
+func (m *Manager) pluginSupervisor(pluginID string) (*Supervisor, error) {
 	m.mu.Lock()
-	var g *procGroup
+	defer m.mu.Unlock()
+	var selected *procGroup
 	for _, rec := range m.instances {
-		if rec.inst.PluginID == pluginID && rec.enabled {
-			g = m.procs[rec.procKey]
-			break
+		if rec.inst.PluginID != pluginID || !rec.enabled {
+			continue
 		}
+		g := m.procs[rec.procKey]
+		if g == nil {
+			continue
+		}
+		if selected != nil && selected != g {
+			return nil, fmt.Errorf("%w: %s", ErrAmbiguousInstance, pluginID)
+		}
+		selected = g
 	}
-	m.mu.Unlock()
-	if g == nil || g.supervisor == nil {
+	if selected == nil {
 		return nil, fmt.Errorf("pluginhost: no running instance for plugin %q", pluginID)
 	}
-	cli := g.supervisor.DriverClient()
-	if cli == nil {
-		return nil, fmt.Errorf("pluginhost: no established RPC session for plugin %q", pluginID)
-	}
-	return cli, nil
+	return selected.supervisor, nil
 }
 
-// ApplicationClient returns the ApplicationClient of the first enabled
-// instance of the given application-kind plugin, or an error when none is
-// running or its RPC session is not established yet. The returned client is
-// tied to the current session and must be re-resolved after a process restart.
-func (m *Manager) ApplicationClient(pluginID string) (application.ApplicationClient, error) {
+func (m *Manager) instanceSupervisor(tenant, id string) (*Supervisor, error) {
+	if tenant == "" || id == "" {
+		return nil, ErrInvalidArgument
+	}
 	m.mu.Lock()
-	var g *procGroup
-	for _, rec := range m.instances {
-		if rec.inst.PluginID == pluginID && rec.enabled {
-			g = m.procs[rec.procKey]
-			break
-		}
+	defer m.mu.Unlock()
+	rec := m.instances[instKey(tenant, id)]
+	if rec == nil || !rec.enabled || m.procs[rec.procKey] == nil {
+		return nil, fmt.Errorf("%w: %s/%s", ErrInstanceNotFound, tenant, id)
 	}
-	m.mu.Unlock()
-	if g == nil || g.supervisor == nil {
-		return nil, fmt.Errorf("pluginhost: no running instance for plugin %q", pluginID)
+	return m.procs[rec.procKey].supervisor, nil
+}
+
+// DriverClient returns a session-scoped client for an unambiguous plugin
+// process. Multiple enabled instances may share it; multiple processes require
+// DriverClientForInstance. Callers must re-resolve after a process restart.
+func (m *Manager) DriverClient(pluginID string) (driver.DriverClient, error) {
+	sup, err := m.pluginSupervisor(pluginID)
+	if err != nil {
+		return nil, err
 	}
-	cli := g.supervisor.ApplicationClient()
-	if cli == nil {
-		return nil, fmt.Errorf("pluginhost: no established RPC session for plugin %q", pluginID)
+	if cli := sup.DriverClient(); cli != nil {
+		return cli, nil
 	}
-	return cli, nil
+	return nil, fmt.Errorf("pluginhost: no established Driver RPC session for plugin %q", pluginID)
+}
+
+// DriverClientForInstance resolves exactly one enabled tenant/instance binding,
+// with no fallback to another version, process or tenant.
+func (m *Manager) DriverClientForInstance(tenant, id string) (driver.DriverClient, error) {
+	sup, err := m.instanceSupervisor(tenant, id)
+	if err != nil {
+		return nil, err
+	}
+	if cli := sup.DriverClient(); cli != nil {
+		return cli, nil
+	}
+	return nil, fmt.Errorf("pluginhost: no established Driver RPC session for instance %s/%s", tenant, id)
+}
+
+// ApplicationClient is the application-kind equivalent of DriverClient. It
+// rejects ambiguous plugin-only lookups instead of selecting an arbitrary process.
+func (m *Manager) ApplicationClient(pluginID string) (application.ApplicationClient, error) {
+	sup, err := m.pluginSupervisor(pluginID)
+	if err != nil {
+		return nil, err
+	}
+	if cli := sup.ApplicationClient(); cli != nil {
+		return cli, nil
+	}
+	return nil, fmt.Errorf("pluginhost: no established Application RPC session for plugin %q", pluginID)
+}
+
+// ApplicationClientForInstance resolves the exact enabled tenant/instance
+// process; the returned client must be re-resolved after a restart.
+func (m *Manager) ApplicationClientForInstance(tenant, id string) (application.ApplicationClient, error) {
+	sup, err := m.instanceSupervisor(tenant, id)
+	if err != nil {
+		return nil, err
+	}
+	if cli := sup.ApplicationClient(); cli != nil {
+		return cli, nil
+	}
+	return nil, fmt.Errorf("pluginhost: no established Application RPC session for instance %s/%s", tenant, id)
 }

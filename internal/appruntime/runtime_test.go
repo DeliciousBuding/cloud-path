@@ -59,7 +59,7 @@ func testSpec() InstanceSpec {
 func newTestRuntime(t *testing.T, cli sdkapplication.ApplicationClient, exec EffectExecutor, queueSize int) *Runtime {
 	t.Helper()
 	rt, err := NewRuntime(RuntimeOptions{
-		Dialer:         func(pluginID string) (sdkapplication.ApplicationClient, error) { return cli, nil },
+		Dialer:         func(InstanceSpec) (sdkapplication.ApplicationClient, error) { return cli, nil },
 		Executor:       exec,
 		EventQueueSize: queueSize,
 	})
