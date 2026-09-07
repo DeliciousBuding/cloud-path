@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { AuthCard, Button, Spinner, TextField } from '@/components/ui'
 import { api } from '@/lib/api'
-import { setupErrorCopy } from '@/lib/authErrors'
+import { SESSION_NOT_ESTABLISHED, setupErrorCopy } from '@/lib/authErrors'
 import { confirmSession } from '@/store/auth'
 import { cn } from '@/lib/cn'
 import type { HealthView } from '@/lib/types'
@@ -76,6 +76,13 @@ export default function Setup() {
   const [redirectToLogin, setRedirectToLogin] = useState(false)
   const [createdUser, setCreatedUser] = useState('')
 
+  /**
+   * 步骤 1 的 /healthz 快照里有没有已接入的边缘/设备。那时实例还没进账号模式、边缘连得上，
+   * 所以这是「完成 setup 后会被断开」的准确信号。全新安装为 false，完成页就不插一段
+   * 与本实例无关的警告——只在真的会咬人时才说。
+   */
+  const hasConnectedFleet = (health?.edges_online ?? 0) > 0 || (health?.devices_online ?? 0) > 0
+
   async function onCreate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const u = username.trim()
@@ -90,15 +97,25 @@ export default function Setup() {
 
     setBusy(true)
     setFormError('')
+    // 两段语义必须分开：setup 调用本身失败 → 按状态码给权限/格式文案；
+    // setup 已 2xx（账号不可逆落库、实例已进全鉴权）但会话复核失败 → 说真话并导流登录页，
+    // 绝不能报「用户名或密码错误」，那会让人重输一套刚设定、且完全正确的凭据（重试只会 409）。
+    let created = false
     try {
       const r = await api.setup(u, password)
+      created = true
       const user = await confirmSession(r?.user ?? null)
       setCreatedUser(user?.username || u)
       setStep(2)
     } catch (err) {
-      const copy = setupErrorCopy(err)
-      setFormError(copy.message)
-      if (copy.alreadySetup) setRedirectToLogin(true)
+      if (created) {
+        setFormError(SESSION_NOT_ESTABLISHED.setup)
+        setRedirectToLogin(true)
+      } else {
+        const copy = setupErrorCopy(err)
+        setFormError(copy.message)
+        if (copy.alreadySetup) setRedirectToLogin(true)
+      }
       setBusy(false)
     }
   }
@@ -283,6 +300,29 @@ export default function Setup() {
               并且你已经登录。实例现在处于全鉴权模式。
             </p>
           </div>
+
+          {/* 全鉴权会立刻掐断已接入的边缘：账号模式下 edge 的 WS 握手不带租户令牌就被拒
+              （internal/server/ws.go），设备随即全部离线，而 server 只留一条 WARN，
+              界面上没有任何地方告诉操作员这是怎么回事、怎么恢复。
+              这不是故障，是账号模式的既定语义（docs/security.md §5），但向导只报喜不说这一步，
+              人就会以为自己刚把部署弄坏了。
+
+              只在**真的有边缘/设备接入过**时才说：全新安装（步骤 1 探到 0 边缘 0 设备）
+              没有这个后果，此时插一段警告只是噪音。判据取步骤 1 的 /healthz 快照——
+              那时还没进账号模式，边缘能连上，正是「会被断开」的准确信号。 */}
+          {hasConnectedFleet && (
+            <div className="rounded-lg bg-surface-2 p-3.5 text-left">
+              <p className="flex items-start gap-2 text-[12px] leading-relaxed text-ink-2">
+                <ShieldAlert size={14} className="mt-0.5 shrink-0 text-warn" />
+                <span>
+                  已接入的<span className="font-semibold text-ink">边缘节点现在会被断开</span>：全鉴权下 edge
+                  必须携带 <span className="font-semibold text-ink">edge 作用域的服务令牌</span>。恢复步骤：进管理台 →
+                  「管理 → 服务令牌」新建一个勾选 <span className="num font-mono">edge</span> 的令牌
+                  （明文只显示一次），填进该边缘配置的 <span className="num font-mono">token:</span> 字段，再重启边缘。
+                </span>
+              </p>
+            </div>
+          )}
           <Button lg className="w-full" onClick={() => navigate('/', { replace: true })}>
             进入管理台
           </Button>

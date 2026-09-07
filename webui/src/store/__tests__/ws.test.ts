@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { connectLive, disconnectLive, reconnectLive, useLive } from '@/store/ws'
 import { useAuth } from '@/store/auth'
 import { setToken } from '@/lib/api'
+import { payloadLabel } from '@/lib/format'
+import type { EventView } from '@/lib/types'
 import { installFetch, stubResponse } from '@/test/http'
 import { resetStores } from '@/test/render'
 
@@ -211,6 +213,54 @@ describe('WS 消费必须宽容（不得让整个 UI 崩）', () => {
     expect(useLive.getState().devices['e1/d1']?.online).toBe(false)
   })
 })
+
+describe('event 载荷契约：实时与落库同形（design.md 硬约束 4）', () => {
+  // server 对同一条 event 只做一次 json.Marshal(EventData)：既落库又广播。
+  // 浏览器端不得重建载荷形状，否则实时列表与历史里的同一条事件会有两种样子。
+  function openSocket(): FakeWebSocket {
+    connectLive()
+    const s = lastSocket()
+    s.simulateOpen()
+    return s
+  }
+
+  /** 最新一条实时事件（store 里新事件在前） */
+  function newestEvent(): EventView {
+    const ev = useLive.getState().events[0]
+    if (!ev) throw new Error('实时事件没进 store')
+    return ev
+  }
+
+  it('实体级事件原样透传：与 server 落库、REST 历史返回的形状一致', () => {
+    const s = openSocket()
+    s.simulateMessage({ v: 1, type: 'event', device: 'e1/d1', ts: 100, data: { type: 'press', entity_id: 'key1' } })
+    const ev = newestEvent()
+    expect({ type: ev.type, device_id: ev.device_id, ts: ev.ts }).toEqual({ type: 'press', device_id: 'e1/d1', ts: 100 })
+    expect(JSON.parse(ev.payload)).toEqual({ type: 'press', entity_id: 'key1' })
+    // 旧实现把载荷重建成 {"label":""}：详情面板只剩空壳，绑定路由依据 entity_id 被丢弃
+    expect(ev.payload).not.toContain('label')
+  })
+
+  it('设备级事件不凭空造键：后端 omitempty 的 entity_id/label 不该出现在实时载荷里', () => {
+    const s = openSocket()
+    s.simulateMessage({ v: 1, type: 'event', device: 'e1/d1', ts: 101, data: { type: 'BOOT' } })
+    const payload = JSON.parse(newestEvent().payload) as Record<string, unknown>
+    expect(payload).toEqual({ type: 'BOOT' })
+    expect('entity_id' in payload).toBe(false)
+    expect('label' in payload).toBe(false)
+  })
+
+  it('后端给了 label 就照原样保留（展示层 payloadLabel 依赖它，前端不得吞掉）', () => {
+    const s = openSocket()
+    s.simulateMessage({
+      v: 1, type: 'event', device: 'e1/d1', ts: 102,
+      data: { type: 'REMIND', entity_id: 'slot1', label: '第 1 槽提醒' },
+    })
+    expect(JSON.parse(newestEvent().payload)).toEqual({ type: 'REMIND', entity_id: 'slot1', label: '第 1 槽提醒' })
+    expect(payloadLabel(newestEvent().payload)).toBe('第 1 槽提醒')
+  })
+})
+
 
 function domainFrame(instanceID = 'app-a') {
   return { v: 1, type: 'domain_record', ts: 1_800_000_000, data: {

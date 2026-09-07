@@ -725,6 +725,9 @@ func (s *Server) Routes() http.Handler {
 
 	r.Get("/healthz", s.handleHealth)
 	r.Route("/api/auth", func(r chi.Router) {
+		// chi 子路由未匹配时默认回 `404 page not found`（text/plain）；统一成 API 错误体，
+		// 否则同一个「端点不存在」在 /api/auth/* 与其余 /api/* 下形状不同，客户端要写两套解析。
+		r.NotFound(apiNotFound)
 		r.Post("/setup", s.handleAuthSetup)
 		r.Post("/login", s.handleAuthLogin)
 		r.Post("/logout", s.handleAuthLogout)
@@ -881,8 +884,35 @@ func (s *Server) accountMode() bool {
 	return s.cfg.RequireAuth || s.authForced.Load()
 }
 
+// 鉴权形态（/api/stats 的 auth_mode）。三档互斥，与 requireAPIAuth / requireWrite 的真实
+// 分支一一对应，取值定义见 docs/api.md §1 不变量 1-3。
+const (
+	authModeAccount = "account" // 账号模式：全部 /api/* 与 /ws 需凭据
+	authModeToken   = "token"   // 仅共享 legacy 令牌：读开放，写需令牌或回环来源
+	authModeOpen    = "open"    // L0 单机：无用户无令牌，读开放，写仅接受回环来源
+)
+
+// authMode 报告 server 现在到底怎么鉴权。这是唯一事实源：展示层不得再用
+// 「有没有配 legacy 令牌」去推断「有没有鉴权」——那正是账号模式被说成开放的原因。
+func (s *Server) authMode() string {
+	switch {
+	case s.accountMode():
+		return authModeAccount
+	case s.cfg.Token != "":
+		return authModeToken
+	default:
+		return authModeOpen
+	}
+}
+
 func (s *Server) tokenOK(r *http.Request) bool {
 	return auth.TokenOK(r, s.cfg.Token)
+}
+
+// apiNotFound 是「端点不存在」的唯一形状，与 docs/api.md 的错误约定一致（{"error":"<msg>"}）。
+// 兜底路由与 chi 子路由的 NotFound 共用它，避免同一个语义有两种响应体。
+func apiNotFound(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusNotFound, map[string]string{"error": "未知 API 端点"})
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
@@ -1092,7 +1122,7 @@ func (s *Server) handleListAdapters(w http.ResponseWriter, r *http.Request) {
 
 // handleStats 返回存储侧计数与保留期（系统页）。
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
-	view := api.StatsView{RetentionDays: s.cfg.retentionDays(), AuthEnabled: s.cfg.Token != ""}
+	view := api.StatsView{RetentionDays: s.cfg.retentionDays(), AuthMode: s.authMode()}
 	if s.cfg.Store != nil {
 		var st store.Stats
 		var err error
@@ -1346,9 +1376,24 @@ func (s *Server) webFS() fs.FS {
 	return nil
 }
 
-// spaHandler 服务前端静态资源；未命中文件回落 index.html（SPA 路由）。
+// spaHandler 服务前端静态资源；未命中文件回落 index.html（SPA 客户端路由）。
+//
+// 两类路径**不得**回落 index.html：
+//
+//   - `/api/*`：能走到这个兜底，说明路由树里根本没有这个端点。回 200 + 一整页 HTML
+//     会让 API 客户端把「端点不存在」读成成功；前端的 res.json() 还会抛 SyntaxError，
+//     于是一个 404 变成一条看不懂的解析错误。写方法尤其危险——一个不存在的
+//     `DELETE /api/devices/x/y` 回 200 等于谎报删除成功。统一回 JSON 404。
+//   - `/assets/*`：内容哈希文件名，缺失只可能是构建产物与页面不匹配（旧 HTML 打新部署）。
+//     回 HTML 会让浏览器报「模块加载失败 / MIME 类型不符」，把真实原因盖掉。回标准 404。
+//
+// 其余路径照旧回落 index.html，否则前端深链刷新即白屏。
 func (s *Server) spaHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if p := r.URL.Path; p == "/api" || strings.HasPrefix(p, "/api/") {
+			apiNotFound(w, r)
+			return
+		}
 		fsys := s.webFS()
 		if fsys == nil {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -1372,7 +1417,14 @@ func (s *Server) spaHandler() http.Handler {
 			http.FileServerFS(fsys).ServeHTTP(w, r)
 			return
 		}
-		// SPA fallback
+		// /assets/* 是内容哈希产物：走到这里就是文件真的不存在，只可能是构建产物与页面
+		// 不匹配（旧 HTML 打新部署）。回落 index.html 会让浏览器报「模块加载失败 / MIME
+		// 类型不符」，把真实原因盖掉。
+		if strings.HasPrefix(r.URL.Path, "/assets/") {
+			http.NotFound(w, r)
+			return
+		}
+		// SPA fallback：其余路径回落 index.html，前端深链刷新才不白屏。
 		index, err := fs.ReadFile(fsys, "index.html")
 		if err != nil {
 			http.NotFound(w, r)

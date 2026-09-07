@@ -123,7 +123,7 @@ type Adapter interface {                              // examples/demo 实现
 | `hello` | edge→server | `{edge_id, token, version, devices:[{id,adapter,name,port}]}` | 首帧，鉴权 + 注册 |
 | `snapshot` | server→浏览器 | `{devices[], edges[]}` | 浏览器连接首帧全量快照 |
 | `state` | edge→server→浏览器 | `{online, raw, updated_at}` | 状态快照（diff 抑制 + 心跳兜底） |
-| `event` | edge→server→浏览器 | `{type, label?}` | 设备事件，落库 `events` |
+| `event` | edge→server→浏览器 | `{type, entity_id?, label?}` | 设备事件，落库 `events`；`entity_id` 是 Capability 绑定把事件路由到 Application 实例的依据，设备级事件为空 |
 | `command` | server→edge | `{command_id, cmd, args}` | 浏览器经 REST 触发 |
 | `command_ack` | edge→server→浏览器 | `{command_id, status, detail}` | 更新 `commands` 并广播 |
 | `edge_up` / `edge_down` | server→浏览器 | `{edge_id, devices[], version}` | 边缘节点上下线 |
@@ -131,25 +131,24 @@ type Adapter interface {                              // examples/demo 实现
 浏览器连接 `/ws` 订阅全量 fan-out（P1 单租户，不做按设备订阅过滤）。协议版本不匹配（`v`）的消息
 被丢弃并告警。
 
+**事件同形不变量**：server 对 `event` 只做一次 `json.Marshal(EventData)`，落库与广播
+共用这份 payload；浏览器端不得重建载荷形状。否则同一条事件在实时列表与历史里会呈现
+两种样子（曾发生过：前端把载荷重建成 `{"label":""}`，`entity_id` 被丢弃，Capability
+绑定的路由依据随之消失）。
+
 ### REST
 
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/healthz` | 版本、运行时长、在线设备/边缘计数（存活探针） |
-| GET | `/api/devices` | 设备列表 + 最新状态（内存态） |
-| GET | `/api/devices/{edgeID}/{deviceID}` | 单设备详情；设备键含 `/`，故用两段路径参数 |
-| POST | `/api/devices/{edgeID}/{deviceID}/commands` | 下发命令 `{cmd,args}` → 建 `commands` 行 → WS 推给 edge |
-| GET | `/api/events?device=&since=&limit=` | 事件历史（新→旧，limit 默认 100 上限 1000） |
-| GET | `/api/commands?device=&status=&limit=` | 命令与 ack 状态 |
-| GET | `/api/edges` | 边缘节点：在线连接 + 曾接入的离线节点（按设备表反推） |
-| GET | `/api/adapters` | 已注册适配器与命令白名单（前端命令面板事实源） |
-| GET | `/api/stats` | 事件/命令/设备计数、最早事件、保留期、schema 版本、鉴权状态 |
-| GET | `/ws` | 浏览器实时订阅（可选 `?token=`） |
-| GET | `/ws/edge` | 边缘接入 |
-| GET | `/*` | 内嵌前端（SPA fallback；含路径穿越防护） |
+HTTP 路由与 DTO 的**唯一**文档事实源是 [`api.md`](api.md)：安全模型三级、鉴权与多租户、
+RBAC、插件控制面写面、Application Data Plane 与稳定错误码都在那里。本文不再复制路由表——
+它已经漂移过一次（缺二十余条已上线路由），复制即负债；这里只留设计层面的约定：
 
-错误体统一 `{"error":"…"}`；状态码语义：400 参数/白名单、401 令牌、404 设备不存在、
-409 edge 离线、429 命令限流、503 存储不可用或 edge 队列满。
+- **错误体**统一 `{"error":"…"}`；插件写面另有稳定错误码（`api.md` §5.6）。
+- **状态码语义**：400 参数/白名单、401 凭据缺失或失效、403 无凭据的非回环写、404 资源不存在、
+  409 edge 离线或状态冲突、429 限流、503 存储不可用或 edge 队列满。
+- **两段设备路径**：设备键本身含 `/`（`{edgeID}/{deviceID}`），用两段路径参数而不是转义单段。
+- **实时通道**：浏览器 `GET /ws`（会话 cookie 优先，`?token=` 只用于带不了 header 的场景）、
+  边缘 `GET /ws/edge`；内嵌 SPA 由 `/*` 兜底并做路径穿越防护，但兜底**不含** `/api/*`
+  与缺失的 `/assets/*`——那两类回 404，否则不存在的端点会用 200 + HTML 谎报成功。
 
 ## SQLite Schema（`PRAGMA user_version` 逐级迁移）
 
@@ -345,11 +344,12 @@ devices 为空），运行中不热加载（P1 有意为之：热加载与串口
 | 协议解析 | `cloud-path-driver-stcb/plugin/parser_test.go`（独立仓） | 黄金样本（真实捕获行：损坏分隔符、噪声前缀、越界值）、事件归一、漂移回绕、HHMM 校验、标签 |
 | 存储 | `internal/store/store_test.go` | 迁移到当前版本 + 幂等、设备/状态生命周期、事件过滤、命令过滤与超时、保留期清理（不误删在途命令）、统计、limit 夹取 |
 | 服务链路 | `internal/server/server_test.go` | WS 全链路（快照→hello→state fan-out+落库→REST 命令→edge 收令→ack 落库+广播→白名单拒绝）、令牌鉴权、重启水合、healthz |
-| 服务加固 | `internal/server/hardening_test.go` | 适配器/统计端点、nil-store 不 panic、命令限流、参数校验、未知设备与离线 edge、命令设备过滤、查询参数夹取、保留期、edge_id 校验、重连挤占不误标离线、安全头、SPA 回落与路径穿越 |
+| 服务加固 | `internal/server/hardening_test.go` | 适配器/统计端点、nil-store 不 panic、命令限流、参数校验、未知设备与离线 edge、命令设备过滤、查询参数夹取、保留期、edge_id 校验、重连挤占不误标离线、安全头、SPA 回落与路径穿越、未路由 `/api/*` 与缺失 `/assets/*` 回 404 而非 index.html、鉴权形态三档如实上报 |
 | Origin 策略 | `internal/server/origin_test.go` | 开发策略放行 localhost/无 Origin、拒绝外站；显式清单生效且防后缀伪装 |
 | 边缘运行时 | `internal/edge/{config_test.go,wsclient_test.go}` | 配置默认值/`${ENV}` 展开/各类错误、离线只缓冲事件、在线入队、队满回落缓冲、缓冲溢出丢最旧、回放（含部分回放）、状态 diff 抑制与心跳兜底、重连强制补报 |
 | 前端 | `pnpm exec tsc --noEmit` | 类型门禁（`strict` + `noUnusedLocals`） |
-| e2e | 真机手工清单 | 见下；证据记录在 `.local/STATE.md`（不进公开仓库） |
+| 契约 | `scripts/check_contract.py`（`task check:contract`） | Go `internal/api/types.go` ↔ TS `webui/src/lib/types.ts` 同名类型的 JSON 字段集合一致（含 `extends` 平面化）；`--self-test` 是解析器红队自检 |
+| e2e | 真机手工清单 | 见下；验证证据记录在私有层（gitignored，不入库） |
 
 真机验收清单（一台接串口的设备即可跑完）：
 
@@ -402,4 +402,6 @@ devices 为空），运行中不热加载（P1 有意为之：热加载与串口
 1. **不含任何第三方厂商固件/SDK/库/课件**：`firmware/` 只放协议参考说明；设备侧代码不进本仓库。
 2. **核心设备/行业无关**：具体语义只存在于 `examples/<device>` 适配器。
 3. **私有信息不入库**：构想、设备清单、验证证据只写 `.local/`（gitignored）。
-4. **契约三处同步**：`internal/api/types.go` ↔ `webui/src/lib/types.ts` ↔ 本文档。
+4. **契约三处同步**：`internal/api/types.go` ↔ `webui/src/lib/types.ts` ↔ 本文档的 WS 信封表；
+   HTTP 路由与 DTO 的文档家是 `api.md`。同一条契约只允许一个文档落点，别处只放指针。
+   代码那一半由 `scripts/check_contract.py` 机器守（CI `public-boundary`）：同名类型字段集不一致就失败。

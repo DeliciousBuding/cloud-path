@@ -34,7 +34,7 @@
 
 | 方法 路径 | 凭据 | 说明 |
 |---|---|---|
-| `POST /api/auth/setup` | 无（仅当用户数为 0） | 首装引导：创建 default 租户 + 首个 admin。已有用户 → `409` |
+| `POST /api/auth/setup` | 无（仅当用户数为 0） | 首装引导：创建 default 租户 + 首个 admin → `200 {user}` 并 set-cookie（会话交接与 login 同一套 TTL/cookie 属性；下发失败仍回 `200`，客户端以 `GET /api/auth/me` 复核为准）。已有用户 → `409` |
 | `POST /api/auth/login` | 无 | `{username,password}` → `200 {user}` 并 set-cookie；错 → `401`；限流 → `429` |
 | `POST /api/auth/logout` | 会话 | `204`，删会话清 cookie |
 | `GET /api/auth/me` | 会话/令牌 | `{user:{id,username,name,role,tenant_id,tenant_slug}}`；无 → `401` |
@@ -58,11 +58,15 @@
 | `GET /api/plugin-instances/{id}/bindings` | 读 | Capability 绑定投影（§5.5） |
 | `GET /api/plugin-instances/{id}/jobs` | 读 | 应用 job 列表（§5.5） |
 | `GET /api/audit?since=&action=&limit=` | admin | 审计日志（本租户，limit 上限 1000） |
-| `GET /api/stats` | 读 | 计数/保留期/`auth_enabled`/`schema_version` |
+| `GET /api/stats` | 读 | 计数/保留期/`auth_mode`/`schema_version`；`auth_mode ∈ account\|token\|open`，报告 §1 中 server **实际执行**的鉴权形态 |
 | `GET /ws` | 读 | 浏览器实时通道（快照 + fan-out）；Origin 策略见下 |
 | `GET /ws/edge` | 服务令牌 | edge 接入；hello 携带 `token` |
 
 错误统一 `{"error":"<msg>"}`；`401` 未认证、`403` 无权限/来源受限、`404` 不存在、`409` 冲突、`429` 限流。
+
+路由表之外的 `/api/*`（含 `/api/auth/*` 下不存在的子路径）一律 `404 {"error":"未知 API 端点"}`，
+**不会**回落到内嵌前端的 `index.html`；缺失的 `/assets/*` 同样回 `404`。SPA 的 `index.html`
+兜底只服务前端路由路径（`/`、`/devices`、…），这样客户端才能把「端点不存在」和「页面」区分开。
 
 ### 2.3 WS Origin 策略
 

@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { PageHeader, Panel, StatTile, Badge, KeyValue } from '@/components/ui'
 import { api, getToken, setToken, wsUrl } from '@/lib/api'
-import { cmdMeta, fmtDateTime, fmtUptime, roleLabel } from '@/lib/format'
+import { authModeLabel, cmdMeta, fmtDateTime, fmtUptime, roleLabel } from '@/lib/format'
 import { useLive, reconnectLive } from '@/store/ws'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { logout, useAuth } from '@/store/auth'
@@ -62,7 +62,7 @@ export default function Settings() {
             <KeyValue k="WS 端点" v={wsUrl()} mono />
             <KeyValue k="服务健康" v={isFetching ? '检查中…' : health?.ok ? '正常' : '异常'} />
             <KeyValue k="自动重连" v="断线后自动重试（1–15 秒）" />
-            <KeyValue k="鉴权" v={stats?.auth_enabled ? '已启用账号鉴权' : '未启用（本机模式）'} />
+            <KeyValue k="鉴权" v={authModeLabel(stats?.auth_mode)} />
           </dl>
           <button type="button" className="btn btn-ghost mt-4"
             onClick={() => { reconnectLive(); toast.info('正在重连…') }}>

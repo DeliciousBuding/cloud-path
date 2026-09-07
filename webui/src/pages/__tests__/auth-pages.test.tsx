@@ -32,10 +32,14 @@ function renderPage(page: ReactElement, route: string) {
   )
 }
 
-/** /healthz 永远 200：它是公开端点，可达与否**不得**影响登录结论 */
+/** /healthz 永远 200：它是公开端点，可达与否**不得**影响登录结论。
+ *  healthOverride 用来造「setup 前已有边缘接入」的现场——完成页要不要提示边缘会被断开，
+ *  取决于这份快照。 */
 type Router = (url: string) => ReturnType<typeof stubResponse>
-function routeWith(auth: Router) {
-  return installFetch((url) => (url === '/healthz' ? stubResponse(200, health) : auth(url)))
+function routeWith(auth: Router, healthOverride: Partial<typeof health> = {}) {
+  return installFetch((url) => (url === '/healthz'
+    ? stubResponse(200, { ...health, ...healthOverride })
+    : auth(url)))
 }
 
 // 实时通道在 jsdom 里不真连（只断言「跟随登录态连/断」这一契约）
@@ -129,7 +133,7 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
     expect(screen.queryByRole('heading', { name: '首页占位' })).not.toBeInTheDocument()
   })
 
-  it('login 200 但 me 复核失败 → 不算登录成功（会话没真正落地）', async () => {
+  it('login 200 但 me 复核失败 → 不算登录成功，且不得谎报「用户名或密码错误」', async () => {
     const user = userEvent.setup()
     routeWith((url) => {
       if (url === '/api/auth/login') return stubResponse(200, { user: admin })
@@ -140,9 +144,15 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
     await user.type(screen.getByLabelText('用户名'), 'admin')
     await user.type(screen.getByLabelText('密码'), 'pw')
     await user.click(screen.getByRole('button', { name: '登录' }))
-    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    const alert = await screen.findByRole('alert')
+    // 服务端已经认了这套凭据：文案必须指向会话没落地，而不是让人重输正确密码
+    expect(alert).toHaveTextContent('账号和密码是对的，但会话没有建立')
+    expect(alert.textContent).not.toContain('用户名或密码错误')
     expect(screen.queryByRole('heading', { name: '首页占位' })).not.toBeInTheDocument()
     expect(useAuth.getState().status).not.toBe('in')
+    // 凭据是对的：不清空密码、不进冷却（按钮仍可立刻重试）
+    expect(screen.getByLabelText('密码')).toHaveValue('pw')
+    expect(screen.getByRole('button', { name: '登录' })).toBeEnabled()
   })
 
   it('429 → 用服务端 Retry-After 报秒数，按钮禁用并倒计时', async () => {
@@ -282,6 +292,84 @@ describe('Setup：真实创建首个账号', () => {
 
     await user.click(screen.getByRole('button', { name: '进入管理台' }))
     expect(await screen.findByRole('heading', { name: '首页占位' })).toBeInTheDocument()
+  })
+
+  // 全鉴权会立刻掐断已接入的边缘（internal/server/ws.go 的 accountMode() 分支），
+  // 而 server 只留一条 WARN。向导此前只报喜不说这一步：操作员看到设备全离线，
+  // 会以为自己刚把部署弄坏了，界面上也找不到恢复入口。
+  it('setup 前已有边缘接入 → 完成页给出 edge 令牌恢复步骤，而不是只报喜', async () => {
+    const user = userEvent.setup()
+    let created = false
+    routeWith((url) => {
+      if (url === '/api/auth/setup') { created = true; return stubResponse(200, { user: admin }) }
+      if (url === '/api/auth/me') {
+        return created ? stubResponse(200, { user: admin }) : stubResponse(401, { error: 'not authenticated' })
+      }
+      return stubResponse(404, {})
+    }, { edges_online: 1, devices_online: 2, devices_total: 2 })
+    renderPage(<Setup />, '/setup')
+    await user.click(await screen.findByRole('button', { name: /下一步/ }))
+    await user.type(screen.getByLabelText('用户名'), 'admin')
+    await user.type(screen.getByLabelText('密码'), 'pw-12345')
+    await user.type(screen.getByLabelText('确认密码'), 'pw-12345')
+    await user.click(screen.getByRole('button', { name: /创建账号并继续/ }))
+
+    expect(await screen.findByText('设置完成')).toBeInTheDocument()
+    // 说清后果 + 给出可执行的恢复路径（在哪建令牌、勾哪个 scope、写进哪个字段、还要重启）
+    expect(screen.getByText(/边缘节点现在会被断开/)).toBeInTheDocument()
+    expect(screen.getByText(/edge 作用域的服务令牌/)).toBeInTheDocument()
+    expect(screen.getByText(/管理 → 服务令牌/)).toBeInTheDocument()
+    expect(screen.getByText(/token:/)).toBeInTheDocument()
+    expect(screen.getByText(/重启边缘/)).toBeInTheDocument()
+    // 仍然报喜：这不是错误态，完成页的主结论没被警告盖掉
+    expect(screen.getByRole('button', { name: '进入管理台' })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('全新安装（0 边缘 0 设备）→ 完成页不插这段与本实例无关的警告', async () => {
+    const user = userEvent.setup()
+    let created = false
+    routeWith((url) => {
+      if (url === '/api/auth/setup') { created = true; return stubResponse(200, { user: admin }) }
+      if (url === '/api/auth/me') {
+        return created ? stubResponse(200, { user: admin }) : stubResponse(401, { error: 'not authenticated' })
+      }
+      return stubResponse(404, {})
+    })
+    renderPage(<Setup />, '/setup')
+    await user.click(await screen.findByRole('button', { name: /下一步/ }))
+    await user.type(screen.getByLabelText('用户名'), 'admin')
+    await user.type(screen.getByLabelText('密码'), 'pw-12345')
+    await user.type(screen.getByLabelText('确认密码'), 'pw-12345')
+    await user.click(screen.getByRole('button', { name: /创建账号并继续/ }))
+
+    expect(await screen.findByText('设置完成')).toBeInTheDocument()
+    expect(screen.queryByText(/边缘节点现在会被断开/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '进入管理台' })).toBeInTheDocument()
+  })
+
+  it('setup 200 但 me 复核失败 → 说清账号已创建并导流登录页，绝不报「用户名或密码错误」', async () => {
+    const user = userEvent.setup()
+    routeWith((url) => {
+      if (url === '/api/auth/setup') return stubResponse(200, { user: admin })
+      if (url === '/api/auth/me') return stubResponse(401, { error: 'not authenticated' })
+      return stubResponse(404, {})
+    })
+    renderPage(<Setup />, '/setup')
+    await user.click(await screen.findByRole('button', { name: /下一步/ }))
+    await user.type(screen.getByLabelText('用户名'), 'admin')
+    await user.type(screen.getByLabelText('密码'), 'pw-12345')
+    await user.type(screen.getByLabelText('确认密码'), 'pw-12345')
+    await user.click(screen.getByRole('button', { name: /创建账号并继续/ }))
+
+    const alert = await screen.findByRole('alert')
+    // 账号已不可逆落库：必须承认这件事，并把人送去登录页（重试 setup 只会 409）
+    expect(alert).toHaveTextContent('管理员账号已创建')
+    expect(alert.textContent).not.toContain('用户名或密码错误')
+    expect(within(alert).getByRole('link', { name: /去登录页/ })).toHaveAttribute('href', '/login')
+    // 会话没落地就不算完成：不得进「设置完成」，auth store 也不能是 in
+    expect(screen.queryByText('设置完成')).not.toBeInTheDocument()
+    expect(useAuth.getState().status).not.toBe('in')
   })
 
   it('两次密码不一致 → 本地先拦，不发请求', async () => {

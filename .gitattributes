@@ -13,3 +13,7 @@ go.sum text eol=lf
 *.css text eol=lf
 *.md text eol=lf
 *.yaml text eol=lf
+# .yml 与 .yaml 是同一种文件，规则也必须同一种：只写 *.yaml 会让 12 个 .yml
+# （含 3 个 GitHub workflow 与 docker-compose）落在规则外，索引里出现 mixed 行尾，
+# 任何一次编辑都产生整文件 diff。
+*.yml text eol=lf

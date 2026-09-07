@@ -1,6 +1,6 @@
 # AGENTS.md
 
-最后更新：2026-09-03
+最后更新：2026-09-05
 
 作用域：`cloudpath` 仓库全部目录。给 coding agent 的项目 SSOT：定位、硬边界、关键路径、命令与约定。
 
@@ -17,7 +17,7 @@ CloudPath（云径）是**云原生、插件驱动的互联物联网控制平台
 ## 硬边界
 
 1. **核心设备无关**：`internal/*` 不得出现任何具体设备/行业语义。设备语义只允许存在于
-   `examples/<device>` 适配器内（状态字段、标签、命令集）。
+   `examples/<device>` 适配器内（状态字段、标签、命令集）。STC-B / 取药小药盒 / 多板玩法只是 reference implementation 与 showcase，**不得为演示向 Core 塞特例**；demo 侧需求若要改 Core，先证明它是通用 primitive。判断句：这段逻辑换个设备、换个业务还成立吗？不成立 → 属 demo 侧或插件侧。
 2. **契约三处同步**：改消息信封或 DTO 必须同时改 `internal/api/types.go`、
    `webui/src/lib/types.ts`、`docs/design.md`，缺一即为未完成。
 3. **锁内不做磁盘 I/O**：`internal/server` 的 `s.mu` 只保护内存态；需要落库时锁内收集、
@@ -29,6 +29,25 @@ CloudPath（云径）是**云原生、插件驱动的互联物联网控制平台
 6. **不含任何第三方厂商固件/库/课件**：`firmware/` 只放协议参考说明。
 7. 隐私：公开仓库不出现可识别个人信息、私有路径、内部业务语义。
 
+## 规划纪律（提任何新工作前先过本节）
+
+**状态词表**——只允许这四类，禁用 ✅ / 🔄 / 「基本完成」/ 「在研」等模糊记号：
+
+| 状态 | 含义 | 判据 |
+|---|---|---|
+| `VERIFIED` | 真机 / E2E / release / deployment 已证明 | 私有层有证据文件，或给出可复跑命令 |
+| `IMPLEMENTED` | 代码完成、测试通过，**但没真机** | 有单测，无真板证据 |
+| `PLANNED` | 已决定下一步，在执行队列里 | 有 owner 与 Gate |
+| `IDEA` | 纯候选，**不进执行队列** | 一律只写私有层的候选登记表 |
+
+**五条决策原则**
+
+1. Evidence > Architecture　2. Finish > Expand　3. One reusable primitive > three demo features
+4. Real hardware > mocked success　5. Current blocker > future possibility
+
+**北极星**：新增一种硬件不改 Core；新增一种业务不改 Driver；所有关键路径都有可自动重复的真实 E2E。
+
+**没有新证据时不新增架构。** 私有层只有四份事实源，各答一个问题：长期定义（最终是什么）、当前证据（今天证明了什么、谁在做什么、当前 blocker、下一个 Gate）、里程碑（最多三个，各有 Gate 与 Done Definition）、候选登记（全部候选 + 毕业判据，不得反向污染架构）。新增第五份规划文档即违规。本文件只写这四类的**约束性规则**，不点名私有层的具体文件（公开文档点名即坏链接）。
 ## 关键路径
 
 | 用途 | 路径 |
@@ -46,7 +65,7 @@ CloudPath（云径）是**云原生、插件驱动的互联物联网控制平台
 | 一键任务 | `Taskfile.yml` |
 | 技术设计 SSOT | `docs/design.md` |
 | 协议契约 | `docs/protocol.md` |
-| 私有层（构想/待办/验证证据，gitignored） | `.local/` |
+| 私有层（gitignored，不入库） | 四份事实源：长期定义 / 当前证据与执行边界 / 里程碑 / 候选登记；另有索引、验证证据、分析与工具子目录。公开文档只泛指「私有层」，不点名其中文件 |
 
 ## 常用命令
 

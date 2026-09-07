@@ -76,6 +76,9 @@ const appConfigKey = "app_config"
 
 // AppHostEdgeID 是 Server 侧应用实例的部署约定 edge_id：真实 Edge 的 desired
 // 快照按 edge_id 过滤，天然不会收到它；AppHost 以该 id 上报 observed 投影。
+// 同一个标识符也用作应用运行时的 NodeID（中心服务就是一个节点）。
+// 生产代码不得再写裸 "server" 字面量——那正是 overview.go 曾经绕过这个常量的方式；
+// 测试里保留字面量是有意的，用来钉住常量对外的值。
 const AppHostEdgeID = "server"
 
 // appInstanceRun 是一个运行中的应用实例的内存投影。
@@ -467,7 +470,7 @@ func (h *AppHost) startInstance(ctx context.Context, row store.PluginInstanceRow
 	launchID := "server-apphost-" + row.InstanceID
 	spec := appruntime.InstanceSpec{
 		PluginInstanceID: row.InstanceID, PluginID: row.PluginID, TenantID: tenantStr,
-		PluginVersion: row.Version, LaunchID: launchID, NodeID: "server",
+		PluginVersion: row.Version, LaunchID: launchID, NodeID: AppHostEdgeID,
 		Config: appConfigBytes(row.ConfigJSON), ConfigRevision: uint32(row.Revision),
 	}
 
@@ -481,7 +484,7 @@ func (h *AppHost) startInstance(ctx context.Context, row store.PluginInstanceRow
 		PluginID: row.PluginID, PluginVersion: row.Version, LaunchID: launchID,
 		ProtocolVersion:           sdkapplication.ProtocolVersion,
 		SupportedProtocolVersions: []uint32{sdkapplication.ProtocolVersion},
-		NodeID:                    "server", RuntimeType: "server-apphost",
+		NodeID:                    AppHostEdgeID, RuntimeType: "server-apphost",
 	}); err != nil {
 		return fmt.Errorf("pre-initialize: %w", err)
 	}

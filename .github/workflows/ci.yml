@@ -278,6 +278,12 @@ jobs:
       - name: Markdown relative-link check
         run: python scripts/check_links.py
 
+      - name: API contract self-test
+        run: python scripts/check_contract.py --self-test
+
+      - name: Go/TS contract sync
+        run: python scripts/check_contract.py
+
       - name: Workflow structure self-test
         run: python scripts/check_workflows.py --self-test
 
