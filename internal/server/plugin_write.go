@@ -33,7 +33,7 @@ const (
 	pluginWriteBodyLimit    = 8 << 10
 	maxPluginConfigKeys     = 32
 	maxPluginConfigKeyLen   = 64
-	maxPluginConfigValueLen = 512
+	maxPluginConfigValueLen = 4096 // structured app config/bindings; total request remains bounded to 8 KiB
 	maxPluginSecretRefs     = 16
 	maxPluginInstanceIDLen  = 64
 	maxPluginIDLen          = 128

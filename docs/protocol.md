@@ -122,3 +122,15 @@ UI 都跑在 Server 侧。本消息就是这条通道；没有它，装了新 Dr
 这样划分的直接后果：新增一种硬件不需要改 Core，也不需要改本文件；Core 只认
 Device / Entity / Capability / Observation / Event / Command 六个概念。写新 Driver 的步骤见
 [How to build a CloudPath Driver](architecture/how-to-build-driver.md)。
+
+## 应用观测输入（Core 0.2.15 起）
+
+`state.observations` 是可选的实体观测数组，每项为 `{entity_id, observations: {property: Observation}}`。
+Edge 保留真实 `observed_at`、质量和序号，单独补 `received_at`；数值不变也能报告新的采样。
+Core 不从旧 `raw` 字段推断实体，未声明/未绑定/跨租户实体不进入应用。已绑定能力的每条观测
+通过 `CapabilityEvent` 投递，`event_type=cloudpath.dev/event/property-observed@1`，`payload_json` 为
+Observation 对象。它是采样事实，不是用户按键事件、业务结局或执行器 ACK。
+
+`JobDescriptor.manual_only` 为兼容扩展（默认 false）。true 的 job 不进入隐式分钟循环，
+仅由已鉴权的显式应用操作请求调用；旧宿主不识别此约束，因此使用者必须声明最低 Core 0.2.15。
+输入与操作的完整边界见 [设计](design.md#应用输入与操作契约) 和 [HTTP API](api.md#551-应用手动操作operator)。

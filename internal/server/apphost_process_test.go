@@ -38,6 +38,8 @@ type appRoutingReport struct {
 	Version string
 	Calls   map[string]int
 	Configs map[string]map[string]string
+	Events  map[string][]*application.CapabilityEvent
+	Jobs    map[string][]*application.RunJobRequest
 }
 
 type appRoutingServer struct {
@@ -52,7 +54,7 @@ func runAppRoutingHelper() int {
 	defer cancel()
 	s := &appRoutingServer{cancel: cancel, report: appRoutingReport{
 		PID: os.Getpid(), Version: filepath.Base(filepath.Dir(os.Args[0])),
-		Calls: map[string]int{}, Configs: map[string]map[string]string{},
+		Calls: map[string]int{}, Configs: map[string]map[string]string{}, Events: map[string][]*application.CapabilityEvent{}, Jobs: map[string][]*application.RunJobRequest{},
 	}}
 	if err := pluginmain.Run(ctx, os.Stdout, os.Stderr, func(tr transport.Transport) *rpc.Server { return application.NewRPCServer(tr, s) }); err != nil {
 		return 2
@@ -67,7 +69,10 @@ func (s *appRoutingServer) Initialize(_ context.Context, req *application.Initia
 	return &application.InitializeResponse{NegotiatedProtocolVersion: application.ProtocolVersion, Status: status.New()}, nil
 }
 func (s *appRoutingServer) Describe(context.Context) (*application.ApplicationDescriptor, error) {
-	return &application.ApplicationDescriptor{ApplicationID: "test-application", Version: s.report.Version}, nil
+	return &application.ApplicationDescriptor{ApplicationID: "test-application", Version: s.report.Version,
+		Requirements: []application.RequirementDescriptor{{ID: "sample-input", Capability: "example.test/capability/counter@1", Cardinality: "zero-or-one"}},
+		Jobs:         []application.JobDescriptor{{ID: "manual-update", Title: "Update a sample", InputSchemaJSON: `{"type":"object"}`, ManualOnly: true}, {ID: "periodic-audit", Title: "Background check"}},
+	}, nil
 }
 func (s *appRoutingServer) ConfigureInstance(_ context.Context, req *application.ConfigureInstanceRequest) (*application.ConfigureInstanceResponse, error) {
 	var config map[string]string
@@ -88,10 +93,26 @@ func (s *appRoutingServer) ValidateBinding(context.Context, *application.Validat
 }
 func (s *appRoutingServer) HandleEvents(ctx context.Context, reader application.ApplicationEventReader, _ application.ApplicationEffectWriter) error {
 	for {
-		if _, err := reader.Recv(ctx); err != nil {
+		event, err := reader.Recv(ctx)
+		if err != nil {
 			return err
 		}
+		if fact, ok := event.Union.(*application.CapabilityEvent); ok {
+			s.mu.Lock()
+			s.report.Events[event.PluginInstanceID] = append(s.report.Events[event.PluginInstanceID], fact)
+			s.mu.Unlock()
+		}
 	}
+}
+func (s *appRoutingServer) RunJob(_ context.Context, req *application.RunJobRequest) (*application.RunJobResponse, error) {
+	if req.ArgsJSON == `{"reject":true}` {
+		return &application.RunJobResponse{Status: status.Errorf(status.CodeInvalidArgument, "rejected argument")}, nil
+	}
+	s.mu.Lock()
+	s.report.Jobs[req.PluginInstanceID] = append(s.report.Jobs[req.PluginInstanceID], req)
+	s.mu.Unlock()
+	data, _ := json.Marshal(map[string]string{"instance": req.PluginInstanceID, "key": req.IdempotencyKey})
+	return &application.RunJobResponse{JobID: req.JobID, Status: status.New(), ResultJSON: string(data)}, nil
 }
 func (s *appRoutingServer) Health(context.Context) (*application.HealthResponse, error) {
 	s.mu.Lock()

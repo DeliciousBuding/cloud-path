@@ -56,7 +56,8 @@
 | `GET /api/plugin-instances/{id}` | 读 | 单插件实例（§5.3） |
 | `GET /api/plugin-instances/{id}/records` | 读 | 实例领域记录（§5.5） |
 | `GET /api/plugin-instances/{id}/bindings` | 读 | Capability 绑定投影（§5.5） |
-| `GET /api/plugin-instances/{id}/jobs` | 读 | 应用 job 列表（§5.5） |
+| `GET /api/plugin-instances/{id}/jobs` | 读 | 应用 job 列表与操作声明（§5.5） |
+| `POST /api/plugin-instances/{id}/jobs/{job}/run` | operator | 显式应用操作（§5.5.1） |
 | `GET /api/audit?since=&action=&limit=` | admin | 审计日志（本租户，limit 上限 1000） |
 | `GET /api/stats` | 读 | 计数/保留期/`auth_mode`/`schema_version`；`auth_mode ∈ account\|token\|open`，报告 §1 中 server **实际执行**的鉴权形态 |
 | `GET /ws` | 读 | 浏览器实时通道（快照 + fan-out）；Origin 策略见下 |
@@ -249,6 +250,29 @@ claim-then-dispatch（先持久推进 next_run_at 再派发）——重启零重
 （同 `/api/events` 模式），快照不内嵌领域记录。浏览器按
 `(instance_id, record_type, record_id)` 合流；建立或重建实时连接后重新读取 REST，
 补齐断线窗口，不依赖 WebSocket 重放。
+
+
+### 5.5.1 应用手动操作（operator+）
+
+jobs 响应新增 `job_descriptors`：每项含 `id`、`title`、`input_schema_json` 和 `manual_only`。
+保留原 `jobs` 标识列表兼容旧客户端。只有运行中、属于当前租户并明确声明 manual_only 的任务可调用。
+
+`POST /api/plugin-instances/{id}/jobs/{job}/run`
+
+`{"args_json":"{}","idempotency_key":"caller-stable-operation-id"}`
+
+- operator/admin + 现有 authWrite/CSRF；viewer 禁止执行。未知、跨租户、停止或非手动任务统一 404。
+- body 上限 8 KiB，仅接受一个 JSON 对象；args_json 为最多 4096 字节的 JSON object，空串按空对象处理。
+  idempotency_key 非空、单行、最多 128 字节。同一逻辑请求重试必须复用，改变参数必须新建 key。
+- 200 返回 `{instance_id,job_id,result_json}`。插件拒绝参数为 400，不存在为 404，状态冲突为 409，
+  不可用或超时为 503。缺少明确插件状态为 502，不作成功推断。完整业务校验由插件执行。
+- 自动任务不会因出现在列表就变成按钮；用户操作不会每分钟自行运行。成功受理不等于设备已完成，
+  领域记录与真实设备 ACK 是异步副作用的后验。失败/超时不自动重试。审计只存实例/任务/结果，不存输入值。
+
+实例 config 仍为 string map，单值上限 4096 字节、总请求上限 8 KiB。
+可选 `app_bindings` 值为 JSON 数组字符串，最多64项，每项是 `{requirement_id,entity_id}`。
+它是完整选择：缺少必要实体、跨租户、不支持所需能力、未知字段或重复占用均拒绝，不回退自动选择。
+数组顺序保留给插件；未配置此键时沿用自动匹配。运行态绑定只展示已通过校验的结果。
 
 ### 5.6 插件写面稳定错误码
 

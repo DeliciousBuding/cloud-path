@@ -767,6 +767,7 @@ func (s *Server) Routes() http.Handler {
 			r.Patch("/api/plugin-instances/{id}", s.authWrite(s.handleUpdatePluginInstance))
 			r.Delete("/api/plugin-instances/{id}", s.authWrite(s.handleDeletePluginInstance))
 			r.Post("/api/plugin-instances/{id}/reconcile", s.authWrite(s.handleReconcilePluginInstance))
+			r.Post("/api/plugin-instances/{id}/jobs/{job}/run", s.authWrite(s.handleRunApplicationJob))
 		})
 	})
 	// 用户/令牌管理：始终要求 admin 身份（legacy token 亦可用；非账号模式未认证 401）。

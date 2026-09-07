@@ -446,7 +446,15 @@ func (e *Edge) pollLoop(ctx context.Context, key string, sup *supervisor) {
 // reportState 上报状态：变化即发，未变化按 ReportIntervalS 心跳兜底。force 无视 diff。
 func (e *Edge) reportState(key string, sup *supervisor, force bool) {
 	st := sup.snapshot()
-	data := mustJSON(api.StateData{Online: st.Online, Raw: st.Raw, UpdatedAt: st.UpdatedAt.Unix()})
+	payload := api.StateData{Online: st.Online, Raw: st.Raw, UpdatedAt: st.UpdatedAt.Unix()}
+	if desc := e.liveDescriptor(key, sup); desc != nil {
+		for _, entity := range desc.Entities {
+			if len(entity.Observations) > 0 {
+				payload.Observations = append(payload.Observations, api.EntityObservationSet{EntityID: entity.EntityID, Observations: entity.Observations})
+			}
+		}
+	}
+	data := mustJSON(payload)
 
 	sup.mu.Lock()
 	changed := string(data) != sup.lastSent
@@ -492,6 +500,18 @@ func (e *Edge) reportDescriptor(key string, sup *supervisor, force bool) {
 // 适配器不支持 Descriptor 时返回 (nil, "")。
 // 优先设备实例的实时 Descriptor（含观测值），回落 Adapter 静态 Descriptor（结构骨架）。
 func (e *Edge) descriptorEnvelope(key string, sup *supervisor) (*api.Envelope, string) {
+	desc := e.liveDescriptor(key, sup)
+	if desc == nil {
+		return nil, ""
+	}
+	fingerprint := string(mustJSON(semanticDescriptor(*desc)))
+	data := mustJSON(desc)
+	return &api.Envelope{V: api.Version, Type: api.MsgDescriptor, Device: key, Ts: time.Now().Unix(), Data: data}, fingerprint
+}
+
+// liveDescriptor is also used by state heartbeats: equal values still carry
+// their real sampling time even when the semantic descriptor is suppressed.
+func (e *Edge) liveDescriptor(key string, sup *supervisor) *model.Descriptor {
 	sup.mu.Lock()
 	dev := sup.dev
 	sup.mu.Unlock()
@@ -504,12 +524,12 @@ func (e *Edge) descriptorEnvelope(key string, sup *supervisor) (*api.Envelope, s
 		} else if dp, ok := sup.adapter.(device.DescriptorProvider); ok {
 			desc = dp.Descriptor(sup.deviceConfig())
 		} else {
-			return nil, ""
+			return nil
 		}
 	default:
 		dp, ok := sup.adapter.(device.DescriptorProvider)
 		if !ok {
-			return nil, ""
+			return nil
 		}
 		desc = dp.Descriptor(sup.deviceConfig())
 	}
@@ -521,20 +541,28 @@ func (e *Edge) descriptorEnvelope(key string, sup *supervisor) (*api.Envelope, s
 	// observed_at 来自设备侧真实采集时刻，由适配器填；received_at 必须 Edge/Core 填）。
 	// 设备时钟不可信时消费方以 received_at 为准。
 	stampReceived(&desc, time.Now())
-	fingerprint := string(mustJSON(semanticDescriptor(desc)))
-	data := mustJSON(desc)
-	return &api.Envelope{V: api.Version, Type: api.MsgDescriptor, Device: key, Ts: time.Now().Unix(), Data: data}, fingerprint
+	return &desc
 }
 
 // stampReceived 把 Edge 侧接收/生成时刻写进全部 observation 的 received_at。
 // 设备无关：对任何适配器的任何 Capability 一视同仁。
 func stampReceived(desc *model.Descriptor, at time.Time) {
-	for i := range desc.Entities {
-		for k, o := range desc.Entities[i].Observations {
-			o.ReceivedAt = at
-			desc.Entities[i].Observations[k] = o
+	// Descriptor providers may return shared slices/maps. Timestamping a wire
+	// snapshot must not mutate the provider or another concurrent consumer.
+	entities := make([]model.Entity, len(desc.Entities))
+	copy(entities, desc.Entities)
+	for i := range entities {
+		if entities[i].Observations == nil {
+			continue
 		}
+		observations := make(map[string]model.Observation, len(entities[i].Observations))
+		for k, o := range entities[i].Observations {
+			o.ReceivedAt = at
+			observations[k] = o
+		}
+		entities[i].Observations = observations
 	}
+	desc.Entities = entities
 }
 
 // semanticDescriptor 返回抹掉 observation 时间戳的深拷贝，仅供 diff 指纹使用。

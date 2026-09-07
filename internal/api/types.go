@@ -64,6 +64,15 @@ type StateData struct {
 	Online    bool           `json:"online"`
 	Raw       map[string]any `json:"raw"`
 	UpdatedAt int64          `json:"updated_at"` // unix 秒
+	// Observations preserve entity identity and quality for Application consumers.
+	// Legacy edges may omit them; Raw is never guessed into typed observations.
+	Observations []EntityObservationSet `json:"observations,omitempty"`
+}
+
+// EntityObservationSet is one entity's real sampled properties, not a command or a domain event.
+type EntityObservationSet struct {
+	EntityID     string                       `json:"entity_id"`
+	Observations map[string]model.Observation `json:"observations"`
 }
 
 // EventData 是设备事件。Type 为规范化标签（BOOT/REMIND/TAKEN/TAKEN-LATE/MISSED/SYNC-OK…）。
@@ -388,10 +397,31 @@ type AppScheduledJobView struct {
 // Jobs 为应用声明并注册到分钟调度的 job id（运行态投影）；
 // Scheduled 为 D2 Durable Scheduler 的声明式 cron 任务（持久态）。
 type AppJobsView struct {
-	InstanceID string                `json:"instance_id"`
-	Running    bool                  `json:"running"`
-	Jobs       []string              `json:"jobs"`
-	Scheduled  []AppScheduledJobView `json:"scheduled"`
+	InstanceID     string                `json:"instance_id"`
+	Running        bool                  `json:"running"`
+	Jobs           []string              `json:"jobs"`
+	Scheduled      []AppScheduledJobView `json:"scheduled"`
+	JobDescriptors []AppJobView          `json:"job_descriptors"`
+}
+
+// AppJobView is the runtime declaration, not a platform-owned action list.
+type AppJobView struct {
+	ID              string `json:"id"`
+	Title           string `json:"title"`
+	InputSchemaJSON string `json:"input_schema_json"`
+	ManualOnly      bool   `json:"manual_only"`
+}
+
+// AppJobRunRequest invokes a declared manual job with a caller-stable retry key.
+type AppJobRunRequest struct {
+	ArgsJSON       string `json:"args_json"`
+	IdempotencyKey string `json:"idempotency_key"`
+}
+
+type AppJobRunView struct {
+	InstanceID string `json:"instance_id"`
+	JobID      string `json:"job_id"`
+	ResultJSON string `json:"result_json"`
 }
 
 // ---- 鉴权与多租户（docs/api.md §2）----
