@@ -29,6 +29,13 @@ type HostManager interface {
 	Close() error
 }
 
+// HostReconciler replaces an existing runtime binding after checking
+// its candidate session. Kept separate from HostManager for legacy embedders;
+// managers without it may create instances but must not silently accept updates.
+type HostReconciler interface {
+	ReconcileInstance(context.Context, pluginhost.InstanceSpec, bool) error
+}
+
 // HostOptions configures the long-running plugin host.
 type HostOptions struct {
 	Manager    HostManager
@@ -45,7 +52,8 @@ type HostOptions struct {
 // and runs until its context is canceled. It is the only component that turns
 // desired state into observed process state.
 type Host struct {
-	opts HostOptions
+	opts    HostOptions
+	applyMu sync.Mutex
 
 	loadOnce sync.Once
 	loadRes  LoadResult
@@ -201,20 +209,32 @@ func (h *Host) load(ctx context.Context, states []InstanceState) (LoadResult, er
 			Config:    configForState(state),
 			Isolation: isolation,
 		}
-		if _, err := h.opts.Manager.CreateInstance(spec); err != nil {
-			if !errors.Is(err, pluginhost.ErrInstanceExists) {
-				return LoadResult{}, fmt.Errorf("create instance %s/%s: %w", state.Tenant, state.InstanceID, err)
-			}
-			continue
-		}
-		if err := h.opts.Manager.Start(state.Tenant, state.InstanceID); err != nil {
-			return LoadResult{}, fmt.Errorf("start instance %s/%s: %w", state.Tenant, state.InstanceID, err)
+		if err := h.reconcileInstance(ctx, spec, true); err != nil {
+			return LoadResult{}, fmt.Errorf("reconcile instance %s/%s: %w", state.Tenant, state.InstanceID, err)
 		}
 		res.Instances++
 		res.Started++
 		res.Idle = false
 	}
 	return res, nil
+}
+
+func (h *Host) reconcileInstance(ctx context.Context, spec pluginhost.InstanceSpec, enabled bool) error {
+	if manager, ok := h.opts.Manager.(HostReconciler); ok {
+		return manager.ReconcileInstance(ctx, spec, enabled)
+	}
+	if !enabled {
+		err := h.opts.Manager.Disable(spec.Tenant, spec.ID)
+		if errors.Is(err, pluginhost.ErrInstanceNotFound) {
+			return nil
+		}
+		return err
+	}
+	if _, err := h.opts.Manager.CreateInstance(spec); err != nil {
+		// ErrInstanceExists is not evidence that the existing definition matches.
+		return fmt.Errorf("manager cannot reconcile instance: %w", err)
+	}
+	return h.opts.Manager.Start(spec.Tenant, spec.ID)
 }
 
 func (h *Host) installationPath(locked registry.LockedPlugin) string {
@@ -261,7 +281,7 @@ func configForState(state InstanceState) map[string]string {
 		out[k] = v
 	}
 	if strings.TrimSpace(state.ConfigPath) != "" {
-		out["path"] = state.ConfigPath
+		out[pluginhost.ConfigPathKey] = state.ConfigPath
 	}
 	return out
 }

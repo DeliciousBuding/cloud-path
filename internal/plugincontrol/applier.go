@@ -36,6 +36,8 @@ var _ Applier = (*Host)(nil)
 // 快照里没有、但本地还留着的实例 = Server 已删除：停用并移除，
 // 默认保留插件数据（purge 是 Server 侧显式高风险选项，Edge 不自作主张）。
 func (h *Host) ApplySnapshot(ctx context.Context, tenant string, instances []api.PluginDesiredInstanceData) ([]api.PluginApplyResultData, error) {
+	h.applyMu.Lock()
+	defer h.applyMu.Unlock()
 	tenant = NormalizeTenant(tenant)
 	if _, err := h.registerInstallations(ctx); err != nil {
 		// 安装物注册失败影响全部实例：逐实例 failed（而不是整体 error），
@@ -110,27 +112,28 @@ func (h *Host) applyOne(ctx context.Context, tenant string, inst api.PluginDesir
 		Config: cloneConfig(inst.Config),
 	}
 
-	if !inst.Enabled {
-		if err := h.opts.Manager.Disable(tenant, id); err != nil && !errors.Is(err, pluginhost.ErrInstanceNotFound) {
-			return bad(err.Error())
-		}
-		if err := h.opts.Store.Save(state); err != nil {
-			return bad(err.Error())
-		}
-		return ok("disabled")
+	// ConfigPath is local CLI state, not a field in the Server snapshot. A
+	// version-only update must not erase that existing binding.
+	if previous, err := h.opts.Store.Load(tenant, id); err == nil {
+		state.ConfigPath = previous.ConfigPath
+	} else if !errors.Is(err, ErrNotFound) {
+		return bad(err.Error())
+	}
+	if err := state.Validate(); err != nil {
+		return bad(err.Error())
 	}
 	spec := pluginhost.InstanceSpec{
 		ID: id, Tenant: tenant, PluginID: pluginID, Version: version,
 		Config: configForState(state), Isolation: isolation,
 	}
-	if _, err := h.opts.Manager.CreateInstance(spec); err != nil && !errors.Is(err, pluginhost.ErrInstanceExists) {
-		return bad(err.Error())
-	}
-	if err := h.opts.Manager.Start(tenant, id); err != nil {
+	if err := h.reconcileInstance(ctx, spec, inst.Enabled); err != nil {
 		return bad(err.Error())
 	}
 	if err := h.opts.Store.Save(state); err != nil {
 		return bad(err.Error())
+	}
+	if !inst.Enabled {
+		return ok("disabled")
 	}
 	return ok("enabled")
 }

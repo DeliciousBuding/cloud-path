@@ -2,10 +2,13 @@ package pluginhost
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
+	"net/url"
 	"sort"
 	"sync"
 	"time"
@@ -27,6 +30,10 @@ const (
 	EnvTenant     = "CLOUDPATH_TENANT"
 	EnvInstanceID = "CLOUDPATH_INSTANCE_ID"
 )
+
+// ConfigPathKey is the existing Host-only config-file reference. It is not
+// a plugin JSON property and must not be forwarded to ConfigureInstance.
+const ConfigPathKey = "path"
 
 // Sentinel errors returned by the Manager. Callers can compare with
 // errors.Is to distinguish "does not exist" from other failures.
@@ -171,6 +178,8 @@ type ManagerOptions struct {
 // processes, plus the periodic health and metrics framework. It is safe for
 // concurrent use.
 type Manager struct {
+	// Lifecycle operations serialize while observations remain available under mu.
+	ops  sync.Mutex
 	mu   sync.Mutex
 	opts ManagerOptions
 
@@ -188,12 +197,14 @@ type Manager struct {
 // instanceRecord is the Manager-side bookkeeping for one instance. It is
 // created at CreateInstance and removed at Remove.
 type instanceRecord struct {
-	inst        Instance
-	enabled     bool
-	procKey     string
-	health      Health
-	failures    int
-	lastHealthy time.Time
+	inst              Instance
+	enabled           bool
+	procKey           string
+	health            Health
+	failures          int
+	lastHealthy       time.Time
+	configuredSession *runtimeSession
+	configRevision    uint32
 }
 
 // procGroup is one supervised plugin process. In shared isolation several
@@ -204,7 +215,8 @@ type procGroup struct {
 	supervisor     *Supervisor
 	ctx            context.Context
 	cancel         context.CancelFunc
-	done           chan error
+	done           chan struct{}
+	err            error // published by closing done
 	started        bool
 	healthRestarts int
 }
@@ -255,6 +267,8 @@ func NewManager(opts ManagerOptions) *Manager {
 // process. It is idempotent.
 func (m *Manager) Close() error {
 	m.closeOnce.Do(func() {
+		m.cancel() // Interrupt an in-flight reconcile before waiting for it.
+		m.ops.Lock()
 		m.mu.Lock()
 		groups := make([]*procGroup, 0, len(m.procs))
 		for _, g := range m.procs {
@@ -262,6 +276,7 @@ func (m *Manager) Close() error {
 		}
 		m.procs = map[string]*procGroup{}
 		m.mu.Unlock()
+		m.ops.Unlock()
 
 		m.cancel()
 		for _, g := range groups {
@@ -269,16 +284,8 @@ func (m *Manager) Close() error {
 		}
 
 		<-m.healthDone
-		wait := m.opts.ShutdownTimeout
-		if wait <= 0 {
-			wait = defaultShutdownTimeout
-		}
-		deadline := time.After(wait + 500*time.Millisecond)
 		for _, g := range groups {
-			select {
-			case <-g.done:
-			case <-deadline:
-			}
+			_ = m.stopProcGroup(g)
 		}
 	})
 	return nil
@@ -303,6 +310,8 @@ func (m *Manager) RegisterInstallation(inst Installation) error {
 // CreateInstance binds a new instance to an installed version. The instance is
 // created stopped; call Start to launch it.
 func (m *Manager) CreateInstance(spec InstanceSpec) (Instance, error) {
+	m.ops.Lock()
+	defer m.ops.Unlock()
 	if spec.Tenant == "" || spec.ID == "" {
 		return Instance{}, fmt.Errorf("%w: instance requires tenant and id", ErrInvalidArgument)
 	}
@@ -332,7 +341,312 @@ func (m *Manager) CreateInstance(spec InstanceSpec) (Instance, error) {
 		health:  HealthUnknown,
 	}
 	m.instances[key] = rec
+	inst.Config = cloneMap(inst.Config)
 	return inst, nil
+}
+
+// ReconcileInstance applies a complete instance definition. Candidate processes
+// must establish an authenticated, serving session before replacing a live
+// binding. Config updates use the existing per-instance RPC, not process-wide
+// environment variables, so shared siblings (including other tenants) stay up.
+// No plugin data is removed. A disabled definition need not be installed.
+func (m *Manager) ReconcileInstance(ctx context.Context, spec InstanceSpec, enabled bool) error {
+	m.ops.Lock()
+	defer m.ops.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := m.ctx.Err(); err != nil {
+		return err
+	}
+	if spec.Tenant == "" || spec.ID == "" {
+		return ErrInvalidArgument
+	}
+	inst := Instance(spec)
+	inst.Config = cloneMap(spec.Config)
+	if inst.Isolation != IsolationPerInstance {
+		inst.Isolation = IsolationShared
+	}
+	key := instKey(inst.Tenant, inst.ID)
+	rec := &instanceRecord{inst: inst, enabled: enabled, procKey: procKeyFor(inst), health: HealthUnknown}
+
+	m.mu.Lock()
+	old := m.instances[key]
+	var previous *procGroup
+	if old != nil {
+		previous = m.procs[old.procKey]
+	}
+	if !enabled {
+		// Retain the new definition without requiring its binary to be present.
+		if old != nil {
+			m.instances[key] = rec
+		}
+		stop := m.unusedProcGroupLocked(previous)
+		m.mu.Unlock()
+		return m.stopProcGroup(stop)
+	}
+	if _, ok := m.installations[installationKey(inst.PluginID, inst.Version)]; !ok {
+		m.mu.Unlock()
+		return fmt.Errorf("%w: %s@%s", ErrInstallationNotFound, inst.PluginID, inst.Version)
+	}
+	g := m.procs[rec.procKey]
+	// A per-instance key is stable across upgrades; it must not retain the old
+	// installation's Supervisor. An unused disabled group is replaced, not revived.
+	if g != nil && (inst.Isolation == IsolationPerInstance && old != nil &&
+		(old.inst.PluginID != inst.PluginID || old.inst.Version != inst.Version) ||
+		g.supervisor.State() == StateDisabled && !m.groupInUseLocked(g)) {
+		g = nil
+	}
+	if old != nil && old.enabled && sameInstance(old.inst, inst) && g != nil &&
+		old.configuredSession != nil && old.configuredSession == procSession(g) {
+		m.mu.Unlock()
+		return nil
+	}
+	if old != nil {
+		rec.configRevision = old.configRevision
+	}
+	created := g == nil
+	if created {
+		g = m.newProcGroupLocked(rec)
+	}
+	m.mu.Unlock()
+
+	if created {
+		m.launchProcGroup(g)
+	}
+	timeout := m.opts.HandshakeTimeout
+	if timeout <= 0 {
+		timeout = defaultHandshakeTimeout
+	}
+	applyCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	sess, err := m.waitProcSession(applyCtx, g)
+	if err == nil {
+		err = initializeInstanceSession(applyCtx, g, sess)
+	}
+	config := pluginConfig(inst.Config)
+	var previousConfig map[string]string
+	if old != nil {
+		previousConfig = pluginConfig(old.inst.Config)
+	}
+	needsConfig := !maps.Equal(config, previousConfig) || len(config) > 0 && (old == nil || old.configuredSession != sess)
+	configured := false
+	if err == nil && needsConfig {
+		rec.configRevision++
+		configured = true
+		err = configureInstance(applyCtx, sess, inst, rec.configRevision)
+	}
+	if err == nil {
+		err = sess.health(applyCtx)
+	}
+	if err == nil {
+		err = applyCtx.Err()
+	}
+	if err == nil {
+		err = m.ctx.Err()
+	}
+	if err == nil && procSession(g) != sess {
+		err = errors.New("pluginhost: session changed during reconcile")
+	}
+	if err != nil {
+		// A rejected in-place config must not leave the Manager or the applied cache
+		// ahead. Restore the last config on the same session; report rollback failure
+		// too, since a transport error can leave the plugin's result uncertain.
+		if configured && !created && old != nil && old.configuredSession == sess {
+			rollbackCtx, rollbackCancel := context.WithTimeout(m.ctx, timeout)
+			old.configRevision = rec.configRevision + 1
+			rollbackErr := configureInstance(rollbackCtx, sess, old.inst, old.configRevision)
+			rollbackCancel()
+			if rollbackErr != nil {
+				old.configuredSession = nil // An unchanged replay must retry an uncertain config.
+				err = errors.Join(err, fmt.Errorf("restore previous config: %w", rollbackErr))
+			}
+		}
+		if created {
+			err = errors.Join(err, m.stopProcGroup(g))
+		}
+		return fmt.Errorf("reconcile instance %s/%s: %w", inst.Tenant, inst.ID, err)
+	}
+	rec.configuredSession = sess
+	m.mu.Lock()
+	replaced := m.procs[rec.procKey]
+	m.instances[key] = rec
+	m.procs[rec.procKey] = g
+	stopPrevious := m.unusedProcGroupLocked(previous)
+	var stopReplaced *procGroup
+	if replaced != previous {
+		stopReplaced = m.unusedProcGroupLocked(replaced)
+	}
+	m.mu.Unlock()
+	return errors.Join(m.stopProcGroup(stopPrevious), m.stopProcGroup(stopReplaced))
+}
+
+func sameInstance(a, b Instance) bool {
+	return a.Tenant == b.Tenant && a.ID == b.ID && a.PluginID == b.PluginID &&
+		a.Version == b.Version && a.Isolation == b.Isolation && maps.Equal(a.Config, b.Config)
+}
+
+// groupInUseLocked compares group identity, not just its key: an upgraded
+// per-instance process has the same key but a different Supervisor.
+func (m *Manager) groupInUseLocked(g *procGroup) bool {
+	for _, rec := range m.instances {
+		if rec.enabled && m.procs[rec.procKey] == g {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Manager) unusedProcGroupLocked(g *procGroup) *procGroup {
+	if g == nil || m.groupInUseLocked(g) {
+		return nil
+	}
+	if m.procs[g.key] == g {
+		delete(m.procs, g.key)
+	}
+	return g
+}
+
+func (m *Manager) stopProcGroup(g *procGroup) error {
+	if g == nil {
+		return nil
+	}
+	g.cancel()
+	timeout := m.opts.ShutdownTimeout
+	if timeout <= 0 {
+		timeout = defaultShutdownTimeout
+	}
+	// Supervisor allows a deadline for RPC, exit after RPC, and signal fallback.
+	timer := time.NewTimer(3*timeout + 500*time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-g.done:
+		return nil
+	case <-timer.C:
+		return errors.New("pluginhost: timed out stopping previous process")
+	}
+}
+
+func procSession(g *procGroup) *runtimeSession {
+	g.supervisor.mu.Lock()
+	defer g.supervisor.mu.Unlock()
+	return g.supervisor.session
+}
+
+func (m *Manager) waitProcSession(ctx context.Context, g *procGroup) (*runtimeSession, error) {
+	ticker := time.NewTicker(5 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		snap := g.supervisor.Snapshot()
+		if snap.State == StateHealthy && snap.HandshakeCompleted && snap.RPCConnections == 1 {
+			if sess := procSession(g); sess != nil {
+				return sess, nil
+			}
+		}
+		if snap.Crashes > 0 || snap.State == StateDisabled {
+			return nil, fmt.Errorf("pluginhost: process failed to become ready (%s)", snap.State)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-g.ctx.Done():
+			return nil, g.ctx.Err()
+		case <-g.done:
+			return nil, fmt.Errorf("pluginhost: process stopped before ready: %w", errors.Join(g.err, errors.New("session unavailable")))
+		case <-ticker.C:
+		}
+	}
+}
+
+func initializeInstanceSession(ctx context.Context, g *procGroup, sess *runtimeSession) error {
+	g.supervisor.mu.Lock()
+	launchID := g.supervisor.launchID
+	g.supervisor.mu.Unlock()
+	if cli := sess.driverClient(); cli != nil {
+		resp, err := cli.Initialize(ctx, &driver.InitializeRequest{
+			ProtocolVersion: driver.ProtocolVersion, SupportedProtocolVersions: []uint32{driver.ProtocolVersion},
+			LaunchID: launchID, RuntimeType: "plugin-host",
+		})
+		if err != nil {
+			return fmt.Errorf("initialize driver: %w", err)
+		}
+		if resp == nil {
+			return errors.New("pluginhost: empty driver initialize response")
+		}
+		if resp.Status != nil && !resp.Status.IsOK() {
+			return fmt.Errorf("initialize driver: %v", resp.Status)
+		}
+		return nil
+	}
+	if cli := sess.appClient(); cli != nil {
+		resp, err := cli.Initialize(ctx, &application.InitializeRequest{
+			ProtocolVersion: application.ProtocolVersion, SupportedProtocolVersions: []uint32{application.ProtocolVersion},
+			LaunchID: launchID, RuntimeType: "plugin-host",
+		})
+		if err != nil {
+			return fmt.Errorf("initialize application: %w", err)
+		}
+		if resp == nil {
+			return errors.New("pluginhost: empty application initialize response")
+		}
+		if resp.Status != nil && !resp.Status.IsOK() {
+			return fmt.Errorf("initialize application: %v", resp.Status)
+		}
+		return nil
+	}
+	return errors.New("pluginhost: no initialization session")
+}
+
+// pluginConfig excludes only the already-reserved Host path reference. Keep
+// the full map on Instance for comparison/snapshots; do not read the referenced
+// file or invent a file format/merge rule as part of runtime reconfiguration.
+func pluginConfig(config map[string]string) map[string]string {
+	out := cloneMap(config)
+	delete(out, ConfigPathKey)
+	return out
+}
+
+// Empty configs are not sent on initial enable: existing plugins may rely on
+// a later device binding. An explicit change from nonempty to empty does send
+// {}, so clearing configuration is not confused with an unchanged definition.
+func configureInstance(ctx context.Context, sess *runtimeSession, inst Instance, revision uint32) error {
+	config := pluginConfig(inst.Config)
+	if config == nil {
+		config = map[string]string{}
+	}
+	data, err := json.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("encode instance config: %w", err)
+	}
+	// The same local instance id may occur in multiple tenants of a shared host.
+	id := url.PathEscape(inst.Tenant) + "/" + url.PathEscape(inst.ID)
+	if cli := sess.driverClient(); cli != nil {
+		resp, err := cli.ConfigureInstance(ctx, &driver.ConfigureInstanceRequest{PluginInstanceID: id, Config: data, ConfigRevision: revision})
+		if err != nil {
+			return fmt.Errorf("configure driver instance: %w", err)
+		}
+		if resp == nil {
+			return errors.New("pluginhost: empty driver configure response")
+		}
+		if resp.Status != nil && !resp.Status.IsOK() {
+			return fmt.Errorf("configure driver instance: %v", resp.Status)
+		}
+		return nil
+	}
+	if cli := sess.appClient(); cli != nil {
+		resp, err := cli.ConfigureInstance(ctx, &application.ConfigureInstanceRequest{PluginInstanceID: id, Config: data, ConfigRevision: revision})
+		if err != nil {
+			return fmt.Errorf("configure application instance: %w", err)
+		}
+		if resp == nil {
+			return errors.New("pluginhost: empty application configure response")
+		}
+		if resp.Status != nil && !resp.Status.IsOK() {
+			return fmt.Errorf("configure application instance: %v", resp.Status)
+		}
+		return nil
+	}
+	return errors.New("pluginhost: no configuration session")
 }
 
 // Start launches the instance's process (or binds it to the running shared
@@ -343,6 +657,8 @@ func (m *Manager) Start(tenant, id string) error { return m.enableInstance(tenan
 func (m *Manager) Enable(tenant, id string) error { return m.enableInstance(tenant, id) }
 
 func (m *Manager) enableInstance(tenant, id string) error {
+	m.ops.Lock()
+	defer m.ops.Unlock()
 	if tenant == "" || id == "" {
 		return ErrInvalidArgument
 	}
@@ -355,6 +671,10 @@ func (m *Manager) enableInstance(tenant, id string) error {
 	if rec.enabled {
 		m.mu.Unlock()
 		return nil
+	}
+	if _, ok := m.installations[installationKey(rec.inst.PluginID, rec.inst.Version)]; !ok {
+		m.mu.Unlock()
+		return ErrInstallationNotFound
 	}
 	rec.enabled = true
 	rec.failures = 0
@@ -379,6 +699,8 @@ func (m *Manager) enableInstance(tenant, id string) error {
 // Disable stops the instance. For a shared process it only stops the process
 // when no other enabled instance still uses it.
 func (m *Manager) Disable(tenant, id string) error {
+	m.ops.Lock()
+	defer m.ops.Unlock()
 	if tenant == "" || id == "" {
 		return ErrInvalidArgument
 	}
@@ -424,6 +746,8 @@ func (m *Manager) disableRecordLocked(rec *instanceRecord) bool {
 // Remove deletes an instance and stops its process when it is no longer
 // needed. Plugin data is preserved by default; use WithPurge to delete it.
 func (m *Manager) Remove(tenant, id string, opts ...RemoveOption) (RemoveResult, error) {
+	m.ops.Lock()
+	defer m.ops.Unlock()
 	if tenant == "" || id == "" {
 		return RemoveResult{}, ErrInvalidArgument
 	}
@@ -648,7 +972,7 @@ func (m *Manager) newProcGroupLocked(rec *instanceRecord) *procGroup {
 		supervisor: NewSupervisor(cfg, m.opts.Runner, m.opts.Logger),
 		ctx:        gctx,
 		cancel:     cancel,
-		done:       make(chan error, 1),
+		done:       make(chan struct{}),
 	}
 }
 
@@ -662,7 +986,10 @@ func (m *Manager) launchProcGroup(g *procGroup) {
 	}
 	g.started = true
 	m.mu.Unlock()
-	go func() { g.done <- g.supervisor.Run(g.ctx) }()
+	go func() {
+		g.err = g.supervisor.Run(g.ctx)
+		close(g.done)
+	}()
 }
 
 // healthLoop periodically probes running instances until the Manager is
@@ -694,8 +1021,10 @@ func (m *Manager) probeOnce() {
 	}
 
 	type target struct {
-		key   string
-		probe HealthTarget
+		key    string
+		record *instanceRecord
+		group  *procGroup
+		probe  HealthTarget
 	}
 	var targets []target
 
@@ -710,7 +1039,9 @@ func (m *Manager) probeOnce() {
 			continue
 		}
 		targets = append(targets, target{
-			key: key,
+			key:    key,
+			record: rec,
+			group:  g,
 			probe: HealthTarget{
 				PluginID:   rec.inst.PluginID,
 				Version:    rec.inst.Version,
@@ -730,17 +1061,15 @@ func (m *Manager) probeOnce() {
 		h, err := checker.Check(m.ctx, t.probe)
 		degraded := err != nil || h == HealthDegraded
 
+		m.ops.Lock()
 		m.mu.Lock()
 		rec := m.instances[t.key]
-		if rec == nil || !rec.enabled {
+		if rec != t.record || !rec.enabled || m.procs[rec.procKey] != t.group {
 			m.mu.Unlock()
+			m.ops.Unlock()
 			continue
 		}
-		g := m.procs[rec.procKey]
-		if g == nil || !g.started {
-			m.mu.Unlock()
-			continue
-		}
+		g := t.group
 
 		var act *action
 		if degraded {
@@ -775,6 +1104,7 @@ func (m *Manager) probeOnce() {
 				act.sup.Disable()
 			}
 		}
+		m.ops.Unlock()
 	}
 }
 
