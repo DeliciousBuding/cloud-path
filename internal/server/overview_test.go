@@ -160,6 +160,19 @@ func TestOverviewTenantIsolation(t *testing.T) {
 		}
 	}
 
+	// tenant-b 的事件同样是异步落库的：上面那段轮询只等 tenant-a 的失败命令，
+	// 命令的 REST→WS→ack 往返偶尔比 tenant-b 单条事件的 WS→落库→读面更快完成，
+	// 断言就拿到空列表。本地 40 连跑复现 2 次（约 5%），CI 上表现为
+	// `overview_test.go:171: tenant-b 事件错误: []`——而当时跑的 PR 只改了 CHANGELOG.md。
+	// 与本文件既有写法一致（waitPluginActive / 上面的 CommandsFailed 轮询）：先等到可见再断言。
+	deadlineB := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadlineB) {
+		if v, _ := getOverview(t, ts, readB); len(v.RecentEvents) == 1 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
 	viewB, rawB := getOverview(t, ts, readB)
 	if viewB.DevicesTotal != 1 || viewB.DevicesOnline != 1 || viewB.EdgesTotal != 1 || viewB.EdgesOnline != 1 {
 		t.Fatalf("tenant-b 计数错误: %+v", viewB)
