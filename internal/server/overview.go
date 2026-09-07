@@ -109,7 +109,7 @@ func pluginObservedActive(in api.PluginInstanceView) bool {
 		return false
 	}
 	// AppHost 的本地运行投影使用 running，不伪造 Edge 的健康探测结果。
-	if in.EdgeID == "server" && in.Observed.State == "running" {
+	if in.EdgeID == AppHostEdgeID && in.Observed.State == "running" {
 		return true
 	}
 	switch in.Observed.State {
