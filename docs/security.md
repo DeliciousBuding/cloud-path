@@ -93,6 +93,13 @@ python -c "import secrets; print(secrets.token_hex(32))"
   （HttpOnly、SameSite=Lax、TLS 反代下 Secure）；`/api/auth/*` 豁免全鉴权。
 - 完成 setup 后，即使未显式 `-require-auth`，也会自动进入账号模式
   （静态资源与 `/healthz` 除外）。
+- **进入账号模式会立刻掐断已接入的边缘**：`/ws/edge` 在账号模式下要求租户令牌，
+  没有 `edge` 作用域令牌的边缘握手即被拒（`internal/server/ws.go` 的 `accountMode()`
+  分支：关闭码 `StatusPolicyViolation`、原因 `invalid token`，server 侧只留一条
+  `WARN edge auth failed`），该边缘的设备随即全部显示离线。这是既定语义而非故障，
+  但日志之外没有任何界面会解释它。恢复：以 admin 调 `POST /api/tokens`
+  建一个 `scopes:["edge"]` 的服务令牌（明文只在创建响应里出现一次），写进边缘配置的
+  `token:` 字段后重启边缘。设置向导第 3 步在步骤 1 探到已有边缘/设备时会主动提示这一步。
 - 无论使用哪种模式，不要让 edge 使用浏览器 Origin；edge 接入只应来自受控
   主机/内网，并使用令牌。
 

@@ -32,10 +32,14 @@ function renderPage(page: ReactElement, route: string) {
   )
 }
 
-/** /healthz 永远 200：它是公开端点，可达与否**不得**影响登录结论 */
+/** /healthz 永远 200：它是公开端点，可达与否**不得**影响登录结论。
+ *  healthOverride 用来造「setup 前已有边缘接入」的现场——完成页要不要提示边缘会被断开，
+ *  取决于这份快照。 */
 type Router = (url: string) => ReturnType<typeof stubResponse>
-function routeWith(auth: Router) {
-  return installFetch((url) => (url === '/healthz' ? stubResponse(200, health) : auth(url)))
+function routeWith(auth: Router, healthOverride: Partial<typeof health> = {}) {
+  return installFetch((url) => (url === '/healthz'
+    ? stubResponse(200, { ...health, ...healthOverride })
+    : auth(url)))
 }
 
 // 实时通道在 jsdom 里不真连（只断言「跟随登录态连/断」这一契约）
@@ -288,6 +292,60 @@ describe('Setup：真实创建首个账号', () => {
 
     await user.click(screen.getByRole('button', { name: '进入管理台' }))
     expect(await screen.findByRole('heading', { name: '首页占位' })).toBeInTheDocument()
+  })
+
+  // 全鉴权会立刻掐断已接入的边缘（internal/server/ws.go 的 accountMode() 分支），
+  // 而 server 只留一条 WARN。向导此前只报喜不说这一步：操作员看到设备全离线，
+  // 会以为自己刚把部署弄坏了，界面上也找不到恢复入口。
+  it('setup 前已有边缘接入 → 完成页给出 edge 令牌恢复步骤，而不是只报喜', async () => {
+    const user = userEvent.setup()
+    let created = false
+    routeWith((url) => {
+      if (url === '/api/auth/setup') { created = true; return stubResponse(200, { user: admin }) }
+      if (url === '/api/auth/me') {
+        return created ? stubResponse(200, { user: admin }) : stubResponse(401, { error: 'not authenticated' })
+      }
+      return stubResponse(404, {})
+    }, { edges_online: 1, devices_online: 2, devices_total: 2 })
+    renderPage(<Setup />, '/setup')
+    await user.click(await screen.findByRole('button', { name: /下一步/ }))
+    await user.type(screen.getByLabelText('用户名'), 'admin')
+    await user.type(screen.getByLabelText('密码'), 'pw-12345')
+    await user.type(screen.getByLabelText('确认密码'), 'pw-12345')
+    await user.click(screen.getByRole('button', { name: /创建账号并继续/ }))
+
+    expect(await screen.findByText('设置完成')).toBeInTheDocument()
+    // 说清后果 + 给出可执行的恢复路径（在哪建令牌、勾哪个 scope、写进哪个字段、还要重启）
+    expect(screen.getByText(/边缘节点现在会被断开/)).toBeInTheDocument()
+    expect(screen.getByText(/edge 作用域的服务令牌/)).toBeInTheDocument()
+    expect(screen.getByText(/管理 → 服务令牌/)).toBeInTheDocument()
+    expect(screen.getByText(/token:/)).toBeInTheDocument()
+    expect(screen.getByText(/重启边缘/)).toBeInTheDocument()
+    // 仍然报喜：这不是错误态，完成页的主结论没被警告盖掉
+    expect(screen.getByRole('button', { name: '进入管理台' })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('全新安装（0 边缘 0 设备）→ 完成页不插这段与本实例无关的警告', async () => {
+    const user = userEvent.setup()
+    let created = false
+    routeWith((url) => {
+      if (url === '/api/auth/setup') { created = true; return stubResponse(200, { user: admin }) }
+      if (url === '/api/auth/me') {
+        return created ? stubResponse(200, { user: admin }) : stubResponse(401, { error: 'not authenticated' })
+      }
+      return stubResponse(404, {})
+    })
+    renderPage(<Setup />, '/setup')
+    await user.click(await screen.findByRole('button', { name: /下一步/ }))
+    await user.type(screen.getByLabelText('用户名'), 'admin')
+    await user.type(screen.getByLabelText('密码'), 'pw-12345')
+    await user.type(screen.getByLabelText('确认密码'), 'pw-12345')
+    await user.click(screen.getByRole('button', { name: /创建账号并继续/ }))
+
+    expect(await screen.findByText('设置完成')).toBeInTheDocument()
+    expect(screen.queryByText(/边缘节点现在会被断开/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '进入管理台' })).toBeInTheDocument()
   })
 
   it('setup 200 但 me 复核失败 → 说清账号已创建并导流登录页，绝不报「用户名或密码错误」', async () => {
