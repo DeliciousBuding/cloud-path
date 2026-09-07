@@ -264,7 +264,11 @@ function handle(env: Envelope) {
       if (!data || !env.device) return
       const ev: EventView = {
         id: liveEventId--, device_id: env.device, ts: env.ts,
-        type: data.type, payload: JSON.stringify({ label: data.label ?? '' }),
+        // 载荷必须与后端落库的形状一致：server 对同一条事件直接 json.Marshal(EventData)
+        // 后既入库又广播。此前这里重建为 {label: data.label ?? ''}，而后端从不发送 label，
+        // 于是实时事件载荷恒为 {"label":""}（详情面板显示空壳 JSON），而历史里的同一条
+        // 事件是 {"type":…,"entity_id":…}——同一事件两种来源不同形，且 entity_id 被丢弃。
+        type: data.type, payload: JSON.stringify(data),
       }
       useLive.setState({ events: [ev, ...st.events].slice(0, 300) })
       break

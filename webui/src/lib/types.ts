@@ -96,7 +96,12 @@ export interface StateData {
   updated_at: number
 }
 
-export interface EventData { type: string; label?: string }
+/**
+ * WS `event` 载荷，与 `internal/api/types.go` 的 `EventData` 同步。
+ * `entity_id` 是事件归属实体，Capability 绑定按它把事件路由到 Application 实例；
+ * 设备级事件为空（后端 omitempty，此时该键不出现）。
+ */
+export interface EventData { type: string; entity_id?: string; label?: string }
 
 export interface AckData {
   command_id: number

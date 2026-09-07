@@ -151,6 +151,12 @@ tasks:
       - '{{.PY}} scripts/check_links.py --self-test'
       - '{{.PY}} scripts/check_links.py'
 
+  check:contract:
+    desc: Go/TS DTO 契约漂移门禁（stdlib-only，含解析器红队自检）
+    cmds:
+      - '{{.PY}} scripts/check_contract.py --self-test'
+      - '{{.PY}} scripts/check_contract.py'
+
   test:templates:
     desc: Go 插件模板（driver/application）build/vet/test/自测/无 internal import
     cmds:
@@ -172,7 +178,7 @@ tasks:
       - pnpm build
 
   verify:
-    desc: 聚合门禁（vet/test/web/template/audit/links/workflow/脚本自测），不递归调用自己
+    desc: 聚合门禁（vet/test/web/template/audit/links/contract/workflow/脚本自测），不递归调用自己
     cmds:
       - task: vet
       - cmd: go test ./... -count=1
@@ -180,5 +186,6 @@ tasks:
       - task: test:templates
       - task: audit:public
       - task: check:links
+      - task: check:contract
       - task: check:workflows
       - task: selftest:scripts
