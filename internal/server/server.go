@@ -881,6 +881,27 @@ func (s *Server) accountMode() bool {
 	return s.cfg.RequireAuth || s.authForced.Load()
 }
 
+// 鉴权形态（/api/stats 的 auth_mode）。三档互斥，与 requireAPIAuth / requireWrite 的真实
+// 分支一一对应，取值定义见 docs/api.md §1 不变量 1-3。
+const (
+	authModeAccount = "account" // 账号模式：全部 /api/* 与 /ws 需凭据
+	authModeToken   = "token"   // 仅共享 legacy 令牌：读开放，写需令牌或回环来源
+	authModeOpen    = "open"    // L0 单机：无用户无令牌，读开放，写仅接受回环来源
+)
+
+// authMode 报告 server 现在到底怎么鉴权。这是唯一事实源：展示层不得再用
+// 「有没有配 legacy 令牌」去推断「有没有鉴权」——那正是账号模式被说成开放的原因。
+func (s *Server) authMode() string {
+	switch {
+	case s.accountMode():
+		return authModeAccount
+	case s.cfg.Token != "":
+		return authModeToken
+	default:
+		return authModeOpen
+	}
+}
+
 func (s *Server) tokenOK(r *http.Request) bool {
 	return auth.TokenOK(r, s.cfg.Token)
 }
@@ -1092,7 +1113,7 @@ func (s *Server) handleListAdapters(w http.ResponseWriter, r *http.Request) {
 
 // handleStats 返回存储侧计数与保留期（系统页）。
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
-	view := api.StatsView{RetentionDays: s.cfg.retentionDays(), AuthEnabled: s.cfg.Token != ""}
+	view := api.StatsView{RetentionDays: s.cfg.retentionDays(), AuthMode: s.authMode()}
 	if s.cfg.Store != nil {
 		var st store.Stats
 		var err error

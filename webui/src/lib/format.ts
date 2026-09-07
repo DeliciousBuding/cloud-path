@@ -173,6 +173,22 @@ export function roleLabel(role: string): string {
 }
 
 /**
+ * 鉴权形态 → 人话（docs/api.md §1）。这里说的是 server **实际执行**的鉴权，
+ * 不是「有没有配 legacy 令牌」：账号模式下必须显示为需登录，否则系统页会把一个
+ * 已收紧的部署说成裸奔。未知形态回落原值，不猜语义——与 roleLabel 同一纪律。
+ */
+const AUTH_MODE_LABELS: Record<string, string> = {
+  account: '账号鉴权：全部接口需登录',
+  token: '共享令牌（legacy）：读开放，写需令牌或本机回环',
+  open: '未启用：读开放，写仅限本机回环',
+}
+
+export function authModeLabel(mode?: string): string {
+  if (!mode) return '—'
+  return AUTH_MODE_LABELS[mode] ?? mode
+}
+
+/**
  * 下拉候选等窄容器里的标签截断。
  * 原生 <option> 不受 CSS truncate 约束（下拉弹层宽度也不受父容器限制），
  * 因此后端给的长标识符只能在文本层收敛，否则 390px 上选择器会被撑宽、弹层不可读。

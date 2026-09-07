@@ -58,7 +58,7 @@
 | `GET /api/plugin-instances/{id}/bindings` | 读 | Capability 绑定投影（§5.5） |
 | `GET /api/plugin-instances/{id}/jobs` | 读 | 应用 job 列表（§5.5） |
 | `GET /api/audit?since=&action=&limit=` | admin | 审计日志（本租户，limit 上限 1000） |
-| `GET /api/stats` | 读 | 计数/保留期/`auth_enabled`/`schema_version` |
+| `GET /api/stats` | 读 | 计数/保留期/`auth_mode`/`schema_version`；`auth_mode ∈ account\|token\|open`，报告 §1 中 server **实际执行**的鉴权形态 |
 | `GET /ws` | 读 | 浏览器实时通道（快照 + fan-out）；Origin 策略见下 |
 | `GET /ws/edge` | 服务令牌 | edge 接入；hello 携带 `token` |
 

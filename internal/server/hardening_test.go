@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -83,11 +84,70 @@ func TestStatsEndpoint(t *testing.T) {
 	if st.Devices != 1 || st.Events != 1 || st.SchemaVersion != srv.cfg.Store.Version() {
 		t.Fatalf("stats = %+v", st)
 	}
-	if st.RetentionDays != defaultRetentionDays || st.AuthEnabled {
+	if st.RetentionDays != defaultRetentionDays || st.AuthMode != authModeOpen {
 		t.Fatalf("stats 配置项 = %+v", st)
 	}
 	if st.OldestEvent == 0 {
 		t.Fatal("oldest_event 应有值")
+	}
+}
+
+// TestStatsAuthModeReportsRealEnforcement /api/stats 的 auth_mode 必须报告 server **实际执行**
+// 的鉴权形态，而不是「有没有配 legacy 令牌」。
+//
+// 回归点：账号模式（setup 已建用户）且未配 CLOUDPATH_TOKEN 时，旧实现用 `cfg.Token != ""`
+// 推断 auth_enabled，把「全部 /api/* 必须登录」报成未启用，系统页于是显示
+// 「鉴权 未启用（本机模式）」——而同一页下方写着「账号模式下浏览器靠会话 cookie 鉴权」，
+// 等于把一个已收紧的部署说成裸奔。形态定义见 docs/api.md §1 不变量 1-3。
+func TestStatsAuthModeReportsRealEnforcement(t *testing.T) {
+	cases := []struct {
+		name        string
+		token       string
+		requireAuth bool
+		runSetup    bool
+		want        string
+	}{
+		{name: "L0 单机：无用户无令牌", want: authModeOpen},
+		{name: "仅共享 legacy 令牌", token: "sekret", want: authModeToken},
+		{name: "-require-auth 强制读鉴权", token: "sekret", requireAuth: true, want: authModeAccount},
+		{name: "账号模式且无 legacy 令牌（回归点）", runSetup: true, want: authModeAccount},
+		{name: "账号模式叠加 legacy 令牌", token: "sekret", runSetup: true, want: authModeAccount},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			st, err := store.Open(filepath.Join(t.TempDir(), "stats.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { st.Close() })
+			srv := New(Config{Store: st, Version: "test", Token: tc.token, RequireAuth: tc.requireAuth})
+			ts := httptest.NewServer(srv.Routes())
+			t.Cleanup(func() { ts.Close(); srv.CloseAll(); time.Sleep(50 * time.Millisecond) })
+
+			if tc.runSetup {
+				setupAdmin(t, ts)
+			}
+			// 账号模式下 /api/stats 自身也要凭据：会话 cookie 与 Bearer 令牌两条路都必须读得到。
+			headers := map[string]string{}
+			var cookies []*http.Cookie
+			switch {
+			case tc.runSetup:
+				cookies = loginCookie(t, ts)
+			case tc.token != "":
+				headers["Authorization"] = "Bearer " + tc.token
+			}
+			resp := doJSON(t, http.MethodGet, ts.URL+"/api/stats", "", headers, cookies)
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("stats = %d, want 200", resp.StatusCode)
+			}
+			var got api.StatsView
+			if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+				t.Fatal(err)
+			}
+			if got.AuthMode != tc.want {
+				t.Fatalf("auth_mode = %q, want %q", got.AuthMode, tc.want)
+			}
+		})
 	}
 }
 
