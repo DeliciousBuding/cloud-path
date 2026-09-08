@@ -327,6 +327,51 @@ describe('commandActions：命令集只来自声明', () => {
     expect(pulse).toMatchObject({ label: '点动', needsInput: true, inputPlaceholder: '{"ms":0,"note":""}', inputMaxLength: 64 })
   })
 
+  it('inputTemplate：只播顶层 required，并支持 enum / array.minItems 递归播种', () => {
+    const schema = {
+      type: 'object',
+      required: ['count', 'enabled', 'mode', 'tags'],
+      properties: {
+        count: { type: 'integer' },
+        enabled: { type: 'boolean' },
+        mode: { enum: ['auto', 'manual'] },
+        tags: { type: 'array', minItems: 2, items: { type: 'string' } },
+        ignored: { type: 'string' },
+      },
+    }
+    const action = commandActions({ descriptor: withRootCommands([{ command: 'schema_cmd', inputSchema: schema }]), index: idx }).actions[0]
+    expect(action.inputPlaceholder).toBe('{"count":0,"enabled":false,"mode":"auto","tags":["",""]}')
+  })
+
+  it('inputTemplate：oneOf/anyOf 只取第一个含 required 的合法分支', () => {
+    const base = {
+      type: 'object',
+      properties: { mode: { type: 'string' }, count: { type: 'integer' }, enabled: { type: 'boolean' } },
+    }
+    const one = commandActions({
+      descriptor: withRootCommands([{ command: 'one_cmd', inputSchema: { ...base, oneOf: [{ required: ['mode', 'count'] }, { required: ['enabled'] }] } }]),
+      index: idx,
+    }).actions[0]
+    expect(one.inputPlaceholder).toBe('{"mode":"","count":0}')
+
+    const any = commandActions({
+      descriptor: withRootCommands([{ command: 'any_cmd', inputSchema: { ...base, anyOf: [{ required: ['enabled'] }] } }]),
+      index: idx,
+    }).actions[0]
+    expect(any.inputPlaceholder).toBe('{"enabled":false}')
+  })
+
+  it('inputTemplate：顶层 required 与分支 required 合并，不丢顶层必填项', () => {
+    const schema = {
+      type: 'object',
+      required: ['id'],
+      properties: { id: { type: 'string' }, mode: { type: 'string' }, other: { type: 'boolean' } },
+      oneOf: [{ required: ['mode'] }],
+    }
+    const action = commandActions({ descriptor: withRootCommands([{ command: 'merge_cmd', inputSchema: schema }]), index: idx }).actions[0]
+    expect(action.inputPlaceholder).toBe('{"id":"","mode":""}')
+  })
+
   it('GAP-2：Descriptor 顶层 commands 扩展（对象与裸字符串都接受），破坏性动作自动生成确认文案', () => {
     const set = commandActions({ descriptor: makeDescriptorWithRootCommands(), index: idx })
     expect(set.source).toBe('descriptor')

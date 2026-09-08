@@ -498,17 +498,62 @@ function confirmOf(decl: Record<string, unknown>, label: string): string | undef
   return undefined
 }
 
+function seedValue(v: unknown): unknown {
+  const o = obj(v)
+  if (!o) return ''
+  if (Array.isArray(o.enum)) {
+    const first = o.enum[0]
+    if (typeof first === 'string' || typeof first === 'number' || typeof first === 'boolean') return first
+    return ''
+  }
+  const t = str(o.type)
+  if (t === 'number' || t === 'integer') return 0
+  if (t === 'boolean') return false
+  if (t === 'array') {
+    const items = obj(o.items)
+    if (!items) return []
+    const count = typeof o.minItems === 'number' && o.minItems > 0 ? Math.min(o.minItems, 8) : 0
+    if (!count) return []
+    return Array.from({ length: count }, () => seedValue(items))
+  }
+  if (t === 'object') return {}
+  return ''
+}
+
+/** JSON Schema 参数模板：支持顶层 required 和 oneOf/anyOf 的第一个合法分支。 */
 function inputTemplate(schema: unknown): string {
-  const props = obj(obj(schema)?.properties)
+  const root = obj(schema)
+  const props = obj(root?.properties)
   if (!props) return ''
+  const required = new Set(
+    Array.isArray(root?.required)
+      ? root.required.filter((v): v is string => typeof v === 'string')
+      : [],
+  )
+
+  const variants: Record<string, unknown>[] = []
+  for (const key of ['oneOf', 'anyOf'] as const) {
+    const list = Array.isArray(root?.[key]) ? root[key] : undefined
+    if (!list?.length) continue
+    for (const item of list) {
+      const req = obj(item)?.required
+      const keys = Array.isArray(req)
+        ? req.filter((v): v is string => typeof v === 'string' && v in props)
+        : []
+      if (keys.length) variants.push(Object.fromEntries(keys.map((k) => [k, seedValue(props[k])])))
+    }
+    if (variants.length) break
+  }
+
   const seed: Record<string, unknown> = {}
+  const hasVariant = variants.length > 0
   for (const [k, v] of Object.entries(props)) {
-    const t = str(obj(v)?.type)
-    seed[k] = t === 'number' || t === 'integer' ? 0
-      : t === 'boolean' ? false
-      : t === 'array' ? []
-      : t === 'object' ? {}
-      : ''
+    if (hasVariant && required.size === 0) continue
+    if (required.size && !required.has(k)) continue
+    seed[k] = seedValue(v)
+  }
+  if (variants.length) {
+    for (const [k, v] of Object.entries(variants[0] ?? {})) seed[k] = v
   }
   if (!Object.keys(seed).length) return ''
   try { return JSON.stringify(seed) } catch { return '' }
