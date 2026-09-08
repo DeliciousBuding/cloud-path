@@ -288,6 +288,23 @@ func (s *Server) hydrate() {
 		}
 		s.deviceTenants[d.ID] = d.TenantSlug
 		s.edgeTenants[d.EdgeID] = d.TenantSlug
+		if d.DescriptorJSON == "" {
+			continue
+		}
+		var desc model.Descriptor
+		if err := json.Unmarshal([]byte(d.DescriptorJSON), &desc); err != nil {
+			slog.Warn("hydrate: bad descriptor json", "device", d.ID, "err", err)
+			continue
+		}
+		if err := desc.Validate(); err != nil {
+			slog.Warn("hydrate: invalid descriptor", "device", d.ID, "err", err)
+			continue
+		}
+		if desc.DeviceID != d.ID {
+			slog.Warn("hydrate: descriptor device_id mismatch", "device", d.ID, "descriptor_device", desc.DeviceID)
+			continue
+		}
+		s.descriptors[d.ID] = desc
 	}
 	slog.Info("hydrated devices from store", "count", len(rows))
 }

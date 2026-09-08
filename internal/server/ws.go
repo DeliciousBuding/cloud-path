@@ -431,8 +431,18 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 			}
 			s.mu.Lock()
 			s.storeDescriptor(msg.Device, desc)
+			stored := s.descriptors[msg.Device]
 			s.mu.Unlock()
-			data, _ := json.Marshal(desc)
+			data, err := json.Marshal(stored)
+			if err != nil {
+				slog.Warn("edge descriptor marshal", "edge", hello.EdgeID, "device", msg.Device, "err", err)
+				continue
+			}
+			if s.cfg.Store != nil {
+				if err := s.cfg.Store.SetDeviceDescriptor(msg.Device, string(data)); err != nil {
+					slog.Warn("persist descriptor", "edge", hello.EdgeID, "device", msg.Device, "err", err)
+				}
+			}
 			s.broadcast(api.Envelope{V: api.Version, Type: api.MsgDescriptor, Device: msg.Device,
 				Ts: time.Now().Unix(), Data: data})
 		case api.MsgCapabilities:

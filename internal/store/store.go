@@ -41,7 +41,7 @@ var schemaV7 string
 var schemaV8 string
 
 // migration 是一次 schema 迁移：ddl 与 PRAGMA user_version 在同一写事务内原子提交；
-// custom 用于需自行管理事务或形状探测的迁移：v4 条件补列、v5 users 表重建
+// custom 用于需自行管理事务或形状探测的迁移：v4/v11 条件补列、v5 users 表重建
 // （需开关 PRAGMA foreign_keys）、v7/v8 幂等 DDL + 逐表校验 + foreign_key_check。
 // 由实现自行在同一专用连接上管理事务与版本标记，但必须同样保证 DDL 与 user_version 原子提交。
 type migration struct {
@@ -62,6 +62,7 @@ var migrations = []migration{
 	{version: 8, custom: migrateV8},
 	{version: 9, custom: migrateV9},
 	{version: 10, custom: migrateV10},
+	{version: 11, custom: migrateV11},
 }
 
 // schemaVersion 是当前 schema 版本（迁移表最后一项）。
@@ -72,6 +73,15 @@ var ErrDeviceTenantMismatch = errors.New("store: device identity bound to anothe
 
 // ErrEdgeTenantMismatch 表示 edge 身份已绑定其他租户，写入必须 fail-closed。
 var ErrEdgeTenantMismatch = errors.New("store: edge identity bound to another tenant")
+
+// ErrDeviceNotFound 表示设备不存在，Descriptor 等设备级写入必须 fail-closed。
+var ErrDeviceNotFound = errors.New("store: device not found")
+
+// ErrDeviceDescriptorEmpty 表示 Descriptor JSON 为空，拒绝覆盖最后已知描述。
+var ErrDeviceDescriptorEmpty = errors.New("store: device descriptor is empty")
+
+// ErrDeviceDescriptorTooLarge 表示 Descriptor JSON 超过持久化上限。
+var ErrDeviceDescriptorTooLarge = errors.New("store: device descriptor exceeds size limit")
 
 // Store 持有数据库连接。所有方法并发安全（database/sql 连接池）。
 type Store struct {
@@ -286,23 +296,51 @@ func (s *Store) upsertDevice(id, edgeID, adapter, name, port string, tenantID in
 
 // DeviceRow 是 devices 表一行。
 type DeviceRow struct {
-	ID         string
-	EdgeID     string
-	Adapter    string
-	Name       string
-	Port       string
-	FirstSeen  int64
-	LastSeen   int64
-	TenantID   int64
-	TenantSlug string
+	ID             string
+	EdgeID         string
+	Adapter        string
+	Name           string
+	Port           string
+	FirstSeen      int64
+	LastSeen       int64
+	DescriptorJSON string
+	TenantID       int64
+	TenantSlug     string
 }
 
-const deviceColumns = `d.id, d.edge_id, d.adapter, d.name, d.port, d.first_seen, d.last_seen, d.tenant_id, COALESCE(t.slug,'default')`
+const deviceColumns = `d.id, d.edge_id, d.adapter, d.name, d.port, d.first_seen, d.last_seen, d.descriptor_json, d.tenant_id, COALESCE(t.slug,'default')`
 
 func scanDevice(scanner interface{ Scan(...any) error }) (DeviceRow, error) {
 	var d DeviceRow
-	err := scanner.Scan(&d.ID, &d.EdgeID, &d.Adapter, &d.Name, &d.Port, &d.FirstSeen, &d.LastSeen, &d.TenantID, &d.TenantSlug)
+	err := scanner.Scan(&d.ID, &d.EdgeID, &d.Adapter, &d.Name, &d.Port, &d.FirstSeen, &d.LastSeen, &d.DescriptorJSON, &d.TenantID, &d.TenantSlug)
 	return d, err
+}
+
+// maxDeviceDescriptorJSONBytes 是单台设备最后已知 Descriptor 的持久化上限。
+// 当前 Edge WS 帧上限为 64KiB；这里保留 4 倍余量，避免未来协议调整时把 DB 行撑爆。
+const maxDeviceDescriptorJSONBytes = 256 << 10
+
+// SetDeviceDescriptor 保存设备最后已知 Descriptor JSON。调用方负责 schema 校验；
+// 本方法只拒绝空值和超限数据，并确保目标设备存在。
+func (s *Store) SetDeviceDescriptor(deviceID, descriptorJSON string) error {
+	if strings.TrimSpace(descriptorJSON) == "" {
+		return ErrDeviceDescriptorEmpty
+	}
+	if len(descriptorJSON) > maxDeviceDescriptorJSONBytes {
+		return fmt.Errorf("%w: %d bytes (max %d)", ErrDeviceDescriptorTooLarge, len(descriptorJSON), maxDeviceDescriptorJSONBytes)
+	}
+	res, err := s.exec(`UPDATE devices SET descriptor_json=? WHERE id=?`, descriptorJSON, deviceID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("%w: %q", ErrDeviceNotFound, deviceID)
+	}
+	return nil
 }
 
 // ListDevices 返回全部注册设备（无账号开发模式沿用）。

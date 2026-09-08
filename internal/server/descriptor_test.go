@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	_ "github.com/DeliciousBuding/cloud-path/examples/demo"
 	"github.com/DeliciousBuding/cloud-path/internal/api"
@@ -164,4 +165,42 @@ func TestDescriptorTenantIsolation(t *testing.T) {
 	if recA.Code != http.StatusOK {
 		t.Fatalf("tenant-a own descriptor = %d, want 200", recA.Code)
 	}
+}
+
+// TestEdgeDescriptorPersisted 锁定 WS Descriptor 的持久化接线：消息先更新内存，
+// 再以稳定设备键落库，重启水合可直接复用。
+func TestEdgeDescriptorPersisted(t *testing.T) {
+	srv, ts := setup(t)
+	ws := registerEdge(t, ts, "e1", api.DeviceMeta{ID: "d1", Adapter: "demo"})
+	desc := model.Descriptor{
+		DeviceID: "e1/d1", ExternalID: "d1", Status: model.DeviceOnline,
+		Entities: []model.Entity{{
+			EntityID: "clock", UniqueKey: "clock", Category: model.EntitySensor,
+			Capabilities: []string{"cloudpath.dev/capability/clock@1"},
+		}},
+	}
+	reportDescriptor(t, ws, "e1/d1", desc)
+
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		rows, err := srv.cfg.Store.ListDevices()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, row := range rows {
+			if row.ID != "e1/d1" || row.DescriptorJSON == "" {
+				continue
+			}
+			var got model.Descriptor
+			if err := json.Unmarshal([]byte(row.DescriptorJSON), &got); err != nil {
+				t.Fatalf("persisted descriptor json: %v", err)
+			}
+			if got.DeviceID != "e1/d1" || got.ExternalID != "d1" || len(got.Entities) != 1 {
+				t.Fatalf("persisted descriptor = %+v", got)
+			}
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("descriptor was not persisted")
 }
