@@ -509,6 +509,14 @@ func (h *AppHost) startInstance(ctx context.Context, row store.PluginInstanceRow
 		return fmt.Errorf("bind: %w", err)
 	}
 
+	reqCap := make(map[string]string, len(reqs))
+	for _, rq := range reqs {
+		reqCap[rq.ID] = rq.Capability
+	}
+	if err := bindingConflictError(h.bindingConflicts(row.TenantID, row.InstanceID, bs.Bindings, reqCap)); err != nil {
+		return err
+	}
+
 	spec.ApplicationID = desc.ApplicationID
 	spec.Candidates = candidates
 	spec.Bindings = bs.Bindings
@@ -517,10 +525,6 @@ func (h *AppHost) startInstance(ctx context.Context, row store.PluginInstanceRow
 	}
 
 	run := &appInstanceRun{row: row, tenantStr: tenantStr, reqByEntity: map[string]string{}}
-	reqCap := make(map[string]string, len(reqs))
-	for _, rq := range reqs {
-		reqCap[rq.ID] = rq.Capability
-	}
 	for _, b := range bs.Bindings {
 		run.reqByEntity[b.EntityID] = b.RequirementID
 		run.bindings = append(run.bindings, api.AppBindingView{

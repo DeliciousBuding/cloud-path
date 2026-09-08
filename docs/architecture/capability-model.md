@@ -159,6 +159,16 @@ local-display      →    stcb-001/display
 
 绑定保存稳定 `entity_id`；端口、Edge 重连和 Driver 重启不应改变绑定。
 
+### 5.1 执行器独占（MVP 规则）
+
+传感器和按键允许同一租户的多个 Application 同时订阅；蜂鸣器、LED、数码管、电机和复合声光序列属于
+有物理副作用的执行器，默认同一稳定 `entity_id` 只能由一个运行中的 Application 驱动。Server 在应用实例
+完成 Binder 匹配后、启动运行会话前检查该约束；冲突时实例启动失败并保留可读错误，不静默覆盖另一个
+应用的输出。
+
+这条规则是 Capability 级策略，不依赖 Driver ID、端口或硬件型号。需要共享执行器的场景应通过未来的
+资源租约/场景协调器显式声明，不能靠“后启动者覆盖先启动者”实现。
+
 ## 6. Reference Application
 
 公开仓库中的参考业务名使用 **Scheduled Compartment**，仓库建议：
