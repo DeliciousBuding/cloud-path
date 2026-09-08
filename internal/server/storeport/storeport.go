@@ -21,7 +21,8 @@
 //   - Create/Update/Delete 在同一写事务内更新期望态并把 tenant/edge desired revision +1，
 //     返回新 revision；失败不得留下半状态；
 //   - 配额超限必须整体失败（不写入、不增 revision），返回 ErrQuota；
-//   - 删除期望态不删除审计；purge=false 时必须保留 observed 投影行；
+//   - 删除期望态不删除审计；purge=false 时必须保留 observed 投影与实例私有数据；
+//     purge=true 时同一事务清除该实例 observed 投影、领域记录和定时任务；
 //   - 只存 secret://<name> handle 名与非敏感标量，绝不存明文 secret。
 package storeport
 
@@ -141,7 +142,8 @@ type PluginStore interface {
 	CreatePluginInstance(row PluginInstanceRow) (uint64, error)
 	UpdatePluginInstance(row PluginInstanceRow) (uint64, error)
 	// DeletePluginInstance 删除期望态并 +1 revision（Edge 需要收敛「实例已移除」）。
-	// purge=false 必须保留该实例的 observed 投影行与全部审计；purge=true 才删投影。
+	// purge=false 必须保留该实例的 observed 投影、领域记录、定时任务与全部审计；
+	// purge=true 才在同一事务中清除该实例的 observed 投影、领域记录和定时任务。
 	DeletePluginInstance(tenantID int64, edgeID, instanceID string, purge bool) (uint64, error)
 	PluginDesiredRevision(tenantID int64, edgeID string) (uint64, error)
 

@@ -353,13 +353,15 @@ func TestPluginConfigCanonicalized(t *testing.T) {
 }
 
 // TestPluginDeleteBumpsRevisionKeepsAudit 锁定契约：删除期望态推进 revision（Edge 靠新
-// revision 收敛「实例已移除」），但绝不删审计；purge 只清该实例 observed 投影，
-// 不动其他实例投影，也不动 per-plugin 安装事实。
+// revision 收敛「实例已移除」），但绝不删审计；purge 在同一事务中只清该实例的
+// observed 投影、领域记录和定时任务，不动其他实例、其他租户或 per-plugin 安装事实。
 func TestPluginDeleteBumpsRevisionKeepsAudit(t *testing.T) {
 	s := openTest(t)
 	tid := mkTenant(t, s, "del")
+	otherTid := mkTenant(t, s, "del-other")
 	mustCreate(t, s, desiredRow(tid, "e1", "i1", "p1"))
 	mustCreate(t, s, desiredRow(tid, "e1", "i2", "p1"))
+	mustCreate(t, s, desiredRow(otherTid, "e2", "i1", "p1"))
 	if err := s.InsertAuditEvent(AuditEvent{
 		TenantID: tid, ActorType: "user", ActorID: 1, Action: "plugin.instance.created",
 		TargetType: "plugin_instance", TargetID: "e1/i1", Outcome: "success",
@@ -378,6 +380,51 @@ func TestPluginDeleteBumpsRevisionKeepsAudit(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if err := s.UpsertPluginObservations(otherTid, "e2", []api.PluginObservedInstanceData{
+		{InstanceID: "i1", PluginID: "p1", State: "running", Health: "healthy"},
+	}, 1001); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range []struct {
+		tenantID int64
+		instance string
+		recordID string
+	}{
+		{tid, "i1", "r-i1"},
+		{tid, "i2", "r-i2"},
+		{otherTid, "i1", "r-other"},
+	} {
+		if err := s.UpsertAppDomainRecord(r.tenantID, r.instance, "state", r.recordID, `{}`, "1", 100); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, job := range []ScheduledJobRow{
+		{TenantID: tid, InstanceID: "i1", ScheduleID: "job-i1", Cron: "* * * * *", Timezone: "UTC", PayloadJSON: "{}", MissedPolicy: "skip", NextRunAt: 1000, UpdatedAt: 1000},
+		{TenantID: tid, InstanceID: "i2", ScheduleID: "job-i2", Cron: "* * * * *", Timezone: "UTC", PayloadJSON: "{}", MissedPolicy: "skip", NextRunAt: 1000, UpdatedAt: 1000},
+		{TenantID: otherTid, InstanceID: "i1", ScheduleID: "job-other", Cron: "* * * * *", Timezone: "UTC", PayloadJSON: "{}", MissedPolicy: "skip", NextRunAt: 1000, UpdatedAt: 1000},
+	} {
+		if _, err := s.UpsertScheduledJob(job); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	assertPrivateData := func(tenantID int64, instance string, wantDomain, wantJobs int) {
+		t.Helper()
+		domain, err := s.ListAppDomainRecords(tenantID, instance, 10)
+		if err != nil {
+			t.Fatalf("list domain records for %d/%s: %v", tenantID, instance, err)
+		}
+		if len(domain) != wantDomain {
+			t.Fatalf("domain records for %d/%s = %d, want %d", tenantID, instance, len(domain), wantDomain)
+		}
+		jobs, err := s.ListScheduledJobs(tenantID, instance)
+		if err != nil {
+			t.Fatalf("list scheduled jobs for %d/%s: %v", tenantID, instance, err)
+		}
+		if len(jobs) != wantJobs {
+			t.Fatalf("scheduled jobs for %d/%s = %d, want %d", tenantID, instance, len(jobs), wantJobs)
+		}
+	}
 
 	// 默认不 purge：只删期望态，observed 投影保留
 	rev, err := s.DeletePluginInstance(tid, "e1", "i1", false)
@@ -394,19 +441,32 @@ func TestPluginDeleteBumpsRevisionKeepsAudit(t *testing.T) {
 	if len(obs) != 2 {
 		t.Fatalf("非 purge 删除动了 observed 投影: %d 行, want 2", len(obs))
 	}
+	assertPrivateData(tid, "i1", 1, 1)
+	assertPrivateData(tid, "i2", 1, 1)
+	assertPrivateData(otherTid, "i1", 1, 1)
 	// 审计必须还在（删除期望态不删审计）
 	audits, err := s.ListAuditEvents(tid, 0, "", 10)
 	if err != nil || len(audits) != 1 {
 		t.Fatalf("审计被删: %d 条 err=%v, want 1", len(audits), err)
 	}
 
-	// purge：删该实例 observed 投影，保留其他实例投影与安装事实
+	// purge：删该实例 observed 投影、领域记录与定时任务，保留其他实例、
+	// 其他租户数据和安装事实。
 	if _, err := s.DeletePluginInstance(tid, "e1", "i2", true); err != nil {
 		t.Fatal(err)
 	}
 	obs, _ = s.ListPluginObservationsTenant(tid)
 	if len(obs) != 1 || obs[0].InstanceID != "i1" {
 		t.Fatalf("purge 后 observed = %+v, want 只剩 i1", obs)
+	}
+	assertPrivateData(tid, "i1", 1, 1)
+	assertPrivateData(tid, "i2", 0, 0)
+	assertPrivateData(otherTid, "i1", 1, 1)
+	if _, ok, err := s.GetPluginInstance(otherTid, "e2", "i1"); err != nil || !ok {
+		t.Fatalf("purge 误删其他租户期望态: ok=%v err=%v", ok, err)
+	}
+	if otherObs, err := s.ListPluginObservationsTenant(otherTid); err != nil || len(otherObs) != 1 {
+		t.Fatalf("purge 误删其他租户 observed: rows=%d err=%v", len(otherObs), err)
 	}
 	insts, _ := s.ListPluginInstallationsTenant(tid)
 	if len(insts) != 1 {

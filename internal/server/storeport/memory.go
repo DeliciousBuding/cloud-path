@@ -111,6 +111,7 @@ func (m *Memory) UpdatePluginInstance(row PluginInstanceRow) (uint64, error) {
 
 // DeletePluginInstance 删除期望态行并 +1 revision。purge=true 才连带删除该实例的
 // observed 投影；purge=false 保留投影（读面标 stale），审计永不被删除。
+// Memory 端口只承载 observed 投影；领域记录与定时任务由持久化 Store 在 purge 时同事务清除。
 func (m *Memory) DeletePluginInstance(tenantID int64, edgeID, instanceID string, purge bool) (uint64, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

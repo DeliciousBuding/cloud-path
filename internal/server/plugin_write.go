@@ -397,8 +397,9 @@ func (s *Server) handleUpdatePluginInstance(w http.ResponseWriter, r *http.Reque
 
 // ---------- DELETE /api/plugin-instances/{id} ----------
 
-// handleDeletePluginInstance 删除期望态实例：默认保留插件数据（observed 投影标 stale），
-// purge=true 才删投影，且 purge 要求 admin（契约无 confirm 字段）。
+// handleDeletePluginInstance 删除期望态实例：默认保留该实例私有数据（observed 投影标 stale），
+// purge=true 才在同一 Store 写事务中清除 observed 投影、领域记录和定时任务，
+// 且 purge 要求 admin（契约无 confirm 字段）。
 func (s *Server) handleDeletePluginInstance(w http.ResponseWriter, r *http.Request) {
 	ctx, werr := s.resolvePluginWriteContext(r)
 	if werr != nil {

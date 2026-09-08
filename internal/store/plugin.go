@@ -487,8 +487,9 @@ func (s *Store) UpdatePluginInstance(row PluginInstanceRow) (uint64, error) {
 // DeletePluginInstance 删除期望态实例并原子推进 revision（Edge 需靠新 revision 收敛「实例已移除」），
 // 返回新 revision。不存在 → ErrPluginInstanceNotFound（不消费 revision）。
 //
-// purge=false（默认）：只删期望态，保留 Edge 上报的 observed 投影与插件安装事实。
-// purge=true：额外删除该实例在 plugin_observations 的投影行（API 语义「显式 purge 才删数据」）。
+// purge=false（默认）：只删期望态，保留 observed 投影、该实例的领域记录与定时任务，以及插件安装事实。
+// purge=true：在同一写事务中额外删除该实例的 plugin_observations、app_domain_records 和
+// scheduled_jobs（API 语义「显式清除该实例私有数据」）。
 // 两种情况都**绝不**删除 audit_events（契约：删除期望态不删审计），也不删 plugin_installations
 // ——安装物是 per-plugin 事实，可能被同 edge 的其他实例共享。
 func (s *Store) DeletePluginInstance(tenantID int64, edgeID, instanceID string, purge bool) (uint64, error) {
@@ -515,10 +516,19 @@ func (s *Store) DeletePluginInstance(tenantID int64, edgeID, instanceID string, 
 			return fmt.Errorf("%w: %s/%s", ErrPluginInstanceNotFound, edgeID, instanceID)
 		}
 		if purge {
-			// 双 predicate（tenant_id + edge_id）锁定范围：不触碰其他 edge / 其他租户投影。
+			// purge 显式清除该实例私有数据；所有谓词均锁定 tenant/instance，
+			// 不触碰其他实例、其他租户或 per-plugin 安装事实。
 			if _, err := conn.ExecContext(ctx, `DELETE FROM plugin_observations
 				WHERE tenant_id=? AND edge_id=? AND instance_id=?`, tid, edgeID, instanceID); err != nil {
 				return fmt.Errorf("store: purge plugin observation: %w", err)
+			}
+			if _, err := conn.ExecContext(ctx, `DELETE FROM app_domain_records
+				WHERE tenant_id=? AND instance_id=?`, tid, instanceID); err != nil {
+				return fmt.Errorf("store: purge app domain records: %w", err)
+			}
+			if _, err := conn.ExecContext(ctx, `DELETE FROM scheduled_jobs
+				WHERE tenant_id=? AND instance_id=?`, tid, instanceID); err != nil {
+				return fmt.Errorf("store: purge scheduled jobs: %w", err)
 			}
 		}
 		if err := ensureEdgeRevisionTx(ctx, conn, tid, edgeID); err != nil {
