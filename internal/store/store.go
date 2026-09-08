@@ -655,13 +655,62 @@ func (s *Store) listCommands(tenantID int64, deviceID, status string, limit int)
 
 // TimeoutStaleCommands 把超过 ttl 仍 pending/sent 的命令标记 timeout，返回受影响行。
 func (s *Store) TimeoutStaleCommands(ttl time.Duration) (int64, error) {
-	cutoff := time.Now().Add(-ttl).Unix()
-	res, err := s.exec(`UPDATE commands SET status='timeout', acked_at=?, result='edge 未回执'
-		WHERE status IN ('pending','sent') AND created_at < ?`, now(), cutoff)
+	ids, err := s.TimeoutStaleCommandIDs(ttl)
 	if err != nil {
 		return 0, err
 	}
-	return res.RowsAffected()
+	return int64(len(ids)), nil
+}
+
+// TimeoutStaleCommandIDs 与 TimeoutStaleCommands 同语义，但在同一个
+// IMMEDIATE 写事务内返回真正从 pending/sent 推进到 timeout 的命令 ID。
+// 调用方据此向 Application Host 通知终态；已终态行不会重复返回。
+func (s *Store) TimeoutStaleCommandIDs(ttl time.Duration) ([]int64, error) {
+	cutoff := time.Now().Add(-ttl).Unix()
+	ctx := context.Background()
+	var ids []int64
+	err := s.withWriteConn(ctx, func(conn *sql.Conn) error {
+		rows, err := conn.QueryContext(ctx, `SELECT id FROM commands
+			WHERE status IN ('pending','sent') AND created_at < ? ORDER BY id`, cutoff)
+		if err != nil {
+			return fmt.Errorf("store: select stale commands: %w", err)
+		}
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return fmt.Errorf("store: scan stale command: %w", err)
+			}
+			ids = append(ids, id)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return fmt.Errorf("store: read stale commands: %w", err)
+		}
+		if err := rows.Close(); err != nil {
+			return fmt.Errorf("store: close stale command rows: %w", err)
+		}
+		if len(ids) == 0 {
+			return nil
+		}
+		res, err := conn.ExecContext(ctx, `UPDATE commands SET status='timeout', acked_at=?, result='edge 未回执'
+			WHERE status IN ('pending','sent') AND created_at < ?`, now(), cutoff)
+		if err != nil {
+			return fmt.Errorf("store: timeout stale commands: %w", err)
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("store: timeout rows affected: %w", err)
+		}
+		if n != int64(len(ids)) {
+			return fmt.Errorf("store: timeout rows affected = %d, selected = %d", n, len(ids))
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return ids, nil
 }
 
 // clampLimit 归一 limit：<=0 或 >1000 → 100（防止无界查询拖垮服务）。

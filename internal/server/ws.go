@@ -28,8 +28,18 @@ const (
 	browserReadLm = 4096
 )
 
+type wsMessageWriter interface {
+	Write(context.Context, websocket.MessageType, []byte) error
+}
+
+func writeWSFrame(ctx context.Context, ws wsMessageWriter, msg []byte) error {
+	wctx, cancel := context.WithTimeout(ctx, wsWriteWait)
+	defer cancel()
+	return ws.Write(wctx, websocket.MessageText, msg)
+}
+
 // writePump 串行写循环：从 send chan 取已序列化消息写 WS，ctx 取消即退出。
-func writePump(ctx context.Context, ws *websocket.Conn, send <-chan []byte) {
+func writePump(ctx context.Context, ws wsMessageWriter, send <-chan []byte) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -38,11 +48,47 @@ func writePump(ctx context.Context, ws *websocket.Conn, send <-chan []byte) {
 			if !ok {
 				return
 			}
-			wctx, cancel := context.WithTimeout(ctx, wsWriteWait)
-			err := ws.Write(wctx, websocket.MessageText, msg)
-			cancel()
+			err := writeWSFrame(ctx, ws, msg)
 			if err != nil {
 				slog.Debug("ws write failed", "err", err)
+				return
+			}
+		}
+	}
+}
+
+// writeEdgePump 是 Edge 的串行 writer：普通控制面消息仍可 fire-and-forget，
+// 命令帧必须把本次 Write 结果回送给调用方。writer 退出即关闭 link.done 并
+// 取消连接上下文，使半死连接上的等待方立即失败，而不是把命令留在旧缓冲区。
+func writeEdgePump(ctx context.Context, cancel context.CancelFunc, ws wsMessageWriter, link *edgeLink) {
+	defer func() {
+		if link.done != nil {
+			close(link.done)
+		}
+		cancel()
+	}()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg, ok := <-link.send:
+			if !ok {
+				return
+			}
+			if err := writeWSFrame(ctx, ws, msg); err != nil {
+				slog.Debug("edge ws write failed", "err", err, "edge", link.edgeID)
+				return
+			}
+		case frame, ok := <-link.commandSend:
+			if !ok {
+				return
+			}
+			err := writeWSFrame(ctx, ws, frame.payload)
+			if frame.result != nil {
+				frame.result <- err
+			}
+			if err != nil {
+				slog.Debug("edge command write failed", "err", err, "edge", link.edgeID)
 				return
 			}
 		}
@@ -183,8 +229,11 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	link := &edgeLink{
 		edgeID: hello.EdgeID, version: hello.Version, tenant: tenant, tenantID: tid,
-		connectedAt: time.Now(), send: make(chan []byte, sendChanSize),
-		cancel: cancel,
+		connectedAt: time.Now(),
+		send:        make(chan []byte, sendChanSize),
+		commandSend: make(chan edgeCommandFrame, sendChanSize),
+		done:        make(chan struct{}),
+		cancel:      cancel,
 	}
 	var deviceKeys []string
 	for _, d := range hello.Devices {
@@ -277,7 +326,7 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 		slog.Info("edge disconnected", "edge", hello.EdgeID, "was_current", current, "tenant", tenant)
 	}()
 
-	go writePump(ctx, ws, link.send)
+	go writeEdgePump(ctx, cancel, ws, link)
 	go pingPump(ctx, cancel, ws)
 
 	// 3.5) hello 成功后下发当前完整插件期望态快照（control-plane-sync §4.2）。

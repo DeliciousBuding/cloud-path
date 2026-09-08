@@ -187,8 +187,22 @@ func TestCommandAuditDoesNotStoreArgs(t *testing.T) {
 	srv.mu.Lock()
 	srv.devices[key] = &api.DeviceView{ID: key, EdgeID: "e", Adapter: "demo", Online: true, State: map[string]any{}}
 	srv.deviceTenants[key] = "default"
-	srv.edges["e"] = &edgeLink{edgeID: "e", tenant: "default", devices: []string{key}, send: make(chan []byte, 8), cancel: func() {}}
+	link := &edgeLink{edgeID: "e", tenant: "default", devices: []string{key},
+		send: make(chan []byte, 8), commandSend: make(chan edgeCommandFrame, 8),
+		done: make(chan struct{}), cancel: func() {}}
+	srv.edges["e"] = link
 	srv.mu.Unlock()
+	go func() {
+		for {
+			select {
+			case frame := <-link.commandSend:
+				frame.result <- nil
+			case <-link.done:
+				return
+			}
+		}
+	}()
+	t.Cleanup(func() { close(link.done) })
 
 	secret := "args-super-secret-42"
 	if resp := doJSON(t, http.MethodPost, ts.URL+"/api/devices/e/d1/commands",

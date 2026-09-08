@@ -11,6 +11,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -156,7 +157,55 @@ type edgeLink struct {
 	devices     []string
 	connectedAt time.Time
 	send        chan []byte
+	commandSend chan edgeCommandFrame
+	done        chan struct{}
 	cancel      context.CancelFunc
+}
+
+// edgeCommandFrame 是带投递结果的命令帧。普通控制面消息仍走 send 的
+// fire-and-forget 语义；设备命令必须等 writer 真正写出后才落 sent，避免
+// 半死连接只把命令放进旧 link 的缓冲区后被静默丢弃。
+type edgeCommandFrame struct {
+	payload []byte
+	result  chan error
+}
+
+var (
+	errEdgeLinkClosed    = errors.New("edge link closed")
+	errEdgeSendQueueFull = errors.New("edge send queue full")
+)
+
+// sendCommand 把命令交给该连接的 writer，并等待本次 Write 的结果。
+// done 关闭、writer 写失败或上下文取消都返回错误，调用方据此把命令标 failed，
+// 不得把“进入旧缓冲区”当成已发送。
+func (l *edgeLink) sendCommand(ctx context.Context, payload []byte) error {
+	if l == nil {
+		return errEdgeLinkClosed
+	}
+	if l.done != nil {
+		select {
+		case <-l.done:
+			return errEdgeLinkClosed
+		default:
+		}
+	}
+	result := make(chan error, 1)
+	frame := edgeCommandFrame{payload: payload, result: result}
+	select {
+	case <-l.done:
+		return errEdgeLinkClosed
+	case l.commandSend <- frame:
+	default:
+		return errEdgeSendQueueFull
+	}
+	select {
+	case err := <-result:
+		return err
+	case <-l.done:
+		return errEdgeLinkClosed
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 type browserConn struct {
@@ -1264,34 +1313,47 @@ func (s *Server) handlePostCommand(w http.ResponseWriter, r *http.Request) {
 		}
 		return s.cfg.Store.UpdateCommandStatus(id, "sent", "")
 	}
-	markFailed := func() error {
+	markFailed := func(detail string) error {
 		if p != nil {
-			_, err := s.cfg.Store.UpdateCommandStatusScoped(id, key, p.TenantID, "failed", "edge 发送队列满")
+			_, err := s.cfg.Store.UpdateCommandStatusScoped(id, key, p.TenantID, "failed", detail)
 			return err
 		}
-		return s.cfg.Store.UpdateCommandStatus(id, "failed", "edge 发送队列满")
+		return s.cfg.Store.UpdateCommandStatus(id, "failed", detail)
 	}
-	select {
-	case link.send <- payload:
-		if err := markSent(); err != nil {
-			slog.Warn("mark command sent", "err", err, "cmd_id", id)
-		}
-		at, aid, an := auditActor(p)
-		s.audit(r, audit.Event{
-			TenantID: s.auditTenantID(p), ActorType: at, ActorID: aid, ActorName: an,
-			Action: audit.ActionCommandAccepted, TargetType: audit.TargetDevice, TargetID: key,
-			Outcome:  audit.OutcomeSuccess,
-			Metadata: audit.NewMetadata().String("cmd", body.Cmd).Map(),
-		})
-		writeJSON(w, http.StatusOK, api.CommandView{ID: id, DeviceID: key, Cmd: body.Cmd, Args: body.Args,
-			Status: "sent", CreatedAt: time.Now().Unix()})
-	default:
-		if err := markFailed(); err != nil {
+	// 先落 sent 再写 WS：Edge 可能在本函数返回前就回 ack，若反过来写库会把
+	// 已到达的 ok 覆盖回 sent。写失败再显式落 failed。
+	if err := markSent(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if deliveryErr := link.sendCommand(r.Context(), payload); deliveryErr != nil {
+		if err := markFailed(edgeSendFailureDetail(deliveryErr)); err != nil {
 			slog.Warn("mark command failed", "err", err, "cmd_id", id)
 		}
-		reject("edge_busy")
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "edge busy"})
+		reject("edge_send_failed")
+		status := http.StatusServiceUnavailable
+		if errors.Is(deliveryErr, errEdgeLinkClosed) {
+			status = http.StatusConflict
+		}
+		writeJSON(w, status, map[string]string{"error": "edge send failed"})
+		return
 	}
+	at, aid, an := auditActor(p)
+	s.audit(r, audit.Event{
+		TenantID: s.auditTenantID(p), ActorType: at, ActorID: aid, ActorName: an,
+		Action: audit.ActionCommandAccepted, TargetType: audit.TargetDevice, TargetID: key,
+		Outcome:  audit.OutcomeSuccess,
+		Metadata: audit.NewMetadata().String("cmd", body.Cmd).Map(),
+	})
+	writeJSON(w, http.StatusOK, api.CommandView{ID: id, DeviceID: key, Cmd: body.Cmd, Args: body.Args,
+		Status: "sent", CreatedAt: time.Now().Unix()})
+}
+
+func edgeSendFailureDetail(err error) string {
+	if errors.Is(err, errEdgeSendQueueFull) {
+		return "edge 发送队列满"
+	}
+	return "edge 发送失败"
 }
 
 // RunSweeper 后台维护协程：命令超时标记（30s）+ 保留期清理（1h）。ctx 取消即退出。
@@ -1325,7 +1387,16 @@ func (s *Server) timeoutOnce(ttl time.Duration) (int64, error) {
 	if s.cfg.Store == nil {
 		return 0, nil
 	}
-	return s.cfg.Store.TimeoutStaleCommands(ttl)
+	ids, err := s.cfg.Store.TimeoutStaleCommandIDs(ttl)
+	if err != nil {
+		return 0, err
+	}
+	// 数据库已完成 pending/sent → timeout 的原子推进；逐个通知应用终态。
+	// NotifyCommandAck 对非应用命令是 no-op，不引入业务特例。
+	for _, id := range ids {
+		s.appHost.NotifyCommandAck(id, "timeout", "edge 未回执")
+	}
+	return int64(len(ids)), nil
 }
 
 // pruneOnce 执行一次保留期清理（sweeper 与测试共用）。

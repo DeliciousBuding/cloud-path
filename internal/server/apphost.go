@@ -655,6 +655,11 @@ func (h *AppHost) NotifyCommandAck(commandID int64, status, detail string) {
 	if !ok {
 		return
 	}
+	h.dispatchRequestCompleted(ref, state, detail)
+}
+
+// dispatchRequestCompleted 把一个应用发起的命令终态送回应用事件流。
+func (h *AppHost) dispatchRequestCompleted(ref appCommandRef, state sdkapplication.CommandState, detail string) {
 	err := h.rt.DispatchEvent(h.ctxOrBackground(), ref.TenantID, ref.InstanceID, &sdkapplication.ApplicationEvent{
 		Union: &sdkapplication.RequestCompleted{
 			RequestID: ref.RequestID, EntityID: ref.EntityID, Action: ref.Action,
@@ -1072,24 +1077,28 @@ func (e *appEffectExecutor) Execute(ctx context.Context, effect appruntime.Effec
 
 func (e *appEffectExecutor) execRequestCommand(ctx context.Context, effect appruntime.Effect) error {
 	p := effect.RequestCommand
+	ref := appCommandRef{
+		TenantID:   effect.TenantID,
+		InstanceID: effect.PluginInstanceID, RequestID: p.IdempotencyKey,
+		EntityID: p.EntityID, Action: p.Action,
+	}
 	tid, err := strconv.ParseInt(effect.TenantID, 10, 64)
 	if err != nil {
 		return fmt.Errorf("apphost: effect tenant %q: %w", effect.TenantID, err)
 	}
 	deviceKey := e.host.srv.deviceKeyForEntity(p.EntityID)
 	if deviceKey == "" {
-		return fmt.Errorf("apphost: entity %q not found on any device", p.EntityID)
+		err := fmt.Errorf("apphost: entity %q not found on any device", p.EntityID)
+		e.host.dispatchRequestCompleted(ref, sdkapplication.CommandStateFailed, err.Error())
+		return err
 	}
 	cmdID, err := e.host.srv.dispatchDeviceCommand(ctx, tid, deviceKey, p.Action, p.ArgsJSON)
 	if err != nil {
+		e.host.dispatchRequestCompleted(ref, sdkapplication.CommandStateFailed, err.Error())
 		return err
 	}
 	e.host.mu.Lock()
-	e.host.appCmds[cmdID] = appCommandRef{
-		TenantID:   effect.TenantID,
-		InstanceID: effect.PluginInstanceID, RequestID: p.IdempotencyKey,
-		EntityID: p.EntityID, Action: p.Action,
-	}
+	e.host.appCmds[cmdID] = ref
 	e.host.mu.Unlock()
 	return nil
 }
@@ -1182,14 +1191,18 @@ func (s *Server) dispatchDeviceCommand(ctx context.Context, tenantID int64, key,
 	}
 	data, _ := json.Marshal(api.CommandData{CommandID: id, Cmd: cmd, Args: args})
 	payload, _ := json.Marshal(api.Envelope{V: api.Version, Type: api.MsgCommand, Device: key, Ts: time.Now().Unix(), Data: data})
-	select {
-	case link.send <- payload:
-		_, err = s.cfg.Store.UpdateCommandStatusScoped(id, key, tenantID, "sent", "")
+	// 先落 sent 再写 WS：Edge 可能在本函数返回前就回 ack，避免终态被覆盖。
+	if _, err := s.cfg.Store.UpdateCommandStatusScoped(id, key, tenantID, "sent", ""); err != nil {
 		return id, err
-	default:
-		_, _ = s.cfg.Store.UpdateCommandStatusScoped(id, key, tenantID, "failed", "edge 发送队列满")
-		return 0, fmt.Errorf("edge send queue full")
 	}
+	if err := link.sendCommand(ctx, payload); err != nil {
+		_, markErr := s.cfg.Store.UpdateCommandStatusScoped(id, key, tenantID, "failed", edgeSendFailureDetail(err))
+		if markErr != nil {
+			return id, fmt.Errorf("edge send: %w (mark failed: %v)", err, markErr)
+		}
+		return id, fmt.Errorf("edge send: %w", err)
+	}
+	return id, nil
 }
 
 // InstalledApplicationPlugins 返回已安装的 Application kind 插件集合（pluginID → version）。

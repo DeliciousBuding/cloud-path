@@ -110,8 +110,15 @@ func TestDispatchDeviceCommandAppPath(t *testing.T) {
 	// 构造一台在线设备（edge link）+ Descriptor（实体 buzzer）
 	link := &edgeLink{
 		edgeID: "e1", tenant: "tenant-app", tenantID: tenantID,
-		send: make(chan []byte, 1), cancel: func() {},
+		send: make(chan []byte, 1), commandSend: make(chan edgeCommandFrame, 1),
+		done: make(chan struct{}), cancel: func() {},
 	}
+	sentFrames := make(chan edgeCommandFrame, 1)
+	go func() {
+		frame := <-link.commandSend
+		sentFrames <- frame
+		frame.result <- nil
+	}()
 	srv.mu.Lock()
 	srv.edges["e1"] = link
 	srv.devices["e1/d1"] = onlineDevice("e1/d1", "e1")
@@ -135,14 +142,14 @@ func TestDispatchDeviceCommandAppPath(t *testing.T) {
 	}
 	// 链路收到命令信封
 	select {
-	case raw := <-link.send:
+	case frame := <-sentFrames:
 		var env struct {
 			Type string `json:"type"`
 		}
-		if err := json.Unmarshal(raw, &env); err != nil || env.Type != "command" {
-			t.Fatalf("envelope = %s err=%v", raw, err)
+		if err := json.Unmarshal(frame.payload, &env); err != nil || env.Type != "command" {
+			t.Fatalf("envelope = %s err=%v", frame.payload, err)
 		}
-	default:
+	case <-time.After(time.Second):
 		t.Fatal("edge link 未收到命令")
 	}
 	// 命令行已落库且标 sent
@@ -152,7 +159,9 @@ func TestDispatchDeviceCommandAppPath(t *testing.T) {
 	}
 
 	// 队列满：诚实失败 + 命令行标 failed
-	full := &edgeLink{edgeID: "e2", tenant: "tenant-app", tenantID: tenantID, send: make(chan []byte, 0), cancel: func() {}}
+	full := &edgeLink{edgeID: "e2", tenant: "tenant-app", tenantID: tenantID,
+		send: make(chan []byte, 0), commandSend: make(chan edgeCommandFrame, 0),
+		done: make(chan struct{}), cancel: func() {}}
 	srv.mu.Lock()
 	srv.edges["e2"] = full
 	srv.devices["e2/d2"] = onlineDevice("e2/d2", "e2")
