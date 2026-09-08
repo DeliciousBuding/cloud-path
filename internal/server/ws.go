@@ -23,6 +23,7 @@ const (
 	wsReadLimit   = 64 << 10 // 单条 WS 消息上限 64KB（状态/事件足够）
 	wsWriteWait   = 5 * time.Second
 	wsPingPeriod  = 30 * time.Second
+	wsPingTimeout = 30 * time.Second
 	sendChanSize  = 256
 	helloTimeout  = 10 * time.Second
 	browserReadLm = 4096
@@ -105,11 +106,13 @@ func pingPump(ctx context.Context, cancel context.CancelFunc, ws *websocket.Conn
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			pctx, pcancel := context.WithTimeout(ctx, wsWriteWait)
+			// The read loop may block briefly on SQLite persistence; a 5s pong
+			// timeout turns transient SQLITE_BUSY into a false disconnect.
+			pctx, pcancel := context.WithTimeout(ctx, wsPingTimeout)
 			err := ws.Ping(pctx)
 			pcancel()
 			if err != nil {
-				slog.Debug("ws ping failed, closing", "err", err)
+				slog.Warn("ws ping failed, closing", "err", err)
 				cancel()
 				return
 			}
