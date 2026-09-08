@@ -6,10 +6,10 @@
 import { create } from 'zustand'
 import { wsUrl } from '@/lib/api'
 import { normalizeDescriptor, readInlineDescriptor } from '@/lib/descriptor'
-import { authReady, refreshAuth, useAuth } from './auth'
+import { authIdentity, authReady, refreshAuth, useAuth } from './auth'
 import type {
   AckData, DeviceDescriptor, DeviceRaw, DeviceView, EdgeUpData, EdgeView, Envelope,
-  EventData, EventView, SnapshotData, StateData,
+  EventData, EventView, Observation, SnapshotData, StateData,
 } from '@/lib/types'
 
 export type WsStatus = 'connecting' | 'open' | 'closed'
@@ -75,6 +75,41 @@ function pushSeries(
   return next ? { ...prev, [key]: next } : prev
 }
 
+/** Typed samples update only the exact device and already-declared entity/capability. Raw is never inferred. */
+function mergeObservations(descriptor: DeviceDescriptor, deviceKey: string, sets: unknown, online: boolean): DeviceDescriptor {
+  if (descriptor.device_id !== deviceKey || !Array.isArray(sets)) return descriptor
+  let changed = false
+  const entities = descriptor.entities.map((entity) => {
+    let observations = entity.observations
+    const seen = new Set<string>()
+    for (const set of sets) {
+      if (!set || typeof set !== 'object' || set.entity_id !== entity.entity_id
+        || !set.observations || typeof set.observations !== 'object' || Array.isArray(set.observations)) continue
+      for (const [property, value] of Object.entries(set.observations)) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) continue
+        const sample = value as Record<string, unknown>
+        if (!property || sample.property !== property || typeof sample.capability !== 'string'
+          || !entity.capabilities.includes(sample.capability) || !Object.hasOwn(sample, 'value') || sample.value == null
+          || (typeof sample.value === 'number' && !Number.isFinite(sample.value))
+          || (sample.entity_id !== undefined && sample.entity_id !== entity.entity_id)
+          || (sample.unit !== undefined && typeof sample.unit !== 'string')
+          || (sample.quality !== undefined && !['good', 'uncertain', 'bad', 'unavailable'].includes(String(sample.quality)))
+          || [sample.observed_at, sample.received_at].some((time) => time !== undefined && (typeof time !== 'string' || !Number.isFinite(Date.parse(time))))
+          || (sample.sequence !== undefined && (typeof sample.sequence !== 'number' || !Number.isInteger(sample.sequence)))) continue
+        const identity = sample.capability + '\0' + property
+        if (seen.has(identity)) continue
+        seen.add(identity)
+        // Replace the sample, even when value is unchanged. Missing metadata must not inherit old freshness.
+        const observation = { ...sample, ...(online ? {} : { quality: 'unavailable' }) } as unknown as Observation
+        observations = { ...observations, [property]: observation }
+        changed = true
+      }
+    }
+    return observations === entity.observations ? entity : { ...entity, observations }
+  })
+  return changed ? { ...descriptor, entities } : descriptor
+}
+
 let ws: WebSocket | null = null
 let retry = 0
 let liveEventId = -1
@@ -87,6 +122,7 @@ let enabled = false
 export function connectLive() {
   enabled = true
   watchNetwork()
+  watchIdentity()
   if (!authReady(useAuth.getState().status)) return
   if (started) return
   started = true
@@ -110,6 +146,20 @@ export function disconnectLive() {
   old.onclose = null
   old.close()
   useLive.setState({ status: 'closed', failures: 0 })
+}
+
+let identityWatched = false
+/** Same-status account/tenant switches must not keep the previous session's socket or observations. */
+function watchIdentity() {
+  if (identityWatched) return
+  identityWatched = true
+  useAuth.subscribe((next, previous) => {
+    if (authIdentity(next) === authIdentity(previous)) return
+    const reconnect = enabled
+    disconnectLive()
+    useLive.setState({ devices: {}, edges: {}, descriptors: {}, series: {}, events: [], acks: {} })
+    if (reconnect && authReady(next.status)) connectLive()
+  })
 }
 
 let netWatched = false
@@ -247,7 +297,11 @@ function handle(env: Envelope) {
       const series = pushSeries(st.series, key, data.online ? data.raw : undefined)
       // 过渡形态：Descriptor 内联在 state 载荷里也接受
       const inline = readInlineDescriptor(data)
-      const descriptors = inline ? { ...st.descriptors, [key]: inline } : st.descriptors
+      // Keep legacy short-id descriptors readable; typed increments below still require the full device key.
+      const inlineMatches = inline && (inline.device_id === key || inline.device_id === key.split('/').at(-1))
+      const descriptor = inlineMatches ? inline : st.descriptors[key]
+      const updated = descriptor && env.v === 1 ? mergeObservations(descriptor, key, data.observations, data.online) : descriptor
+      const descriptors = updated && updated !== st.descriptors[key] ? { ...st.descriptors, [key]: updated } : st.descriptors
       useLive.setState({ devices: { ...st.devices, [key]: dev }, series, descriptors })
       break
     }
@@ -255,7 +309,7 @@ function handle(env: Envelope) {
       // Wave2：后端可直接推 Descriptor（spec/descriptor.schema.json）
       if (!env.device) return
       const dd = normalizeDescriptor(env.data)
-      if (!dd) return
+      if (!dd || (dd.device_id !== env.device && dd.device_id !== env.device.split('/').at(-1))) return
       useLive.setState({ descriptors: { ...st.descriptors, [env.device]: dd } })
       break
     }

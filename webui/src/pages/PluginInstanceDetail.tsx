@@ -63,7 +63,7 @@ export default function PluginInstanceDetail() {
   const serverHosted = instance.edge_id === 'server'
   const isApplication = serverHosted || catalog?.kind === 'application'
   const lifecycleKey = JSON.stringify([instance.desired.revision, instance.desired.enabled,
-    instance.has_observed, instance.observed?.state, instance.observed?.restart_count])
+    instance.has_observed, instance.observed?.state, instance.observed?.restart_count, instance.stale])
 
   const facts = (
     <div className="grid items-start gap-5 lg:grid-cols-3">
@@ -133,7 +133,9 @@ export default function PluginInstanceDetail() {
       </header>
 
       {isApplication && instance.desired.instance_id && (
-        <ApplicationPlane key={instance.id} instanceID={instance.desired.instance_id} lifecycleKey={lifecycleKey} />
+        <ApplicationPlane key={instance.id} instanceID={instance.desired.instance_id} lifecycleKey={lifecycleKey}
+          runtimeState={!instance.desired.enabled ? 'stopped' : !instance.has_observed || instance.stale
+            ? 'unknown' : instance.observed?.state ?? 'unknown'} />
       )}
 
       {editing && !readOnly ? (

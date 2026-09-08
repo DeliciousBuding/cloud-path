@@ -2,12 +2,14 @@ import { useId, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { Badge, ErrorState, Panel } from '@/components/ui'
+import { StructuredValue } from '@/components/StructuredValue'
+import { ApplicationActions } from './ApplicationActions'
 import { RowSkeleton } from '@/components/Skeleton'
 import { APP_RECORD_PAGE_SIZE, useApplicationPlane } from '@/hooks/useApplicationPlane'
 import { ApiError } from '@/lib/api'
-import { appTime, bindingLabels, emptyRecordValue, recordEntries, recordFieldLabel, recordTimestamp, scheduleSummary, scheduleZone } from '@/lib/application-plane'
+import { appTime, bindingLabels, scheduleSummary, scheduleZone } from '@/lib/application-plane'
 import type { AppDomainRecordView, AppScheduledJobView } from '@/lib/types'
-import { useAuth } from '@/store/auth'
+import { authIdentity, useAuth } from '@/store/auth'
 
 interface ReadQuery {
   isPending: boolean
@@ -40,38 +42,6 @@ function TechnicalDetails({ children }: { children: ReactNode }) {
     <button type="button" className="btn btn-ghost" aria-expanded={expanded} aria-controls={id}
       onClick={() => setExpanded(!expanded)}>{expanded ? '收起技术详情' : '查看技术详情'}</button>
     {expanded && <div id={id} className="mt-2 min-w-0 space-y-2 break-all text-xs text-ink-2">{children}</div>}
-  </div>
-}
-
-/** 应用内容是数据，不是可执行展示代码；普通视图保留字段身份与结构。 */
-function StructuredValue({ value, depth = 0 }: { value: unknown; depth?: number }) {
-  if (value === null || value === '') return <span className="text-ink-3">未填写</span>
-  if (typeof value !== 'object') {
-    const time = typeof value === 'string' ? recordTimestamp(value) : undefined
-    return time && typeof value === 'string'
-      ? <time dateTime={value} title={value} className="num break-words">{time}</time>
-      : <span className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{
-        typeof value === 'boolean' ? value ? '是' : '否' : String(value)
-      }</span>
-  }
-  const entries = recordEntries(value)
-  if (!entries.length) return <span className="text-ink-3">暂无内容</span>
-  if (depth >= 2) return <span className="text-ink-3">{entries.length} 项嵌套内容，详见技术详情</span>
-  const preview = Array.isArray(value) ? entries.slice(0, 6) : entries.filter(([, item]) => !emptyRecordValue(item)).slice(0, 6)
-  const shown = new Set(preview.map(([key]) => key))
-  const rest = entries.filter(([key]) => !shown.has(key))
-  const field = ([key, item]: [string, unknown]) => <div key={key} className="min-w-0">
-    <dt className="break-words text-xs text-ink-3 [overflow-wrap:anywhere]" title={key}>{Array.isArray(value) ? '第 ' + (Number(key) + 1) + ' 项' : recordFieldLabel(key)}</dt>
-    <dd className="mt-1 min-w-0 text-sm leading-relaxed text-ink-2"><StructuredValue value={item} depth={depth + 1} /></dd>
-  </div>
-  return <div className="min-w-0">
-    {preview.length ? <dl className={depth === 0 ? 'grid min-w-0 gap-x-8 gap-y-4 sm:grid-cols-2' : 'grid min-w-0 gap-3'}>{preview.map(field)}</dl>
-      : <p className="text-sm text-ink-3">暂无已填写内容</p>}
-    {rest.length > 0 && <details className="mt-4 min-w-0 border-t border-hairline pt-3">
-      <summary className="cursor-pointer text-xs text-ink-2">其余字段（{rest.length}）</summary>
-      <dl className="mt-3 grid min-w-0 gap-x-8 gap-y-4 sm:grid-cols-2">{rest.slice(0, 40).map(field)}</dl>
-      {rest.length > 40 && <p className="mt-3 text-xs text-ink-3">另有 {rest.length - 40} 项，完整内容见技术详情。</p>}
-    </details>}
   </div>
 }
 
@@ -121,19 +91,21 @@ function ScheduledRow({ job, number }: { job: AppScheduledJobView; number: numbe
   </article>
 }
 
-interface Props { instanceID: string; lifecycleKey?: string }
+interface Props { instanceID: string; lifecycleKey?: string; runtimeState?: string }
 
 /** 切实例或账号时重建局部筛选/分页；不能把上一实例的视图状态带过来。 */
 export function ApplicationPlane(props: Props) {
-  const identity = useAuth((s) => [s.user?.tenant_id, s.user?.id].join(':'))
+  const identity = useAuth(authIdentity)
   return <ApplicationPlaneContent key={identity + ':' + props.instanceID} {...props} />
 }
 
-function ApplicationPlaneContent({ instanceID, lifecycleKey }: Props) {
+function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState }: Props) {
   const [offset, setOffset] = useState(0)
   const [filter, setFilter] = useState('')
   const [draft, setDraft] = useState('')
   const { records, bindings, jobs, presentation, status, running, canRead } = useApplicationPlane(instanceID, offset, filter, lifecycleKey)
+  const actionRunning = runtimeState === undefined || runtimeState === 'running' ? running
+    : runtimeState === 'stopped' ? false : undefined
   const rows = records.data?.records ?? []
   const refreshing = records.isFetching || bindings.isFetching || jobs.isFetching
   if (!canRead) return <Panel title="应用数据" className="mb-5">
@@ -149,6 +121,11 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey }: Props) {
       {refreshing && <span className="text-xs text-ink-3">正在同步…</span>}
     </div>
     {running === false && <p className="text-sm text-ink-2">应用当前未运行。设备绑定和运行期任务会暂时清空，已保存的记录和计划仍可查看。</p>}
+    <Panel title="应用操作">
+      {(jobs.isPending || jobs.isError) && <ReadContent title="应用操作" query={jobs} empty={false}>{null}</ReadContent>}
+      <ApplicationActions instanceID={instanceID} jobs={jobs.data} running={actionRunning}
+        lifecycleKey={JSON.stringify([lifecycleKey, runtimeState])} />
+    </Panel>
     <Panel title="应用记录">
       <details className="mb-4 min-w-0">
         <summary className="cursor-pointer text-xs text-ink-2">筛选记录{filter ? '（已筛选）' : ''}</summary>

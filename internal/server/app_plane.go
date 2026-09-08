@@ -155,5 +155,6 @@ func (s *Server) handlePluginInstanceJobs(w http.ResponseWriter, r *http.Request
 	}
 	writeJSON(w, http.StatusOK, api.AppJobsView{
 		InstanceID: instanceID, Running: running, Jobs: jobs, Scheduled: scheduled,
+		JobDescriptors: s.appHost.InstanceJobDescriptors(tenantID, instanceID),
 	})
 }

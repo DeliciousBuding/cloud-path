@@ -122,7 +122,7 @@ type Adapter interface {                              // examples/demo 实现
 |---|---|---|---|
 | `hello` | edge→server | `{edge_id, token, version, devices:[{id,adapter,name,port}]}` | 首帧，鉴权 + 注册 |
 | `snapshot` | server→浏览器 | `{devices[], edges[]}` | 浏览器连接首帧全量快照 |
-| `state` | edge→server→浏览器 | `{online, raw, updated_at}` | 状态快照（diff 抑制 + 心跳兜底） |
+| `state` | edge→server→浏览器 | `{online, raw, updated_at, observations?}` | 状态快照；可选的实体观测保留能力、质量和真实采样时间 |
 | `event` | edge→server→浏览器 | `{type, entity_id?, label?}` | 设备事件，落库 `events`；`entity_id` 是 Capability 绑定把事件路由到 Application 实例的依据，设备级事件为空 |
 | `command` | server→edge | `{command_id, cmd, args}` | 浏览器经 REST 触发 |
 | `command_ack` | edge→server→浏览器 | `{command_id, status, detail}` | 更新 `commands` 并广播 |
@@ -301,6 +301,25 @@ REST 仍是数据事实源：查询缓存按租户、用户、裸实例标识隔
 实例通知通过直接订阅逐个消费，同批通知合并补读。每次连接建立/重建都重新读取 REST，
 覆盖断线窗口；在线时也每 10 秒读取绑定与任务，以感知没有独立推送的启停和调度变化。
 控制投影变化会立即补读，运行事实不由 desired.enabled 乐观推断。
+
+
+### 应用输入与操作契约
+
+- **观测输入**：Edge 的 state 可携带 `observations: [{entity_id, observations: {property: Observation}}]`。
+  即使数值未变、Descriptor 被语义去重，新的真实采样时间仍随 state 上报。旧 Edge 没有此字段时，
+  Core 不从 raw 的字段名猜实体或伪造样本。AppHost 只向同租户、实际绑定了该实体和能力的应用投递
+  `cloudpath.dev/event/property-observed@1` CapabilityEvent，PayloadJSON 是一条完整 Observation。
+  保留 observed_at / received_at / quality / sequence；离线状态降为 unavailable，不升级坏数据为正常。
+- **明确分配**：实例 config 的可选 `app_bindings` 是完整 Binding 数组的 JSON 字符串，按给定顺序选择稳定
+  entity_id。复用 Binder.Validate 核对实际设备租户、能力、基数与重复占用；非法选择必须失败，不能换绑
+  到任意在线实体。缺省仍自动匹配。应用只接收 ValidateBinding，不读取此控制面配置。
+- **用户操作**：JobDescriptor.manual_only=true 的任务只由 operator/admin 显式请求，绝不进入分钟循环。
+  名称、标题和输入 schema 来自运行中插件，不在 Core 维护应用动作列表。未设置此标记的旧任务保持既有
+  自动执行语义；durable schedule_job 仍是显式声明的调度路径。
+- **执行结果**：手动调用要求调用方生成并在同一逻辑请求重试时复用 idempotency_key。Core 限流、限制输入
+  为 4 KiB JSON object、记录无参数值的审计；业务参数与幂等语义由插件验证。插件非 OK 状态返回错误 HTTP，
+  不包装为成功。HTTP 成功只证明插件处理了请求，物理动作的成功仍需 RequestCompleted 和设备 ACK。
+  网络超时不自动重试，应先核对领域记录，再以同一 key 重试。需要这些能力的插件要求 Core >=0.2.15。
 
 ## 配置与环境
 

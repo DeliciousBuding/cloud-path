@@ -80,6 +80,8 @@ type JobDescriptor struct {
 	ID              string `json:"id"`
 	Title           string `json:"title"`
 	InputSchemaJSON string `json:"input_schema_json"`
+	// ManualOnly jobs are operator actions, never automatic minute-loop work.
+	ManualOnly bool `json:"manual_only,omitempty"`
 }
 
 type ConfigureInstanceRequest struct {
@@ -129,6 +131,11 @@ type ApplicationEvent struct {
 type ApplicationEventUnion interface {
 	applicationEventVariant()
 }
+
+// PropertyObservedEvent delivers one model.Observation as PayloadJSON. The host
+// routes only declared properties of a bound entity in the same tenant. It is
+// a sampled fact, not proof of a physical user action or a completed command.
+const PropertyObservedEvent = "cloudpath.dev/event/property-observed@1"
 
 type CapabilityEvent struct {
 	RequirementID string `json:"requirement_id"`

@@ -321,6 +321,7 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 			pend := s.applyState(msg.Device, &st)
 			s.mu.Unlock()
 			s.persistStates([]statePersist{pend}) // 落库在锁外
+			s.appHost.DispatchDeviceObservations(tid, msg.Device, st.Online, st.Observations)
 			msg.Ts = time.Now().Unix()
 			s.broadcast(msg)
 		case api.MsgEvent:

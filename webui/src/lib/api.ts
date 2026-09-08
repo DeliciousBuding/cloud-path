@@ -3,7 +3,7 @@
 // + 可选 Bearer 服务令牌（localStorage）。登录态事实源 = GET /api/auth/me（200 已登录 / 401 未登录）。
 // 任何受保护端点返回 401 → markUnauthenticated() 全局收敛（store/auth.ts → 路由守卫跳 /login）。
 import type {
-  AppDomainRecordsView, AppBindingsView, AppJobsView, AdapterView, CommandView, CreateTokenInput, CreatedToken, CreateUserInput, DeviceView, EdgeView,
+  AppDomainRecordsView, AppBindingsView, AppJobsView, AppJobRunRequest, AppJobRunView, AdapterView, CommandView, CreateTokenInput, CreatedToken, CreateUserInput, DeviceView, EdgeView,
   EventView, HealthView, MeResponse, OverviewView, PluginCatalogListResponse, PluginCatalogView,
   PluginInstanceActionRequest, PluginInstanceCreateRequest, PluginInstanceDeleteRequest,
   PluginInstanceListResponse, PluginInstanceUpdateRequest, PluginInstanceView,
@@ -188,7 +188,7 @@ export const api = {
   plugin: (pluginId: string) =>
     req<PluginCatalogView>(`/api/plugins/${encodeURIComponent(pluginId)}`),
 
-  // ---- 应用只读数据：只传 desired.instance_id，不使用控制面 v.id / 节点前缀 ----
+  // ---- 应用数据与操作：只传 desired.instance_id，不使用控制面 v.id / 节点前缀 ----
   appRecords: (id: string, options: { recordType?: string; limit?: number; offset?: number } = {}, signal?: AbortSignal) => {
     const params = new URLSearchParams({ limit: String(options.limit ?? 20), offset: String(options.offset ?? 0) })
     if (options.recordType) params.set('record_type', options.recordType)
@@ -198,6 +198,9 @@ export const api = {
     req<AppBindingsView>(`/api/plugin-instances/${encodeURIComponent(id)}/bindings`, { signal }),
   appJobs: (id: string, signal?: AbortSignal) =>
     req<AppJobsView>(`/api/plugin-instances/${encodeURIComponent(id)}/jobs`, { signal }),
+  runAppJob: (id: string, job: string, body: AppJobRunRequest, signal?: AbortSignal) =>
+    req<AppJobRunView>(`/api/plugin-instances/${encodeURIComponent(id)}/jobs/${encodeURIComponent(job)}/run`,
+      { method: 'POST', body: JSON.stringify(body), signal }),
   // ---- 插件实例管理：v.id 是服务端返回的控制面键，保留原值（可能含节点前缀） ----
   pluginInstances: () => req<PluginInstanceListResponse>('/api/plugin-instances'),
   pluginInstance: (id: string) =>

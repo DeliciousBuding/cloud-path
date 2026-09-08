@@ -83,13 +83,14 @@ const AppHostEdgeID = "server"
 
 // appInstanceRun 是一个运行中的应用实例的内存投影。
 type appInstanceRun struct {
-	row         store.PluginInstanceRow
-	tenantStr   string
-	reqByEntity map[string]string    // entityID → requirementID（事件扇入路由）
-	bindings    []api.AppBindingView // 启动时 Binder 权威匹配的绑定快照（D1 读面）
-	jobIDs      []string             // 应用声明的 job（每分钟驱动一次）
-	tz          *time.Location       // 应用配置时区
-	windows     []appWindowSpec      // 应用配置的每日窗口
+	row            store.PluginInstanceRow
+	tenantStr      string
+	reqByEntity    map[string]string              // entityID → requirementID（事件扇入路由）
+	bindings       []api.AppBindingView           // 启动时 Binder 权威匹配的绑定快照（D1 读面）
+	jobIDs         []string                       // 应用声明的 job（包含手动操作）
+	jobDescriptors []sdkapplication.JobDescriptor // immutable runtime declaration snapshot
+	tz             *time.Location                 // 应用配置时区
+	windows        []appWindowSpec                // 应用配置的每日窗口
 }
 
 // appWindowSpec 是应用配置里的一个每日窗口（HH:MM，配置时区）。
@@ -503,7 +504,7 @@ func (h *AppHost) startInstance(ctx context.Context, row store.PluginInstanceRow
 	}
 	candidates := h.srv.appCandidates(row.TenantID)
 	binder := coreapplication.Binder{ApplicationID: desc.ApplicationID, PluginInstanceID: row.InstanceID, TenantID: tenantStr}
-	bs, err := binder.Match(reqs, candidates)
+	bs, err := selectApplicationBindings(binder, reqs, candidates, row.ConfigJSON)
 	if err != nil {
 		return fmt.Errorf("bind: %w", err)
 	}
@@ -530,6 +531,7 @@ func (h *AppHost) startInstance(ctx context.Context, row store.PluginInstanceRow
 	}
 	for _, j := range desc.Jobs {
 		run.jobIDs = append(run.jobIDs, j.ID)
+		run.jobDescriptors = append(run.jobDescriptors, j)
 	}
 	var cfg appConfig
 	if raw := appConfigBytes(row.ConfigJSON); len(raw) > 0 {
@@ -709,7 +711,7 @@ func (h *AppHost) minutePass(now time.Time) {
 				ticks = append(ticks, tickDispatch{tenantStr: run.tenantStr, instanceID: id, tick: t})
 			}
 		}
-		for _, jobID := range run.jobIDs {
+		for _, jobID := range run.automaticJobs() {
 			jobs = append(jobs, jobDispatch{tenantStr: run.tenantStr, instanceID: id, req: &sdkapplication.RunJobRequest{
 				PluginInstanceID: id, JobID: jobID, IdempotencyKey: jobID + "-" + minuteKey,
 			}})
@@ -735,7 +737,7 @@ func (h *AppHost) minutePass(now time.Time) {
 		}
 	}
 	for _, j := range jobs {
-		if _, err := h.rt.RunJob(h.ctx, j.tenantStr, j.instanceID, j.req); err != nil {
+		if _, err := h.rt.RunJob(h.ctxOrBackground(), j.tenantStr, j.instanceID, j.req); err != nil {
 			h.logger.Warn("apphost run job", "instance", j.instanceID, "job", j.req.JobID, "err", err)
 		}
 	}
@@ -1096,11 +1098,23 @@ func (e *appEffectExecutor) execRequestCommand(ctx context.Context, effect appru
 // 同名实体，当前按先注册者绑定、命令按首个匹配设备下发。协议层引入限定实体 ID
 // （device/entity）前不扩展——单一 reference 设备场景下语义正确。
 func (s *Server) appCandidates(tenantID int64) []coreapplication.Candidate {
+	// Resolve ownership outside the memory lock. Never relabel all devices as
+	// the requesting tenant merely to make the binder accept them.
+	if s.cfg.Store == nil {
+		return nil
+	}
+	tenant, err := s.cfg.Store.GetTenantByID(tenantID)
+	if err != nil {
+		return nil
+	}
 	tenantStr := strconv.FormatInt(tenantID, 10)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := make([]coreapplication.Candidate, 0, 32)
 	for key, desc := range s.descriptors {
+		if s.deviceTenant(key) != tenant.Slug {
+			continue
+		}
 		for _, e := range desc.Entities {
 			out = append(out, coreapplication.Candidate{
 				EntityID: e.EntityID, Name: e.Name, TenantID: tenantStr,

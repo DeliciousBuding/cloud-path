@@ -100,6 +100,7 @@ message JobDescriptor {
   string id = 1;
   string title = 2;
   string input_schema_json = 3;                // JSON Schema
+  bool manual_only = 4;                       // Operator action; never implicit minute-loop work.
 }
 
 // ---------------------------------------------------------------------------

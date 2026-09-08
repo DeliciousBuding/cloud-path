@@ -102,6 +102,13 @@ export interface StateData {
   online: boolean
   raw: DeviceRaw
   updated_at: number
+  /** Typed samples for bound applications; optional for older edges. */
+  observations?: EntityObservationSet[]
+}
+
+export interface EntityObservationSet {
+  entity_id: string
+  observations: Record<string, Observation>
 }
 
 /**
@@ -668,4 +675,23 @@ export interface AppJobsView {
   running: boolean
   jobs: string[]
   scheduled: AppScheduledJobView[]
+  job_descriptors?: AppJobView[]
+}
+
+export interface AppJobView {
+  id: string
+  title: string
+  input_schema_json: string
+  manual_only: boolean
+}
+
+export interface AppJobRunRequest {
+  args_json: string
+  idempotency_key: string
+}
+
+export interface AppJobRunView {
+  instance_id: string
+  job_id: string
+  result_json: string
 }
