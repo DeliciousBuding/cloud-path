@@ -14,11 +14,10 @@ import (
 // without an explicit future sharing policy. This is a capability-level rule,
 // not a device- or Driver-specific special case.
 var exclusiveBindingCapabilities = map[string]bool{
-	"cloudpath.dev/capability/buzzer@1":                    true,
-	"cloudpath.dev/capability/led@1":                       true,
-	"cloudpath.dev/capability/display-text@1":              true,
-	"cloudpath.dev/capability/motor@1":                     true,
-	"io.github.deliciousbuding/capability/actuator-show@1": true,
+	"cloudpath.dev/capability/buzzer@1":       true,
+	"cloudpath.dev/capability/led@1":          true,
+	"cloudpath.dev/capability/display-text@1": true,
+	"cloudpath.dev/capability/motor@1":        true,
 }
 
 // bindingConflicts returns human-readable conflicts for bindings that would
