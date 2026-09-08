@@ -141,6 +141,56 @@ func TestDispatchDeviceCommandUsesReconnectedLink(t *testing.T) {
 	}
 }
 
+// TestDispatchDeviceCommandHookBeforeWrite 锁定 AppHost 的 ACK 登记时序：
+// onCreated 必须在任何 Edge 写入前完成，否则极快 ACK 会先到而引用尚未登记。
+func TestDispatchDeviceCommandHookBeforeWrite(t *testing.T) {
+	srv, _ := setup(t)
+	tid := ensureTenantSlug(t, srv.cfg.Store, "edge-hook-order")
+	key := "e1/d1"
+	if err := srv.cfg.Store.UpsertDeviceTenant(key, "e1", "demo", key, "", tid); err != nil {
+		t.Fatal(err)
+	}
+	link := &edgeLink{
+		edgeID: "e1", tenant: "edge-hook-order", tenantID: tid,
+		commandSend: make(chan edgeCommandFrame, 1), done: make(chan struct{}), cancel: func() {},
+	}
+	srv.mu.Lock()
+	srv.edges["e1"] = link
+	srv.devices[key] = onlineDevice(key, "e1")
+	srv.mu.Unlock()
+
+	hookSeen := make(chan int64, 1)
+	writeResult := make(chan error, 1)
+	go func() {
+		frame := <-link.commandSend
+		select {
+		case id := <-hookSeen:
+			if id == 0 {
+				writeResult <- errors.New("hook received zero command id")
+				frame.result <- errors.New("hook received zero command id")
+				return
+			}
+			writeResult <- nil
+			frame.result <- nil
+		default:
+			err := errors.New("command reached Edge before onCreated hook")
+			writeResult <- err
+			frame.result <- err
+		}
+	}()
+
+	id, err := srv.dispatchDeviceCommandWithHook(context.Background(), tid, key, "buzzer", `{"freq":1}`, func(id int64) { hookSeen <- id })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id == 0 {
+		t.Fatal("command id must be non-zero")
+	}
+	if err := <-writeResult; err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestTimeoutOnceNotifiesAppCommand 锁定 90s sweeper 的终态通知：只有真正
 // pending/sent → timeout 的命令才消费 AppHost 引用并触发 RequestCompleted。
 func TestTimeoutOnceNotifiesAppCommand(t *testing.T) {

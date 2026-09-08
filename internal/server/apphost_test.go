@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -309,6 +310,63 @@ func TestAppHostObservedProjectionFeedsPlane(t *testing.T) {
 	}
 	if view.Drift || view.Stale {
 		t.Fatalf("view drift=%v stale=%v（本地宿主：applied 即 desired，observed 刚上报）", view.Drift, view.Stale)
+	}
+}
+
+// TestAppHostFailedInstanceProjection 锁定绑定/启动失败必须作为 observed
+// 事实可见：desired 保留、state=failed、detail 可读，且伪 edge 仍判在线。
+func TestAppHostFailedInstanceProjection(t *testing.T) {
+	_, srv, _, _, tid, _ := setupPluginSync(t)
+	ah, err := NewAppHost(srv, AppHostConfig{
+		Enabled: true, PluginsDir: t.TempDir(),
+		LockPath: filepath.Join(t.TempDir(), "plugins.lock"), StateDir: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(ah.Close)
+	srv.SetAppHost(ah)
+
+	now := time.Now().Unix()
+	portRow := storeport.PluginInstanceRow{
+		TenantID: tid, EdgeID: AppHostEdgeID, InstanceID: "bind-fail",
+		PluginID: "app-x", Version: "1.0", Enabled: true,
+		ConfigJSON: "{}", CreatedAt: now, UpdatedAt: now,
+	}
+	rev, err := srv.plugin.store.CreatePluginInstance(portRow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	portRow.Revision = rev
+	srv.plugin.remember(portRow)
+	row := store.PluginInstanceRow{
+		TenantID: tid, EdgeID: AppHostEdgeID, InstanceID: "bind-fail",
+		PluginID: "app-x", Version: "1.0", Enabled: true, Revision: rev,
+	}
+	ah.mu.Lock()
+	ah.failed[appInstKey{tid, "bind-fail"}] = appInstanceFailure{
+		row: row, detail: "bind: application binding invalid: exclusive actuator binding conflict",
+	}
+	ah.mu.Unlock()
+
+	ah.reportObserved()
+
+	srv.plugin.mu.Lock()
+	ep := srv.plugin.tenants[tid].edges[AppHostEdgeID]
+	observed, ok := ep.observed["bind-fail"]
+	_, online := srv.pluginEdgeOnline()[pluginEdgeKey{tenantID: tid, edgeID: AppHostEdgeID}]
+	srv.plugin.mu.Unlock()
+	if !ok || observed.State != string(appruntime.StateFailed) || observed.Health != "ERROR" ||
+		!strings.Contains(observed.Detail, "exclusive actuator binding conflict") {
+		t.Fatalf("failed observed = ok:%v %+v", ok, observed)
+	}
+	if !online {
+		t.Fatal("AppHost 仅承载失败实例时仍应保持伪 edge 在线，否则失败态被渲染成 unknown")
+	}
+	view := srv.pluginInstanceView(tid, "", AppHostEdgeID, "bind-fail")
+	if !view.HasObserved || !view.EdgeOnline || view.Observed == nil || !view.Drift ||
+		view.Observed.State != string(appruntime.StateFailed) || !strings.Contains(view.Observed.Detail, "exclusive actuator binding conflict") {
+		t.Fatalf("failed instance view = %+v", view)
 	}
 }
 

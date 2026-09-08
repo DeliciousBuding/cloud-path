@@ -57,10 +57,18 @@ type AppHost struct {
 	bootID string
 
 	mu      sync.Mutex
-	running map[appInstKey]*appInstanceRun // (tenant, instanceID) → 运行记录
-	ticked  map[string]bool                // "<tenant>|<instance>|<window>|<date>" → 已派发（防重复开窗）
-	appCmds map[int64]appCommandRef        // server 命令 id → 应用侧引用（RequestCompleted 用）
-	seq     uint64                         // observed 上报序号
+	running map[appInstKey]*appInstanceRun    // (tenant, instanceID) → 运行记录
+	failed  map[appInstKey]appInstanceFailure // (tenant, instanceID) → 启动/绑定失败投影
+	ticked  map[string]bool                   // "<tenant>|<instance>|<window>|<date>" → 已派发（防重复开窗）
+	appCmds map[int64]appCommandRef           // server 命令 id → 应用侧引用（RequestCompleted 用）
+	seq     uint64                            // observed 上报序号
+}
+
+// appInstanceFailure 是 AppHost 在 desired 已存在但协议/绑定启动失败时的
+// 可观测事实；它不是 desired，必须只进入 observed 投影。
+type appInstanceFailure struct {
+	row    store.PluginInstanceRow
+	detail string
 }
 
 // AppHostConfig 是 Server 侧 Application Plugin Host 的配置（Config.AppHost）。
@@ -157,6 +165,7 @@ func NewAppHost(srv *Server, cfg AppHostConfig) (*AppHost, error) {
 		done:    make(chan struct{}),
 		bootID:  fmt.Sprintf("server-apphost-%d", time.Now().UnixNano()),
 		running: map[appInstKey]*appInstanceRun{},
+		failed:  map[appInstKey]appInstanceFailure{},
 		ticked:  map[string]bool{},
 		appCmds: map[int64]appCommandRef{},
 	}
@@ -378,6 +387,11 @@ func (h *AppHost) reconcile(ctx context.Context) error {
 			toStop = append(toStop, h.running[key].row)
 		}
 	}
+	for key := range h.failed {
+		if _, ok := desired[key]; !ok {
+			delete(h.failed, key)
+		}
+	}
 	for key, r := range desired {
 		if !applied[r.TenantID][key.instanceID] {
 			continue // Keep the prior protocol instance; do not promote a failed apply.
@@ -410,7 +424,8 @@ func (h *AppHost) reconcile(ctx context.Context) error {
 	}
 	for _, r := range toStart {
 		if err := h.startInstance(ctx, r); err != nil {
-			// 失败不缓存：进程握手是异步的，下一轮 reconcile 自然重试。
+			// 失败会保留为 observed 事实；下一轮 reconcile 仍会自然重试。
+			h.recordInstanceFailure(r, err)
 			h.logger.Warn("apphost start instance failed", "instance", r.InstanceID, "err", err)
 		}
 	}
@@ -424,6 +439,7 @@ func (h *AppHost) stopInstance(key appInstKey) {
 		pluginID = run.row.PluginID
 	}
 	delete(h.running, key)
+	delete(h.failed, key)
 	siblings := 0
 	if pluginID != "" {
 		for _, run := range h.running {
@@ -551,7 +567,9 @@ func (h *AppHost) startInstance(ctx context.Context, row store.PluginInstanceRow
 	}
 
 	h.mu.Lock()
-	h.running[appInstKey{row.TenantID, row.InstanceID}] = run
+	key := appInstKey{row.TenantID, row.InstanceID}
+	h.running[key] = run
+	delete(h.failed, key)
 	h.mu.Unlock()
 	h.logger.Info("apphost instance running", "instance", row.InstanceID,
 		"plugin", row.PluginID, "version", row.Version, "bindings", len(bs.Bindings))
@@ -927,9 +945,13 @@ func (h *AppHost) reportObserved() {
 		}
 		items = append(items, item{row: run.row, st: st})
 	}
+	failures := make([]appInstanceFailure, 0, len(h.failed))
+	for _, failure := range h.failed {
+		failures = append(failures, failure)
+	}
 	h.mu.Unlock()
 
-	if h.srv.cfg.PluginStore == nil || len(items) == 0 {
+	if h.srv.cfg.PluginStore == nil || (len(items) == 0 && len(failures) == 0) {
 		return
 	}
 	// 按 (tenant, edge_id) 聚合：observed 投影以伪 edge（约定 AppHostEdgeID）为键。
@@ -947,11 +969,28 @@ func (h *AppHost) reportObserved() {
 			Detail: "server-apphost", RestartCount: snap.restartCount,
 		})
 	}
+	for _, failure := range failures {
+		k := groupKey{tid: failure.row.TenantID, edgeID: failure.row.EdgeID}
+		groups[k] = append(groups[k], api.PluginObservedInstanceData{
+			InstanceID: failure.row.InstanceID, PluginID: failure.row.PluginID, Version: failure.row.Version,
+			HostOnline: true, State: string(appruntime.StateFailed), Health: "ERROR",
+			Detail: "server-apphost: " + failure.detail,
+		})
+	}
 	for k, rows := range groups {
 		// 事实：AppHost 是 Server 进程内的本地宿主，desired 快照由本进程写入并
 		// 已成功收敛（apply snapshot + 实例 running），applied 即 desired、drift 恒否。
 		h.srv.plugin.applyAppHostObservations(k.tid, k.edgeID, h.bootID, seq, rows)
 	}
+}
+
+func (h *AppHost) recordInstanceFailure(row store.PluginInstanceRow, err error) {
+	if err == nil {
+		return
+	}
+	h.mu.Lock()
+	h.failed[appInstKey{row.TenantID, row.InstanceID}] = appInstanceFailure{row: row, detail: err.Error()}
+	h.mu.Unlock()
 }
 
 // runningTenantIDs 返回当前承载着应用实例的租户（伪 edge 在线判定的事实源：
@@ -965,6 +1004,12 @@ func (h *AppHost) runningTenantIDs() []int64 {
 		if !seen[run.row.TenantID] {
 			seen[run.row.TenantID] = true
 			out = append(out, run.row.TenantID)
+		}
+	}
+	for _, failure := range h.failed {
+		if !seen[failure.row.TenantID] {
+			seen[failure.row.TenantID] = true
+			out = append(out, failure.row.TenantID)
 		}
 	}
 	return out
@@ -1092,14 +1137,30 @@ func (e *appEffectExecutor) execRequestCommand(ctx context.Context, effect appru
 		e.host.dispatchRequestCompleted(ref, sdkapplication.CommandStateFailed, err.Error())
 		return err
 	}
-	cmdID, err := e.host.srv.dispatchDeviceCommand(ctx, tid, deviceKey, p.Action, p.ArgsJSON)
+	registered := false
+	cmdID, err := e.host.srv.dispatchDeviceCommandWithHook(ctx, tid, deviceKey, p.Action, p.ArgsJSON, func(id int64) {
+		// 在命令写入 Edge 之前登记，避免设备 ACK 比 dispatch 返回更快时丢事件。
+		e.host.mu.Lock()
+		e.host.appCmds[id] = ref
+		e.host.mu.Unlock()
+		registered = true
+	})
 	if err != nil {
+		if registered {
+			e.host.mu.Lock()
+			_, pending := e.host.appCmds[cmdID]
+			if pending {
+				delete(e.host.appCmds, cmdID)
+			}
+			e.host.mu.Unlock()
+			if !pending {
+				// 极快 ACK 已消费引用并投递终态，不能再用发送错误覆盖它。
+				return err
+			}
+		}
 		e.host.dispatchRequestCompleted(ref, sdkapplication.CommandStateFailed, err.Error())
 		return err
 	}
-	e.host.mu.Lock()
-	e.host.appCmds[cmdID] = ref
-	e.host.mu.Unlock()
 	return nil
 }
 
@@ -1167,6 +1228,12 @@ func (s *Server) deviceKeyForEntity(entityID string) string {
 // Driver 设备本就无注册表项，命令合法性由 Edge/Driver 侧校验；应用可下发的
 // 动作已被 Capability 绑定约束。
 func (s *Server) dispatchDeviceCommand(ctx context.Context, tenantID int64, key, cmd, args string) (int64, error) {
+	return s.dispatchDeviceCommandWithHook(ctx, tenantID, key, cmd, args, nil)
+}
+
+// dispatchDeviceCommandWithHook 与 dispatchDeviceCommand 同路径；onCreated 在
+// 命令落库后、任何网络写入前同步调用，供 AppHost 先登记 RequestCompleted 引用。
+func (s *Server) dispatchDeviceCommandWithHook(ctx context.Context, tenantID int64, key, cmd, args string, onCreated func(int64)) (int64, error) {
 	s.mu.RLock()
 	v, devOK := s.devices[key]
 	var link *edgeLink
@@ -1188,6 +1255,9 @@ func (s *Server) dispatchDeviceCommand(ctx context.Context, tenantID int64, key,
 	id, err := s.cfg.Store.CreateCommandTenant(key, cmd, args, tenantID)
 	if err != nil {
 		return 0, err
+	}
+	if onCreated != nil {
+		onCreated(id)
 	}
 	data, _ := json.Marshal(api.CommandData{CommandID: id, Cmd: cmd, Args: args})
 	payload, _ := json.Marshal(api.Envelope{V: api.Version, Type: api.MsgCommand, Device: key, Ts: time.Now().Unix(), Data: data})

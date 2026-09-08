@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/DeliciousBuding/cloud-path/internal/api"
+	"github.com/DeliciousBuding/cloud-path/internal/appruntime"
 	"github.com/DeliciousBuding/cloud-path/internal/plugincatalog"
 	"github.com/DeliciousBuding/cloud-path/internal/server/storeport"
 	"github.com/DeliciousBuding/cloud-path/internal/tenantpolicy"
@@ -648,9 +649,24 @@ func (p *pluginPlane) applyAppHostObservations(tenantID int64, edgeID, bootID st
 		o.Detail = plugincatalog.SanitizeDetail(o.Detail)
 		ep.observed[o.InstanceID] = o
 	}
-	// AppHost 是本地宿主：desired 快照由本进程写入且已成功收敛，applied 即 desired
-	// （与 Edge 路径「applied 只由 plugin_ack 推进」的语义不同——这里没有跨进程 ack）。
-	applied := ep.desiredRevision
+	// AppHost 是本地宿主：只有所有 enabled desired 实例都以匹配版本进入 running，
+	// 才把 applied 推进到 desiredRevision；绑定/启动失败必须保留 drift 事实。
+	applied := ep.appliedRevision
+	allApplied := true
+	for key, row := range t.instances {
+		if key.edgeID != edgeID || !row.Enabled {
+			continue
+		}
+		o, ok := ep.observed[key.instanceID]
+		if !ok || o.State != string(appruntime.StateRunning) ||
+			(row.Version != "" && o.Version != "" && row.Version != o.Version) {
+			allApplied = false
+			break
+		}
+	}
+	if allApplied {
+		applied = ep.desiredRevision
+	}
 	ep.appliedRevision = applied
 	p.mu.Unlock()
 
