@@ -63,9 +63,25 @@ CloudPath turns **plug in a device → see it in the cloud → control it remote
 UI contributions are not a separate executable plugin type: plugins submit declarative navigation,
 forms, and page Schema via a Manifest.
 
-Current plugin flavors: `examples/scheduled-compartment` (process-based reference Application) ·
-`templates/go-plugin` (official Go plugin template). The STC-B reference Driver lives in the separate
-`cloud-path-driver-stcb` repo and is installed via GitHub discover/install. See `docs/plugin-system.md`.
+Current Application source repositories:
+
+- [cloud-path-app-scheduled-compartment](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment)
+- [cloud-path-app-button-indicator](https://github.com/DeliciousBuding/cloud-path-app-button-indicator)
+- [cloud-path-app-environment-guard](https://github.com/DeliciousBuding/cloud-path-app-environment-guard)
+
+These independent repositories own application source, configuration and upgrades; consult their
+Releases for installable versions, assets and digests. A merged source change is not a published release.
+The Core [scheduled-compartment example](examples/scheduled-compartment/README.md) and
+[split generator](deploy/split/README.md) are reference / historical bootstrap material.
+[Go plugin templates](templates/go-plugin/README.md) are starting points for new plugins,
+not an update source: never regenerate or copy them over an independently maintained application.
+
+Core >= v0.2.15 provides typed `property-observed`, manual jobs and explicit `app_bindings`; see
+the [application input and operation contract](docs/design.md#应用输入与操作契约). Each application
+repository declares its dependency range in `plugin.yaml` and `go.mod`.
+
+The STC-B reference Driver lives in the separate `cloud-path-driver-stcb` repo and is installed
+via GitHub discover/install. See the [plugin runtime contract](docs/architecture/plugin-system.md).
 
 ## Quick start (local)
 

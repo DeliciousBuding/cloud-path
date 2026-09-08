@@ -1,5 +1,11 @@
 # Scheduled Compartment
 
+> **Core reference / historical bootstrap only.** The maintained application source is
+> [cloud-path-app-scheduled-compartment](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment).
+> Make application fixes and upgrades there; do not regenerate it from this example or a scaffold.
+> The build, configuration and test instructions below describe only this Core reference snapshot,
+> not the independently maintained application.
+
 `cloud-path-app-scheduled-compartment` is a **device-agnostic** reference
 Application plugin for CloudPath. It manages a set of compartments against a
 daily schedule: when a schedule window starts it emits a reminder, treats a

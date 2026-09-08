@@ -60,13 +60,23 @@ CloudPath 把「插上一台设备 → 上云看到它 → 远程控制它」做
 
 UI 贡献不是独立的可执行插件类型：插件通过 Manifest 提交声明式导航、表单与页面 Schema。
 
-当前仓库内的插件形态（孵化状态，逐条如实）：
+插件源码入口与 Core 参考材料：
 
 | 位置 | 形态 | 说明 |
 |---|---|---|
 | [cloud-path-driver-stcb](https://github.com/DeliciousBuding/cloud-path-driver-stcb) | **独立 Driver Plugin** | STC-B 参考驱动；经 GitHub discover/install 由 Plugin Host 运行（v0.1.0） |
-| [examples/scheduled-compartment/](examples/scheduled-compartment/README.md) | **进程式参考 Application** | 由 Plugin Host 以独立进程拉起，只依赖公开 SDK；可用 [deploy/split/](deploy/split/README.md) 生成独立仓 |
-| [templates/go-plugin/](templates/go-plugin/README.md) | 官方 Go 插件模板 | driver / application 两套，带 CI、Release 与 manifest 校验器 |
+| [cloud-path-app-scheduled-compartment](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment) | **独立 Application Plugin** | 定时隔间应用的现役源码、配置与发布说明 |
+| [cloud-path-app-button-indicator](https://github.com/DeliciousBuding/cloud-path-app-button-indicator) | **独立 Application Plugin** | 按键指示应用的现役源码、配置与发布说明 |
+| [cloud-path-app-environment-guard](https://github.com/DeliciousBuding/cloud-path-app-environment-guard) | **独立 Application Plugin** | 环境监护应用的现役源码、配置与发布说明 |
+| [examples/scheduled-compartment/](examples/scheduled-compartment/README.md) | **Core 参考 / 历史 bootstrap** | 只依赖公开 SDK 的参考快照；[deploy/split/](deploy/split/README.md) 不用于更新现役应用 |
+| [templates/go-plugin/](templates/go-plugin/README.md) | 官方 Go 插件模板 | 新插件的起步材料，带 CI、Release 与 manifest 校验器；不是已有应用的更新源 |
+
+**现役应用的源码事实源是各自独立仓库。** 修复与升级在对应仓库进行，不要从 Core 示例或
+split/scaffold 重新生成并覆盖已独立演进的应用。可安装版本、资产与摘要以各仓 Release 为准，
+源码合并不等于已发布。
+
+Core >= v0.2.15 的类型化 `property-observed`、手动任务与显式 `app_bindings` 契约见
+[应用输入与操作契约](docs/design.md#应用输入与操作契约)；应用依赖范围以各自 `plugin.yaml` 和 `go.mod` 为准。
 
 能力模型、控制面同步语义与租户安全边界见
 [docs/architecture/capability-model.md](docs/architecture/capability-model.md)、
@@ -436,8 +446,8 @@ cloud-path/
 - 参考 Driver `stcb` 已拆为独立 Driver Plugin [`cloud-path-driver-stcb`](https://github.com/DeliciousBuding/cloud-path-driver-stcb)
   （v0.1.0 发布，Driver Protocol v1；Core 生产二进制不再 blank import STC-B，经 GitHub discover/install 由 Edge 的 Plugin Host 运行）。
 - 内置参考演示适配器 `demo`（无硬件，`ping/set/dump/noop`，server/edge 双端同源注册，`/api/adapters` 与白名单同一事实源）。
-- 参考 Application `scheduled-compartment`（进程式插件，Plugin Host 拉起，只依赖公开 SDK）
-  与 [deploy/split/](deploy/split/README.md) 独立仓生成器。
+- Application 插件在[独立仓库](docs/architecture/repository-strategy.md)维护；
+  Core 示例与拆仓生成器仅保留作参考 / 历史 bootstrap，不作为现役应用更新源。
 - 外部 Driver Plugin Host：desired-state + `plugins.lock` 监督插件进程；
   Registry CLI 的 search/inspect/install/enable/disable/update/remove/host 与信任锚校验。
 - 插件控制面全链路：Server desired 权威（写面 REST + 9 个稳定错误码 + RBAC/配额/审计/WS
@@ -461,10 +471,6 @@ cloud-path/
   （浏览器 WebSocket 无法携带自定义 header）；账号密码会话功能完整。v0.1 接受此限制，UI 诚实呈现。
 - **中心 Secret Store**：v0.1 明确不做（见上）；secret 一律 `secret://<name>` handle + Edge 本地
   provider 解析，未来可替换 Vault/KMS 而不改 desired 协议。
-- **插件独立仓 Release**：药盒 Application 插件已拆入独立仓
-  [`cloud-path-app-scheduled-compartment`](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment)
-  （[deploy/split/](deploy/split/README.md) 生成器生成）；独立 Release 资产发布待执行。
-  STC-B Driver 已拆为独立仓 `cloud-path-driver-stcb`；Registry 客户端仍留在主仓（`internal/registry`）。
 - MQTT/Modbus 等协议接入、远程 OTA 编排、时序聚合与业务分析（P2–P4 规划，见
   [docs/architecture.md](docs/architecture.md)）。
 

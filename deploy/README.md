@@ -477,4 +477,4 @@ curl -fsS "https://${SITE}/healthz"
 | [../Taskfile.yml](../Taskfile.yml) | `task build:linux-arm64` / `build:matrix` / `verify:arch` / `release:artifacts` |
 | [../edge.example.yaml](../edge.example.yaml) | Edge 配置母版（复制为 `edge.yaml` 后填写，不入库） |
 | [../CHANGELOG.md](../CHANGELOG.md) | 版本记录与产物命名规范 |
-| [split/README.md](split/README.md) | 参考 Application 插件拆成独立仓库的可复现脚本 |
+| [split/README.md](split/README.md) | 参考 Application 的历史 bootstrap 生成器；不是现役独立应用更新源 |

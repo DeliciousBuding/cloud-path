@@ -5,6 +5,11 @@ source for the future independent repository
 `cloud-path-plugin-template-go`. It contains two self-contained plugin
 templates, CI/Release examples, a manifest, and a stdlib-only renamer.
 
+**New-plugin scaffolds only.** These templates are not an update source for the
+[current independent applications](../../docs/architecture/repository-strategy.md).
+Make fixes and SDK upgrades in each application repository; never copy or regenerate
+a scaffold over an application that has already evolved independently.
+
 ## Templates
 
 | Template | Kind | Directory |
@@ -36,8 +41,8 @@ Each template builds and tests on its own (`go build ./...`, `go vet ./...`,
    `cmd/<binary>`. It rejects empty values and path-traversal inputs and never
    calls git or GitHub. `python scripts/rename.py --self-test` runs a smoke test.
    The template go.mod uses a `replace` to the local cloud-path checkout; drop
-   it and pin the published `github.com/DeliciousBuding/cloud-path` version once
-   the SDK is released.
+   it and pin a compatible published `github.com/DeliciousBuding/cloud-path`
+   version before publishing the new plugin.
 
 3. **Test.** In the new repository:
 

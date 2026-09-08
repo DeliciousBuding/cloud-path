@@ -1,5 +1,9 @@
 # CloudPath Application Plugin Template
 
+> **New-application scaffold only, not an update source.** Maintain existing applications in
+> their [independent repositories](https://github.com/DeliciousBuding/cloud-path/blob/main/docs/architecture/repository-strategy.md).
+> Do not copy or regenerate this template over an independently maintained application.
+
 A minimal, copyable Application Plugin for CloudPath. It implements the
 Application Protocol v1 (`sdk/go/cloudpath/v1/application`) and binds to a
 single Capability by semantic id  -  never by a Driver id. `HandleEvents`
@@ -60,9 +64,9 @@ application/
    ```
 
 The `go.mod` ships with a `replace` pointing at the local cloud-path checkout
-so it builds in the monorepo. Once the public
-`github.com/DeliciousBuding/cloud-path` module is published, remove the
-`replace` and pin the released version.
+so it builds in the monorepo. Before publishing a new plugin, remove the
+`replace` and pin a compatible published `github.com/DeliciousBuding/cloud-path`
+version; the template dependency is not the baseline for existing applications.
 
 ## Binding model
 
