@@ -16,10 +16,9 @@ import (
 )
 
 const (
-	wsReadLimit  = 64 << 10
-	wsWriteWait  = 5 * time.Second
-	wsPingPeriod = 30 * time.Second
-	sendQueue    = 256
+	wsReadLimit = 64 << 10
+	wsWriteWait = 5 * time.Second
+	sendQueue   = 256
 	// offlineBufferCap 是断线期间缓冲的事件条数上限：事件不可重放（丢了就没了），
 	// 状态消息幂等（下一拍会重发）所以直接丢。超上限丢最旧保最新。
 	offlineBufferCap = 512
@@ -197,27 +196,10 @@ func (c *wsClient) session(ctx context.Context) error {
 			}
 		}
 	}()
-	// ping 泵：失败即取消会话（半开连接收敛）
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer sessCancel()
-		t := time.NewTicker(wsPingPeriod)
-		defer t.Stop()
-		for {
-			select {
-			case <-sessCtx.Done():
-				return
-			case <-t.C:
-				pctx, cancel := context.WithTimeout(sessCtx, wsWriteWait)
-				err := ws.Ping(pctx)
-				cancel()
-				if err != nil {
-					return
-				}
-			}
-		}
-	}()
+	// Server owns WebSocket keepalive. Do not run a second Ping pump here:
+	// coder/websocket Ping holds the write lock while waiting for Pong, so
+	// simultaneous client/server pings can deadlock both read loops until the
+	// context expires. The server Ping plus this read loop detects a dead peer.
 
 	// 读循环（本协程）：处理 server 下行消息
 	for {
@@ -256,7 +238,7 @@ func (c *wsClient) session(ctx context.Context) error {
 			slog.Debug("plugin_desired ignored: plugin control plane disabled on this edge",
 				"type", string(env.Type))
 		case api.MsgPing, api.MsgPong:
-			// 由 websocket 库与本客户端的 ping 泵处理
+			// 由 websocket 库自动回应 Server 的 ping
 		default:
 			// 未知/浏览器向消息：忽略并记 debug，不断开连接。
 			slog.Debug("ignoring server message", "type", string(env.Type))
