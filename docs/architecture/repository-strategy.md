@@ -1,6 +1,6 @@
 # 仓库组合、命名与公开边界
 
-最后更新：2026-09-03
+最后更新：2026-09-08
 
 > 本文定义 CloudPath 的公开仓库组合、命名、插件孵化/拆仓策略和公开边界。插件发现与信任链见
 > [github-ecosystem.md](github-ecosystem.md)，插件运行契约见 [plugin-system.md](plugin-system.md)。
@@ -20,12 +20,14 @@
 
 ## 2. 官方仓库组合
 
-| 仓库 | 职责 | 创建时机 |
+| 仓库 | 职责 | 源码状态 / 创建条件 |
 |---|---|---|
 | `cloud-path` | Core、Server、Edge、WebUI、公共 API/Schema、Go SDK、测试 harness | 当前主仓库 |
 | `cloud-path-registry` | 精选插件索引、发布者策略、digest/attestation 元数据；不存二进制 | A7 稳定后 |
 | `cloud-path-driver-stcb` | STC-B Driver Plugin；板级容错、串口协议、Capability 映射 | A5 拆仓 |
-| `cloud-path-app-scheduled-compartment` | 完全硬件无关的参考 Application Plugin | A6 可运行后 |
+| [cloud-path-app-scheduled-compartment](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment) | 硬件无关的定时隔间 Application Plugin | 独立维护；现役源码入口 |
+| [cloud-path-app-button-indicator](https://github.com/DeliciousBuding/cloud-path-app-button-indicator) | 按键指示 Application Plugin | 独立维护；现役源码入口 |
+| [cloud-path-app-environment-guard](https://github.com/DeliciousBuding/cloud-path-app-environment-guard) | 环境监护 Application Plugin | 独立维护；现役源码入口 |
 | `cloud-path-plugin-template-go` | 官方 Go 插件模板、CI、Release、conformance 示例 | 第二个外部插件前 |
 
 暂不创建 `cloud-path-docs`、`cloud-path-sdk-*` 等空仓库。文档、Go SDK、Schema、harness 在接口稳定前留在核心仓库，避免跨仓同步成本。
@@ -63,7 +65,7 @@ cloud-path-connector-home-assistant
 - Device/Entity/Capability/Observation/Event/Command 通用模型；
 - Edge、Server、WebUI、认证/租户、Plugin Host 与 Registry 客户端；
 - versioned 协议、Schema、SDK、conformance harness；
-- 尚处孵化期的 reference plugin（放 `examples/`，不作为永久运行形态）。
+- 孵化或契约演示用 reference plugin（放 `examples/`；拆仓后不再是现役应用的源码事实源）。
 
 核心仓库不拥有：
 
@@ -92,6 +94,11 @@ Application ─X→ Driver ID / 端口 / 厂商字段
 6. README 能让陌生人独立安装、配置、验证和卸载。
 
 拆仓使用 `git filter-repo`/subtree 保留相关历史；核心仓库删除编译期 import，仅保留安装示例和 Registry 指针。
+
+**拆仓后以独立仓库为源码事实源**：修复、配置契约、SDK 依赖与发布在各应用仓维护。
+Core 的 `examples/scheduled-compartment` 与 [split 生成器](../../deploy/split/README.md)
+只保留参考 / 历史 bootstrap；[Go 模板](../../templates/go-plugin/README.md)仅供新插件起步。
+这些材料不自动跟随独立应用演进，不得重新生成或复制覆盖现役应用。
 
 ## 6. 公开展示矩阵
 

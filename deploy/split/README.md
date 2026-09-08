@@ -1,7 +1,7 @@
-# 插件独立仓拆分（只拆「药盒」这一个）
+# 参考应用拆仓生成器（历史 bootstrap）
 
 > 生成器：[split_app_plugin.py](split_app_plugin.py)（Python 3 stdlib only，无第三方依赖）。
-> 作用：把本仓孵化的参考 **Application** 插件 `examples/scheduled-compartment` 生成成一个
+> 作用：把 Core 内的参考快照 `examples/scheduled-compartment` 生成成一个
 > **独立 `go.mod`** 的插件仓库目录树，带自己的 README、LICENSE(MIT)、`.gitignore`、CI、
 > Release workflow、manifest 与 manifest 校验器。
 >
@@ -10,11 +10,16 @@
 > 插件发现与信任链见
 > [docs/architecture/github-ecosystem.md](../../docs/architecture/github-ecosystem.md)。
 
+**这不是现役应用更新工具。** [scheduled-compartment](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment)
+已在独立仓演进；它与 button-indicator、environment-guard 的源码入口见
+[官方仓库组合](../../docs/architecture/repository-strategy.md)。修复与升级在各自仓库进行，
+不得把此生成器或 scaffold 的输出覆盖、推送到已有应用仓。下文只说明历史 bootstrap。
+
 ## 1. 范围（明确限定）
 
-只生成 **一个** 插件仓：
+只复现 **一个** 参考快照的初始仓库布局，不拉取现役应用源码：
 
-| 目标仓库 | module 名 | 源 |
+| 历史拆仓目标 | module 名 | bootstrap 输入 |
 |---|---|---|
 | `DeliciousBuding/cloud-path-app-scheduled-compartment` | `github.com/DeliciousBuding/cloud-path-app-scheduled-compartment` | `examples/scheduled-compartment` |
 
@@ -35,7 +40,8 @@ STC-B Driver 已拆为独立仓 `cloud-path-driver-stcb`；Registry 客户端仍
 
 ## 3. SDK 依赖方式（二选一，取舍写清）
 
-生成的 `go.mod` 默认使用 **发布后的 module 路径**：
+生成的 `go.mod` 使用发布 module 路径；以下 `v0.1.0` 是生成器的**历史默认值**，
+不是现役应用的 SDK 基线（以各应用仓 `go.mod` / `plugin.yaml` 为准）：
 
 ```text
 module github.com/DeliciousBuding/cloud-path-app-scheduled-compartment
@@ -77,7 +83,7 @@ python deploy/split/split_app_plugin.py --out dist/split/plugin-repo --core-vers
 | `--out` | 输出目录（默认 `dist/split/cloud-path-app-scheduled-compartment`，gitignored） |
 | `--core-version` | 写进 `require` 的 core 版本（默认 `v0.1.0`） |
 | `--core-path` | 本地 core checkout，写入 `replace` 以便当场构建（验证用，不可发布） |
-| `--force` | 输出目录已存在时替换（默认拒绝，不静默删除） |
+| `--force` | 替换已有临时输出目录（默认拒绝）；不得用于现役应用工作区 |
 | `--no-build` | 跳过生成后的 `go build` 尝试 |
 | `--require-build` | 构建不通过就非零退出 |
 | `--self-test` | 内置自测（正例 + 负例 + 输出栅栏 + 真实构建） |
@@ -113,7 +119,7 @@ import 重写规则：
 Release 资产命名与主仓一致：`cloud-path-app-scheduled-compartment_<version>_<os>_<arch>[.exe]`
 外加 `checksums.txt` 与 `plugin.yaml`。
 
-## 6. 本机验证结果（生成后实测）
+## 6. bootstrap 历史验证记录（非现役应用验收）
 
 ```bash
 python deploy/split/split_app_plugin.py --core-path . --force --require-build
@@ -134,14 +140,16 @@ go test ./... -count=1                                   # ok <plugin module>
 > “依赖不可解析”跳过（脚本如实打印 `SKIPPED`，不假装成功）；目录树/module 名/import 重写
 > 仍由 audit 断言。
 
-## 7. 发布流程（人工，脚本不代做）
+## 7. 历史首次建仓流程（不适用于现役仓库更新）
+
+以下仅保留最初拆仓过程；现役应用的发布流程与 Release 资产以独立仓库为准。
 
 1. 用发布形态生成：`python deploy/split/split_app_plugin.py --force`（不带 `--core-path`）。
 2. 确认 core 仓已公开且 `v0.1.0` tag 存在（否则使用者无法解析依赖）。
 3. 在生成目录里先 `go mod tidy` 生成 `go.sum`（生成器不产出 go.sum——它需要已发布的
    core tag 经公共 proxy 解析；缺 go.sum 时独立仓 CI 必失败，2026-09-04 实测），
    再 `git init -b main`、首次提交、`gh repo create`（发现型插件仓按仓库策略为公开仓；
-   仓库已存在时直接加 remote）、push。
+   仅适用于尚未创建的目标仓库，不接入已有应用仓 remote）、push。
 4. 给仓库打 Topic `cloudpath-plugin`（发现契约，见
    [docs/architecture/github-ecosystem.md](../../docs/architecture/github-ecosystem.md)）。
 5. 打 `v0.1.0` tag 触发 release workflow，产出 6 平台资产 + `checksums.txt`。
@@ -149,9 +157,9 @@ go test ./... -count=1                                   # ok <plugin module>
 7. 主仓侧：`examples/scheduled-compartment` 是否移除由主仓决策（拆仓门第 3 条要求
    “Core 移除该插件后仍可 build/test/start”），本脚本**不动** `examples/`。
 
-## 8. 上游变更怎么同步
+## 8. 拆仓后的维护边界
 
-单一方向：**改主仓 `examples/scheduled-compartment`，再重新生成本仓**。
-不要在生成出来的独立仓里手改业务代码后往回抄——那会让两边静默漂移。
-如果上游 README 结构变了导致生成失败，就更新
-[split_app_plugin.py](split_app_plugin.py) 里的 `README_REWRITES` 锚点（断言式替换会明确指出哪条失配）。
+**在各自独立仓修改和发布应用，不通过 Core 示例重新生成。** Core 示例与独立应用
+不是同步镜像；需要新版 SDK 时，在应用仓更新依赖并验证兼容性。
+只有维护历史 bootstrap 本身时才修改参考快照或生成器；README 的断言式改写锚点
+仅服务于该快照，不是将 Core 内容同步到现役应用的机制。
