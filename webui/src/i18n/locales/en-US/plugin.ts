@@ -221,6 +221,11 @@ export default {
     compatibility: 'Compatibility', noConfig: 'No configuration', noSecrets: 'No secrets referenced',
     secretsHint: 'Only secret names are shown here, never their values.', secretTitle: 'Secret reference: {{name}}',
     errorCode: 'Error number', noPermissionsDeclared: 'This plugin does not declare any permissions', isolation: 'Run mode',
+    settingsUnavailable: 'This plugin has not declared settings that can be displayed; the full configuration is available under More information below.',
+    rawSettings: 'Full configuration (technical details)', rawSettingsHint: 'Use this only for troubleshooting; it contains the raw configuration.',
+    notConfigured: 'Not set', usingDefault: 'Using default: {{value}}', noItems: 'No items',
+    arrayItem: 'Item {{number}}', settingFallback: 'Setting', structuredValue: 'Structured content (see technical details)',
+    secretHidden: 'Secret value hidden',
   },
   desired: {
     desiredNoteServer: 'The platform service applies these settings', desiredNoteEdge: 'The gateway applies these settings', desired: 'Saved settings',

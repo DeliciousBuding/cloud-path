@@ -102,6 +102,38 @@ describe('Application section recordType isolation', () => {
     expect(screen.getByText('查看更多信息')).toBeInTheDocument()
   })
 
+
+  it('schedule source=records filters recordType and renders declared fields', () => {
+    renderSection({
+      type: 'schedule', source: 'records', recordType: 'window', title: '取药窗口',
+      fields: [
+        { key: 'state', label: '状态', values: { opened: '已开启' } },
+        { key: 'start', label: '开始时间' },
+      ],
+    }, [
+      record('window', 'window-1', { state: 'opened', start: '08:00' }, 2),
+      record('other', 'other-1', { state: 'opened', start: '09:00' }, 1),
+    ])
+    expect(screen.getByText('取药窗口')).toBeInTheDocument()
+    expect(screen.getByText('已开启')).toBeInTheDocument()
+    expect(screen.getByText('08:00')).toBeInTheDocument()
+    expect(screen.queryByText('09:00')).not.toBeInTheDocument()
+  })
+
+  it('schedule source=jobs keeps the durable scheduled job view', () => {
+    renderWithProviders(<ApplicationSection
+      instance={instance} catalog={catalog} section={{ type: 'schedule', source: 'jobs' }}
+      records={query({ instance_id: 'app-a', records: [], limit: 20, offset: 0 })}
+      bindings={query({ instance_id: 'app-a', running: true, bindings: [] })}
+      jobs={query({ instance_id: 'app-a', running: true, jobs: [], job_descriptors: [], scheduled: [{
+        schedule_id: 'daily-window', cron: '30 8 * * *', timezone: 'Asia/Shanghai',
+        missed_policy: 'skip', next_run_at: 1_800_000_000, state: 'active', revision: 1,
+      }] })}
+      readOnly={false} lifecycleKey="1"
+    />)
+    expect(screen.getByText('每天 08:30')).toBeInTheDocument()
+    expect(screen.getByText('已启用')).toBeInTheDocument()
+  })
   it('metrics filters by recordType before taking the latest record', () => {
     renderSection({ type: 'metrics', recordType: 'sensor' }, [
       record('other', 'other-1', { temperature_c: 999 }, 3),

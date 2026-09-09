@@ -18,6 +18,8 @@ import { PluginConfigForm } from './PluginConfigForm'
 import { PluginUIBridge } from './PluginUIBridge'
 import { ApiError } from '@/lib/api'
 import { appTime, bindingLabels, recordFieldLabel, recordHeadline, recordTimestamp, scheduleSummary, scheduleZone } from '@/lib/application-plane'
+import { resolveUIFieldLabel, resolveUIFieldValue } from '@/lib/plugin-ui'
+import { resolveLocalizedText } from '@/i18n/pluginText'
 import { safeConfigEntries } from '@/lib/plugins'
 import type {
   AppBindingsView, AppDomainRecordView, AppDomainRecordsView, AppJobsView, AppScheduledJobView,
@@ -47,11 +49,16 @@ export interface ApplicationSectionProps {
 }
 
 function sectionTitle(section: PluginUISection, fallback: string): string {
-  return section.title?.trim() || fallback
+  return resolveLocalizedText(section, 'title') || fallback
 }
 
-function SectionIntro({ text }: { text?: string }) {
-  if (!text?.trim()) return null
+function sectionEmptyText(section: PluginUISection): string | undefined {
+  return resolveLocalizedText(section, 'emptyText') || section.emptyText
+}
+
+function SectionIntro({ section }: { section: PluginUISection }) {
+  const text = resolveLocalizedText(section, 'description')
+  if (!text) return null
   return <p className="mb-3 text-meta leading-relaxed text-ink-3">{text}</p>
 }
 
@@ -80,7 +87,13 @@ type BindingRow = AppBindingsView['bindings'][number]
 const bindingColumn = createColumnHelper<typeof dataTableFeatures, BindingRow>()
 
 function fieldValueMaps(section: PluginUISection): Record<string, Record<string, string>> | undefined {
-  const entries = (section.fields ?? []).flatMap((field) => field.values ? [[field.key, field.values] as const] : [])
+  const entries = (section.fields ?? []).flatMap((field) => {
+    const keys = new Set([...Object.keys(field.values ?? {}), ...Object.keys(field.valuesI18n ?? {})])
+    if (keys.size === 0) return []
+    const values = Object.fromEntries([...keys]
+      .map((key) => [key, resolveUIFieldValue(field, key) ?? field.values?.[key] ?? key]))
+    return [[field.key, values] as const]
+  })
   return entries.length > 0 ? Object.fromEntries(entries) : undefined
 }
 
@@ -176,7 +189,8 @@ function resolvedFieldUnit(field: PluginUIField, source?: Record<string, unknown
 
 function formatFieldValue(field: PluginUIField, value: unknown, t: (key: string, options?: Record<string, unknown>) => string, source?: Record<string, unknown>): string {
   if (value === undefined || value === null || value === '') return t('record.empty')
-  if (field.values && Object.prototype.hasOwnProperty.call(field.values, String(value))) return field.values[String(value)]
+  const mapped = resolveUIFieldValue(field, value)
+  if (mapped !== undefined) return mapped
   if (typeof value === 'boolean') return value ? t('record.yes') : t('record.no')
   if (field.format === 'time' || /(^|_)(at|time)$/.test(field.key) || /^(start|end)$/.test(field.key)) {
     if (typeof value === 'number' && Number.isFinite(value)) return appTime(value)
@@ -202,7 +216,7 @@ function RecordFields({ record, fields, omitKeys = [] }: { record: AppDomainReco
   if (shown.length === 0) return <p className="text-body text-ink-3">{t('record.noFilled')}</p>
   return <dl className="grid min-w-0 gap-x-8 gap-y-3 sm:grid-cols-2">
     {shown.map(({ field, value }) => <div key={field.key} className="min-w-0">
-      <dt className="text-meta text-ink-3">{field.label || recordFieldLabel(field.key)}</dt>
+      <dt className="text-meta text-ink-3">{resolveUIFieldLabel(field) || recordFieldLabel(field.key)}</dt>
       <dd className="mt-1 min-w-0 break-words text-body leading-relaxed text-ink-2 [overflow-wrap:anywhere]">
         {formatFieldValue(field, value, t, parsed.value as Record<string, unknown>)}
       </dd>
@@ -250,23 +264,28 @@ function recordsForSection(records: AppDomainRecordView[] | undefined, section: 
   return (records ?? []).filter((record) => !section.recordType || record.record_type === section.recordType)
 }
 
-function RecordsSection({ query, section }: { query: SectionQuery<AppDomainRecordsView>; section: PluginUISection }) {
+function RecordsSection({ query, section, fallbackTitle, icon }: {
+  query: SectionQuery<AppDomainRecordsView>
+  section: PluginUISection
+  fallbackTitle?: string
+  icon?: ReactNode
+}) {
   const { t } = useTranslation('plugin')
   const [expanded, setExpanded] = useState(false)
   const rows = recordsForSection(query.data?.records, section)
   const visible = expanded ? rows : rows.slice(0, 5)
   const presentation = section.presentation ?? (section.type === 'timeline' ? 'timeline' : 'list')
-  const title = sectionTitle(section, section.type === 'timeline' ? t('sections.timeline') : t('sections.records'))
-  return <Panel title={<span className="flex items-center gap-1.5"><ListTree size={14} />{title}</span>}>
-    <SectionIntro text={section.description} />
-    <ReadContent title={title} query={query} empty={rows.length === 0} emptyText={section.emptyText}>
+  const title = sectionTitle(section, fallbackTitle ?? (section.type === 'timeline' ? t('sections.timeline') : t('sections.records')))
+  return <Panel title={<span className="flex items-center gap-1.5">{icon ?? <ListTree size={14} />}{title}</span>}>
+    <SectionIntro section={section} />
+    <ReadContent title={title} query={query} empty={rows.length === 0} emptyText={sectionEmptyText(section)}>
       {presentation === 'table'
         ? <StaticDataTable<AppDomainRecordView>
           ariaLabel={title}
           columns={recordColumns(t, section)}
           data={visible}
           getRowId={(record) => record.record_id}
-          empty={section.emptyText?.trim() || t('plane.empty', { title })}
+          empty={sectionEmptyText(section)?.trim() || t('plane.empty', { title })}
           minWidthClassName="min-w-[36rem]"
           containerClassName="rounded-tile border border-hairline"
         />
@@ -284,14 +303,14 @@ function BindingTable({ query, presentation, section }: { query: SectionQuery<Ap
   const { t } = useTranslation('plugin')
   const title = sectionTitle(section, t('sections.bindings'))
   return <Panel title={<span className="flex items-center gap-1.5"><Table2 size={14} />{title}</span>}>
-    <SectionIntro text={section.description} />
-    <ReadContent title={title} query={query} empty={!query.data?.bindings.length} emptyText={section.emptyText}>
+    <SectionIntro section={section} />
+    <ReadContent title={title} query={query} empty={!query.data?.bindings.length} emptyText={sectionEmptyText(section)}>
       <StaticDataTable<BindingRow>
         ariaLabel={title}
         columns={bindingColumns(t, presentation)}
         data={query.data?.bindings ?? []}
         getRowId={(binding) => binding.requirement_id + binding.entity_id}
-        empty={section.emptyText?.trim() || t('plane.empty', { title })}
+        empty={sectionEmptyText(section)?.trim() || t('plane.empty', { title })}
         minWidthClassName="min-w-[30rem]"
         containerClassName="rounded-tile border border-hairline"
         tableClassName="text-body"
@@ -305,8 +324,8 @@ function ScheduleSection({ query, section }: { query: SectionQuery<AppJobsView>;
   const rows = query.data?.scheduled ?? []
   const title = sectionTitle(section, t('sections.schedule'))
   return <Panel title={<span className="flex items-center gap-1.5"><Clock3 size={14} />{title}</span>}>
-    <SectionIntro text={section.description} />
-    <ReadContent title={title} query={query} empty={rows.length === 0} emptyText={section.emptyText}>
+    <SectionIntro section={section} />
+    <ReadContent title={title} query={query} empty={rows.length === 0} emptyText={sectionEmptyText(section)}>
       <div className="divide-y divide-hairline">{rows.map((job: AppScheduledJobView, index) => {
         const state = ({ active: t('plane.active'), cancelled: t('plane.cancelled'), paused: t('plane.paused') } as Record<string, string>)[job.state] ?? t('plane.statusUnknown')
         return <article key={job.schedule_id} className="py-3 first:pt-0">
@@ -337,10 +356,10 @@ function MetricsSection({ section, query }: { section: PluginUISection; query: S
   const entries = metricEntries(section, recordsForSection(query.data?.records, section))
   const title = sectionTitle(section, t('sections.metrics'))
   return <Panel title={<span className="flex items-center gap-1.5"><BarChart3 size={14} />{title}</span>}>
-    <SectionIntro text={section.description} />
-    <ReadContent title={title} query={query} empty={entries.length === 0} emptyText={section.emptyText || t('sections.noMetrics')}>
+    <SectionIntro section={section} />
+    <ReadContent title={title} query={query} empty={entries.length === 0} emptyText={sectionEmptyText(section) || t('sections.noMetrics')}>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">{entries.map(({ field, value, source }) => <StatTile key={field.key}
-        label={field.label || recordFieldLabel(field.key)} value={formatFieldValue(field, value, t, source)} />)}</div>
+        label={resolveUIFieldLabel(field) || recordFieldLabel(field.key)} value={formatFieldValue(field, value, t, source)} />)}</div>
     </ReadContent>
   </Panel>
 }
@@ -357,10 +376,10 @@ function ChartSection({ section, records }: { section: PluginUISection; records:
     ? values.map((value) => typeof recordValue(value, firstNumeric[0]) === 'number' ? recordValue(value, firstNumeric[0]) as number : 0)
     : []
   const max = Math.max(...series, 1)
-  if (!firstNumeric || !firstNumeric[0] || series.length === 0) return <Panel title={title}><SectionIntro text={section.description} /><p className="text-body text-ink-3">{section.emptyText || t('sections.noTrend')}</p></Panel>
+  if (!firstNumeric || !firstNumeric[0] || series.length === 0) return <Panel title={title}><SectionIntro section={section} /><p className="text-body text-ink-3">{sectionEmptyText(section) || t('sections.noTrend')}</p></Panel>
   const fieldLabel = requested?.label || recordFieldLabel(firstNumeric[0])
   return <Panel title={<span className="flex items-center gap-1.5"><BarChart3 size={14} />{title}</span>}>
-    <SectionIntro text={section.description} />
+    <SectionIntro section={section} />
     <p className="mb-3 text-meta text-ink-3">{t('sections.recent', { count: series.length, field: fieldLabel })}</p>
     <div className="flex h-28 items-end gap-1" role="img" aria-label={t('sections.trendAria', { field: fieldLabel })}>
       {series.slice().reverse().map((value, index) => <span key={index} title={String(value)} className="min-h-1 flex-1 rounded-t bg-accent/60" style={{ height: `${Math.max(4, value / max * 100)}%` }} />)}
@@ -373,7 +392,7 @@ function MarkdownSection({ section }: { section: PluginUISection }) {
   const text = section.text ?? ''
   const lines = text.split(/\r?\n/)
   return <Panel title={sectionTitle(section, t('sections.description'))}>
-    <SectionIntro text={section.description} />
+    <SectionIntro section={section} />
     <div className="space-y-2 text-body leading-relaxed text-ink-2">
     {lines.map((line, index) => {
       if (line.startsWith('### ')) return <h4 key={index} className="font-semibold text-ink">{line.slice(4)}</h4>
@@ -411,13 +430,13 @@ export function ApplicationSection(props: ApplicationSectionProps) {
   const rows = records.data?.records ?? []
   switch (section.type) {
     case 'status':
-      return <Panel title={sectionTitle(section, t('sections.status'))}><SectionIntro text={section.description} /><InstanceStatusSummary v={instance} /></Panel>
+      return <Panel title={sectionTitle(section, t('sections.status'))}><SectionIntro section={section} /><InstanceStatusSummary v={instance} /></Panel>
     case 'metrics':
       return <MetricsSection section={section} query={records} />
     case 'actions':
-      return <Panel title={sectionTitle(section, t('sections.actions'))}><SectionIntro text={section.description} />
+      return <Panel title={sectionTitle(section, t('sections.actions'))}><SectionIntro section={section} />
         <ReadContent title={sectionTitle(section, t('sections.actions'))} query={jobs} empty={false}>
-          <ApplicationActions instanceID={instance.desired.instance_id} jobs={jobs.data} emptyText={section.emptyText}
+          <ApplicationActions instanceID={instance.desired.instance_id} jobs={jobs.data} emptyText={sectionEmptyText(section)}
             running={running} desiredEnabled={instance.desired.enabled} lifecycleKey={lifecycleKey} />
         </ReadContent>
       </Panel>
@@ -429,11 +448,13 @@ export function ApplicationSection(props: ApplicationSectionProps) {
         ? <BindingTable query={bindings} presentation={presentation} section={section} />
         : <RecordsSection query={records} section={{ ...section, presentation: 'table' }} />
     case 'schedule':
-      return <ScheduleSection query={jobs} section={section} />
+      return section.source === 'records'
+        ? <RecordsSection query={records} section={section} fallbackTitle={t('sections.schedule')} icon={<Clock3 size={14} />} />
+        : <ScheduleSection query={jobs} section={section} />
     case 'chart':
       return <ChartSection section={section} records={rows} />
     case 'form':
-      return <Panel title={sectionTitle(section, t('sections.settings'))}><SectionIntro text={section.description} /><PluginConfigForm instance={instance} section={section} readOnly={readOnly} /></Panel>
+      return <Panel title={sectionTitle(section, t('sections.settings'))}><SectionIntro section={section} /><PluginConfigForm instance={instance} section={section} readOnly={readOnly} /></Panel>
     case 'markdown':
       return <MarkdownSection section={section} />
     case 'diagnostics':

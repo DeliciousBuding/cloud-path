@@ -221,6 +221,11 @@ export default {
     compatibility: '兼容性', noConfig: '没有配置项', noSecrets: '未引用任何密钥',
     secretsHint: '这里只显示密钥名称，不会显示密钥内容。', secretTitle: '密钥引用：{{name}}',
     errorCode: '错误编号', noPermissionsDeclared: '该插件没有声明任何权限', isolation: '运行方式',
+    settingsUnavailable: '该插件暂未声明可展示的设置；完整内容只在下方技术详情中。',
+    rawSettings: '完整配置（技术详情）', rawSettingsHint: '这里仅用于排查问题，包含原始配置内容。',
+    notConfigured: '未设置', usingDefault: '使用默认值：{{value}}', noItems: '暂无内容',
+    arrayItem: '第 {{number}} 项', settingFallback: '设置项', structuredValue: '结构化内容（见技术详情）',
+    secretHidden: '已隐藏密钥内容',
   },
   desired: {
     desiredNoteServer: '平台服务会按它应用', desiredNoteEdge: '网关会按它应用', desired: '保存的设置',

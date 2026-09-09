@@ -36,15 +36,16 @@ type PluginUIDeviceData struct {
 
 // PluginUISectionData is one allowlisted Core-rendered section.
 type PluginUISectionData struct {
-	Type         string           `json:"type"`
-	Title        string           `json:"title,omitempty"`
-	Description  string           `json:"description,omitempty"`
-	EmptyText    string           `json:"emptyText,omitempty"`
-	Source       string           `json:"source,omitempty"`
-	RecordType   string           `json:"recordType,omitempty"`
-	Presentation string           `json:"presentation,omitempty"`
-	Text         string           `json:"text,omitempty"`
-	Entry        string           `json:"entry,omitempty"`
-	Scopes       []string         `json:"scopes,omitempty"`
-	Fields       []map[string]any `json:"fields,omitempty"`
+	Type         string            `json:"type"`
+	Title        string            `json:"title,omitempty"`
+	Description  string            `json:"description,omitempty"`
+	EmptyText    string            `json:"emptyText,omitempty"`
+	Source       string            `json:"source,omitempty"`
+	RecordType   string            `json:"recordType,omitempty"`
+	Presentation string            `json:"presentation,omitempty"`
+	Text         string            `json:"text,omitempty"`
+	Entry        string            `json:"entry,omitempty"`
+	Scopes       []string          `json:"scopes,omitempty"`
+	I18n         map[string]string `json:"i18n,omitempty"`
+	Fields       []map[string]any  `json:"fields,omitempty"`
 }

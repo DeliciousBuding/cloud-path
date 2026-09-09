@@ -319,6 +319,71 @@ describe('运行项分区：desired 与 observed 永远分别渲染', () => {
     await screen.findByText('基本信息')
     expect(container.textContent).not.toContain(LOCAL_PATH)
   })
+
+  it('详情设置按 manifest 字段结构化展示，原始 app_config 只留在技术详情', async () => {
+    const catalog: PluginCatalogView[] = [{
+      id: 'io.github.acme.reminder', kind: 'application', version: 'v1.2.0',
+      source: LOCAL_PATH, digest: 'sha256:abcdef0123456789abcdef', verified: true,
+      protocol: 1, permissions: {},
+      contributes: {
+        applications: [{
+          id: 'io.github.acme.reminder', title: '取药提醒',
+          ui: {
+            apiVersion: 1,
+            pages: [{
+              id: 'home', title: '取药提醒',
+              sections: [{
+                type: 'form', source: 'config', title: '提醒设置',
+                description: '配置时区、提醒开关和药格。',
+                fields: [
+                  { key: 'app_config.timezone', label: '时区', type: 'string' },
+                  { key: 'app_config.reminder.enabled', label: '提醒启用', type: 'boolean' },
+                  { key: 'app_config.reminder.freq', label: '提示音档位', type: 'integer', unit: '档' },
+                  {
+                    key: 'app_config.compartments', label: '药格列表', type: 'array',
+                    itemFields: [
+                      { key: 'id', label: '药格 ID', type: 'string' },
+                      { key: 'name', label: '显示名称', type: 'string' },
+                    ],
+                  },
+                ],
+              }],
+            }],
+          },
+        }],
+      },
+    }]
+    const app = instance({
+      desired: {
+        ...instance().desired,
+        plugin_id: 'io.github.acme.reminder',
+        config: {
+          app_config: JSON.stringify({
+            timezone: 'Asia/Shanghai',
+            reminder: { enabled: true, freq: 3 },
+            compartments: [{ id: 'medicine', name: '取药' }],
+          }),
+        },
+      },
+    })
+    route({ instances: [app], catalog })
+    const user = userEvent.setup()
+    renderDetail()
+    await user.click(await screen.findByText('查看设置、权限与密钥'))
+    const settings = screen.getByText('插件设置').closest('section')!
+    expect(within(settings).getByText('提醒设置')).toBeVisible()
+    expect(within(settings).getByText('时区')).toBeVisible()
+    expect(within(settings).getByText('Asia/Shanghai')).toBeVisible()
+    expect(within(settings).getByText('提醒启用')).toBeVisible()
+    expect(within(settings).getByText('是')).toBeVisible()
+    expect(within(settings).getByText('3 档')).toBeVisible()
+    expect(within(settings).getByText('药格 ID')).toBeVisible()
+    expect(within(settings).getByText('取药')).toBeVisible()
+    expect(within(settings).queryByText('reminder.enabled')).toBeNull()
+    expect(within(settings).getByText('app_config')).not.toBeVisible()
+    await user.click(within(settings).getByText('完整配置（技术详情）'))
+    expect(within(settings).getByText('app_config')).toBeVisible()
+  })
 })
 
 describe('写操作按稳定错误码呈现', () => {

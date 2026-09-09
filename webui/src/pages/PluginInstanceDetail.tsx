@@ -99,7 +99,7 @@ export default function PluginInstanceDetail() {
       </Panel>
 
       <Panel title={<span className="flex items-center gap-1.5"><SlidersHorizontal size={14} />{t('detail.settings')}</span>}>
-        <ConfigTable config={instance.desired.config} />
+        <ConfigTable config={instance.desired.config} catalog={catalog} />
         <p className="mt-3 border-t border-hairline pt-3 text-meta leading-relaxed text-ink-3">
           {t('detail.settingsHint')}
         </p>

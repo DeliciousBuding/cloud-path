@@ -87,7 +87,7 @@ Connector 暂不接受 `ui`；manifest 校验直接拒绝，避免把未实现�
 ### Application
 
 - `ui.navigation.route` 必须是稳定 slug：`^[a-z0-9][a-z0-9-]{0,62}$`。
-- `navigation.title` / `pages[].title` 可选 `i18n` map；旧 `title` 是默认值，机器 `route` / `id` 永不翻译。用户可见文案原则见 [i18n.md](i18n.md)。
+- `navigation.title` / `pages[].title` / `section.title` 可选 `i18n` map；旧字段是默认值，机器 `route` / `id` 永不翻译。Page 用 `<locale>.description`，section 还用 `<locale>.emptyText`；字段用 `fields[].i18n`（`<locale>` 与 `<locale>.description`），枚举展示值用 `fields[].valuesI18n[<raw>][<locale>]`。用户可见文案原则见 [i18n.md](i18n.md)。
 - Core 生成 `/apps/{route}`；后续页面为 `/apps/{route}/{pageID}`。
 - 旧的业务路径只做重定向，不进入新契约。
 - 导航项只在以下条件全部满足时出现：

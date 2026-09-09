@@ -7,14 +7,17 @@
 //   - 不呈现插件 stdout/stderr 原文（observed.detail 是 server 限长脱敏后的摘要）。
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { KeyRound, Lock, ShieldCheck, ShieldAlert } from 'lucide-react'
+import { Braces, KeyRound, Lock, ShieldCheck, ShieldAlert } from 'lucide-react'
 import { Badge, KeyValue } from '@/components/ui'
 import {
   permissionGroups, permissionItemLabel, pluginDisplayName, pluginErrorCopy, safeConfigEntries,
   secretHandleName, shortDigest, trustMeta,
 } from '@/lib/plugins'
 import { fmtDateTime } from '@/lib/format'
-import type { PluginCatalogView, PluginInstanceView, PluginPermissionsData } from '@/lib/types'
+import { resolveUIFieldLabel, resolveUIFieldValue } from '@/lib/plugin-ui'
+import type {
+  PluginCatalogView, PluginInstanceView, PluginPermissionsData, PluginUIField,
+} from '@/lib/types'
 
 /** 错误码 → 设计过的提示块（按稳定码呈现，不复述服务端文本） */
 export function PluginErrorNote({ error, className }: { error: unknown; className?: string }) {
@@ -101,23 +104,175 @@ export function SecretRefList({ refs }: { refs: string[] | undefined }) {
   )
 }
 
-/** 非敏感配置：secret:// 值自动折叠成 handle 名 */
-export function ConfigTable({ config }: { config: Record<string, string> | undefined }) {
+/** app_config 路径读取：与配置表单保持同一套嵌套语义。 */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function parseConfigRoot(config: Record<string, string>, root: string): Record<string, unknown> | null {
+  const raw = config[root]
+  if (typeof raw !== 'string' || !raw.trim()) return null
+  try {
+    const value: unknown = JSON.parse(raw)
+    return isRecord(value) ? value : null
+  } catch { return null }
+}
+
+function getConfigPath(config: Record<string, string>, key: string): unknown {
+  if (!key.includes('.')) return config[key]
+  const [root, ...parts] = key.split('.')
+  let current: unknown = parseConfigRoot(config, root)
+  for (const part of parts) {
+    if (!isRecord(current)) return undefined
+    current = current[part]
+  }
+  return current
+}
+
+interface ConfigFieldGroup {
+  key: string
+  title?: string
+  description?: string
+  fields: PluginUIField[]
+}
+
+/** 只读取插件声明的配置字段；机器字段名和原始 JSON 不进入普通设置区。 */
+function declaredConfigGroups(catalog?: PluginCatalogView): ConfigFieldGroup[] {
+  const contributions = [
+    ...(catalog?.contributes.applications ?? []),
+    ...(catalog?.contributes.drivers ?? []),
+  ]
+  const groups: ConfigFieldGroup[] = []
+  for (const contribution of contributions) {
+    for (const page of contribution.ui?.pages ?? []) {
+      for (const [index, section] of page.sections.entries()) {
+        if (section.type !== 'form' || section.source !== 'config' || !section.fields?.length) continue
+        groups.push({
+          key: `${contribution.id}:${page.id}:${index}`,
+          title: section.title || page.title,
+          description: section.description,
+          fields: section.fields,
+        })
+      }
+    }
+  }
+  return groups
+}
+
+function scalarValue(field: PluginUIField, value: unknown, t: (key: string, options?: Record<string, unknown>) => string): string {
+  const mapped = resolveUIFieldValue(field, value)
+  if (mapped) return mapped
+  if (field.type === 'boolean' || typeof value === 'boolean') {
+    return value === true || value === 'true' ? t('sections.yes') : t('sections.no')
+  }
+  if (field.type === 'number' || field.type === 'integer') {
+    const number = Number(value)
+    if (Number.isFinite(number)) {
+      const formatted = field.precision === undefined ? String(number) : String(Number(number.toFixed(field.precision)))
+      const suffix = field.format === 'percent' && !field.unit?.includes('%') ? '%' : ''
+      return `${formatted}${suffix}${field.unit ? ` ${field.unit}` : ''}`
+    }
+  }
+  return `${String(value)}${field.unit ? ` ${field.unit}` : ''}`
+}
+
+function FieldValue({ field, value }: { field: PluginUIField; value: unknown }) {
   const { t } = useTranslation('plugin')
+  if (field.type === 'array' || Array.isArray(value)) {
+    const items = Array.isArray(value) ? value : []
+    if (items.length === 0) return <span className="text-meta text-ink-3">{t('facts.noItems')}</span>
+    return (
+      <div className="space-y-2">
+        {items.map((item, index) => {
+          const itemTitle = t('facts.arrayItem', { number: index + 1 })
+          if (!isRecord(item) || !field.itemFields?.length) {
+            const display = isRecord(item) ? t('facts.structuredValue') : scalarValue(field, item, t)
+            return (
+              <div key={`${itemTitle}-${index}`} className="rounded-tile bg-surface-2 px-3 py-2">
+                <p className="text-meta text-ink-3">{itemTitle}</p>
+                <p className="mt-0.5 text-body text-ink-2">{display}</p>
+              </div>
+            )
+          }
+          return (
+            <div key={`${itemTitle}-${index}`} className="rounded-tile bg-surface-2 px-3 py-2.5">
+              <p className="mb-2 text-meta font-medium text-ink-2">{itemTitle}</p>
+              <dl className="m-0 space-y-1.5">
+                {field.itemFields.map((itemField) => (
+                  <KeyValue
+                    key={itemField.key}
+                    k={resolveUIFieldLabel(itemField) || t('facts.settingFallback')}
+                    v={<FieldValue field={itemField} value={item[itemField.key]} />}
+                  />
+                ))}
+              </dl>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+  if (value === undefined || value === null || value === '') {
+    if (field.default !== undefined && !Array.isArray(field.default) && !isRecord(field.default)) {
+      return <span className="text-ink-2">{t('facts.usingDefault', { value: scalarValue(field, field.default, t) })}</span>
+    }
+    return <span className="text-meta text-ink-3">{t('facts.notConfigured')}</span>
+  }
+  return <span className="break-words">{scalarValue(field, value, t)}</span>
+}
+/** 非敏感配置：优先按 manifest 的 form 字段结构化展示，原始配置只留在技术详情。 */
+export function ConfigTable({ config, catalog }: {
+  config: Record<string, string> | undefined
+  catalog?: PluginCatalogView
+}) {
+  const { t } = useTranslation('plugin')
+  const groups = declaredConfigGroups(catalog)
   const rows = safeConfigEntries(config)
-  if (rows.length === 0) return <p className="py-1 text-meta text-ink-3">{t('facts.noConfig')}</p>
+  if (groups.length === 0 && rows.length === 0) {
+    return <p className="py-1 text-meta text-ink-3">{t('facts.noConfig')}</p>
+  }
   return (
-    <dl className="m-0">
-      {rows.map((r) => (
-        <KeyValue
-          key={r.key}
-          k={<span className="num min-w-0 truncate font-mono text-meta" title={r.key}>{r.key}</span>}
-          v={r.isSecret
-            ? <span className="flex min-w-0 items-center justify-end gap-1"><Lock size={10} className="shrink-0" /><span className="truncate">{r.value}</span></span>
-            : <span className="num min-w-0 truncate font-mono" title={r.value}>{r.value}</span>}
-        />
-      ))}
-    </dl>
+    <div className="min-w-0">
+      {groups.length === 0 ? (
+        <p className="py-1 text-meta leading-relaxed text-ink-3">{t('facts.settingsUnavailable')}</p>
+      ) : (
+        <div className="space-y-4">
+          {groups.map((group) => (
+            <section key={group.key} className="min-w-0">
+              {group.title && <h3 className="text-compact font-medium text-ink-2">{group.title}</h3>}
+              {group.description && <p className="mt-0.5 text-meta leading-relaxed text-ink-3">{group.description}</p>}
+              <dl className="m-0 mt-2 space-y-2.5">
+                {group.fields.map((field) => (
+                  <KeyValue
+                    key={field.key}
+                    k={resolveUIFieldLabel(field) || t('facts.settingFallback')}
+                    v={<FieldValue field={field} value={getConfigPath(config ?? {}, field.key)} />}
+                  />
+                ))}
+              </dl>
+            </section>
+          ))}
+        </div>
+      )}
+      {rows.length > 0 && (
+        <details className="mt-3 min-w-0 border-t border-hairline pt-3 text-meta text-ink-2">
+          <summary className="flex min-h-touch cursor-pointer items-center gap-1.5">
+            <Braces size={12} />{t('facts.rawSettings')}
+          </summary>
+          <p className="mt-2 leading-relaxed text-ink-3">{t('facts.rawSettingsHint')}</p>
+          <dl className="m-0 mt-2 space-y-1 rounded-tile bg-surface-2 p-3">
+            {rows.map((r) => (
+              <div key={r.key} className="flex min-w-0 justify-between gap-3">
+                <dt className="shrink-0 font-mono">{r.key}</dt>
+                <dd className="num min-w-0 break-all text-right font-mono" title={r.value}>
+                  {r.isSecret ? t('facts.secretHidden') : r.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </details>
+      )}
+    </div>
   )
 }
 

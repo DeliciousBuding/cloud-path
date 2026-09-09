@@ -4,7 +4,9 @@ import { currentLocale } from './index'
 export interface LocalizedText {
   title?: string
   name?: string
+  label?: string
   description?: string
+  emptyText?: string
   i18n?: I18nText
 }
 
@@ -27,14 +29,15 @@ function i18nIndex(value: I18nText | undefined): Map<string, string> {
 }
 
 function lookupField(
-  index: Map<string, string>, value: LocalizedText, field: 'title' | 'name' | 'description', locale: string,
+  index: Map<string, string>, value: LocalizedText,
+  field: 'title' | 'name' | 'label' | 'description' | 'emptyText', locale: string,
 ): string | undefined {
-  const hasPrimaryText = Boolean(value.title?.trim() || value.name?.trim())
+  const hasPrimaryText = Boolean(value.title?.trim() || value.name?.trim() || value.label?.trim())
   for (const candidate of localeCandidates(locale)) {
     // 单字段对象使用 locale 键；Action 同时声明 title/description 时，description
     // 使用 "<locale>.description"（并兼容 "description.<locale>"）避免覆盖 title。
-    const keys = field === 'description'
-      ? [`${candidate}.description`, `description.${candidate}`, ...(hasPrimaryText ? [] : [candidate])]
+    const keys = field === 'description' || field === 'emptyText'
+      ? [`${candidate}.${field}`, `${field}.${candidate}`, ...(hasPrimaryText ? [] : [candidate])]
       : [`${candidate}.${field}`, candidate]
     for (const key of keys) {
       const translated = index.get(key)
@@ -46,7 +49,7 @@ function lookupField(
 
 export function resolveLocalizedText(
   value: LocalizedText | undefined,
-  field: 'title' | 'name' | 'description',
+  field: 'title' | 'name' | 'label' | 'description' | 'emptyText',
   locale: string = currentLocale(),
 ): string | undefined {
   if (!value) return undefined

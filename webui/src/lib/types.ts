@@ -416,6 +416,8 @@ export interface PluginUIField {
   label?: string
   type?: PluginUIFieldType
   description?: string
+  /** Locale -> field label/description overrides; `<locale>.description` translates the hint. */
+  i18n?: I18nText
   placeholder?: string
   required?: boolean
   enum?: (string | number | boolean)[]
@@ -429,6 +431,8 @@ export interface PluginUIField {
   precision?: number
   format?: 'text' | 'time' | 'number' | 'percent' | 'duration'
   values?: Record<string, string>
+  /** Raw value -> locale -> translated display value. */
+  valuesI18n?: Record<string, I18nText>
   primary?: boolean
   hideWhenEmpty?: boolean
   /** Array editor: fields are relative to each item and use the same scalar types. */
@@ -443,6 +447,8 @@ export interface PluginUISection {
   title?: string
   description?: string
   emptyText?: string
+  /** Locale -> section title/description/emptyText overrides. */
+  i18n?: I18nText
   source?: PluginUISource
   recordType?: string
   presentation?: PluginUIPresentation

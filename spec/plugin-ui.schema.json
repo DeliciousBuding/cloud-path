@@ -63,6 +63,12 @@
         "title": {"type": "string", "maxLength": 80},
         "description": {"type": "string", "maxLength": 240},
         "emptyText": {"type": "string", "maxLength": 160},
+        "i18n": {
+          "type": "object",
+          "description": "Optional locale -> section text map. Use <locale>.description and <locale>.emptyText for those fields.",
+          "propertyNames": {"minLength": 1},
+          "additionalProperties": {"type": "string"}
+        },
         "source": {"enum": ["instance", "bindings", "jobs", "manual-jobs", "records", "config", "device", "device-actions", "diagnostics", "state", "events"]},
         "recordType": {"type": "string", "maxLength": 64},
         "presentation": {"enum": ["list", "timeline", "table", "cards"]},

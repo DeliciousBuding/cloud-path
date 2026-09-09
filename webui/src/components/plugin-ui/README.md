@@ -50,6 +50,8 @@ ui:
 
 插件页面可以用 `description` 说明用途，用 section 的 `title` / `description` / `emptyText` 组织内容；`fields` 声明指标卡和记录主视图要展示的字段，可带 `label`、`unit`、`precision`、`format`、`values`、`hideWhenEmpty`。未声明字段不会占据主视图，原始数据只在“更多信息”中展开。
 
+Navigation、page、section 与配置字段都按当前语言解析 manifest 的 `i18n` / `valuesI18n`；缺失翻译回落到 manifest 原文，机器 `route` / `id` 永不翻译。
+
 `ApplicationSections.tsx` 只渲染白名单类型：
 
 | type | 行为 |

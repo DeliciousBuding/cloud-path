@@ -52,7 +52,8 @@ func publicPluginUI(in *PluginUI) *api.PluginUIData {
 		out.Pages = make([]api.PluginUIPageData, 0, len(in.Pages))
 		for _, page := range in.Pages {
 			out.Pages = append(out.Pages, api.PluginUIPageData{
-				ID: page.ID, Title: page.Title, I18n: page.I18n, Sections: publicUISections(page.Sections),
+				ID: page.ID, Title: page.Title, Description: page.Description,
+				I18n: page.I18n, Sections: publicUISections(page.Sections),
 			})
 		}
 	}
@@ -69,8 +70,10 @@ func publicUISections(in []UISection) []api.PluginUISectionData {
 	out := make([]api.PluginUISectionData, 0, len(in))
 	for _, section := range in {
 		out = append(out, api.PluginUISectionData{
-			Type: section.Type, Source: section.Source, RecordType: section.RecordType,
-			Presentation: section.Presentation, Text: section.Text, Entry: section.Entry,
+			Type: section.Type, Title: section.Title, Description: section.Description,
+			EmptyText: section.EmptyText, I18n: section.I18n, Source: section.Source,
+			RecordType: section.RecordType, Presentation: section.Presentation,
+			Text: section.Text, Entry: section.Entry,
 			Scopes: append([]string(nil), section.Scopes...), Fields: cloneUIFields(section.Fields),
 		})
 	}

@@ -36,6 +36,10 @@ contributes:
               en-US: Pillbox reminders
             sections:
               - type: status
+                i18n:
+                  zh-CN: 状态
+                  en-US: Status
+                  en-US.description: Current status
               - type: actions
                 source: manual-jobs
               - type: records
@@ -55,11 +59,11 @@ contributes:
 	if len(ui.Pages) != 1 || len(ui.Pages[0].Sections) != 4 {
 		t.Fatalf("UI pages/sections not parsed: %+v", ui)
 	}
-	if ui.Navigation.I18n["en-US"] != "Pillbox reminders" || ui.Pages[0].I18n["en-US"] != "Pillbox reminders" {
-		t.Fatalf("UI i18n not parsed: navigation=%+v page=%+v", ui.Navigation.I18n, ui.Pages[0].I18n)
+	if ui.Navigation.I18n["en-US"] != "Pillbox reminders" || ui.Pages[0].I18n["en-US"] != "Pillbox reminders" || ui.Pages[0].Sections[0].I18n["en-US"] != "Status" {
+		t.Fatalf("UI i18n not parsed: navigation=%+v page=%+v section=%+v", ui.Navigation.I18n, ui.Pages[0].I18n, ui.Pages[0].Sections[0].I18n)
 	}
 	public := m.PublicContributions()
-	if public.Applications[0].UI.Navigation.I18n["en-US"] != "Pillbox reminders" || public.Applications[0].UI.Pages[0].I18n["en-US"] != "Pillbox reminders" {
+	if public.Applications[0].UI.Navigation.I18n["en-US"] != "Pillbox reminders" || public.Applications[0].UI.Pages[0].I18n["en-US"] != "Pillbox reminders" || public.Applications[0].UI.Pages[0].Sections[0].I18n["en-US"] != "Status" {
 		t.Fatalf("UI i18n not projected: %+v", public.Applications[0].UI)
 	}
 }
