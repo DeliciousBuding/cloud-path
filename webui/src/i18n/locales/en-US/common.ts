@@ -16,7 +16,15 @@ export default {
     offlineDisconnected: 'The data connection is offline and reconnecting automatically (the page will keep refreshing).',
     offlineFailures: '{{count}} consecutive failures', offlineRechecking: ' · rechecking sign-in status',
   },
+  roles: { admin: 'Administrator', operator: 'Operator', viewer: 'Read only' },
+  authModes: {
+    account: 'Account sign-in required', token: 'Access token: read allowed; changes require a token or local access', open: 'No sign-in required: read allowed; changes are limited to local access',
+  },
+  validation: {
+    argsControl: 'Arguments cannot contain line breaks or control characters', argsTooLong: 'Arguments are {{bytes}} bytes, exceeding the {{limit}}-byte limit',
+  },
   time: {
+    minutesShort_one: '{{count}} minute', minutesShort_other: '{{count}} minutes', minutesShortOne: 'minute', hoursShort_one: '{{count}} hour', hoursShort_other: '{{count}} hours', hoursShortOne: 'hour', daysShort_one: '{{count}} day', daysShort_other: '{{count}} days', daysShortOne: 'day',
     justNow: 'Just now', today: 'Today', yesterday: 'Yesterday',
     secondsAgo_one: '{{count}} second ago', secondsAgo_other: '{{count}} seconds ago',
     minutesAgo_one: '{{count}} minute ago', minutesAgo_other: '{{count}} minutes ago',

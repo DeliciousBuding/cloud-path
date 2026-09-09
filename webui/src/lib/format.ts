@@ -4,18 +4,24 @@
 // 未声明时回落 humanize(机器名)。机器 ID、Capability ID、事件类型永不本地化
 // （docs/architecture/capability-model.md §9）。
 import { ApiError } from './api'
+import { currentLocale, i18n } from '@/i18n'
 import type { Tone } from '@/components/ui'
 import { capabilityLabel, commandDecl, commandLabel, eventDecl, humanize } from './descriptor'
 import type { CapabilityIndex, CommandAction } from './descriptor'
 import type { EventView } from './types'
 
 export function fmtTime(ts: number): string {
-  return new Date(ts * 1000).toLocaleTimeString('zh-CN', { hour12: false })
+  return new Intl.DateTimeFormat(currentLocale(), {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(new Date(ts * 1000))
 }
 
 export function fmtDateTime(ts: number): string {
   if (!ts) return '—'
-  return new Date(ts * 1000).toLocaleString('zh-CN', { hour12: false })
+  return new Intl.DateTimeFormat(currentLocale(), {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(new Date(ts * 1000))
 }
 
 /**
@@ -28,30 +34,34 @@ export function fmtDay(ts: number): string {
   const dayMs = 86_400_000
   const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
   const diff = Math.round((startOf(now) - startOf(d)) / dayMs)
-  if (diff === 0) return '今天'
-  if (diff === 1) return '昨天'
+  if (diff === 0) return i18n.t('time.today', { ns: 'common' })
+  if (diff === 1) return i18n.t('time.yesterday', { ns: 'common' })
   const sameYear = d.getFullYear() === now.getFullYear()
-  return d.toLocaleDateString('zh-CN', sameYear
+  return new Intl.DateTimeFormat(currentLocale(), sameYear
     ? { month: 'long', day: 'numeric' }
-    : { year: 'numeric', month: 'long', day: 'numeric' })
+    : { year: 'numeric', month: 'long', day: 'numeric' }).format(d)
 }
 
 export function timeAgo(ts: number): string {
   if (!ts) return '—'
   const s = Math.max(0, Math.floor(Date.now() / 1000 - ts))
-  if (s < 5) return '刚刚'
-  if (s < 60) return `${s} 秒前`
-  if (s < 3600) return `${Math.floor(s / 60)} 分钟前`
-  if (s < 86400) return `${Math.floor(s / 3600)} 小时前`
-  return `${Math.floor(s / 86400)} 天前`
+  if (s < 5) return i18n.t('time.justNow', { ns: 'common' })
+  if (s < 60) return i18n.t('time.secondsAgo', { ns: 'common', count: s })
+  if (s < 3600) return i18n.t('time.minutesAgo', { ns: 'common', count: Math.floor(s / 60) })
+  if (s < 86400) return i18n.t('time.hoursAgo', { ns: 'common', count: Math.floor(s / 3600) })
+  return i18n.t('time.daysAgo', { ns: 'common', count: Math.floor(s / 86400) })
 }
 
 export function fmtUptime(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) return '—'
-  if (sec < 60) return `${sec} 秒`
-  if (sec < 3600) return `${Math.floor(sec / 60)} 分钟`
-  if (sec < 86400) return `${Math.floor(sec / 3600)} 小时 ${Math.floor((sec % 3600) / 60)} 分`
-  return `${Math.floor(sec / 86400)} 天 ${Math.floor((sec % 86400) / 3600)} 小时`
+  if (sec < 60) return i18n.t('time.seconds', { ns: 'common', count: sec })
+  if (sec < 3600) return i18n.t('time.minutes', { ns: 'common', count: Math.floor(sec / 60) })
+  if (sec < 86400) return i18n.t('time.hoursMinutes', {
+    ns: 'common', hours: Math.floor(sec / 3600), minutes: Math.floor((sec % 3600) / 60),
+  })
+  return i18n.t('time.daysHours', {
+    ns: 'common', days: Math.floor(sec / 86400), hours: Math.floor((sec % 86400) / 3600),
+  })
 }
 
 /** 事件载荷里后端给的展示标签（WS EventData.label / REST payload.label），没有则 undefined */
@@ -187,14 +197,8 @@ export function mergeEvents(live: EventView[], history: EventView[]): EventView[
 }
 
 /** 用户角色 → 中文标签（docs/api.md §2.1 role ∈ admin|operator|viewer；未知角色回落原名） */
-const ROLE_LABELS: Record<string, string> = {
-  admin: '管理员',
-  operator: '操作员',
-  viewer: '只读',
-}
-
 export function roleLabel(role: string): string {
-  return ROLE_LABELS[role] ?? role
+  return i18n.t(`roles.${role}`, { ns: 'common', defaultValue: role })
 }
 
 /**
@@ -202,15 +206,9 @@ export function roleLabel(role: string): string {
  * 不是「有没有配 legacy 令牌」：账号模式下必须显示为需登录，否则系统页会把一个
  * 已收紧的部署说成裸奔。未知形态回落原值，不猜语义——与 roleLabel 同一纪律。
  */
-const AUTH_MODE_LABELS: Record<string, string> = {
-  account: '需要账号登录',
-  token: '使用访问令牌：可查看，修改需令牌或本机操作',
-  open: '无需登录：可查看，修改仅限本机',
-}
-
 export function authModeLabel(mode?: string): string {
   if (!mode) return '—'
-  return AUTH_MODE_LABELS[mode] ?? mode
+  return i18n.t(`authModes.${mode}`, { ns: 'common', defaultValue: mode })
 }
 
 /**
@@ -231,10 +229,10 @@ export function argsMaxBytes(declared?: number): number {
 
 /** 保留原文，不静默剥离、截断或压缩 JSON；与服务端的换行/NUL 门禁一致。 */
 export function argsError(args: string, max = 64): string | undefined {
-  if (/[\r\n\0]/.test(args)) return '参数不能包含换行或控制字符'
+  if (/[\r\n\0]/.test(args)) return i18n.t('validation.argsControl', { ns: 'common' })
   const bytes = new TextEncoder().encode(args).length
   const limit = argsMaxBytes(max)
-  if (bytes > limit) return '参数 ' + bytes + ' 字节，超过 ' + limit + ' 字节上限'
+  if (bytes > limit) return i18n.t('validation.argsTooLong', { ns: 'common', bytes, limit })
   return undefined
 }
 
@@ -246,26 +244,28 @@ export function argsError(args: string, max = 64): string | undefined {
 export function commandErrorCopy(e: unknown): string {
   if (e instanceof ApiError) {
     switch (e.status) {
-      case 400: return '操作或参数不被接受：设备不支持，或参数过长、包含无效字符'
-      case 401: return '登录已失效，请重新登录后再执行操作'
-      case 403: return '当前账号没有执行操作的权限'
-      case 404: return '设备不存在，或不属于当前组织'
-      case 409: return '设备所在网关离线，操作暂时无法执行'
-      case 429: return e.retryAfter ? `操作过于频繁，请 ${e.retryAfter} 秒后重试` : '操作过于频繁，请稍后重试'
-      case 503: return '服务暂时不可用或网关忙碌，请稍后重试'
-      default: return `操作失败（HTTP ${e.status}）`
+      case 400: return i18n.t('command.badRequest', { ns: 'errors' })
+      case 401: return i18n.t('command.unauthorized', { ns: 'errors' })
+      case 403: return i18n.t('command.forbidden', { ns: 'errors' })
+      case 404: return i18n.t('command.notFound', { ns: 'errors' })
+      case 409: return i18n.t('command.offline', { ns: 'errors' })
+      case 429: return e.retryAfter
+        ? i18n.t('command.rateLimitedAfter', { ns: 'errors', seconds: e.retryAfter })
+        : i18n.t('command.rateLimited', { ns: 'errors' })
+      case 503: return i18n.t('command.unavailable', { ns: 'errors' })
+      default: return i18n.t('command.failed', { ns: 'errors', status: e.status })
     }
   }
-  return e instanceof Error && e.message ? e.message : '无法连接服务（服务未启动或网络不可达）'
+  return e instanceof Error && e.message ? e.message : i18n.t('network', { ns: 'errors' })
 }
 
 /** 桶宽候选（秒）：从数据跨度自动选，保证 ≤ want 个桶且桶宽是人话单位 */
 const DENSITY_STEPS = [60, 300, 900, 1800, 3600, 7200, 14400, 43200, 86400]
 
 function stepLabel(sec: number): string {
-  if (sec < 3600) return sec === 60 ? '分钟' : `${sec / 60} 分钟`
-  if (sec < 86400) return sec === 3600 ? '小时' : `${sec / 3600} 小时`
-  return sec === 86400 ? '天' : `${sec / 86400} 天`
+  if (sec < 3600) return sec === 60 ? i18n.t('time.minutesShortOne', { ns: 'common' }) : i18n.t('time.minutesShort', { ns: 'common', count: sec / 60 })
+  if (sec < 86400) return sec === 3600 ? i18n.t('time.hoursShortOne', { ns: 'common' }) : i18n.t('time.hoursShort', { ns: 'common', count: sec / 3600 })
+  return sec === 86400 ? i18n.t('time.daysShortOne', { ns: 'common' }) : i18n.t('time.daysShort', { ns: 'common', count: sec / 86400 })
 }
 
 /**

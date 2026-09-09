@@ -15,7 +15,15 @@ export default {
     offlineDisconnected: '数据连接已断开，正在自动恢复（页面会继续刷新）',
     offlineFailures: '已连续失败 {{count}} 次', offlineRechecking: ' · 正在重新检查登录状态',
   },
+  roles: { admin: '管理员', operator: '操作员', viewer: '只读' },
+  authModes: {
+    account: '需要账号登录', token: '使用访问令牌：可查看，修改需令牌或本机操作', open: '无需登录：可查看，修改仅限本机',
+  },
+  validation: {
+    argsControl: '参数不能包含换行或控制字符', argsTooLong: '参数 {{bytes}} 字节，超过 {{limit}} 字节上限',
+  },
   time: {
+    minutesShort: '{{count}} 分钟', minutesShortOne: '分钟', hoursShort: '{{count}} 小时', hoursShortOne: '小时', daysShort: '{{count}} 天', daysShortOne: '天',
     justNow: '刚刚', today: '今天', yesterday: '昨天',
     secondsAgo: '{{count}} 秒前', minutesAgo: '{{count}} 分钟前', hoursAgo: '{{count}} 小时前', daysAgo: '{{count}} 天前',
     seconds: '{{count}} 秒', minutes: '{{count}} 分钟', hoursMinutes: '{{hours}} 小时 {{minutes}} 分', daysHours: '{{days}} 天 {{hours}} 小时',
