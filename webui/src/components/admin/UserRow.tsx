@@ -136,10 +136,10 @@ export function UserRow({ user: u }: { user: UserView }) {
             onChange={setConfirmed} hint={t('userRow.reset.confirmHint')} />
           {update.isError && <ErrorNote message={adminErrorMessage(update.error)} />}
           <div className="flex flex-wrap gap-2">
-            <button type="submit" disabled={!confirmed || update.isPending}
-              className="btn btn-danger" aria-label={t('userRow.reset.submitAria', { username: u.username })}>
+            <Button type="submit" variant="danger" loading={update.isPending} disabled={!confirmed}
+              aria-label={t('userRow.reset.submitAria', { username: u.username })}>
               {update.isPending ? t('userRow.reset.submitting') : t('userRow.reset.submit')}
-            </button>
+            </Button>
             <Button type="button" variant="ghost" onClick={() => setMode('idle')}
               aria-label={t('userRow.actions.cancelResetAria', { username: u.username })}>
               {t('actions.cancel')}

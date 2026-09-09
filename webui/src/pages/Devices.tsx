@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Cpu, Inbox, Search, SearchX, WifiOff } from 'lucide-react'
-import { EmptyState, ErrorState, PageHeader, Panel, Segmented } from '@/components/ui'
+import { Button, EmptyState, ErrorState, Input, PageHeader, Panel, Segmented } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { DeviceRow, DeviceRowHead } from '@/components/DeviceRow'
 import { useDevices } from '@/hooks/useDevices'
@@ -77,14 +77,14 @@ export default function Devices() {
           <label className="sr-only" htmlFor="dev-search">{t('list.search.label')}</label>
           <span className="relative min-w-0 flex-1">
             <Search size={14} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3" />
-            <input
+            <Input
               id="dev-search" type="search" value={q} placeholder={t('list.search.placeholder')}
               onChange={(e) => setQ(e.target.value)}
-              className="input input-search max-w-full"
+              className="input-search max-w-full"
             />
           </span>
           {q && (
-            <button type="button" className="btn btn-ghost shrink-0" onClick={() => setQ('')}>{t('list.search.clear')}</button>
+            <Button variant="ghost" className="shrink-0" onClick={() => setQ('')}>{t('list.search.clear')}</Button>
           )}
         </div>
       )}

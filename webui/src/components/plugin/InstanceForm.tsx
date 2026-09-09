@@ -5,7 +5,7 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { KeyRound, Plus, X } from 'lucide-react'
-import { Button, Select, TextField } from '@/components/ui'
+import { Button, Checkbox, IconButton, Input, Select, Textarea, TextField } from '@/components/ui'
 import { PermissionList, PluginErrorNote } from './PluginFacts'
 import { useEdges } from '@/hooks/useEdges'
 import { useCreateInstance, useUpdateInstance } from '@/hooks/usePlugins'
@@ -231,7 +231,7 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
               {versionOptions.map((v) => <option key={v} value={v}>{v}</option>)}
             </Select>
           ) : (
-            <input id="pi-version" className="input text-compact" value={version} placeholder={t('form.versionPlaceholder')}
+            <Input id="pi-version" compact value={version} placeholder={t('form.versionPlaceholder')}
               autoComplete="off" spellCheck={false} onChange={(e) => setVersion(e.target.value)} />
           )}
           <p className="mt-1.5 text-meta text-ink-3">
@@ -249,8 +249,7 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
 
         <div className="flex items-end pb-1">
           <label className="flex cursor-pointer items-center gap-2.5 text-compact">
-            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)}
-              className="h-4 w-4 shrink-0 accent-accent" />
+            <Checkbox checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
             {mode === 'create' ? t('form.enableOnCreate') : t('form.enableOnUpdate')}
           </label>
         </div>
@@ -265,8 +264,7 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
         />
         {perms > 0 && (
           <label className="mt-3 flex cursor-pointer items-start gap-2.5 border-t border-hairline pt-3">
-            <input type="checkbox" checked={permAcked} onChange={(e) => setPermAcked(e.target.checked)}
-              className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
+            <Checkbox checked={permAcked} onChange={(e) => setPermAcked(e.target.checked)} className="mt-0.5" />
             <span className="min-w-0 text-meta leading-relaxed">
               {t('form.permissionsAck', { count: perms })}
             </span>
@@ -291,18 +289,18 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
                 {rows.map((r, i) => (
                   <div key={i} className="flex min-w-0 gap-2">
                     <label className="sr-only" htmlFor={`cfg-k-${i}`}>{t('form.paramName')}</label>
-                    <input id={`cfg-k-${i}`} className="input num min-w-0 flex-1 font-mono text-meta"
-                      placeholder="{t('form.paramName')}" value={r.key} autoComplete="off" spellCheck={false}
+                    <Input id={`cfg-k-${i}`} compact className="num min-w-0 flex-1 font-mono"
+                      placeholder={t('form.paramName')} value={r.key} autoComplete="off" spellCheck={false}
                       onChange={(e) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, key: e.target.value } : x)))} />
                     <label className="sr-only" htmlFor={`cfg-v-${i}`}>{t('form.paramValue')}</label>
-                    <input id={`cfg-v-${i}`} className="input num min-w-0 flex-1 font-mono text-meta"
-                      placeholder="{t('form.paramValue')}" value={r.value} autoComplete="off" spellCheck={false}
+                    <Input id={`cfg-v-${i}`} compact className="num min-w-0 flex-1 font-mono"
+                      placeholder={t('form.paramValue')} value={r.value} autoComplete="off" spellCheck={false}
                       onChange={(e) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))} />
-                    <button type="button" aria-label={t('form.deleteParam', { name: r.key || i + 1 })}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-pill text-ink-3 transition-colors hover:text-bad"
+                    <IconButton label={t('form.deleteParam', { name: r.key || i + 1 })}
+                      size="sm" className="text-ink-3 hover:text-bad"
                       onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))}>
                       <X size={14} />
-                    </button>
+                    </IconButton>
                   </div>
                 ))}
               </div>
@@ -313,11 +311,11 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
             <label htmlFor="pi-refs" className="mb-1.5 flex items-center gap-1.5 text-compact font-medium">
               <KeyRound size={13} className="shrink-0" /> {t('form.secretRefs')}
             </label>
-            <textarea
+            <Textarea
               id="pi-refs" rows={3} value={refsText} autoComplete="off" spellCheck={false}
               placeholder={t('form.secretPlaceholder')}
               onChange={(e) => setRefsText(e.target.value)}
-              className="input num resize-y font-mono text-meta"
+              compact className="num resize-y font-mono"
             />
             <p className="mt-1.5 text-meta leading-relaxed text-ink-3">
               {t('form.secretHint')}

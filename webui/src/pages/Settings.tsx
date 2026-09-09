@@ -6,7 +6,7 @@ import {
   Activity, AlertCircle, Check, ChevronDown, Cpu, Database, KeyRound, LogOut, Monitor, Moon, Network, Plug,
   Server, Sun, UserRound, Wifi,
 } from 'lucide-react'
-import { Badge, KeyValue, PageHeader, Panel, Segmented, StatTile, TextField } from '@/components/ui'
+import { Badge, Button, ButtonLink, KeyValue, PageHeader, Panel, Segmented, StatTile, TextField } from '@/components/ui'
 import { api, getToken, setToken } from '@/lib/api'
 import { authModeLabel, cmdMeta, fmtDateTime, fmtUptime, roleLabel } from '@/lib/format'
 import { getTheme, setTheme, type ThemeMode } from '@/lib/theme'
@@ -34,9 +34,9 @@ function InlineError({ title, hint, onRetry, retrying }: {
       </p>
       <p className="mt-1 text-meta leading-relaxed opacity-90">{hint}</p>
       {onRetry && (
-        <button type="button" className="btn btn-ghost mt-2.5" onClick={onRetry} disabled={retrying}>
+        <Button variant="ghost" className="mt-2.5" onClick={onRetry} disabled={retrying}>
           {retrying ? t('retry.busy') : t('retry.idle')}
-        </button>
+        </Button>
       )}
     </div>
   )
@@ -220,12 +220,11 @@ export default function Settings() {
                 {t('account.persisted')}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <button type="button" className="btn btn-danger-ghost" disabled={signingOut}
-                  onClick={() => void signOut()}>
+                <Button variant="danger-ghost" disabled={signingOut} onClick={() => void signOut()}>
                   <LogOut size={13} /> {signingOut ? t('account.signingOut') : t('account.signOut')}
-                </button>
+                </Button>
                 {user.role === 'admin' && (
-                  <Link to="/admin" className="btn btn-ghost no-underline">{t('account.manage')}</Link>
+                  <ButtonLink to="/admin" variant="ghost" className="no-underline">{t('account.manage')}</ButtonLink>
                 )}
               </div>
             </>
@@ -279,9 +278,9 @@ export default function Settings() {
                   error={tokenError ? t(`token.errors.${tokenError}`) : undefined}
                   hint={t('token.hint')}
                 />
-                <button type="button" className="btn btn-primary lg:mb-[1.625rem]" disabled={tokenSaving} onClick={() => void saveToken()}>
+                <Button className="lg:mb-[1.625rem]" loading={tokenSaving} onClick={() => void saveToken()}>
                   {saved && <Check size={14} />}{tokenSaving ? t('token.saving') : saved ? t('token.saved') : t('token.save')}
-                </button>
+                </Button>
               </div>
             </>
           )}
@@ -343,10 +342,10 @@ export default function Settings() {
                     v={statsError ? t('live.platform.unavailable') : stats ? authModeLabel(stats.auth_mode) : statsPending ? t('live.accessLoading') : t('live.platform.unknown')} />
                 </dl>
                 <p className="mt-3 border-t border-hairline pt-3 text-meta leading-relaxed text-ink-3">{liveHint}</p>
-                <button type="button" className="btn btn-ghost mt-4"
+                <Button variant="ghost" className="mt-4"
                   onClick={() => { reconnectLive(); void refetchHealth(); toast.info(t('live.reconnecting')) }}>
                   {t('live.reconnect')}
-                </button>
+                </Button>
               </Panel>
 
               <Panel title={<span className="flex items-center gap-1.5"><Database size={14} />{t('records.title')}</span>}

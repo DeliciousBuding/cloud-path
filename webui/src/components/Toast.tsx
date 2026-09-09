@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import '@/i18n'
 import { useToasts, type ToastTone } from '@/store/toast'
 import { cn } from '@/lib/cn'
+import { IconButton } from '@/components/ui'
 
 const TONE_ICON: Record<ToastTone, { icon: typeof Info; cls: string }> = {
   ok: { icon: CheckCircle2, cls: 'text-ok' },
@@ -40,14 +41,13 @@ export function ToastViewport() {
               <span className="block text-compact font-semibold leading-snug">{item.title}</span>
               {item.detail && <span className="mt-0.5 line-clamp-2 block text-meta text-ink-2">{item.detail}</span>}
             </span>
-            <button
-              type="button"
+            <IconButton
+              label={t('toast.close', { title: item.title })}
+              size="sm" className="-mr-1 shrink-0 text-ink-3"
               onClick={() => dismiss(item.id)}
-              aria-label={t('toast.close', { title: item.title })}
-              className="-mr-1 shrink-0 rounded-pill p-1 text-ink-3 transition-colors hover:text-ink"
             >
               <X size={14} aria-hidden />
-            </button>
+            </IconButton>
           </div>
         )
       })}

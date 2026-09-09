@@ -2,7 +2,7 @@
 import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Command, SlidersHorizontal, WifiOff } from 'lucide-react'
-import { Panel, Select } from './ui'
+import { Input, Panel, Select } from './ui'
 import { CommandButton } from './CommandButton'
 import { CommandInput } from './command/CommandInput'
 import { commandScope } from './command/scope'
@@ -84,10 +84,10 @@ function WritableActions({ deviceId, targetLabel, set, disabled = false }: {
               {manual.map((a) => <option key={a.cmd} value={a.cmd}>{a.label}</option>)}
             </Select>
             <label className="sr-only" htmlFor={id + '-args'}>{t('commandPanel.argsLabel')}</label>
-            <input id={id + '-args'} value={advAction ? advArgs : ''} disabled={!advAction}
+            <Input id={id + '-args'} value={advAction ? advArgs : ''} disabled={!advAction}
               aria-invalid={advErr ? true : undefined} aria-describedby={advErr ? id + '-error' : undefined}
               onChange={(e) => setAdvArgs(e.target.value)} placeholder={advAction?.inputPlaceholder ?? t('commandPanel.argsPlaceholder')}
-              className={cn('input input-sm min-w-0 flex-1', advErr && 'input-error')} />
+              compact error={Boolean(advErr)} className="min-w-0 flex-1" />
             {advAction && <CommandButton deviceId={deviceId} targetLabel={targetLabel} action={advAction} args={advArgs} disabled={disabled || !!advErr} className="min-h-touch w-full sm:min-h-0 sm:w-auto" />}
           </div>
           {advErr && <p id={id + '-error'} role="alert" className="mt-1 text-meta text-bad">{advErr}</p>}

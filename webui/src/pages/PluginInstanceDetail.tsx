@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router'
 import {
   Boxes, KeyRound, Puzzle, Server, Settings2, ShieldCheck, SlidersHorizontal,
 } from 'lucide-react'
-import { BackLink, Badge, EmptyState, ErrorState, Panel } from '@/components/ui'
+import { BackLink, Badge, Button, EmptyState, ErrorState, Panel } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { ApplicationPlane } from '@/components/plugin/ApplicationPlane'
 import { InstanceSplit } from '@/components/plugin/InstanceRow'
@@ -149,9 +149,9 @@ export default function PluginInstanceDetail() {
           <Panel className="mb-5" title={t('detail.actions')}>
             <InstanceControls v={instance} catalog={catalog} showEdit={false}
               onEdit={() => setEditing(true)} />
-            {!readOnly && <button type="button" className="btn btn-ghost mt-3" onClick={() => setEditing(true)}>
+            {!readOnly && <Button variant="ghost" className="mt-3" onClick={() => setEditing(true)}>
               <SlidersHorizontal size={13} /> {t('detail.editSettings')}
-            </button>}
+            </Button>}
           </Panel>
 
           {isApplication && instance.desired.instance_id && (

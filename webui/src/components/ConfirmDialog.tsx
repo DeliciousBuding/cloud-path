@@ -13,7 +13,7 @@ import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, Info } from 'lucide-react'
 import { cn } from '@/lib/cn'
-import { Spinner } from './ui'
+import { Button, Checkbox } from './ui'
 
 export interface ConfirmDialogProps {
   open: boolean
@@ -122,30 +122,27 @@ export function ConfirmDialog({
 
         {requireAck && (
           <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-tile bg-surface-2 p-3.5">
-            <input
-              type="checkbox" checked={acked} disabled={busy}
+            <Checkbox
+              checked={acked} disabled={busy}
               onChange={(e) => setAcked(e.target.checked)}
-              className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
+              className="mt-0.5"
             />
             <span className="min-w-0 text-compact leading-relaxed break-words">{requireAck}</span>
           </label>
         )}
 
         <div className="mt-6 flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
-          <button
-            ref={cancelRef} type="button" className="btn btn-ghost" disabled={busy} onClick={onCancel}
-          >
+          <Button ref={cancelRef} variant="ghost" disabled={busy} onClick={onCancel}>
             {cancelText}
-          </button>
-          <button
-            type="button"
-            className={cn('btn', tone === 'danger' ? 'btn-danger' : 'btn-primary')}
+          </Button>
+          <Button
+            variant={tone === 'danger' ? 'danger' : 'primary'}
+            loading={busy}
             disabled={blocked}
             onClick={onConfirm}
           >
-            {busy && <Spinner size={13} />}
             {confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

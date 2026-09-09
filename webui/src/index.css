@@ -202,6 +202,10 @@ body {
 .btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
 .btn-ghost { background: transparent; color: var(--color-ink); border-color: var(--color-hairline); }
 .btn-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 6%, transparent); }
+.btn-quiet { padding: 0; border-color: transparent; background: transparent; color: var(--color-accent); }
+.btn-quiet:hover:not(:disabled) { text-decoration: underline; }
+.btn-bare { padding: 0; border-color: transparent; background: transparent; color: inherit; }
+.btn-bare:hover:not(:disabled) { color: var(--color-ink); }
 /* 危险操作（删除实例 / 不可逆操作）：只有在二次确认对话框里才用 */
 .btn-danger { background: var(--color-bad); color: var(--color-bad-ink); }
 .btn-danger:hover:not(:disabled) { filter: brightness(1.08); }
@@ -211,6 +215,17 @@ body {
   color: var(--color-bad);
 }
 .btn-danger-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--color-bad) 10%, transparent); }
+.btn-sm { padding: 4px 10px; font-size: var(--text-meta); }
+
+/* 图标按钮只保留图标；尺寸仍由 control token 管理，避免各页面写死 h/w。 */
+.btn-icon { width: var(--spacing-control); height: var(--spacing-control); padding: 0; }
+.btn-icon-sm { width: var(--spacing-control-sm); height: var(--spacing-control-sm); padding: 0; }
+
+/* 原生 checkbox/radio 只保留浏览器语义，色彩统一走 accent token。 */
+.checkbox, .radio {
+  width: 1rem; height: 1rem; flex-shrink: 0;
+  accent-color: var(--color-accent);
+}
 
 /* 模态对话框：抬到最高阴影层级 */
 .dialog { box-shadow: var(--shadow-lift); }
@@ -271,6 +286,7 @@ table td, table th { vertical-align: baseline; }
 @media (max-width: 639px) {
   .card { box-shadow: none; }
   .btn { min-height: var(--spacing-touch); }
+  .btn-icon, .btn-icon-sm { width: var(--spacing-touch); height: var(--spacing-touch); }
 }
 
 /* 标题断行平衡、散文避孤行：CJK 标题折两行时长短悬殊是廉价感来源 */

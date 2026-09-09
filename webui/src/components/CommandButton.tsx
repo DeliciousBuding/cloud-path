@@ -3,13 +3,14 @@ import type { ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import '@/i18n'
-import { Loader2 } from 'lucide-react'
+
 import { api } from '@/lib/api'
 import { useAuth } from '@/store/auth'
 import { useLive } from '@/store/ws'
 import { toast } from '@/store/toast'
 import { cn } from '@/lib/cn'
 import { ConfirmDialog } from './ConfirmDialog'
+import { Button } from './ui'
 import { commandScope } from './command/scope'
 import { commandArgsError, commandArgsErrorCopy, commandHasInput } from '@/lib/command-schema'
 import { commandErrorCopy } from '@/lib/format'
@@ -133,16 +134,13 @@ function ScopedCommandButton({ deviceId, targetLabel, action, args, buttonLabel,
 
   return (
     <>
-      <button type="button" onClick={onClick} disabled={busy || blocked} title={title}
+      <Button
+        variant={action.variant === 'primary' ? 'primary' : action.variant === 'danger' ? 'danger-ghost' : 'ghost'}
+        loading={busy} disabled={blocked} onClick={onClick} title={title}
         aria-busy={busy} aria-label={buttonAriaLabel ?? label}
-        className={cn('btn min-w-0', {
-          'btn-primary': action.variant === 'primary',
-          'btn-ghost': !action.variant || action.variant === 'ghost',
-          'bg-bad/10 text-bad hover:bg-bad/16': action.variant === 'danger',
-        }, className)}>
-        {busy && <Loader2 size={14} className="shrink-0 animate-spin" />}
+        className={cn('min-w-0', className)}>
         <span className="truncate">{busy ? t('command.running') : (buttonLabel ?? label)}</span>
-      </button>
+      </Button>
       <ConfirmDialog open={confirming !== null && confirming.args === args && !blocked}
         tone={action.variant === 'danger' ? 'danger' : 'warn'} title={t('command.confirmTitle', { label })}
         body={<>
