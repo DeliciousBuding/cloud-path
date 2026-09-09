@@ -739,7 +739,7 @@ func TestPluginInstallationsRoundTrip(t *testing.T) {
 		t.Fatalf("投影坐标错误: %+v", got[0])
 	}
 	// nil capabilities 归一为 []，读回不得是 null 语义
-	if got[1].Capabilities != nil && len(got[1].Capabilities) != 0 {
+	if len(got[1].Capabilities) != 0 {
 		t.Fatalf("空 capabilities = %+v", got[1].Capabilities)
 	}
 	// 全量快照替换：只上报 p2 → p1 消失

@@ -4,9 +4,9 @@ import "regexp"
 
 // Sensitive field shapes. Values for these keys must never reach logs.
 var (
-	headerRedactRE = regexp.MustCompile("(?i)\\b(authorization|proxy-authorization)\\b\\s*[:=]\\s*[^\\r\\n]+")
-	jsonRedactRE   = regexp.MustCompile("(?i)(\"(?:secret[_-]?key|secret|access[_-]?token|token|password|passwd|api[_-]?key|apikey|cookie|credential|proof|authorization)\"\\s*:\\s*)(?:\"[^\"]*\"|null|true|false|-?[0-9.]+)")
-	kvRedactRE     = regexp.MustCompile("(?i)(\\b(?:secret[_-]?key|secret|access[_-]?token|token|password|passwd|api[_-]?key|apikey|cookie|credential|proof)\\b\\s*[:=]\\s*)(?:\"[^\"]*\"|[^\\s,;]+)")
+	headerRedactRE = regexp.MustCompile(`(?i)\b(authorization|proxy-authorization)\b\s*[:=]\s*[^\r\n]+`)
+	jsonRedactRE   = regexp.MustCompile(`(?i)("(?:secret[_-]?key|secret|access[_-]?token|token|password|passwd|api[_-]?key|apikey|cookie|credential|proof|authorization)"\s*:\s*)(?:"[^"]*"|null|true|false|-?[0-9.]+)`)
+	kvRedactRE     = regexp.MustCompile(`(?i)(\b(?:secret[_-]?key|secret|access[_-]?token|token|password|passwd|api[_-]?key|apikey|cookie|credential|proof)\b\s*[:=]\s*)(?:"[^"]*"|[^\s,;]+)`)
 )
 
 // Redact removes values of sensitive fields from a single log line. It covers

@@ -243,7 +243,7 @@ def self_test():
                 raise AssertionError("value %r was not rejected" % (field_value,))
             except SystemExit:
                 pass
-            except AssertionError as e:
+            except AssertionError:
                 raise
 
         print("rename.py: self-test OK")

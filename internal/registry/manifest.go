@@ -235,15 +235,15 @@ func ValidateContributions(m *Manifest) error {
 	switch m.Kind {
 	case "Driver":
 		if len(c.Applications) > 0 || len(c.Connectors) > 0 {
-			return fmt.Errorf("Driver plugin must contribute drivers, not applications or connectors")
+			return fmt.Errorf("driver plugin must contribute drivers, not applications or connectors")
 		}
 	case "Application":
 		if len(c.Drivers) > 0 || len(c.Connectors) > 0 {
-			return fmt.Errorf("Application plugin must contribute applications, not drivers or connectors")
+			return fmt.Errorf("application plugin must contribute applications, not drivers or connectors")
 		}
 	case "Connector":
 		if len(c.Drivers) > 0 || len(c.Applications) > 0 {
-			return fmt.Errorf("Connector plugin must contribute connectors, not drivers or applications")
+			return fmt.Errorf("connector plugin must contribute connectors, not drivers or applications")
 		}
 	default:
 		return fmt.Errorf("unknown manifest kind %q for contributes", m.Kind)

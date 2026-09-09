@@ -122,7 +122,6 @@ def validate_contributes_block(lines, start_line):
     """
     errors = []
     seen_ids = set()
-    category = None
     cat_indent = None
     item_indent = None
     item = None  # {"id": str|None, "has_id": bool}
@@ -172,7 +171,6 @@ def validate_contributes_block(lines, start_line):
         # Category key under contributes.
         if key in CONTRIB_CATEGORIES and (cat_indent is None or indent == cat_indent):
             finish_item()
-            category = key
             cat_indent = indent
             item = None
             item_indent = None

@@ -196,7 +196,7 @@ func Dial(ctx context.Context, endpoint string, creds Credentials, cfg Config) (
 		return nil, err
 	}
 
-	auth, err := json.Marshal(authFrame{LaunchID: creds.LaunchID, Proof: creds.Proof})
+	auth, err := json.Marshal(authFrame(creds))
 	if err != nil {
 		_ = conn.Close()
 		return nil, err

@@ -34,14 +34,7 @@ func (f *fakeHostManager) CreateInstance(spec pluginhost.InstanceSpec) (pluginho
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.created = append(f.created, spec)
-	return pluginhost.Instance{
-		ID:        spec.ID,
-		Tenant:    spec.Tenant,
-		PluginID:  spec.PluginID,
-		Version:   spec.Version,
-		Config:    spec.Config,
-		Isolation: spec.Isolation,
-	}, nil
+	return pluginhost.Instance(spec), nil
 }
 
 func (f *fakeHostManager) Start(tenant, id string) error {

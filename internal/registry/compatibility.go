@@ -121,7 +121,7 @@ func constraintMatches(constraint string, current semver) (bool, error) {
 		return cmp < 0, nil
 	case "^":
 		lower := compareSemver(current, target) >= 0
-		upper := semver{}
+		var upper semver
 		if target.Major == 0 {
 			upper = semver{Major: 0, Minor: target.Minor + 1, Patch: 0}
 		} else {

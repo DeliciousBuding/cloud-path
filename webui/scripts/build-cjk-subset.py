@@ -10,11 +10,14 @@
 （unicode-range 只接管 CJK，拉丁/数字仍走 Geist）。
 依赖：pip install fonttools brotli
 """
-import io, glob, os, sys
-SRC_TTF = os.path.join(os.path.dirname(__file__), '..', '..', '.tmp', 'NotoSansSC-var.ttf')
-OUT = os.path.join(os.path.dirname(__file__), 'NotoSansSC-subset.woff2')
+import glob
+import io
+import os
 
 from fontTools import subset as ftsubset
+
+SRC_TTF = os.path.join(os.path.dirname(__file__), '..', '..', '.tmp', 'NotoSansSC-var.ttf')
+OUT = os.path.join(os.path.dirname(__file__), 'NotoSansSC-subset.woff2')
 
 # GB2312 一级字表（3755 汉字，覆盖 99.9% 人名/设备名/日常词）
 l1 = set()
@@ -53,5 +56,4 @@ args = [
     '--name-IDs=1,2', '--notdef-outline', '--drop-tables+=DSIG',
 ]
 ftsubset.main(args)
-import os
 print('woff2 bytes:', os.path.getsize(OUT))

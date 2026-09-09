@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	capTenantA       = "io.example.tenant/capability/a@1"
-	capTenantAOther  = "io.example.tenant/capability/a-other@1"
-	capTenantB       = "io.example.tenant/capability/b@1"
-	capTenantShared  = "io.example.tenant/capability/shared@1"
+	capTenantA      = "io.example.tenant/capability/a@1"
+	capTenantAOther = "io.example.tenant/capability/a-other@1"
+	capTenantB      = "io.example.tenant/capability/b@1"
+	capTenantShared = "io.example.tenant/capability/shared@1"
 )
 
 func tenantCapability(id, title string) model.Capability {
