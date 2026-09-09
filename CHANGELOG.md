@@ -36,7 +36,7 @@ shasum -a 256 -c checksums.txt --ignore-missing      # macOS
 certutil -hashfile <文件> SHA256                      # Windows（逐项对照）
 ```
 
-## Unreleased
+## v0.2.23 — 2026-09-09
 
 - WebUI：建立 `zh-CN` / `en-US` 国际化，语言选择持久化；导航、页面、表单、错误态和插件生命周期文案全部走 i18n，硬编码中文清零。
 - 插件契约：Manifest、Descriptor、Capability 与插件 UI 标题支持可选 `i18n` map，旧 `title` / `name` / `description` 保持兼容；后端错误改用稳定 `code` + `params`。
@@ -204,7 +204,8 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 | `v0.2.20` | 已发布（2026-09-09） | 持久化设备最后已知 Descriptor（schema v11），离线重启后可水合并恢复 Application 绑定；详见 [§v0.2.20](#v0220--2026-09-09) |
 | `v0.2.21` | 已发布（2026-09-09） | WebUI 易用性、响应式布局与文案收口；离线设备操作 fail-closed；应用结果与原始 JSON 分层展示；RBAC 稳定错误体与 AppHost observed 即时投影；全仓静态检查清零 |
 | `v0.2.22` | 已发布（2026-09-09） | 修复设备详情「概览」标签点击后被默认「设备操作」弹回 |
+| `v0.2.23` | 已发布（2026-09-09） | 插件 UI 声明式契约与受控资产端点；WebUI `zh-CN` / `en-US` 完整国际化、稳定错误码和设计 token 门禁 |
 | `dev` | 本地 | `task build` / `task build:matrix` 的未打标产物（`git describe` 兜底） |
 
 > 仓库没有 `v0.2.16` / `v0.2.17` tag；`v0.2.18` 覆盖 `v0.2.15` 之后累计的变更。当前 `main` 在
-> 最新发布版本为 `v0.2.22`。
+> 最新发布版本为 `v0.2.23`。
