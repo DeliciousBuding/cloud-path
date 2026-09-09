@@ -115,6 +115,42 @@ export function recordHeadline(value: unknown, fallback: string): { title: strin
 }
 
 
+/** 应用操作结果的首屏摘要：只展示可读的通用字段，机器字段原文留在“查看结果原文”。 */
+export function applicationResultSummary(value: unknown): { text?: string; usedKeys: string[] } {
+  const usedKeys: string[] = []
+  const scalar = (item: unknown): string | undefined => {
+    if (typeof item === 'string') return item.trim() || undefined
+    if (typeof item === 'number' && Number.isFinite(item)) return String(item)
+    if (typeof item === 'boolean') return item ? '是' : '否'
+    return undefined
+  }
+  const direct = scalar(value)
+  if (direct !== undefined) return { text: direct, usedKeys }
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return { usedKeys }
+  const record = value as Record<string, unknown>
+  const parts: string[] = []
+  const add = (key: string, text: string, label?: string) => {
+    usedKeys.push(key)
+    parts.push(label ? label + ' ' + text : text)
+  }
+  for (const key of ['message', 'summary', 'result', 'name', 'title']) {
+    const text = scalar(record[key])
+    if (text) { add(key, text); break }
+  }
+  for (const key of ['state', 'status']) {
+    const text = scalar(record[key])
+    if (text) { add(key, text, '状态'); break }
+  }
+  const count = record.run_count
+  if (typeof count === 'number' && Number.isFinite(count)) add('run_count', String(count), '执行次数')
+  for (const key of ['finished_at', 'ended_at', 'updated_at', 'created_at']) {
+    const raw = record[key]
+    const text = typeof raw === 'string' ? recordTimestamp(raw) : undefined
+    if (text) { add(key, text, '完成时间'); break }
+  }
+  if (!parts.length && typeof record.ok === 'boolean') add('ok', record.ok ? '成功' : '失败')
+  return { text: parts.join(' · ') || undefined, usedKeys }
+}
 /** 应用运行态的唯一展示结论：观察态与实际运行态冲突时明确报冲突，不二选一。 */
 export type ApplicationRunningState = 'running' | 'stopped' | 'conflict' | 'unknown'
 export function applicationRunningState(running: boolean | undefined, runtimeState?: string): ApplicationRunningState {

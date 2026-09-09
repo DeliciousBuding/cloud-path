@@ -31,7 +31,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import ast
+import importlib.util
 import pathlib
 import re
 import sys
@@ -175,40 +175,6 @@ RELEASE_REQUIRED = (
 )
 
 
-# A plugin repository has no WebUI and none of the core hygiene scripts, so its
-# workflows are held to a lighter (but still real) contract. Applying the core
-# expectations to them would be a false positive.
-PLUGIN_CI_REQUIRED = (
-    "ubuntu-latest",
-    "go build ./...",
-    "go vet ./...",
-    "go test ./... -count=1",
-    "gofmt -l .",
-    "validate_manifest.py",
-    "setup-go",
-)
-
-PLUGIN_RELEASE_REQUIRED = (
-    "tags:",
-    "v*",
-    "sha256sum",
-    "checksums.txt",
-    "action-gh-release",
-    "contents: write",
-    "arm64",
-)
-
-
-def detect_profile(path: pathlib.Path) -> str:
-    """core = this repository's own workflows; plugin = generated plugin repos."""
-    try:
-        resolved = path.resolve()
-        resolved.relative_to((REPO_ROOT / ".github" / "workflows").resolve())
-        return "core"
-    except ValueError:
-        return "plugin"
-
-
 def race_is_linux_only(text: str) -> bool:
     """The race detector needs cgo; assert every -race step is Linux-only.
 
@@ -243,20 +209,14 @@ def race_is_linux_only(text: str) -> bool:
     return True
 
 
-def parse_declared_platforms(source: str) -> tuple[str, ...]:
-    """Read the ordered PLATFORMS tuple without importing build_matrix.py."""
-    tree = ast.parse(source)
-    value_node = None
-    for node in tree.body:
-        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == "PLATFORMS":
-            value_node = node.value
-        elif isinstance(node, ast.Assign) and any(
-            isinstance(target, ast.Name) and target.id == "PLATFORMS" for target in node.targets
-        ):
-            value_node = node.value
-    if value_node is None:
-        raise ValueError("PLATFORMS declaration not found")
-    raw = ast.literal_eval(value_node)
+def load_declared_platforms(path: pathlib.Path) -> tuple[str, ...]:
+    """Load PLATFORMS from the build script that owns the release matrix."""
+    spec = importlib.util.spec_from_file_location("_cloudpath_build_matrix", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    raw = getattr(module, "PLATFORMS", None)
     if not isinstance(raw, tuple) or not raw:
         raise ValueError("PLATFORMS must be a non-empty tuple")
     platforms: list[str] = []
@@ -276,9 +236,9 @@ def check_matrix_consistency(repo_root: pathlib.Path = REPO_ROOT) -> list[Proble
     """Keep the duplicated workflow matrices aligned with their code SSOT."""
     script = repo_root / "scripts" / "build_matrix.py"
     try:
-        expected = parse_declared_platforms(script.read_text(encoding="utf-8"))
-    except (OSError, SyntaxError, TypeError, ValueError) as exc:
-        return [Problem("scripts/build_matrix.py", f"cannot read PLATFORMS: {exc}")]
+        expected = load_declared_platforms(script)
+    except Exception as exc:  # noqa: BLE001 - any load failure is a gate finding
+        return [Problem("scripts/build_matrix.py", f"cannot load PLATFORMS: {exc}")]
 
     problems: list[Problem] = []
     for workflow_name in ("ci.yml", "release.yml"):
@@ -297,39 +257,38 @@ def check_matrix_consistency(repo_root: pathlib.Path = REPO_ROOT) -> list[Proble
     return problems
 
 
-def file_specific_checks(path: pathlib.Path, text: str, profile: str = "core") -> list[Problem]:
+def file_specific_checks(path: pathlib.Path, text: str) -> list[Problem]:
     problems: list[Problem] = []
     name = path.name
     lowered = name.lower()
-    ci_required = CI_REQUIRED if profile == "core" else PLUGIN_CI_REQUIRED
-    release_required = RELEASE_REQUIRED if profile == "core" else PLUGIN_RELEASE_REQUIRED
+    ci_required = CI_REQUIRED
+    release_required = RELEASE_REQUIRED
 
     if "ci" in lowered:
         for needle in ci_required:
             if needle not in text:
-                problems.append(Problem(name, f"[{profile}] CI workflow is missing the required element: {needle!r}"))
-        if profile == "core" and not race_is_linux_only(text):
+                problems.append(Problem(name, f"CI workflow is missing the required element: {needle!r}"))
+        if not race_is_linux_only(text):
             problems.append(Problem(name, "-race must be present and guarded to the Linux leg only (needs cgo)"))
     if "release" in lowered:
         for needle in release_required:
             if needle not in text:
-                problems.append(Problem(name, f"[{profile}] release workflow is missing the required element: {needle!r}"))
+                problems.append(Problem(name, f"release workflow is missing the required element: {needle!r}"))
         has_linux_arm64 = ("linux/arm64" in text) or ("os: linux" in text and "arch: arm64" in text)
         if not has_linux_arm64:
             problems.append(Problem(name, "release matrix must include the linux+arm64 combination (native arm64 production host)"))
     return problems
 
 
-def check_path(path: pathlib.Path, profile: str | None = None) -> list[Problem]:
+def check_path(path: pathlib.Path) -> list[Problem]:
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
         return [Problem(path.name, f"unreadable: {exc}")]
-    resolved_profile = profile or detect_profile(path)
     problems = basic_line_checks(path, text)
     if HAVE_YAML:
         problems.extend(yaml_checks(path, text))
-    problems.extend(file_specific_checks(path, text, resolved_profile))
+    problems.extend(file_specific_checks(path, text))
     return problems
 
 
@@ -376,7 +335,7 @@ def self_test() -> int:
     try:
         good = tmp / "ci.yml"
         good.write_text(GOOD_CI, encoding="utf-8")
-        for p in check_path(good, "core"):
+        for p in check_path(good):
             errors.append(f"good CI workflow flagged: {p.message}")
 
         cases: dict[str, tuple[str, str]] = {
@@ -392,21 +351,21 @@ def self_test() -> int:
                 bad.write_text(GOOD_CI.replace(", windows-latest", ""), encoding="utf-8")
             else:
                 bad.write_text(GOOD_CI + inject, encoding="utf-8")
-            found = check_path(bad, "core")
+            found = check_path(bad)
             if not any(expect in p.message for p in found):
                 errors.append(f"{label}: expected a finding containing {expect!r}, got {[p.message for p in found]}")
 
         # secrets.* references must NOT be flagged.
         ok_secret = tmp / "ci-secret.yml"
         ok_secret.write_text(GOOD_CI + "      api_token: ${{ secrets.API_TOKEN }}\n", encoding="utf-8")
-        for p in check_path(ok_secret, "core"):
+        for p in check_path(ok_secret):
             if "credential" in p.message:
                 errors.append("a ${{ secrets.* }} reference was flagged as a plaintext credential")
 
         # Race guard: moving -race outside the Linux-only guard must be caught.
         unguarded = tmp / "ci-race.yml"
         unguarded.write_text(GOOD_CI.replace("        if: matrix.os == 'ubuntu-latest'\n", ""), encoding="utf-8")
-        if not any("guarded to the Linux leg" in p.message for p in check_path(unguarded, "core")):
+        if not any("guarded to the Linux leg" in p.message for p in check_path(unguarded)):
             errors.append("an unguarded -race step was not caught")
 
         # Release invariants.
@@ -420,13 +379,13 @@ def self_test() -> int:
             "      - run: python scripts/build_matrix.py --verify-only --out dist\n"
             "      - run: cat dist/checksums.txt\n      - uses: softprops/action-gh-release@v2\n",
             encoding="utf-8")
-        for p in check_path(good_release, "core"):
+        for p in check_path(good_release):
             errors.append(f"good release workflow flagged: {p.message}")
 
         bad_release = tmp / "release-noarm.yml"
         bad_release.write_text(good_release.read_text(encoding="utf-8").replace("linux/arm64,", "")
                                .replace("--verify-only", "--no-verify"), encoding="utf-8")
-        found = [p.message for p in check_path(bad_release, "core")]
+        found = [p.message for p in check_path(bad_release)]
         if not any("linux+arm64" in m for m in found):
             errors.append(f"release workflow without arm64 was not caught: {found}")
         if not any("--verify-only" in m for m in found):
@@ -436,28 +395,8 @@ def self_test() -> int:
             broken = tmp / "ci-broken.yml"
             broken.write_text("name: x\non: push\npermissions:\n  contents: read\njobs:\n  a:\n   runs-on: ubuntu-latest\n  steps: []\n", encoding="utf-8")
             if not any("parse error" in p.message or "not a mapping" in p.message or "steps" in p.message
-                       for p in check_path(broken, "core")):
+                       for p in check_path(broken)):
                 errors.append("malformed YAML structure was not caught in PyYAML mode")
-        # Plugin profile: the generated plugin repo workflow must pass its own
-        # (lighter) contract and must NOT be judged by core-only expectations.
-        plugin_ci = tmp / "plugin-ci.yml"
-        plugin_ci.write_text(
-            "name: ci\n\non:\n  push:\n\npermissions:\n  contents: read\n\n"
-            "jobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n"
-            "      - uses: actions/checkout@v4\n      - uses: actions/setup-go@v5\n"
-            "      - run: go build ./...\n      - run: go vet ./...\n"
-            "      - run: go test ./... -count=1\n"
-            "      - run: test -z \"$(gofmt -l .)\"\n"
-            "      - run: python scripts/validate_manifest.py plugin.yaml --dir .\n",
-            encoding="utf-8")
-        for p in check_path(plugin_ci, "plugin"):
-            errors.append(f"plugin CI workflow flagged under the plugin profile: {p.message}")
-        for p in check_path(plugin_ci, "core"):
-            if "windows-latest" not in p.message:
-                break
-        else:
-            errors.append("the core profile did not notice a missing windows leg")
-
         # Matrix SSOT: both workflow copies must match build_matrix.py exactly.
         expected_matrix = (
             "linux/arm64", "linux/amd64", "windows/amd64",
@@ -535,8 +474,6 @@ def collect(paths: list[str]) -> list[pathlib.Path]:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--self-test", action="store_true")
-    parser.add_argument("--profile", choices=("core", "plugin", "auto"), default="auto",
-                        help="expectation profile; auto = core for .github/workflows, plugin elsewhere")
     parser.add_argument("paths", nargs="*", help="workflow files or directories (default: .github/workflows)")
     args = parser.parse_args(argv)
 
@@ -548,13 +485,11 @@ def main(argv: list[str]) -> int:
         print("workflow check FAILED: no workflow files found")
         return 1
     mode = "PyYAML parse + line scan" if HAVE_YAML else "line scan only (PyYAML not importable; structural checks degraded)"
-    profile = None if args.profile == "auto" else args.profile
     all_problems: list[Problem] = []
     for f in files:
-        problems = check_path(f, profile)
+        problems = check_path(f)
         all_problems.extend(problems)
-        effective = profile or detect_profile(f)
-        print(f"  {'FAIL' if problems else 'OK  '} {f} [{effective}]")
+        print(f"  {'FAIL' if problems else 'OK  '} {f}")
         for p in problems:
             print(f"       - {p.message}")
     if not args.paths:

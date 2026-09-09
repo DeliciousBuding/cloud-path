@@ -211,6 +211,24 @@ describe('应用数据读取和通用展示', () => {
     expect(screen.getByText('检查窗口')).toBeVisible()
   })
 
+  it('手动操作不会混进临时任务列表', async () => {
+    installFetch((url) => {
+      const path = new URL(url, 'http://localhost').pathname
+      if (path.endsWith('/jobs')) return stubResponse(200, {
+        instance_id: 'app-a', running: true, jobs: ['minute-check', 'manual-check'], scheduled: [],
+        job_descriptors: [
+          { id: 'minute-check', title: '检查窗口', input_schema_json: '{}', manual_only: false },
+          { id: 'manual-check', title: '手动检查', input_schema_json: '{}', manual_only: true },
+        ],
+      })
+      return appResponse(url)
+    })
+    renderWithProviders(<ApplicationPlane instanceID="app-a" />)
+    expect(await screen.findByText('检查窗口')).toBeVisible()
+    const scheduled = screen.getByText('定时任务').closest('section')!
+    expect(within(scheduled).queryByText('手动检查')).not.toBeInTheDocument()
+    expect(screen.getAllByText('手动检查')).toHaveLength(1)
+  })
   it('取消计划不会被渲染成仍要执行的时间，未知规则不被猜成每天', async () => {
     installFetch((url) => appResponse(url, { scheduled: [{ ...appSchedule, state: 'cancelled', cron: '15 8 * * 1-5' }] }))
     renderWithProviders(<ApplicationPlane instanceID="app-a" />)

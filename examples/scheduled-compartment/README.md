@@ -146,8 +146,12 @@ The runtime is a process-based `ApplicationService` (Application Protocol v1):
 4. **Idempotency** — repeated automatic jobs, repeated durable dispatches,
    duplicate key presses and cross-day occurrences have distinct
    occurrence-qualified record/command/task identities; same-occurrence repeats
-   do not emit duplicate effects. A first `window-check` observation already
-   past the end stays quiet instead of fabricating a miss: the app has no
+   do not emit duplicate effects. Closed occurrence tombstones remain in memory
+   for 30 days so a delayed durable replay cannot turn a completion into a
+   missed record. After a process restart, Core cancellation remains the
+   completion fact available through the protocol. A first `window-check`
+   observation already past the end stays quiet instead of fabricating a miss:
+   the app has no
    plugin-to-Core read API to distinguish a restart after completion from a
    late start. A late mid-window observation (more than one minute after start)
    records the occurrence but suppresses the stale reminder and does not arm a
@@ -195,8 +199,9 @@ The suite covers the descriptor requirements, config/binding validation, the
 window reminder effect, occurrence-qualified records/commands/tasks,
 key-press-driven completion with and without warm state, durable missed-window
 recording, restart/no-false-miss behavior, duplicate-event idempotency,
-cross-day identity, rejection of driver coupling, invalid config, graceful
-shutdown, and manifest identity / requirements drift.
+cross-day identity and stale durable replay, late-observation fallback, the
+documented first-minute restart ambiguity, rejection of driver coupling,
+invalid config, graceful shutdown, and manifest identity / requirements drift.
 
 Inside the monorepo, the repository-level gates additionally cover the whole
 tree:

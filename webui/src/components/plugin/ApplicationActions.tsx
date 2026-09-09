@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
 import { Loader2 } from 'lucide-react'
 import { SchemaActionInput } from '@/components/command/SchemaActionInput'
-import { StructuredValue } from '@/components/StructuredValue'
 import { useApplicationAction } from '@/hooks/useApplicationAction'
+import { applicationResultSummary } from '@/lib/application-plane'
 import { appActionError, appActionScope, appJobArgsError, appJobSchema, manualAppJobs } from '@/lib/application-actions'
+import { commandHasInput } from '@/lib/command-schema'
 import type { AppJobsView, AppJobView } from '@/lib/types'
 import { useAuth } from '@/store/auth'
 
@@ -11,9 +12,14 @@ function ActionResult({ json }: { json: string }) {
   let value: unknown
   let valid = true
   try { value = JSON.parse(json) } catch { valid = false }
+  const summary = valid ? applicationResultSummary(value) : { text: undefined }
   return <div className="mt-3 min-w-0 space-y-3">
-    {valid ? <StructuredValue value={value} /> : <p className="text-sm text-ink-2">{json
-      ? '应用返回的内容无法直接展示，请查看原文。' : '应用未返回结果内容，请查看应用记录。'}</p>}
+    {valid
+      ? <p className="break-words text-sm leading-relaxed text-ink-2 [overflow-wrap:anywhere]">{
+        summary.text || '应用已返回结果，详情请查看结果原文或应用记录。'
+      }</p>
+      : <p className="text-sm text-ink-2">{json
+        ? '应用返回的内容无法直接展示，请查看原文。' : '应用未返回结果内容，请查看应用记录。'}</p>}
     {json && <details className="min-w-0">
       <summary className="flex min-h-11 cursor-pointer items-center text-xs text-ink-2">查看结果原文</summary>
       <pre tabIndex={0} role="group" aria-label="执行结果原文"
@@ -22,16 +28,17 @@ function ActionResult({ json }: { json: string }) {
   </div>
 }
 
-function ActionForm({ instanceID, job, scope, schema, enabled }: {
-  instanceID: string; job: AppJobView; scope: string; schema: Record<string, unknown>; enabled: boolean
+function ActionForm({ instanceID, job, scope, schema, enabled, hasInput }: {
+  instanceID: string; job: AppJobView; scope: string; schema: Record<string, unknown>; enabled: boolean; hasInput: boolean
 }) {
   const { mutation, request, run, edit } = useApplicationAction(instanceID, job, schema, scope, enabled)
   const title = job.title?.trim() || job.id
   return <div className="min-w-0">
     <SchemaActionInput action={{ label: title, inputSchema: schema, inputPlaceholder: '按应用要求填写参数' }}
       validate={(args) => appJobArgsError(args, schema)} emptyArgs="{}"
-      description="按应用要求填写参数。"
-      emptyHint="填写参数后可执行。" validationSource="插件" disabled={!enabled || mutation.isPending} onEdit={edit}
+      description={hasInput ? '按应用要求填写参数。' : '无需填写参数，点击即可执行。'}
+      emptyHint={hasInput ? '填写参数后可执行。' : '点击执行操作。'}
+      validationSource="插件" disabled={!enabled || mutation.isPending} onEdit={edit}
       renderSubmit={(args, error) => <button type="button" className="btn btn-primary shrink-0"
         aria-label={(mutation.isError ? '重试' : mutation.isSuccess ? '再次执行' : '执行') + '「' + title + '」'}
         aria-busy={mutation.isPending} disabled={!enabled || Boolean(error) || mutation.isPending} onClick={() => run(args)}>
@@ -65,8 +72,9 @@ function Action({ instanceID, job, scope, enabled }: {
   instanceID: string; job: AppJobView; scope: string | null; enabled: boolean
 }) {
   const { schema, error } = useMemo(() => appJobSchema(job.input_schema_json), [job.input_schema_json])
+  const hasInput = useMemo(() => schema ? commandHasInput(schema) : false, [schema])
   return <article aria-label={job.title?.trim() || job.id} className="min-w-0 py-4 first:pt-0 last:pb-0">
-    {scope && schema ? <ActionForm instanceID={instanceID} job={job} scope={scope} schema={schema} enabled={enabled} />
+    {scope && schema ? <ActionForm instanceID={instanceID} job={job} scope={scope} schema={schema} enabled={enabled} hasInput={hasInput} />
       : <h3 className="break-words text-sm font-medium [overflow-wrap:anywhere]">{job.title?.trim() || job.id}</h3>}
     {error && <p role="alert" className="mt-2 text-xs text-bad">{error}</p>}
   </article>

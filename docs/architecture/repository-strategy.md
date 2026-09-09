@@ -2,7 +2,7 @@
 
 最后更新：2026-09-08
 
-> 本文定义 CloudPath 的公开仓库组合、命名、插件孵化/拆仓策略和公开边界。插件发现与信任链见
+> 本文定义 CloudPath 的公开仓库组合、命名、插件开发/拆仓策略和公开边界。插件发现与信任链见
 > [github-ecosystem.md](github-ecosystem.md)，插件运行时见 [plugin-system.md](plugin-system.md)。
 
 ## 1. 名称层级
@@ -65,7 +65,7 @@ cloud-path-connector-home-assistant
 - Device/Entity/Capability/Observation/Event/Command 通用模型；
 - Edge、Server、WebUI、认证/租户、Plugin Host 与 Registry 客户端；
 - versioned 协议、Schema、SDK、conformance harness；
-- 孵化或协议演示用 reference plugin（放 `examples/`；拆仓后不再是现役应用的源码事实源）。
+- 开发或协议演示用 reference plugin（放 `examples/`；拆仓后不再是现役应用的源码事实源）。
 
 核心仓库不拥有：
 
@@ -77,14 +77,14 @@ cloud-path-connector-home-assistant
 依赖只能朝一个方向：
 
 ```text
-Plugin → public SDK/Schema/Protocol → Core contracts
+Plugin → public SDK/Schema/Protocol → Core APIs
 Core ─X→ 某个具体 Driver/Application
 Application ─X→ Driver ID / 端口 / 厂商字段
 ```
 
-## 5. 插件孵化与拆仓门
+## 5. 插件开发与拆仓条件
 
-插件先在 `examples/<slug>/` 孵化；同时满足下列条件才拆成独立仓库：
+插件先在 `examples/<slug>/` 开发；同时满足下列条件才拆成独立仓库：
 
 1. Manifest/Descriptor 稳定，机器 ID 不再频繁变化；
 2. 通过对应 conformance suite；

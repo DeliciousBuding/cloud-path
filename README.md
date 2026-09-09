@@ -471,7 +471,7 @@ Connector/通知运行时、Transform/WASM、MQTT/Modbus 接入、远程 OTA、�
 | [docs/architecture/capability-model.md](docs/architecture/capability-model.md) | Device/Entity/Capability 模型 |
 | [docs/architecture/control-plane-sync.md](docs/architecture/control-plane-sync.md) | 声明式快照 + 单调 revision 同步语义 |
 | [docs/architecture/tenant-security-policy.md](docs/architecture/tenant-security-policy.md) | 租户配额、保留期与 secret 边界 |
-| [docs/architecture/repository-strategy.md](docs/architecture/repository-strategy.md) | 仓库组合、命名、拆仓门与公开边界 |
+| [docs/architecture/repository-strategy.md](docs/architecture/repository-strategy.md) | 仓库组合、命名、拆仓条件与公开边界 |
 | [docs/architecture/adr/0001-capability-centered-plugins.md](docs/architecture/adr/0001-capability-centered-plugins.md) | 能力中心插件模型决策 |
 | [docs/architecture/adr/0002-github-plugin-discovery.md](docs/architecture/adr/0002-github-plugin-discovery.md) | GitHub 发现与 Registry 信任决策 |
 | [deploy/README.md](deploy/README.md) | 公网落地 SOP（systemd + nginx + WSS） |

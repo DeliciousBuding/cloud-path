@@ -85,6 +85,15 @@ describe('应用操作的授权、生命周期与明确用户意图', () => {
     expect(actionRequests(http)).toHaveLength(0)
   })
 
+  it('无参数操作不显示技术参数输入框，并明确说明可直接执行', async () => {
+    installFetch((url) => actionResponse(url, { descriptors: [emptyJob] }))
+    renderWithProviders(<ApplicationPlane instanceID="app-a" />)
+    expect(await screen.findByText('无需填写参数，点击即可执行。')).toBeVisible()
+    expect(screen.queryByText('技术参数')).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '执行「刷新记录」' })).toBeEnabled()
+  })
+
   it.each(['stopped', 'unknown', 'starting', 'degraded'])('控制面状态 %s 即使旧 jobs 说 running 也禁止执行', async (runtimeState) => {
     const http = installFetch((url) => actionResponse(url, { descriptors: [emptyJob] }))
     renderWithProviders(<ApplicationPlane instanceID="app-a" runtimeState={runtimeState} />)
@@ -175,9 +184,9 @@ describe('参数与不可信执行结果', () => {
     const user = userEvent.setup()
     const { container } = renderWithProviders(<ApplicationPlane instanceID="app-a" />)
     await user.click(await screen.findByRole('button', { name: '执行「刷新记录」' }))
-    expect(await screen.findByText(dangerous)).toBeVisible()
-    expect(screen.getByText('custom-status')).toBeVisible()
-    expect(screen.getByText('javascript:alert(3)')).toBeVisible()
+    await waitFor(() => expect(container.textContent).toContain('custom-status'))
+    expect(container.textContent).toContain(dangerous)
+    expect(screen.queryByText('javascript:alert(3)')).not.toBeInTheDocument()
     expect(container.querySelector('img, script, a[href^="javascript:"]')).toBeNull()
     await user.click(screen.getByText('查看结果原文'))
     expect(screen.getByRole('group', { name: '执行结果原文' }).textContent).toBe(JSON.stringify(result))
@@ -185,6 +194,20 @@ describe('参数与不可信执行结果', () => {
     expect(screen.queryByText('板端成功')).not.toBeInTheDocument()
   })
 
+  it('机器字段只在原文展开，首屏显示人话摘要', async () => {
+    const result = { ok: true, message: '自检完成', run_count: 3, finished_at: '2026-09-09T07:30:03Z' }
+    installFetch((url, init) => init?.method === 'POST' ? accepted('app-a', emptyJob.id, result)
+      : actionResponse(url, { descriptors: [emptyJob] }))
+    const user = userEvent.setup()
+    renderWithProviders(<ApplicationPlane instanceID="app-a" />)
+    await user.click(await screen.findByRole('button', { name: '执行「刷新记录」' }))
+    expect(await screen.findByText(/自检完成 · 执行次数 3 · 完成时间/)).toBeVisible()
+    expect(screen.queryByText('run_count')).not.toBeInTheDocument()
+    expect(screen.queryByText('finished_at')).not.toBeInTheDocument()
+    await user.click(screen.getByText('查看结果原文'))
+    expect(screen.getByRole('group', { name: '执行结果原文' })).toHaveTextContent('run_count')
+    expect(screen.getByRole('group', { name: '执行结果原文' })).toHaveTextContent('finished_at')
+  })
   it.each(['', '<svg onload="alert(1)">raw response</svg>'])('空或非 JSON 结果不伪造结构：%s', async (result_json) => {
     installFetch((url, init) => init?.method === 'POST'
       ? stubResponse(200, { instance_id: 'app-a', job_id: emptyJob.id, result_json })

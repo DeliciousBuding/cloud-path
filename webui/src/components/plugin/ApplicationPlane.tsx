@@ -8,7 +8,7 @@ import { RowSkeleton } from '@/components/Skeleton'
 import { APP_RECORD_PAGE_SIZE, useApplicationPlane } from '@/hooks/useApplicationPlane'
 import { ApiError } from '@/lib/api'
 import { appTime, applicationRunningState, bindingLabels, recordHeadline, scheduleSummary, scheduleZone } from '@/lib/application-plane'
-import type { AppDomainRecordView, AppScheduledJobView } from '@/lib/types'
+import type { AppDomainRecordView, AppJobsView, AppScheduledJobView } from '@/lib/types'
 import { authIdentity, useAuth } from '@/store/auth'
 
 interface ReadQuery {
@@ -95,6 +95,12 @@ function ScheduledRow({ job, number }: { job: AppScheduledJobView; number: numbe
   </article>
 }
 
+/** 临时任务是应用自动运行的后台项；手动操作只在“应用操作”出现，避免同一入口重复。 */
+function backgroundJobIDs(jobs: AppJobsView | undefined): string[] {
+  const descriptors = new Map((jobs?.job_descriptors ?? []).map((job) => [job.id, job]))
+  return (jobs?.jobs ?? []).filter((id) => descriptors.get(id)?.manual_only !== true)
+}
+
 interface Props { instanceID: string; lifecycleKey?: string; runtimeState?: string; desiredEnabled?: boolean }
 
 /** 切实例或账号时重建局部筛选/分页；不能把上一实例的视图状态带过来。 */
@@ -113,6 +119,7 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState, desir
     : runningState === 'unknown' ? undefined : false
   const runningConflict = runningState === 'conflict'
   const rows = records.data?.records ?? []
+  const temporaryJobs = backgroundJobIDs(jobs.data)
   const recordTypes = [...new Set(rows.map((row) => row.record_type).filter(Boolean))].sort()
   const refreshing = records.isFetching || bindings.isFetching || jobs.isFetching
   if (!canRead) return <Panel title="应用数据" className="mb-5">
@@ -181,10 +188,10 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState, desir
       </ReadContent>
     </Panel>
     <Panel title="定时任务">
-      <ReadContent title="定时任务" query={jobs} empty={!jobs.data?.jobs.length && !jobs.data?.scheduled.length}>
+      <ReadContent title="定时任务" query={jobs} empty={!temporaryJobs.length && !jobs.data?.scheduled.length}>
         <p className="mb-4 text-xs text-ink-3">临时任务随应用启停，保存的计划会保留。排定时间不代表已经执行成功。</p>
         <h3 className="text-sm font-medium">临时任务</h3>
-        {jobs.data?.jobs.length ? <ul className="mb-4 divide-y divide-hairline">{jobs.data.jobs.map((job) => {
+        {temporaryJobs.length ? <ul className="mb-4 divide-y divide-hairline">{temporaryJobs.map((job) => {
           const descriptor = jobs.data?.job_descriptors?.find((item) => item.id === job)
           const title = descriptor?.title?.trim() || '后台任务'
           return <li key={job} className="py-3">

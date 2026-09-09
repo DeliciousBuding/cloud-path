@@ -58,7 +58,7 @@ devices (reference Driver: stcb; or external Driver plugins)
 | **Connector** | Edge or Server (runtime target-state) | MQTT, webhook, external platforms, notifications, data egress | defining the core device model |
 
 Driver Protocol v1 and Application Protocol v1 are implemented. Connector has a manifest
-contribution contract but no runtime. UI contributions are not an executable plugin type; the
+declaration but no runtime. UI contributions are not an executable plugin type; the
 current WebUI renders Descriptor/Capability schemas for device views, capability actions, and
 command forms. Arbitrary page schemas and third-party JavaScript remain target-state work.
 

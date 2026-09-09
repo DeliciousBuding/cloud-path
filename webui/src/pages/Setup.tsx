@@ -82,8 +82,8 @@ export default function Setup() {
 
   /**
    * 步骤 1 的 /healthz 快照里有没有已接入的边缘/设备。那时实例还没进账号模式、边缘连得上，
-   * 所以这是「完成 setup 后会被断开」的准确信号。全新安装为 false，完成页就不插一段
-   * 与本实例无关的警告——只在真的会咬人时才说。
+   * 所以这能提示：启用账号验证后，未携带有效网关令牌的已接入网关会断开；已配置令牌的共享网关不受影响。
+   * 全新安装为 false，完成页不插这段与本实例无关的警告。
    */
   const hasConnectedFleet = (health?.edges_online ?? 0) > 0 || (health?.devices_online ?? 0) > 0
 
@@ -327,7 +327,7 @@ export default function Setup() {
             </p>
           </div>
 
-          {/* 全鉴权会立刻掐断已接入的边缘：账号模式下 edge 的 WS 握手不带租户令牌就被拒
+          {/* 全鉴权会掐断未携带有效令牌的边缘：账号模式下 edge 的 WS 握手不带租户令牌就被拒
               （internal/server/ws.go），设备随即全部离线，而 server 只留一条 WARN，
               界面上没有任何地方告诉操作员这是怎么回事、怎么恢复。
               这不是故障，是账号模式的既定语义（docs/security.md §5），但向导只报喜不说这一步，
@@ -335,14 +335,14 @@ export default function Setup() {
 
               只在**真的有边缘/设备接入过**时才说：全新安装（步骤 1 探到 0 边缘 0 设备）
               没有这个后果，此时插一段警告只是噪音。判据取步骤 1 的 /healthz 快照——
-              那时还没进账号模式，边缘能连上，正是「会被断开」的准确信号。 */}
+              那时还没进账号模式，边缘能连上；未携带有效令牌的连接会在启用账号验证后断开。 */}
           {hasConnectedFleet && (
             <div className="rounded-lg bg-surface-2 p-3.5 text-left">
               <div className="flex items-start gap-2 text-[12px] leading-relaxed text-ink-2">
                 <ShieldAlert size={14} className="mt-0.5 shrink-0 text-warn" />
                 <div className="min-w-0">
-                  已接入的<span className="font-semibold text-ink">网关现在会被断开</span>：启用账号验证后，网关
-                  必须携带 <span className="font-semibold text-ink">「网关」范围的访问令牌</span>。
+                  启用账号验证后，<span className="font-semibold text-ink">未配置有效网关令牌的已接入网关会被断开</span>。
+                  网关必须携带 <span className="font-semibold text-ink">「网关」范围的访问令牌</span>；已配置的共享网关不受影响。
                   <details className="mt-2">
                     <summary className="cursor-pointer select-none font-medium text-ink-2">
                       查看网关恢复步骤（技术人员）

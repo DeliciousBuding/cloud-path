@@ -13,6 +13,16 @@ import { commandArgsError, commandArgsErrorCopy, commandHasInput } from '@/lib/c
 import { commandErrorCopy } from '@/lib/format'
 import type { CommandAction } from '@/lib/descriptor'
 
+/** ACK detail 可能是设备内部 key=value/JSON；轻提示只给人话，原文留在操作记录。 */
+function ackDetailCopy(detail?: string): string | undefined {
+  const text = detail?.trim()
+  if (!text) return undefined
+  if (/^[\[{]/.test(text) || /(?:^|\s)[a-z][a-z0-9_]*\s*=/.test(text)) {
+    return '设备已返回确认，结果请在操作记录中查看。'
+  }
+  return text
+}
+
 const ACK_TIMEOUT_MS = 15000
 
 interface CommandButtonProps {
@@ -74,7 +84,7 @@ function ScopedCommandButton({ deviceId, targetLabel, action, args, buttonLabel,
     setBusy(false)
     setPendingId(null)
     refreshHistory()
-    if (ack.status === 'ok') toast.ok(label + '已完成', ack.detail || undefined)
+    if (ack.status === 'ok') toast.ok(label + '已完成', ackDetailCopy(ack.detail))
     else toast.bad(label + '失败', '设备返回失败，请在操作记录中查看结果。')
   }, [acks, pendingId, label, current, refreshHistory])
 

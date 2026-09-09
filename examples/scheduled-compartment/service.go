@@ -34,6 +34,12 @@ const (
 // stale reminder or create a second durable miss task.
 const windowFreshOpenGrace = time.Minute
 
+// windowStateRetention keeps completed/missed occurrences as in-memory
+// tombstones long enough for delayed durable-dispatch replays. It is not a
+// durable store: after a process restart Core cancellation is still the only
+// completion fact available through Application Protocol v1.
+const windowStateRetention = 30 * 24 * time.Hour
+
 // window state values stored in domain records.
 const (
 	windowOpened    = "opened"
@@ -459,7 +465,18 @@ func (s *Service) runWindowCheck(req *application.RunJobRequest) (*application.R
 	local := now.In(tz)
 	today := local.Format("2006-01-02")
 	for key, w := range st.windows {
-		if w == nil || w.Start.In(tz).Format("2006-01-02") != today {
+		if w == nil {
+			delete(st.windows, key)
+			continue
+		}
+		// Open occurrences from an earlier day are reconstructed by a durable
+		// miss dispatch when needed. Keep closed occurrences as tombstones so
+		// a delayed replay cannot turn a completion into a false miss.
+		if w.State == windowOpened && w.Start.In(tz).Format("2006-01-02") != today {
+			delete(st.windows, key)
+			continue
+		}
+		if !w.End.IsZero() && now.Sub(w.End) > windowStateRetention {
 			delete(st.windows, key)
 		}
 	}

@@ -347,7 +347,8 @@ describe('Setup：真实创建首个账号', () => {
 
     expect(await screen.findByText('设置完成')).toBeInTheDocument()
     // 说清后果 + 给出可执行的恢复路径（在哪建令牌、勾哪个 scope、写进哪个字段、还要重启）
-    expect(screen.getByText(/网关现在会被断开/)).toBeInTheDocument()
+    expect(screen.getByText(/未配置有效网关令牌的已接入网关会被断开/)).toBeInTheDocument()
+    expect(screen.getByText(/已配置的共享网关不受影响/)).toBeInTheDocument()
     expect(screen.getByText(/「网关」范围的访问令牌/)).toBeInTheDocument()
     expect(screen.getByText(/管理 → 访问令牌/)).toBeInTheDocument()
     expect(screen.getByText(/token:/)).toBeInTheDocument()
@@ -375,7 +376,7 @@ describe('Setup：真实创建首个账号', () => {
     await user.click(screen.getByRole('button', { name: /创建账号并继续/ }))
 
     expect(await screen.findByText('设置完成')).toBeInTheDocument()
-    expect(screen.queryByText(/网关现在会被断开/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/未配置有效网关令牌的已接入网关会被断开/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '进入 CloudPath' })).toBeInTheDocument()
   })
 

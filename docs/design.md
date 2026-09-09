@@ -116,25 +116,10 @@ Descriptor / Entity / Capability / Observation。核心与前端都不对具体�
 
 ## API 接口
 
-### WS 消息信封（edge↔server、server↔浏览器统一）
+### WebSocket 协议
 
-```json
-{ "v": 1, "type": "hello|snapshot|state|event|command|command_ack|edge_up|edge_down",
-  "device": "lab-1/demo-1", "ts": 1788408968, "data": { } }
-```
-
-| type | 方向 | data | 说明 |
-|---|---|---|---|
-| `hello` | edge→server | `{edge_id, token, version, devices:[{id,adapter,name,port}]}` | 首帧，鉴权 + 注册 |
-| `snapshot` | server→浏览器 | `{devices[], edges[]}` | 浏览器连接首帧全量快照 |
-| `state` | edge→server→浏览器 | `{online, raw, updated_at, observations?}` | 状态快照；可选的实体观测保留能力、质量和真实采样时间 |
-| `event` | edge→server→浏览器 | `{type, entity_id?, label?}` | 设备事件，落库 `events`；`entity_id` 是 Capability 绑定把事件路由到 Application 实例的依据，设备级事件为空 |
-| `command` | server→edge | `{command_id, cmd, args}` | 浏览器经 REST 触发 |
-| `command_ack` | edge→server→浏览器 | `{command_id, status, detail}` | 更新 `commands` 并广播 |
-| `edge_up` / `edge_down` | server→浏览器 | `{edge_id, devices[], version}` | 边缘节点上下线 |
-
-浏览器连接 `/ws` 获得本租户快照与实时 fan-out；当前不做按设备订阅过滤。协议版本不匹配（`v`）的消息
-被丢弃并告警。完整的插件控制面与 Application 消息以 [protocol.md](protocol.md) 和 `internal/api/types.go` 为准。
+WS 信封、消息类型、方向和字段以 [protocol.md](protocol.md) 与 `internal/api/types.go` 为准。
+设计侧只保留一条不变量：
 
 **事件同形不变量**：server 对 `event` 只做一次 `json.Marshal(EventData)`，落库与广播
 共用这份 payload；浏览器端不得重建载荷形状。否则同一条事件在实时列表与历史里会呈现

@@ -149,6 +149,15 @@ WebUI 首屏一次性聚合。所有计数来自真实 Edge 上报与 Server 权
 - `GET /api/plugins/{pluginID}` → 单个 `PluginView`；不存在 `404 {"error":"plugin not found"}`；
   catalog 内部错误 `500 {"error":"plugin catalog unavailable"}`。
 
+默认 catalog 合并当前租户的 Edge 上报安装物与中心 AppHost 的 Application 安装物。
+Edge 安装物按租户隔离；AppHost 插件目录是 Server 级安装事实，对所有已认证租户可见。
+同一 `plugin_id` 只返回一个 `PluginView`：Edge 上报优先于 AppHost；同源多版本按
+major/minor/patch 取最高，版本相同按 edge id 稳定去重；列表与单查询使用同一规范化结果。
+AppHost 的 `plugins.lock` 不存在按空安装集处理；lock 解析失败、`plugin.yaml` 读取失败、
+lock/manifest ID 或版本不一致时返回 `500`，不静默隐藏。`PluginView` 只暴露白名单字段：
+`Verified`/`Digest` 来自 lockfile，`Permissions`/`Contributes` 来自 manifest；entrypoint、
+descriptor、configSchema、capabilityCatalog 等本地路径不进入响应。
+
 ### 5.3 插件实例（读）
 
 `GET /api/plugin-instances` → `{"instances":[PluginInstanceView…]}`；

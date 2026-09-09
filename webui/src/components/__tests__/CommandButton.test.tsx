@@ -240,6 +240,14 @@ describe('POST / WS ACK / history / timeout 生命周期', () => {
     expect(ok).toHaveBeenCalledExactlyOnceWith('读取已完成', 'done')
     expect(invalidate).toHaveBeenCalledTimes(4)
   })
+  it('ACK 的机器细节不直接塞进轻提示', async () => {
+    const ok = vi.spyOn(toast, 'ok')
+    mount(<CommandButton deviceId={KEY} action={simple} />)
+    await clickRead()
+    act(() => useLive.setState({ acks: { 7: { command_id: 7, status: 'ok', detail: 'ping pings=1 commands=199 uptime_s=395' } } }))
+    expect(ok).toHaveBeenCalledWith('读取已完成', '设备已返回确认，结果请在操作记录中查看。')
+  })
+
   it('失败 ACK 同样结算并刷新历史', async () => {
     const view = mount(<CommandButton deviceId={KEY} action={simple} />)
     const invalidate = vi.spyOn(view.queryClient, 'invalidateQueries')

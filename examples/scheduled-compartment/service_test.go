@@ -747,6 +747,77 @@ func TestWindowCheckOpensAgainOnNextDay(t *testing.T) {
 	}
 }
 
+func TestLateObservationFallsBackToMissedAtEnd(t *testing.T) {
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 0, 5, 0, 0, time.UTC)) // 08:05
+	defer a.close()
+	a.openStream()
+
+	_ = a.runJob("window-check", "late-mid-window")
+	_ = a.waitEffects(1, 60*time.Millisecond)
+
+	a.now = time.Date(2026, 9, 3, 0, 31, 0, 0, time.UTC) // 08:31
+	_ = a.runJob("window-check", "late-fallback")
+	effects := a.waitEffects(3, 60*time.Millisecond)
+	if got := windowStateOf(effects, "w-morning"); got != windowMissed {
+		t.Fatalf("late fallback state = %q, want %q", got, windowMissed)
+	}
+	if !hasCancelTask(effects, "window-miss-w-morning@2026-09-03") || !hasNotification(effects) {
+		t.Fatalf("late fallback effects = %+v", effects)
+	}
+}
+
+func TestRestartInsideFreshGraceMayRearmMissTask(t *testing.T) {
+	// A fresh service at 08:00:30 models a restart with no warm state. Application
+	// Protocol v1 has no read API to distinguish that from a first observation,
+	// so this test locks the documented ambiguity: the occurrence is opened and
+	// its durable miss task is armed again.
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 0, 0, 30, 0, time.UTC)) // 08:00:30
+	defer a.close()
+	a.openStream()
+
+	_ = a.runJob("window-check", "restart-inside-grace")
+	effects := a.waitEffects(3, 60*time.Millisecond)
+	if got := windowStateOf(effects, "w-morning"); got != windowOpened {
+		t.Fatalf("restart-inside-grace state = %q, want %q", got, windowOpened)
+	}
+	if n := countScheduleTask(effects); n != 1 {
+		t.Fatalf("restart-inside-grace emitted %d miss tasks, want 1", n)
+	}
+}
+
+func TestStaleMissAfterNextDayCheckDoesNotOverrideCompletion(t *testing.T) {
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC))
+	defer a.close()
+	a.openStream()
+
+	_ = a.runJob("window-check", "day-1-open")
+	_ = a.waitEffects(3, 60*time.Millisecond)
+	a.send(1, &application.CapabilityEvent{
+		RequirementID: "compartments", EntityID: c1, EventType: keyPressEvent,
+		OccurredAt: "2026-09-03T08:05:00+08:00",
+	})
+	_ = a.waitEffects(2, 60*time.Millisecond)
+
+	// Advancing through the next day's automatic check used to evict the
+	// completed occurrence before a delayed durable dispatch for day one.
+	a.now = time.Date(2026, 9, 4, 0, 0, 0, 0, time.UTC)
+	_ = a.runJob("window-check", "day-2-open")
+	_ = a.waitEffects(3, 60*time.Millisecond)
+
+	const staleMissID = "window-miss-w-morning@2026-09-03"
+	resp := a.runJobWithArgs(staleMissID, `{"window_id":"w-morning","occurrence_date":"2026-09-03"}`, "stale-day-1-miss")
+	if resp.ResultJSON != `{"missed":[]}` {
+		t.Fatalf("stale miss result = %s, want empty missed list", resp.ResultJSON)
+	}
+	effects := a.recvEffects(60 * time.Millisecond)
+	if got := windowStateOf(effects, "w-morning"); got != "" {
+		t.Fatalf("stale miss changed completed occurrence to %q: %+v", got, effects)
+	}
+	if hasNotification(effects) {
+		t.Fatalf("stale miss emitted a missed notification: %+v", effects)
+	}
+}
+
 func TestRejectDriverCoupling(t *testing.T) {
 	a := newTestApp(t, time.Now())
 	defer a.close()

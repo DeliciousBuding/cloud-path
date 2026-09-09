@@ -35,11 +35,13 @@ curl -fsS http://127.0.0.1:8080/healthz
 仅 Linux 串口直通需要；从仓库根目录手动启动，不配置开机自启：
 
 ```bash
+cp deploy/edge.example.yaml deploy/edge.yaml   # 本地私有配置，勿提交
+# 按实际设备修改 deploy/edge.yaml（端口/边 ID/设备名）
 docker compose -f deploy/compose/docker-compose.yml -f deploy/docker-compose.edge.yml up -d --build
 docker compose -f deploy/compose/docker-compose.yml -f deploy/docker-compose.edge.yml down
 ```
 
-Edge 使用同一镜像；真实串口需在 `deploy/docker-compose.edge.yml` 中取消注释 `devices`。容器刻意不设置自动重启。
+Edge 默认挂载 gitignored 的 `deploy/edge.yaml`；也可用 `EDGE_CONFIG=/absolute/path/edge.yaml` 指向别的本地文件。真实串口需在 `deploy/docker-compose.edge.yml` 中取消注释 `devices`。容器刻意不设置自动重启。
 
 ## Application 插件（可选）
 
@@ -58,6 +60,7 @@ lockfile（`CLOUDPATH_APP_LOCK`）与宿主状态（`CLOUDPATH_APP_STATE_DIR`）
 ```bash
 # 1) 证书（nginx 缺 cert 起不来）
 mkdir -p certs   # 放 fullchain.pem / privkey.pem（私钥只留主机，勿提交；本地演示可自签）
+chmod 600 certs/privkey.pem   # 私钥仅部署用户可读
 # 2) 起栈
 docker compose -f docker-compose.public.yml up -d --build
 # 3) 首装管理员 —— 公网用一次性 setup token（先首装再放开公网）

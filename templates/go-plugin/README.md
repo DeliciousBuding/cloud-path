@@ -1,7 +1,7 @@
 # CloudPath Go Plugin Templates
 
 Official, copyable Go plugin templates for CloudPath. This directory is the
-source for the future independent repository
+source for the independent repository
 `cloud-path-plugin-template-go`. It contains two self-contained plugin
 templates, CI/Release examples, a manifest, and a stdlib-only renamer.
 

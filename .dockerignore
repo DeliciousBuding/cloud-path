@@ -1,4 +1,12 @@
 # Docker build context 只保留 Go/前端构建所需的最小集合。
+# 本地 secrets / 证书不得进入构建上下文。
+.env
+.env.*
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
 # 注意：webui/dist 会在 builder stage 从 webui stage 显式复制。
 .git
 .github

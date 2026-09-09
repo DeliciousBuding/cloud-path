@@ -425,48 +425,128 @@ func (p *pluginPlane) forgetObserved(tenantID int64, edgeID, instanceID string) 
 // 它取代任何 fake/静态来源：安装物只来自 Edge 上报，期望态只来自 Server 权威存储。
 type pluginProjection struct{ s *Server }
 
-// Installations 返回租户可见的安装物投影（Edge 上报的公开 manifest 事实）。
+// installationCandidate 是安装物去重的候选行。serverHosted 只用于排序：
+// Edge 上报事实优先于中心 AppHost 事实；两者都不伪造 edge 归属。
+type installationCandidate struct {
+	row          api.PluginInstallationStatusData
+	edgeID       string
+	serverHosted bool
+}
+
+// comparePluginVersions 比较 manifest 版本。正常输入是 semver；非 semver
+// 回落到稳定字符串序，绝不因无法解析而让去重结果随机。
+func comparePluginVersions(a, b string) int {
+	parse := func(v string) ([3]int, bool) {
+		v = strings.TrimPrefix(strings.TrimSpace(v), "v")
+		if i := strings.IndexAny(v, "-+"); i >= 0 {
+			v = v[:i]
+		}
+		parts := strings.Split(v, ".")
+		if len(parts) != 3 {
+			return [3]int{}, false
+		}
+		var out [3]int
+		for i, part := range parts {
+			n, err := strconv.Atoi(part)
+			if err != nil || n < 0 {
+				return [3]int{}, false
+			}
+			out[i] = n
+		}
+		return out, true
+	}
+	pa, oka := parse(a)
+	pb, okb := parse(b)
+	if oka && okb {
+		for i := range pa {
+			if pa[i] < pb[i] {
+				return -1
+			}
+			if pa[i] > pb[i] {
+				return 1
+			}
+		}
+		return 0
+	}
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	return 0
+}
+
+func installationCandidateLess(a, b installationCandidate) bool {
+	if a.row.PluginID != b.row.PluginID {
+		return a.row.PluginID < b.row.PluginID
+	}
+	if a.serverHosted != b.serverHosted {
+		return !a.serverHosted
+	}
+	if cmp := comparePluginVersions(a.row.Version, b.row.Version); cmp != 0 {
+		return cmp > 0
+	}
+	if a.edgeID != b.edgeID {
+		return a.edgeID < b.edgeID
+	}
+	if a.row.Kind != b.row.Kind {
+		return a.row.Kind < b.row.Kind
+	}
+	return a.row.Digest < b.row.Digest
+}
+
+// Installations 返回租户可见的安装物投影。Edge 上报事实按租户过滤；AppHost
+// 的 Application 安装目录是 Server 级事实，所有租户可见。同一 plugin_id
+// Edge 优先于 AppHost，同源重版取最高 semver，并用 edge id 做稳定 tie-break。
 func (pr pluginProjection) Installations(tenant string) ([]api.PluginInstallationStatusData, error) {
 	s := pr.s
+	serverRows, err := s.appHost.installationStatuses()
+	if err != nil {
+		return nil, err
+	}
 	if !s.plugin.enabled() {
-		return []api.PluginInstallationStatusData{}, nil
+		return serverRows, nil
 	}
 	p := s.plugin
-	serverRows := s.appHost.installationStatuses()
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	ids, err := p.matchTenantsLocked(tenant)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]api.PluginInstallationStatusData, 0, 8)
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	candidates := make([]installationCandidate, 0, 8)
 	for _, tid := range ids {
 		t := p.tenants[tid]
 		if t == nil || !t.loaded {
 			continue
 		}
-		for _, ep := range t.edges {
+		edgeIDs := make([]string, 0, len(t.edges))
+		for edgeID := range t.edges {
+			edgeIDs = append(edgeIDs, edgeID)
+		}
+		sort.Strings(edgeIDs)
+		for _, edgeID := range edgeIDs {
+			ep := t.edges[edgeID]
 			for _, in := range ep.installations {
-				out = append(out, in)
+				candidates = append(candidates, installationCandidate{row: in, edgeID: edgeID})
 			}
 		}
 	}
-	seen := make(map[string]bool, len(out))
-	for _, in := range out {
-		seen[in.PluginID] = true
-	}
 	for _, in := range serverRows {
-		if !seen[in.PluginID] {
-			out = append(out, in)
-			seen[in.PluginID] = true
-		}
+		candidates = append(candidates, installationCandidate{row: in, edgeID: AppHostEdgeID, serverHosted: true})
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].PluginID != out[j].PluginID {
-			return out[i].PluginID < out[j].PluginID
+	sort.Slice(candidates, func(i, j int) bool { return installationCandidateLess(candidates[i], candidates[j]) })
+	out := make([]api.PluginInstallationStatusData, 0, len(candidates))
+	seen := make(map[string]bool, len(candidates))
+	for _, candidate := range candidates {
+		if seen[candidate.row.PluginID] {
+			continue
 		}
-		return out[i].Version < out[j].Version
-	})
+		seen[candidate.row.PluginID] = true
+		out = append(out, candidate.row)
+	}
 	return out, nil
 }
 

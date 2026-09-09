@@ -1171,36 +1171,69 @@ func (s *Server) dispatchDeviceCommandWithHook(ctx context.Context, tenantID int
 	return id, nil
 }
 
-// installationStatuses 返回中心服务托管的 Application 插件公开事实。
-// 与 Edge 上报的安装物同形，供只读插件目录统一展示；不包含本地路径、启动参数或 secret。
-func (h *AppHost) installationStatuses() []api.PluginInstallationStatusData {
-	if h == nil || !h.cfg.Enabled {
-		return nil
-	}
-	lock, err := registry.LoadLockFile(h.cfg.LockPath)
+// installedAppPlugin 是 AppHost 目录中一个通过 lock/manifest 一致性校验的
+// Application 插件事实。只保存公开字段所需的 manifest 与 lock 元数据。
+type installedAppPlugin struct {
+	manifest *registry.Manifest
+	locked   registry.LockedPlugin
+}
+
+// loadInstalledApplicationPlugins 读取 AppHost 的 lockfile + plugin.yaml，并
+// 只返回通过一致性校验的 Application 插件。lock/manifest 读取失败、ID/版本
+// 不一致或 kind 非法都 fail-closed；非 Application 插件合法跳过。
+func loadInstalledApplicationPlugins(pluginsDir, lockPath string) ([]installedAppPlugin, error) {
+	lock, err := registry.LoadLockFile(lockPath)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("apphost: load plugin lock: %w", err)
 	}
-	out := make([]api.PluginInstallationStatusData, 0, len(lock.Plugins))
+	out := make([]installedAppPlugin, 0, len(lock.Plugins))
 	for _, locked := range lock.Plugins {
-		manifestPath := filepath.Join(h.cfg.PluginsDir, registry.SafePluginID(locked.ID), "plugin.yaml")
-		manifest, err := registry.LoadManifest(manifestPath)
+		manifestPath := filepath.Join(pluginsDir, registry.SafePluginID(locked.ID), "plugin.yaml")
+		manifest, err := registry.ReadManifest(manifestPath)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("apphost: read manifest for %s: %w", locked.ID, err)
+		}
+		if manifest.ID != locked.ID {
+			return nil, fmt.Errorf("apphost: manifest id %q does not match lock id %q", manifest.ID, locked.ID)
+		}
+		if locked.Version != "" && manifest.Version != locked.Version {
+			return nil, fmt.Errorf("apphost: manifest version %q does not match lock version %q for %s",
+				manifest.Version, locked.Version, locked.ID)
 		}
 		kind, err := pluginhost.ParseKind(manifest.Kind)
-		if err != nil || kind != pluginhost.KindApplication {
+		if err != nil {
+			return nil, fmt.Errorf("apphost: parse kind for %s: %w", locked.ID, err)
+		}
+		if kind != pluginhost.KindApplication {
 			continue
 		}
-		out = append(out, installationStatusFromManifest(manifest, locked))
+		out = append(out, installedAppPlugin{manifest: manifest, locked: locked})
 	}
 	sort.Slice(out, func(i, j int) bool {
-		if out[i].PluginID != out[j].PluginID {
-			return out[i].PluginID < out[j].PluginID
+		if out[i].locked.ID != out[j].locked.ID {
+			return out[i].locked.ID < out[j].locked.ID
 		}
-		return out[i].Version < out[j].Version
+		return out[i].manifest.Version < out[j].manifest.Version
 	})
-	return out
+	return out, nil
+}
+
+// installationStatuses 返回中心服务托管的 Application 插件公开事实。
+// 与 Edge 上报的安装物同形，供只读插件目录统一展示；不包含本地路径、启动参数或 secret。
+// lock/manifest 损坏时返回错误，由读面映射为 500，绝不静默隐藏安装事实。
+func (h *AppHost) installationStatuses() ([]api.PluginInstallationStatusData, error) {
+	if h == nil || !h.cfg.Enabled {
+		return nil, nil
+	}
+	plugins, err := loadInstalledApplicationPlugins(h.cfg.PluginsDir, h.cfg.LockPath)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]api.PluginInstallationStatusData, 0, len(plugins))
+	for _, plugin := range plugins {
+		out = append(out, installationStatusFromManifest(plugin.manifest, plugin.locked))
+	}
+	return out, nil
 }
 
 func installationStatusFromManifest(m *registry.Manifest, locked registry.LockedPlugin) api.PluginInstallationStatusData {
@@ -1246,20 +1279,13 @@ func installationStatusFromManifest(m *registry.Manifest, locked registry.Locked
 
 // InstalledApplicationPlugins 返回已安装的 Application kind 插件集合（pluginID → version）。
 func InstalledApplicationPlugins(pluginsDir, lockPath string) (map[string]string, error) {
-	lock, err := registry.LoadLockFile(lockPath)
+	plugins, err := loadInstalledApplicationPlugins(pluginsDir, lockPath)
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]string{}
-	for _, locked := range lock.Plugins {
-		manifestPath := filepath.Join(pluginsDir, registry.SafePluginID(locked.ID), "plugin.yaml")
-		manifest, err := registry.LoadManifest(manifestPath)
-		if err != nil {
-			continue
-		}
-		if kind, err := pluginhost.ParseKind(manifest.Kind); err == nil && kind == pluginhost.KindApplication {
-			out[locked.ID] = locked.Version
-		}
+	out := make(map[string]string, len(plugins))
+	for _, plugin := range plugins {
+		out[plugin.locked.ID] = plugin.locked.Version
 	}
 	return out, nil
 }

@@ -124,7 +124,7 @@ func TestDispatchDeviceCommandAppPath(t *testing.T) {
 
 	// 队列满：诚实失败 + 命令行标 failed
 	full := &edgeLink{edgeID: "e2", tenant: "tenant-app", tenantID: tenantID,
-		send: make(chan []byte, 0), commandSend: make(chan edgeCommandFrame, 0),
+		send: make(chan []byte), commandSend: make(chan edgeCommandFrame),
 		done: make(chan struct{}), cancel: func() {}}
 	srv.mu.Lock()
 	srv.edges["e2"] = full

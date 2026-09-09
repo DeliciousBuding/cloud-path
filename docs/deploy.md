@@ -98,7 +98,8 @@ curl -fsS http://127.0.0.1:8080/healthz
 从仓库根目录执行：
 
 ```bash
-# 按实际设备修改 deploy/edge.example.yaml，例如端口/边 ID/设备名
+cp deploy/edge.example.yaml deploy/edge.yaml   # 本地私有配置，勿提交
+# 按实际设备修改 deploy/edge.yaml，例如端口/边 ID/设备名
 docker compose -f deploy/compose/docker-compose.yml -f deploy/docker-compose.edge.yml up -d --build
 docker compose -f deploy/compose/docker-compose.yml -f deploy/docker-compose.edge.yml ps
 # 停止
@@ -107,7 +108,7 @@ docker compose -f deploy/compose/docker-compose.yml -f deploy/docker-compose.edg
 
 要点：
 
-- `deploy/edge.example.yaml` 使用容器网络主机名 `ws://server:8080/ws/edge`；
+- `deploy/edge.example.yaml` 使用容器网络主机名 `ws://server:8080/ws/edge`；复制为 gitignored 的 `deploy/edge.yaml` 后再改设备配置。
   宿主机直跑时改成 `ws://127.0.0.1:8080/ws/edge`。
 - `token: ${CLOUDPATH_TOKEN}` 由 edge 配置加载器展开，容器环境变量
   `CLOUDPATH_TOKEN` 与 server 保持一致。
@@ -157,6 +158,7 @@ CLOUDPATH_ALLOWED_ORIGINS=console.example.com
 - 不要在 NAT 上把 8080 暴露到公网；server 只应被反代在本机/内网访问。
 - `CLOUDPATH_TRUSTED_PROXIES` 必须包含反代来源，服务才会采信 `X-Forwarded-Proto` 并为会话 cookie
   标记 `Secure`；未命中可信反代时伪造该头一律忽略，不能据此放宽鉴权边界。
+- TLS 私钥只保留在部署主机，权限建议 `0600`；证书目录和私钥不得进入 Git 或镜像构建上下文。
 
 ## 6. 健康检查、日志与数据
 
