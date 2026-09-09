@@ -1,7 +1,7 @@
 import { useId, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
-import { Badge, ErrorState, Panel } from '@/components/ui'
+import { Badge, ErrorState, Panel, Select } from '@/components/ui'
 import { StructuredValue } from '@/components/StructuredValue'
 import { ApplicationActions } from './ApplicationActions'
 import { RowSkeleton } from '@/components/Skeleton'
@@ -148,11 +148,11 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState, desir
           event.preventDefault(); setOffset(0); setFilter(draft.trim())
         }}>
           <label className="min-w-0 text-meta text-ink-2">分类
-            <select className="input mt-1 block min-h-touch w-full" value={draft} onChange={(event) => setDraft(event.target.value)}>
+            <Select className="mt-1 block w-full" value={draft} onChange={(event) => setDraft(event.target.value)}>
               <option value="">全部分类</option>
               {recordTypes.map((type) => <option key={type} value={type}>{type}</option>)}
               {draft && !recordTypes.includes(draft) && <option value={draft}>{draft}</option>}
-            </select>
+            </Select>
           </label>
           <button type="submit" className="btn btn-ghost">筛选</button>
           {(filter || draft) && <button type="button" className="btn btn-ghost" onClick={() => {

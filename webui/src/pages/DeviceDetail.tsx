@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {Activity, ArrowRight, Braces, Command, Grid3x3, History, LayoutDashboard, RadioTower, Sparkles, Zap} from 'lucide-react'
 import {
-  BackLink, Badge, EmptyState, ErrorState, KeyValue, Panel, Segmented, StatusDot, TabBar, TabPanel,
+  BackLink, Badge, EmptyState, ErrorState, KeyValue, Panel, Segmented, Select, StatusDot, TabBar, TabPanel,
 } from '@/components/ui'
 import type { TabItem } from '@/components/ui'
 import {
@@ -503,11 +503,11 @@ export default function DeviceDetail() {
                 {eventKinds.length > 1 && (
                   <div className="mb-3 flex items-center gap-2">
                     <label htmlFor="ev-kind" className="shrink-0 text-meta text-ink-3">筛选</label>
-                    <select id="ev-kind" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}
-                      className="input input-sm min-h-touch min-w-0 max-w-[18rem] sm:min-h-0">
+                    <Select id="ev-kind" compact value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}
+                      className="min-w-0 max-w-[18rem]">
                       <option value="">全部事件</option>
                       {eventKinds.map(([t, l]) => <option key={t} value={t}>{optionLabel(l, 40)}</option>)}
-                    </select>
+                    </Select>
                   </div>
                 )}
                 {evLoading && events.length === 0

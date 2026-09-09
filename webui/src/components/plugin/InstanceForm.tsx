@@ -4,7 +4,7 @@
 // 连接器不出现在创建候选中。版本和运行方式用下拉选择，低频的配置与密钥收进高级参数。
 import { useMemo, useState } from 'react'
 import { KeyRound, Plus, X } from 'lucide-react'
-import { Button, TextField } from '@/components/ui'
+import { Button, Select, TextField } from '@/components/ui'
 import { PermissionList, PluginErrorNote } from './PluginFacts'
 import { useEdges } from '@/hooks/useEdges'
 import { useCreateInstance, useUpdateInstance } from '@/hooks/usePlugins'
@@ -18,9 +18,6 @@ const ISOLATIONS = [
   { value: 'shared', label: '共享运行（多个项目共用运行资源）' },
   { value: 'per-instance', label: '独立运行（每个项目单独运行）' },
 ]
-
-// 原生 select/option 不吃 CSS 截断：限宽 + overflow-hidden，option 文本另做收敛
-const SELECT_CLS = 'input overflow-hidden text-compact'
 
 interface ConfigRow { key: string; value: string }
 
@@ -134,7 +131,7 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
             <span className="min-w-0 truncate">{pluginDisplayName(selected)}</span>
           </div>
         ) : createOptions.length > 0 ? (
-          <select id="pi-plugin" className={SELECT_CLS} value={effectivePluginId}
+          <Select id="pi-plugin" className="overflow-hidden" compact value={effectivePluginId}
             onChange={(e) => {
               const nextID = e.target.value
               const next = catalog.find((p) => p.id === nextID)
@@ -157,7 +154,7 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
                 </option>
               ))}
             </optgroup>
-          </select>
+          </Select>
         ) : (
           <p className="rounded-tile bg-surface px-3.5 py-2.5 text-compact text-ink-2">
             暂无可用于创建实例的应用或驱动。连接器用于连接服务，不会创建运行实例。
@@ -178,18 +175,18 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
                   连接器只负责连接，不能创建运行实例。
                 </p>
               ) : pluginKind === 'application' ? (
-                <select id="pi-edge" className={SELECT_CLS} value="server" disabled>
+                <Select id="pi-edge" className="overflow-hidden" compact value="server" disabled>
                   <option value="server">中心服务</option>
-                </select>
+                </Select>
               ) : pluginKind === 'driver' ? (
-                <select id="pi-edge" className={SELECT_CLS} value={effectiveEdge} onChange={(e) => setEdgeId(e.target.value)}>
+                <Select id="pi-edge" className="overflow-hidden" compact value={effectiveEdge} onChange={(e) => setEdgeId(e.target.value)}>
                   {edges.length === 0 && <option value="">（还没有可用网关）</option>}
                   {edges.map((edge) => (
                     <option key={edge.edge_id} value={edge.edge_id}>
                       {optionLabel(`${edge.edge_id}${edge.online ? '' : '（离线）'}`, 40)}
                     </option>
                   ))}
-                </select>
+                </Select>
               ) : (
                 <p className="rounded-tile bg-surface-2 px-3.5 py-2.5 text-compact text-ink-2">
                   请先选择要运行的应用或驱动。
@@ -226,10 +223,10 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
         <div>
           <label htmlFor="pi-version" className="mb-1.5 block text-compact font-medium text-ink-2">版本</label>
           {versionOptions.length > 0 ? (
-            <select id="pi-version" className={SELECT_CLS} value={effectiveVersion}
+            <Select id="pi-version" className="overflow-hidden" compact value={effectiveVersion}
               onChange={(e) => setVersion(e.target.value)}>
               {versionOptions.map((v) => <option key={v} value={v}>{v}</option>)}
-            </select>
+            </Select>
           ) : (
             <input id="pi-version" className="input text-compact" value={version} placeholder="例如 v1.2.0"
               autoComplete="off" spellCheck={false} onChange={(e) => setVersion(e.target.value)} />
@@ -241,9 +238,9 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
 
         <div>
           <label htmlFor="pi-iso" className="mb-1.5 block text-compact font-medium text-ink-2">运行方式</label>
-          <select id="pi-iso" className={SELECT_CLS} value={isolation} onChange={(e) => setIsolation(e.target.value as 'shared' | 'per-instance')}>
+          <Select id="pi-iso" className="overflow-hidden" compact value={isolation} onChange={(e) => setIsolation(e.target.value as 'shared' | 'per-instance')}>
             {ISOLATIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
+          </Select>
           <p className="mt-1.5 text-meta text-ink-3">不确定时保持共享运行即可。</p>
         </div>
 

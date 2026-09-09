@@ -156,5 +156,8 @@ unicode-range 只接管 CJK，拉丁/数字仍走 Geist；可复现构建见 web
 - 层级：`--z-local` / `--z-sticky` / `--z-nav` / `--z-overlay`；动效：`--motion-fast` / `--motion-base` / `--motion-slow` / `--motion-shimmer`，统一 `--ease-standard`。
 - 焦点：`--focus-ring-color` / `--focus-ring-width` / `--focus-ring-offset` / `--focus-halo` / `--focus-halo-bad`；键盘焦点必须可见，输入框错误态用红色 halo。
 - 状态：`--opacity-disabled`；骨架屏 1.6s 微光，`prefers-reduced-motion` 下关闭。
-- 原生 `select` 通过 `color-scheme` + `appearance: base-select` + `::picker(select)` 纳入深浅主题和圆角 token；不支持 `base-select` 的浏览器至少跟随系统主题。
+- 原生 `select` 通过 `Select` 原语统一：默认 `.select`，筛选器用 `pill`，紧凑表单用 `compact`；弹层通过 `color-scheme` + `appearance: base-select` + `::picker(select)` 纳入深浅主题和圆角 token，不支持 `base-select` 的浏览器至少跟随系统主题。
+- 输入框和 Select 的高度只走 `--spacing-control-sm` / `--spacing-control` / `--spacing-touch`，禁用态统一 `--opacity-disabled`；组件不再自己叠 `min-h-11` / `sm:min-h-0`。
+- `theme-color` 随手动浅/深主题更新；Firefox 使用 token 色滚动条，WebKit 使用同一 token 色。
+- CI 由 `scripts/check_design_tokens.py` 守门，禁止任意 px 字号、裸圆角、裸 z-index、`min-h-11`、`transition-all` 和业务源码裸色值。
 - Vercel 官方 `design.md` 是报告网站品牌指南，不是 CloudPath 的 token 来源。只吸收其判断原则，不引入 `vbg-*` 类名、色值或圆角；本地参考文件在 `.local/design/vercel-design.md`，不提交仓库。

@@ -2,7 +2,7 @@
 // Segmented / KeyValue / Spinner / Button / TextField / ThemeToggle / AuthCard
 // 颜色一律走 index.css token（Tailwind 主题类或 .btn/.input/.card 基类），组件内禁止裸色值。
 import { useId, useState } from 'react'
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react'
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
 import { ArrowLeft, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
 import { Link } from 'react-router'
 import { cn } from '@/lib/cn'
@@ -285,6 +285,14 @@ export function Button({ variant = 'primary', lg, className, ...rest }: {
       {...rest}
     />
   )
+}
+
+/** 原生 select 原语：默认走 .select，pill 只用于筛选器，compact 只用于紧凑表单。 */
+export function Select({ pill, compact, className, ...rest }: {
+  pill?: boolean
+  compact?: boolean
+} & SelectHTMLAttributes<HTMLSelectElement>) {
+  return <select className={cn('select', pill && 'select-pill', compact && 'select-sm', className)} {...rest} />
 }
 
 /** 带标签/提示/错误的表单输入行（error 优先于 hint 展示）。

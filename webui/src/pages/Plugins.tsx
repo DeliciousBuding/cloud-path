@@ -3,7 +3,7 @@ import {
   Ban, Boxes, Layers, PackagePlus, PackageOpen, Plus, Puzzle, Server, ShieldCheck,
 } from 'lucide-react'
 import {
-  Badge, EmptyState, ErrorState, PageHeader, Panel, TabBar, TabPanel,
+  Badge, EmptyState, ErrorState, PageHeader, Panel, Select, TabBar, TabPanel,
 } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { InstanceForm } from '@/components/plugin/InstanceForm'
@@ -279,7 +279,7 @@ export default function Plugins() {
                 <label htmlFor="instance-location" className="flex min-w-0 shrink-0 items-center gap-2 whitespace-nowrap text-compact font-medium text-ink-2">
                   <Server size={14} className="shrink-0" /> 运行位置
                 </label>
-                <select id="instance-location" className="input min-h-touch max-w-full text-compact sm:min-h-0 sm:w-72"
+                <Select id="instance-location" compact className="max-w-full sm:w-72"
                   value={edgeFilter} onChange={(e) => setEdgeFilter(e.target.value)}>
                   <option value="all">全部运行位置（{instances.length}）</option>
                   {edgeOptions.map((edge) => (
@@ -287,7 +287,7 @@ export default function Plugins() {
                       {edge === 'server' ? '中心服务' : `网关 ${edge || '未知'}`}（{instances.filter((v) => v.edge_id === edge).length}）
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
 
               {visibleInstances.length === 0 ? (

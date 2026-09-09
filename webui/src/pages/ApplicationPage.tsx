@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { Boxes, Layers3, ShieldAlert } from 'lucide-react'
-import { BackLink, EmptyState, ErrorState, PageHeader, Panel } from '@/components/ui'
+import { BackLink, EmptyState, ErrorState, PageHeader, Panel, Select } from '@/components/ui'
 import { ApiError } from '@/lib/api'
 import { PageSkeleton } from '@/components/Skeleton'
 import { ApplicationConsole } from '@/components/plugin-ui/ApplicationConsole'
@@ -90,12 +90,12 @@ export default function ApplicationPage() {
           actions={resolution.instances.length > 1
             ? <label className="flex items-center gap-2 text-meta text-ink-2">
               <span>运行实例</span>
-              <select className="input min-h-touch max-w-[14rem]" value={selected.desired.instance_id}
+              <Select className="max-w-[14rem]" value={selected.desired.instance_id}
                 onChange={(event) => setInstance(event.target.value)}>
                 {resolution.instances.map((instance) => <option key={instance.id} value={instance.desired.instance_id}>
                   {instance.desired.instance_id}{instance.desired.enabled ? '' : '（已停用）'}
                 </option>)}
-              </select>
+              </Select>
             </label>
             : undefined}
         />

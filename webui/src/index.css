@@ -144,7 +144,7 @@
   --focus-halo-bad: 0 0 0 3px color-mix(in srgb, var(--color-bad) 22%, transparent);
 }
 
-html { color-scheme: light; min-width: 320px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
+html { color-scheme: light; min-width: 320px; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--color-ink-3) 40%, transparent) transparent; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
 body {
   margin: 0;
   background: var(--color-canvas);
@@ -291,8 +291,9 @@ p { text-wrap: pretty; }
 /* ---------- 表单与认证页（Login / Setup 共用） ---------- */
 
 /* 文本输入框：颜色全部走 token，聚焦环用 accent 混色 */
-.input {
+.input, .select {
   width: 100%;
+  min-height: var(--spacing-control);
   padding: 10px 14px;
   font: inherit;
   font-size: var(--text-body);
@@ -304,7 +305,8 @@ p { text-wrap: pretty; }
   transition: border-color var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard), background-color var(--motion-slow) var(--ease-standard);
 }
 .input::placeholder { color: var(--color-ink-3); }
-.input:focus {
+.input:disabled { opacity: var(--opacity-disabled); cursor: not-allowed; }
+.input:focus, .select:focus {
   outline: none;
   background: var(--color-surface);
   border-color: var(--focus-ring-color);
@@ -313,13 +315,37 @@ p { text-wrap: pretty; }
 /* 紧凑变体：工具条下拉 / 带图标搜索框。
  * .input 本身是非分层 CSS，组件里叠 py-1 / pl-9 这类工具类会被层叠吃掉，
  * 所以输入框的尺寸角色只能由设计系统定义，不允许各组件自行覆盖。 */
-.input-sm { padding: 5px 10px; font-size: var(--text-meta); }
+.input-sm, .select-sm { min-height: var(--spacing-control-sm); padding: 5px 10px; font-size: var(--text-meta); }
 .input-search { padding: 8px 12px 8px 34px; font-size: var(--text-compact); }
 
 @media (max-width: 639px) {
-  .input, .input-sm, .input-search { font-size: 1rem; }
+  .input, .input-sm, .input-search, .select, .select-sm {
+    min-height: var(--spacing-touch);
+    font-size: 1rem;
+  }
 }
 
+
+/* 原生 select 的闭合态统一由 .select 承担；pill 只改变形状，不复制输入框规则。 */
+.select {
+  cursor: pointer;
+  padding-right: 2.25rem;
+}
+.select:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+.select-pill {
+  width: auto;
+  min-height: var(--spacing-touch);
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-meta);
+  font-weight: 500;
+}
+@media (min-width: 640px) {
+  .select-pill { min-height: var(--spacing-control-sm); }
+}
 
 .input-error, .input-error:focus {
   border-color: var(--color-bad);

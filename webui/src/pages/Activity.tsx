@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Activity as ActivityIcon, FilterX, RefreshCw, Terminal, WifiOff } from 'lucide-react'
-import { Badge, EmptyState, ErrorState, Panel, PageHeader, Segmented, Spinner } from '@/components/ui'
+import { Badge, EmptyState, ErrorState, Panel, PageHeader, Segmented, Select, Spinner } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { EventFeed, commandDisplayMeta, commandFailureInfo, eventDisplayLabel } from '@/components/EventFeed'
 import { api } from '@/lib/api'
@@ -33,7 +33,6 @@ const STATUS_FILTERS = [
 
 /** 下拉共用的样式（390px：min-w-0 + max-w-full，长设备名靠 option 自身截断） */
 // 原生 select/option 不吃 CSS 截断：select 自身限宽 + overflow-hidden，option 文本另在 optionLabel 里收敛
-const SELECT_CLS = 'min-h-touch min-w-0 max-w-full overflow-hidden rounded-pill border border-hairline bg-surface px-3 py-1.5 text-meta font-medium outline-none transition-colors focus:border-accent sm:min-h-0'
 
 /**
  * 活动页：事件与命令历史（/api/events、/api/commands），带设备 / 边缘 / 状态过滤。
@@ -140,31 +139,31 @@ export default function Activity() {
               ]}
             />
             <label className="sr-only" htmlFor="act-device">按设备筛选</label>
-            <select id="act-device" value={device} onChange={(e) => setDevice(e.target.value)} className={SELECT_CLS}>
+            <Select id="act-device" pill value={device} onChange={(e) => setDevice(e.target.value)} className="min-w-0 max-w-full">
               <option value="">设备：全部</option>
               {devices.map((d) => (
                 <option key={d.id} value={d.id}>
                   {optionLabel(d.name ? `${d.name}（${d.id}）` : d.id, 40)}
                 </option>
               ))}
-            </select>
+            </Select>
 
             <label className="sr-only" htmlFor="act-edge">按网关筛选</label>
-            <select id="act-edge" value={edge} disabled={Boolean(device)}
-              onChange={(e) => setEdge(e.target.value)} className={cn(SELECT_CLS, 'disabled:opacity-disabled')}
+            <Select id="act-edge" pill value={edge} disabled={Boolean(device)}
+              onChange={(e) => setEdge(e.target.value)} className="min-w-0 max-w-full"
               title={device ? '已按具体设备筛选' : undefined}>
               <option value="">网关：全部</option>
               {edges.map((e) => (
                 <option key={e.edge_id} value={e.edge_id}>{optionLabel(e.edge_id, 40)}</option>
               ))}
-            </select>
+            </Select>
 
             {tab === 'commands' && (
               <>
                 <label className="sr-only" htmlFor="act-status">按操作状态筛选</label>
-                <select id="act-status" value={status} onChange={(e) => setStatus(e.target.value)} className={SELECT_CLS}>
+                <Select id="act-status" pill value={status} onChange={(e) => setStatus(e.target.value)} className="min-w-0 max-w-full">
                   {STATUS_FILTERS.map((s) => <option key={s.value} value={s.value}>{s.value ? s.label : '状态：全部'}</option>)}
-                </select>
+                </Select>
               </>
             )}
 

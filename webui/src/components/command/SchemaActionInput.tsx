@@ -1,6 +1,7 @@
 import { useId, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/cn'
+import { Select } from '@/components/ui'
 import { commandArgsErrorCopy, commandForm, unsupportedSchemaKeywords } from '@/lib/command-schema'
 import type { CommandField } from '@/lib/command-schema'
 
@@ -293,17 +294,17 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
                   placeholder={(field.fields ?? []).map((nested) => nested.label).join(', ')}
                   aria-describedby={[fieldDescription, describedBy].filter(Boolean).join(' ')}
                   onChange={(e) => setField(field.key, e.target.value)}
-                  className="input input-sm min-h-touch min-w-0 font-mono sm:min-h-0" />
+                  className="input input-sm min-w-0 font-mono" />
               </div>
             ) : field.type === 'enum' || field.type === 'boolean' ? (
-              <select id={fieldId} value={value} required={field.required}
+              <Select id={fieldId} compact value={value} required={field.required}
                 aria-describedby={[fieldDescription, describedBy].filter(Boolean).join(' ')}
-                className="input input-sm min-h-touch min-w-0 sm:min-h-0"
+                className="min-w-0"
                 onChange={(e) => setField(field.key, e.target.value)}>
                 <option value="">请选择</option>
                 {field.type === 'boolean' ? <><option value="true">是</option><option value="false">否</option></>
                   : field.choices?.map((choice, i) => <option key={i} value={String(i)}>{field.choiceLabels?.[i] ?? choiceLabel(choice)}</option>)}
-              </select>
+              </Select>
             ) : (
               <input id={fieldId} type={field.type === 'string' || field.type === 'array' ? 'text' : 'number'}
                 value={value} required={field.required}
@@ -316,7 +317,7 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
                     : '用逗号或空格分隔')
                   : undefined}
                 aria-describedby={[fieldDescription, describedBy].filter(Boolean).join(' ')}
-                onChange={(e) => setField(field.key, e.target.value)} className="input input-sm min-h-touch min-w-0 sm:min-h-0" />
+                onChange={(e) => setField(field.key, e.target.value)} className="min-w-0" />
             )}
             {field.description && <p id={fieldDescription} className="mt-1 break-words text-meta text-ink-3">{field.description}</p>}
           </div>

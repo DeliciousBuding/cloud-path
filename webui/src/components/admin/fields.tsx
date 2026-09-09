@@ -3,6 +3,7 @@
 // 不会被长提示污染（TextField 在 components/ui.tsx 里已经是同一套做法）。
 import { useId } from 'react'
 import { cn } from '@/lib/cn'
+import { Select } from '@/components/ui'
 
 export interface FieldOption { value: string; label: string }
 
@@ -19,15 +20,14 @@ export function SelectField({ label, hint, value, onChange, options, className }
   return (
     <div className={className}>
       <label htmlFor={id} className="mb-1.5 block text-compact font-medium text-ink-2">{label}</label>
-      <select
+      <Select
         id={id}
         value={value}
         aria-describedby={desc}
         onChange={(ev) => onChange(ev.target.value)}
-        className="input"
       >
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
+      </Select>
       {desc && <p id={desc} className="mt-1.5 text-meta leading-relaxed text-ink-3 break-words">{hint}</p>}
     </div>
   )

@@ -1,7 +1,7 @@
 // 设备操作：只展示设备当前支持的动作；参数操作先选功能，再填参数。
 import { useId, useState } from 'react'
 import { Command, SlidersHorizontal, WifiOff } from 'lucide-react'
-import { Panel } from './ui'
+import { Panel, Select } from './ui'
 import { CommandButton } from './CommandButton'
 import { CommandInput } from './command/CommandInput'
 import { commandScope } from './command/scope'
@@ -54,15 +54,16 @@ function WritableActions({ deviceId, targetLabel, set, disabled = false }: {
           <label htmlFor={id + '-parameter-action'} className="mb-1.5 block text-meta font-medium text-ink-3">
             选择要设置的功能
           </label>
-          <select
+          <Select
             id={id + '-parameter-action'}
             aria-label="选择参数操作"
             value={selected?.cmd ?? ''}
             onChange={(e) => setSelectedCmd(e.target.value)}
-            className="input input-sm min-h-touch min-w-0 max-w-md sm:min-h-0"
+            className="min-w-0 max-w-md"
+            compact
           >
             {parameterized.map((a) => <option key={a.cmd} value={a.cmd}>{a.label}</option>)}
-          </select>
+          </Select>
           {selected && <div className="mt-3 sm:mt-4"><CommandInput key={selected.cmd} deviceId={deviceId} targetLabel={targetLabel} action={selected} /></div>}
         </div>
       )}
@@ -74,17 +75,17 @@ function WritableActions({ deviceId, targetLabel, set, disabled = false }: {
           </summary>
           <div className="mt-2 flex flex-wrap gap-2">
             <label className="sr-only" htmlFor={id + '-cmd'}>选择操作</label>
-            <select id={id + '-cmd'} value={advCmd}
+            <Select id={id + '-cmd'} compact value={advCmd}
               onChange={(e) => { setAdvCmd(e.target.value); setAdvArgs('') }}
-              className="input input-sm min-h-touch min-w-0 flex-1 sm:min-h-0">
+              className="min-w-0 flex-1">
               <option value="">选择操作</option>
               {manual.map((a) => <option key={a.cmd} value={a.cmd}>{a.label}</option>)}
-            </select>
+            </Select>
             <label className="sr-only" htmlFor={id + '-args'}>操作参数</label>
             <input id={id + '-args'} value={advAction ? advArgs : ''} disabled={!advAction}
               aria-invalid={advErr ? true : undefined} aria-describedby={advErr ? id + '-error' : undefined}
               onChange={(e) => setAdvArgs(e.target.value)} placeholder={advAction?.inputPlaceholder ?? '参数（可空）'}
-              className={cn('input input-sm min-h-touch min-w-0 flex-1 disabled:opacity-disabled sm:min-h-0', advErr && 'input-error')} />
+              className={cn('input input-sm min-w-0 flex-1', advErr && 'input-error')} />
             {advAction && <CommandButton deviceId={deviceId} targetLabel={targetLabel} action={advAction} args={advArgs} disabled={disabled || !!advErr} className="min-h-touch w-full sm:min-h-0 sm:w-auto" />}
           </div>
           {advErr && <p id={id + '-error'} role="alert" className="mt-1 text-meta text-bad">{advErr}</p>}

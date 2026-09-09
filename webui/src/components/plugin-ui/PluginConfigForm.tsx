@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Braces, Save } from 'lucide-react'
-import { Button, TextField } from '@/components/ui'
+import { Button, Select, TextField } from '@/components/ui'
 import { PluginErrorNote } from '@/components/plugin/PluginFacts'
 import { useUpdateInstance } from '@/hooks/usePlugins'
 import { safeConfigEntries } from '@/lib/plugins'
@@ -167,12 +167,12 @@ export function PluginConfigForm({ instance, section, readOnly }: {
         if (field.enum?.length || field.type === 'select') {
           return <label key={field.key} className="min-w-0 text-compact font-medium text-ink-2">
             <span className="mb-1.5 block">{common.label}{field.required ? ' *' : ''}</span>
-            <select className="input min-h-touch w-full" value={value} disabled={common.disabled}
+            <Select className="w-full" value={value} disabled={common.disabled}
               aria-invalid={common.error ? true : undefined}
               onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))}>
               <option value="">请选择</option>
               {(field.enum ?? []).map((option) => <option key={String(option)} value={String(option)}>{String(option)}</option>)}
-            </select>
+            </Select>
             {common.error && <span className="mt-1.5 block text-meta text-bad">{common.error}</span>}
           </label>
         }

@@ -78,7 +78,7 @@ export default function Devices() {
             <input
               id="dev-search" type="search" value={q} placeholder="按名称、编号、网关或设备类型搜索"
               onChange={(e) => setQ(e.target.value)}
-              className="input input-search min-h-touch max-w-full sm:min-h-0"
+              className="input input-search max-w-full"
             />
           </span>
           {q && (

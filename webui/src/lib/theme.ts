@@ -17,6 +17,9 @@ export function applyTheme(mode: ThemeMode = getTheme()) {
   const dark = mode === 'dark' ||
     (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
   document.documentElement.classList.toggle('dark', dark)
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+  const canvas = getComputedStyle(document.documentElement).getPropertyValue('--color-canvas').trim()
+  if (meta && canvas) meta.setAttribute('content', canvas)
 }
 
 /** system 模式下监听系统切换；返回清理函数（App 挂载一次） */
