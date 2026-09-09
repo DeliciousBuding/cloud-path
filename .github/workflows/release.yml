@@ -37,6 +37,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Go stamps +dirty when tracked files differ at build time. A line-ending
+      # mismatch would silently taint every release artifact.
+      - name: Verify clean source tree
+        run: test -z "$(git status --porcelain)"
+
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -91,6 +96,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Go stamps +dirty when tracked files differ at build time. A line-ending
+      # mismatch would silently taint every release artifact.
+      - name: Verify clean source tree
+        run: test -z "$(git status --porcelain)"
 
       - name: Set up Go
         uses: actions/setup-go@v5

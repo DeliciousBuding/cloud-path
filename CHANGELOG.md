@@ -36,6 +36,14 @@ shasum -a 256 -c checksums.txt --ignore-missing      # macOS
 certutil -hashfile <文件> SHA256                      # Windows（逐项对照）
 ```
 
+## v0.2.24 — 2026-09-09
+
+### 发布工程
+
+- 修正 `scripts/assert_arch.py` 索引中的 CRLF 行尾：Linux Release checkout 不再因 `.gitattributes` 的 LF 归一化而让 Go 把源码树判定为 dirty。
+- Release 构建前新增干净工作树门禁，阻止 `+dirty` 二进制再次发布。
+- 取代 `v0.2.23` 的 CI 二进制；该批资产仅因上述行尾问题被误标为 `+dirty`，运行时代码相同。
+
 ## v0.2.23 — 2026-09-09
 
 - WebUI：建立 `zh-CN` / `en-US` 国际化，语言选择持久化；导航、页面、表单、错误态和插件生命周期文案全部走 i18n，硬编码中文清零。
@@ -205,7 +213,8 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 | `v0.2.21` | 已发布（2026-09-09） | WebUI 易用性、响应式布局与文案收口；离线设备操作 fail-closed；应用结果与原始 JSON 分层展示；RBAC 稳定错误体与 AppHost observed 即时投影；全仓静态检查清零 |
 | `v0.2.22` | 已发布（2026-09-09） | 修复设备详情「概览」标签点击后被默认「设备操作」弹回 |
 | `v0.2.23` | 已发布（2026-09-09） | 插件 UI 声明式契约与受控资产端点；WebUI `zh-CN` / `en-US` 完整国际化、稳定错误码和设计 token 门禁 |
+| `v0.2.24` | 已发布（2026-09-09） | 修复 Release 行尾脏标记并新增干净工作树门禁；取代 v0.2.23 的 `+dirty` CI 资产 |
 | `dev` | 本地 | `task build` / `task build:matrix` 的未打标产物（`git describe` 兜底） |
 
 > 仓库没有 `v0.2.16` / `v0.2.17` tag；`v0.2.18` 覆盖 `v0.2.15` 之后累计的变更。当前 `main` 在
-> 最新发布版本为 `v0.2.23`。
+> 最新发布版本为 `v0.2.24`。
