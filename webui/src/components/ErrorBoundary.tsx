@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { i18n } from '@/i18n'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 
 interface Props { children: ReactNode }
@@ -26,19 +27,19 @@ export class ErrorBoundary extends Component<Props, State> {
     return (
       <div className="flex min-h-screen items-center justify-center px-6">
         <div className="card w-full max-w-md p-8 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-bad/10 text-bad">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-pill bg-bad/10 text-bad">
             <AlertTriangle size={22} />
           </div>
-          <h1 className="mt-5 text-[22px] font-semibold tracking-[-0.01em]">界面出现异常</h1>
-          <p className="mt-1.5 text-sm text-ink-2">
-            页面暂时没有加载出来。重新加载后再试一次；如果仍然失败，再尝试继续。
+          <h1 className="mt-5 text-section font-semibold tracking-[-0.01em]">{i18n.t('common:errorBoundary.title')}</h1>
+          <p className="mt-1.5 text-body text-ink-2">
+            {i18n.t('common:errorBoundary.description')}
           </p>
           <div className="mt-5 flex justify-center gap-2">
             <button type="button" className="btn btn-primary" onClick={() => location.reload()}>
-              <RefreshCw size={14} /> 重新加载
+              <RefreshCw size={14} /> {i18n.t('common:errorBoundary.reload')}
             </button>
             <button type="button" className="btn btn-ghost" onClick={() => this.setState({ error: null })}>
-              尝试继续
+              {i18n.t('common:errorBoundary.continue')}
             </button>
           </div>
         </div>

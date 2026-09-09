@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { Panel } from '@/components/ui'
 import { useApplicationPlane } from '@/hooks/useApplicationPlane'
 import { applicationRunningState } from '@/lib/application-plane'
+import { resolveLocalizedText } from '@/i18n/pluginText'
 import { ApplicationSection } from './ApplicationSections'
 import type { PluginCatalogView, PluginInstanceView, PluginUIPage } from '@/lib/types'
 
@@ -17,10 +18,11 @@ export function ApplicationConsole({ instance, catalog, page, readOnly, lifecycl
   readOnly: boolean
   lifecycleKey: string
 }) {
-  const { t } = useTranslation('plugin')
+  const { t, i18n } = useTranslation('plugin')
   const { records, bindings, jobs, presentation, status, running, canRead } = useApplicationPlane(
     instance.desired.instance_id, 0, '', lifecycleKey,
   )
+  const pageTitle = resolveLocalizedText(page, 'title', i18n.resolvedLanguage ?? i18n.language) ?? page.title
   const runningState = applicationRunningState(running,
     !instance.has_observed || instance.stale ? 'unknown' : instance.observed?.state)
   const actionRunning = runningState === 'running' ? instance.desired.enabled
@@ -28,16 +30,16 @@ export function ApplicationConsole({ instance, catalog, page, readOnly, lifecycl
 
   if (!canRead) {
     return <Panel title={t('console.appData')}>
-      <p className="text-sm text-ink-2">{t('console.loginHint')}</p>
+      <p className="text-body text-ink-2">{t('console.loginHint')}</p>
       <Link to="/login" className="btn btn-ghost mt-3">{t('console.login')}</Link>
     </Panel>
   }
 
-  return <div className="space-y-5" aria-label={page.title}>
-    {!instance.desired.enabled && <div role="status" className="rounded-lg bg-warn/12 px-3.5 py-3 text-sm text-warn">
+  return <div className="space-y-5" aria-label={pageTitle}>
+    {!instance.desired.enabled && <div role="status" className="rounded-tile bg-warn/12 px-3.5 py-3 text-body text-warn">
       {t('console.disabled')}
     </div>}
-    {instance.stale && <div role="status" className="rounded-lg bg-warn/12 px-3.5 py-3 text-sm text-warn">
+    {instance.stale && <div role="status" className="rounded-tile bg-warn/12 px-3.5 py-3 text-body text-warn">
       {t('console.stale')}
     </div>}
     {page.sections.map((section, index) => <ApplicationSection
@@ -53,7 +55,7 @@ export function ApplicationConsole({ instance, catalog, page, readOnly, lifecycl
       readOnly={readOnly}
       lifecycleKey={lifecycleKey}
     />)}
-    <p role="status" className="text-xs text-ink-3">
+    <p role="status" className="text-meta text-ink-3">
       {status === 'open' ? t('console.realtimeOpen') : status === 'connecting' ? t('console.realtimeConnecting') : t('console.realtimeClosed')}
     </p>
   </div>

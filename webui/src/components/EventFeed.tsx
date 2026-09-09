@@ -10,11 +10,10 @@ import { cn } from '@/lib/cn'
 import {
   cmdMeta, eventLabel, eventTone, fmtDay, fmtDateTime, fmtTime, isDirtyLabel, payloadHasMore, payloadLabel,
 } from '@/lib/format'
-import { eventDecl } from '@/lib/descriptor'
+import { eventDecl, humanize } from '@/lib/descriptor'
 import type { CapabilityIndex, CommandAction } from '@/lib/descriptor'
 import { i18n } from '@/i18n'
 
-const CJK_RE = /[\u3400-\u9fff]/
 
 /** 机器名规范化：只用于展示名查词典，原始值仍原样放在 title/技术详情。 */
 function machineNameKeys(value: string): string[] {
@@ -37,6 +36,18 @@ function machineNameKeys(value: string): string[] {
 
 function translate(key: string, options?: Record<string, unknown>): string {
   return String(i18n.t(key, { ns: 'activity', ...options }))
+}
+
+function isMachineName(value: string): boolean {
+  const text = value.trim()
+  if (!text) return true
+  if (/\s/.test(text)) return false
+  return /^[a-z0-9._:/-]+$/i.test(text)
+}
+
+function displayableText(value?: string): string | undefined {
+  const text = value?.trim()
+  return text && !isMachineName(text) && !isDirtyLabel(text) ? text : undefined
 }
 
 /** 通用事件展示词典：只覆盖跨设备、低歧义的机器名；未知值继续 humanize。 */
@@ -98,19 +109,23 @@ const COMMAND_LABEL_KEYS: Record<string, string> = {
 
 /** 事件主标签：声明 title → 后端标签 → 平台/通用词典 → 兜底；机器名只放 title/技术详情。 */
 export function eventDisplayLabel(type: string, index?: CapabilityIndex, label?: string): string {
+  if (isDirtyLabel(type)) return translate('event.labels.invalid')
   const declared = index ? eventDecl(type, index)?.title : undefined
   if (declared) return declared
-  if (label && CJK_RE.test(label)) return label
-  if (isDirtyLabel(type)) return translate('event.labels.invalid')
-  const base = eventLabel(type, index)
+  const backendLabel = displayableText(label)
+  if (backendLabel) return backendLabel
   for (const key of machineNameKeys(type)) {
     if (EVENT_LABEL_KEYS[key]) return translate(EVENT_LABEL_KEYS[key])
   }
-  if (CJK_RE.test(base)) return base
+  const base = eventLabel(type, index)
   for (const key of machineNameKeys(base)) {
     if (EVENT_LABEL_KEYS[key]) return translate(EVENT_LABEL_KEYS[key])
   }
-  return CJK_RE.test(base) ? base : translate('event.unknownEvent')
+  if (base !== humanize(type)) {
+    const readable = displayableText(base)
+    if (readable) return readable
+  }
+  return translate('event.unknownEvent')
 }
 
 /** 操作主标签：声明/平台词典 → 通用词典 → 兜底；原始 cmd 只由调用方放进 title。 */
@@ -123,7 +138,10 @@ export function commandDisplayMeta(cmd: string, index?: CapabilityIndex, actions
   for (const key of machineNameKeys(cmd)) {
     if (COMMAND_LABEL_KEYS[key]) return { ...meta, label: translate(COMMAND_LABEL_KEYS[key]) }
   }
-  if (CJK_RE.test(meta.label)) return meta
+  if (meta.label !== humanize(cmd)) {
+    const readable = displayableText(meta.label)
+    if (readable) return { ...meta, label: readable }
+  }
   for (const key of machineNameKeys(meta.label)) {
     if (COMMAND_LABEL_KEYS[key]) return { ...meta, label: translate(COMMAND_LABEL_KEYS[key]) }
   }
@@ -142,40 +160,52 @@ const PAYLOAD_SUMMARY_KEYS: Record<string, string> = {
 
 function payloadSummary(raw: string | undefined): string | undefined {
   if (!raw) return undefined
-  if (CJK_RE.test(raw)) return raw
   for (const key of machineNameKeys(raw)) {
     if (PAYLOAD_SUMMARY_KEYS[key]) return translate(PAYLOAD_SUMMARY_KEYS[key])
   }
-  return undefined
+  return displayableText(raw)
 }
 
-/** 操作失败原因 → 人话 + 下一步。文案与设备详情「操作记录」保持同源，原始 result 只放 title。 */
-export function commandFailureInfo(result?: string, status?: string): { message: string; next: string } {
+/** 操作失败原因 → 人话 + 下一步。只依赖稳定状态/错误码，不解析中文文本。 */
+function failureSignal(result?: string): string {
   const text = result?.trim()
-  if (!text) return status === 'timeout'
-    ? { message: translate('failure.timeoutMessage'), next: translate('failure.timeoutNext') }
-    : { message: translate('failure.genericMessage'), next: translate('failure.retryNext') }
-  if (/timeout|timed out|超时/i.test(text)) {
+  if (!text) return ''
+  const parts = [text]
+  try {
+    const parsed = JSON.parse(text) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const record = parsed as Record<string, unknown>
+      for (const key of ['code', 'error', 'reason', 'status', 'message']) {
+        const value = record[key]
+        if (typeof value === 'string' && value.trim()) parts.push(value.trim())
+      }
+    }
+  } catch { /* 原文仍可用于稳定机器标记匹配 */ }
+  return parts.join(' ').toLowerCase()
+}
+
+function includesAny(text: string, tokens: string[]): boolean {
+  return tokens.some((token) => text.includes(token))
+}
+
+export function commandFailureInfo(result?: string, status?: string): { message: string; next: string } {
+  const text = failureSignal(result)
+  if (status === 'timeout' || includesAny(text, ['timeout', 'timed out', 'deadline', 'etimedout'])) {
     return { message: translate('failure.timeoutMessage'), next: translate('failure.timeoutNext') }
   }
-  if (status === 'timeout') {
-    return { message: translate('failure.timeoutMessage'), next: translate('failure.timeoutNext') }
-  }
-  if (/busy|queue full|忙/i.test(text)) {
+  if (includesAny(text, ['busy', 'queue full', 'queue_full', 'err_busy', 'resource_exhausted'])) {
     return { message: translate('failure.busyMessage'), next: translate('failure.busyNext') }
   }
-  if (/offline|离线/i.test(text)) {
+  if (includesAny(text, ['offline', 'unavailable', 'edge_offline', 'device_offline'])) {
     return { message: translate('failure.offlineMessage'), next: translate('failure.offlineNext') }
   }
-  if (/permission|forbidden|unauthorized|权限/i.test(text)) {
+  if (includesAny(text, ['permission', 'forbidden', 'unauthorized', 'permission_denied'])) {
     return { message: translate('failure.permissionMessage'), next: translate('failure.permissionNext') }
   }
-  if (/unsupported|not supported|invalid|参数无效/i.test(text)) {
+  if (includesAny(text, ['unsupported', 'not supported', 'invalid', 'bad request', 'bad_request', 'err_invalid'])) {
     return { message: translate('failure.unsupportedMessage'), next: translate('failure.unsupportedNext') }
   }
-  if (/^[\u3400-\u9fff\s，。！？、；：（）\-—]+$/.test(text)) {
-    return { message: text, next: translate('failure.chineseNext') }
-  }
+  if (!result?.trim()) return { message: translate('failure.genericMessage'), next: translate('failure.retryNext') }
   return { message: translate('failure.genericMessage'), next: translate('failure.retryDetailNext') }
 }
 
@@ -201,7 +231,7 @@ export function EventFeed({ events, showDevice = true, limit = 30, dayGrouped = 
   ), [devices])
 
   if (!events.length) {
-    return <p className="py-6 text-center text-sm text-ink-3">{t('event.empty')}</p>
+    return <p className="py-6 text-center text-body text-ink-3">{t('event.empty')}</p>
   }
   const shown = events.slice(0, limit)
   if (!dayGrouped) {
@@ -225,7 +255,7 @@ export function EventFeed({ events, showDevice = true, limit = 30, dayGrouped = 
     <div className="space-y-4">
       {groups.map((g, gi) => (
         <section key={`${g.day}-${gi}`}>
-          <h4 className="sticky top-0 z-10 -my-1 bg-surface py-1 px-0.5 text-[12px] font-medium text-ink-3">{g.day}</h4>
+          <h4 className="sticky top-0 z-local -my-1 bg-surface py-1 px-0.5 text-meta font-medium text-ink-3">{g.day}</h4>
           <ul className="divide-y divide-hairline">
             {g.items.map((e, i) => (
               <EventRow key={`${e.id}-${gi}-${i}`} e={e} first={gi === 0 && i === 0} showDevice={showDevice} name={names.get(e.device_id)} />
@@ -264,7 +294,7 @@ function EventRow({ e, first, showDevice, name }: {
         {showDevice && (
           <Link
             to={`/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`}
-            className={cn('flex min-h-11 min-w-0 max-w-[10rem] items-center text-[12px] text-ink-3 transition-colors hover:text-accent sm:min-h-0 lg:col-start-2',
+            className={cn('flex min-h-touch min-w-0 max-w-[10rem] items-center text-meta text-ink-3 transition-colors hover:text-accent sm:min-h-0 lg:col-start-2',
               !name && 'num font-mono')}
             title={t('event.viewDeviceTitle', { id: e.device_id })}
           >
@@ -272,7 +302,7 @@ function EventRow({ e, first, showDevice, name }: {
           </Link>
         )}
         {summary && (
-          <span className="col-span-3 row-start-2 min-w-0 truncate text-[12px] text-ink-2 lg:col-span-1 lg:col-start-3 lg:row-start-1"
+          <span className="col-span-3 row-start-2 min-w-0 truncate text-meta text-ink-2 lg:col-span-1 lg:col-start-3 lg:row-start-1"
             title={e.payload || undefined}>{summary}</span>
         )}
         <div className="col-start-3 row-start-1 flex shrink-0 items-center gap-2 justify-self-end lg:col-span-2 lg:col-start-4">
@@ -282,18 +312,18 @@ function EventRow({ e, first, showDevice, name }: {
               onClick={() => setOpen((v) => !v)}
               aria-expanded={open}
               aria-label={open ? t('event.collapse') : t('event.expand')}
-              className="flex h-11 w-11 shrink-0 items-center justify-center text-ink-3 transition-colors hover:text-ink-2 sm:h-8 sm:w-8">
+              className="flex h-touch w-touch shrink-0 items-center justify-center text-ink-3 transition-colors hover:text-ink-2 sm:h-8 sm:w-8">
               <ChevronRight size={12} className={open ? 'rotate-90 transition-transform' : 'transition-transform'} />
             </button>
           )}
-          <span className="num shrink-0 font-mono text-[11px] text-ink-3" title={`${fmtDateTime(e.ts)} · ${e.type}`}>
+          <span className="num shrink-0 font-mono text-micro text-ink-3" title={`${fmtDateTime(e.ts)} · ${e.type}`}>
             {fmtTime(e.ts)}
           </span>
         </div>
       </div>
       {open && (
         <pre tabIndex={0} role="group" aria-label={t('event.detailsData')}
-          className="num mb-2 max-h-40 overflow-auto rounded-lg bg-surface-2 p-2 font-mono text-[11px] leading-relaxed text-ink-2">
+          className="num mb-2 max-h-40 overflow-auto rounded-tile bg-surface-2 p-2 font-mono text-micro leading-relaxed text-ink-2">
           {e.payload}
         </pre>
       )}

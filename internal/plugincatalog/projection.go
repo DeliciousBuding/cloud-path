@@ -228,6 +228,17 @@ func cloneConfig(in map[string]string) map[string]string {
 	return out
 }
 
+func cloneI18n(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
 // validateUIRouteConflicts fails the whole catalog projection when two visible
 // Application contributions claim the same stable route. Silent last-writer
 // wins would make navigation non-deterministic and is never acceptable.
@@ -255,13 +266,14 @@ func clonePluginUI(in *api.PluginUIData) *api.PluginUIData {
 	out := &api.PluginUIData{APIVersion: in.APIVersion}
 	if in.Navigation != nil {
 		n := *in.Navigation
+		n.I18n = cloneI18n(n.I18n)
 		out.Navigation = &n
 	}
 	if len(in.Pages) > 0 {
 		out.Pages = make([]api.PluginUIPageData, 0, len(in.Pages))
 		for _, page := range in.Pages {
 			out.Pages = append(out.Pages, api.PluginUIPageData{
-				ID: page.ID, Title: page.Title, Sections: cloneUISections(page.Sections),
+				ID: page.ID, Title: page.Title, I18n: cloneI18n(page.I18n), Sections: cloneUISections(page.Sections),
 			})
 		}
 	}

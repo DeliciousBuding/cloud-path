@@ -38,7 +38,7 @@ describe('useDeviceDescriptor：来源优先级与回落', () => {
     expect(result.current.descriptor).toBeNull()
     expect(result.current.source).toBe('none')
     expect(result.current.capabilities).toBe(EMPTY_INDEX)
-    expect(result.current.commands).toEqual({ actions: [{ cmd: 'raw', label: '原始操作' }], source: 'adapter' })
+    expect(result.current.commands).toEqual({ actions: [{ cmd: 'raw', label: '操作' }], source: 'adapter' })
   })
 
   it('Schema 端点 502 → 真实错误态，不回落成“没有操作”', async () => {

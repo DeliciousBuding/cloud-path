@@ -84,7 +84,7 @@ export default function Setup() {
   const [createdUser, setCreatedUser] = useState('')
 
   /**
-   * 步骤 1 的 /healthz 快照里有没有已接入的网关/设备。那时实例还没进账号模式、网关连得上，
+   * 步骤 1 的 /healthz 快照里有没有已接入的边缘/设备。那时实例还没进账号模式、边缘连得上，
    * 所以这能提示：启用账号验证后，未携带有效网关令牌的已接入网关会断开；已配置令牌的共享网关不受影响。
    * 全新安装为 false，完成页不插这段与本实例无关的警告。
    */
@@ -154,11 +154,11 @@ export default function Setup() {
       {/* 步骤指示器：移动端用短标签，避免 390px 溢出 */}
       <ol className="mb-6 flex items-center" aria-label={t('setup.progressAria')}>
         {STEPS.map((item, i) => (
-          <li key={item.label} className={cn('flex items-center', i < STEPS.length - 1 && 'flex-1')}>
+          <li key={t(item.label)} className={cn('flex items-center', i < STEPS.length - 1 && 'flex-1')}>
             <span
               aria-current={i === step ? 'step' : undefined}
               className={cn(
-                'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold',
+                'flex h-6 w-6 shrink-0 items-center justify-center rounded-pill text-meta font-semibold',
                 i < step ? 'bg-accent text-accent-ink'
                   : i === step ? 'bg-accent/15 text-accent'
                     : 'bg-ink-3/12 text-ink-3',
@@ -167,16 +167,16 @@ export default function Setup() {
               {i < step ? <Check size={13} strokeWidth={2.5} /> : i + 1}
             </span>
             <span className={cn(
-              'ml-2 text-xs sm:hidden',
+              'ml-2 text-meta sm:hidden',
               i === step ? 'font-medium text-ink' : 'text-ink-3',
             )}>
               {t(item.short)}
             </span>
             <span className={cn(
-              'ml-2 hidden text-xs sm:block',
+              'ml-2 hidden text-meta sm:block',
               i === step ? 'font-medium text-ink' : 'text-ink-3',
             )}>
-              {t(item.label)}
+              {item.label}
             </span>
             {i < STEPS.length - 1 && (
               <span className={cn('mx-2 h-px flex-1 sm:mx-3', i < step ? 'bg-accent/40' : 'bg-hairline')} />
@@ -188,30 +188,30 @@ export default function Setup() {
       {step === 0 && (
         <div className="space-y-4">
           {phase === 'checking' && (
-            <p className="flex items-center gap-2 text-sm text-ink-2">
+            <p className="flex items-center gap-2 text-body text-ink-2">
               <Spinner /> {t('setup.probe.checking')}
             </p>
           )}
           {phase === 'ok' && health && (
-            <div className="rounded-lg bg-ok/10 p-4">
-              <p className="flex items-center gap-2 text-sm font-medium text-ok">
+            <div className="rounded-tile bg-ok/10 p-4">
+              <p className="flex items-center gap-2 text-body font-medium text-ok">
                 <Check size={15} strokeWidth={2.5} /> {t('setup.probe.ready')}
               </p>
-              <p className="mt-1 text-xs break-words text-ink-2">
+              <p className="mt-1 text-meta break-words text-ink-2">
                 <Trans i18nKey="setup.probe.version" ns="auth" values={{ version: health.version }} components={{ version: <span className="font-mono" /> }} />
               </p>
               {alreadyIn && (
-                <p className="mt-2 text-xs leading-relaxed text-ink-2">
+                <p className="mt-2 text-meta leading-relaxed text-ink-2">
                   {t('setup.probe.alreadyIn')}
                 </p>
               )}
             </div>
           )}
           {phase === 'fail' && (
-            <div className="rounded-lg bg-bad/10 p-4">
-              <p className="text-sm font-medium text-bad">{t('setup.probe.failedTitle')}</p>
-              <p className="mt-1 break-words text-xs text-ink-2">{probeError}</p>
-              <p className="mt-1 text-xs text-ink-3">{t('setup.probe.failedHint')}</p>
+            <div className="rounded-tile bg-bad/10 p-4">
+              <p className="text-body font-medium text-bad">{t('setup.probe.failedTitle')}</p>
+              <p className="mt-1 break-words text-meta text-ink-2">{probeError}</p>
+              <p className="mt-1 text-meta text-ink-3">{t('setup.probe.failedHint')}</p>
             </div>
           )}
           <div className="flex gap-2">
@@ -234,9 +234,9 @@ export default function Setup() {
       {step === 1 && (
         redirectToLogin ? (
           <div className="space-y-4">
-            <div role="alert" className="rounded-lg bg-warn/12 p-3.5 text-[13px] leading-relaxed break-words text-warn">
+            <div role="alert" className="rounded-tile bg-warn/12 p-3.5 text-compact leading-relaxed break-words text-warn">
               {formError}
-              <Link to="/login" className="link mt-2 flex items-center gap-1 text-[13px]">
+              <Link to="/login" className="link mt-2 flex items-center gap-1 text-compact">
                 <LogIn size={13} /> {t('setup.create.goLogin')}
               </Link>
             </div>
@@ -251,10 +251,10 @@ export default function Setup() {
           </div>
         ) : (
         <form onSubmit={onCreate} noValidate className="space-y-4">
-          <div className="rounded-lg bg-surface-2 p-3.5">
+          <div className="rounded-tile bg-surface-2 p-3.5">
             <div className="flex items-start gap-2">
               <ShieldAlert size={14} className="mt-0.5 shrink-0 text-warn" />
-              <div className="min-w-0 text-[12px] leading-relaxed text-ink-2">
+              <div className="min-w-0 text-meta leading-relaxed text-ink-2">
                 <p><Trans i18nKey="setup.create.intro" ns="auth" components={{ strong: <span className="font-semibold text-ink" /> }} /></p>
                 <ul className="mt-2 list-disc space-y-1 pl-4">
                   <li>{t('setup.create.onlyMembers')}</li>
@@ -297,7 +297,7 @@ export default function Setup() {
                 aria-label={reveal ? t('login.fields.password.hide') : t('login.fields.password.show')}
                 title={reveal ? t('login.fields.password.hide') : t('login.fields.password.show')}
                 aria-pressed={reveal}
-                className="flex h-7 w-7 items-center justify-center rounded-full text-ink-3 transition-colors hover:text-ink"
+                className="flex h-7 w-7 items-center justify-center rounded-pill text-ink-3 transition-colors hover:text-ink"
               >
                 {reveal ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
@@ -317,7 +317,7 @@ export default function Setup() {
           />
 
           {formError && (
-            <div role="alert" className="rounded-lg bg-bad/10 p-3.5 text-[13px] leading-relaxed break-words text-bad">
+            <div role="alert" className="rounded-tile bg-bad/10 p-3.5 text-compact leading-relaxed break-words text-bad">
               {formError}
             </div>
           )}
@@ -339,24 +339,24 @@ export default function Setup() {
         <div className="space-y-4 text-center">
           <span className="text-ok"><PartyPopper size={22} /></span>
           <div>
-            <p className="text-[15px] font-semibold">{t('setup.complete.title')}</p>
-            <p className="mt-1 text-[13px] leading-relaxed break-words text-ink-2">
+            <p className="text-lead font-semibold">{t('setup.complete.title')}</p>
+            <p className="mt-1 text-compact leading-relaxed break-words text-ink-2">
               <Trans i18nKey="setup.complete.account" ns="auth" values={{ username: createdUser || username }} components={{ name: <span className="font-mono font-medium text-ink" /> }} />
             </p>
           </div>
 
-          {/* 全鉴权会掐断未携带有效令牌的网关：账号模式下 edge 的 WS 握手不带租户令牌就被拒
+          {/* 全鉴权会掐断未携带有效令牌的边缘：账号模式下 edge 的 WS 握手不带租户令牌就被拒
               （internal/server/ws.go），设备随即全部离线，而 server 只留一条 WARN，
               界面上没有任何地方告诉操作员这是怎么回事、怎么恢复。
               这不是故障，是账号模式的既定语义（docs/security.md §5），但向导只报喜不说这一步，
               人就会以为自己刚把部署弄坏了。
 
-              只在**真的有网关/设备接入过**时才说：全新安装（步骤 1 探到 0 网关 0 设备）
+              只在**真的有边缘/设备接入过**时才说：全新安装（步骤 1 探到 0 边缘 0 设备）
               没有这个后果，此时插一段警告只是噪音。判据取步骤 1 的 /healthz 快照——
-              那时还没进账号模式，网关能连上；未携带有效令牌的连接会在启用账号验证后断开。 */}
+              那时还没进账号模式，边缘能连上；未携带有效令牌的连接会在启用账号验证后断开。 */}
           {hasConnectedFleet && (
-            <div className="rounded-lg bg-surface-2 p-3.5 text-left">
-              <div className="flex items-start gap-2 text-[12px] leading-relaxed text-ink-2">
+            <div className="rounded-tile bg-surface-2 p-3.5 text-left">
+              <div className="flex items-start gap-2 text-meta leading-relaxed text-ink-2">
                 <ShieldAlert size={14} className="mt-0.5 shrink-0 text-warn" />
                 <div className="min-w-0">
                   <Trans i18nKey="setup.complete.fleetWarning" ns="auth" components={{ strong: <span className="font-semibold text-ink" /> }} />

@@ -5,7 +5,7 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { KeyRound, Plus, X } from 'lucide-react'
-import { Button, TextField } from '@/components/ui'
+import { Button, Select, TextField } from '@/components/ui'
 import { PermissionList, PluginErrorNote } from './PluginFacts'
 import { useEdges } from '@/hooks/useEdges'
 import { useCreateInstance, useUpdateInstance } from '@/hooks/usePlugins'
@@ -20,8 +20,6 @@ const ISOLATIONS = [
   { value: 'per-instance', labelKey: 'form.isolationIndependent' },
 ] as const
 
-// 原生 select/option 不吃 CSS 截断：限宽 + overflow-hidden，option 文本另做收敛
-const SELECT_CLS = 'input overflow-hidden text-[13px]'
 
 interface ConfigRow { key: string; value: string }
 
@@ -127,16 +125,16 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
       noValidate
       onSubmit={(e) => { e.preventDefault() }}
     >
-      <div className="rounded-lg bg-surface-2 p-3.5">
-        <label htmlFor="pi-plugin" className="mb-1.5 block text-[13px] font-medium text-ink-2">
+      <div className="rounded-tile bg-surface-2 p-3.5">
+        <label htmlFor="pi-plugin" className="mb-1.5 block text-compact font-medium text-ink-2">
           {t('form.whatToRun')}
         </label>
         {mode === 'edit' ? (
-          <div id="pi-plugin" className="input flex min-w-0 items-center text-[13px] text-ink-2">
+          <div id="pi-plugin" className="input flex min-w-0 items-center text-compact text-ink-2">
             <span className="min-w-0 truncate">{pluginDisplayName(selected)}</span>
           </div>
         ) : createOptions.length > 0 ? (
-          <select id="pi-plugin" className={SELECT_CLS} value={effectivePluginId}
+          <Select id="pi-plugin" className="overflow-hidden" compact value={effectivePluginId}
             onChange={(e) => {
               const nextID = e.target.value
               const next = catalog.find((p) => p.id === nextID)
@@ -159,13 +157,13 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
                 </option>
               ))}
             </optgroup>
-          </select>
+          </Select>
         ) : (
-          <p className="rounded-lg bg-surface px-3.5 py-2.5 text-[13px] text-ink-2">
+          <p className="rounded-tile bg-surface px-3.5 py-2.5 text-compact text-ink-2">
             {t('form.noCandidates')}
           </p>
         )}
-        <p className="mt-1.5 text-xs leading-relaxed text-ink-3">
+        <p className="mt-1.5 text-meta leading-relaxed text-ink-3">
           {mode === 'edit' ? t('form.pluginFixed') : t('form.pluginHelp')}
         </p>
       </div>
@@ -174,30 +172,30 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
         {mode === 'create' ? (
           <>
             <div>
-              <label htmlFor="pi-edge" className="mb-1.5 block text-[13px] font-medium text-ink-2">{t('form.location')}</label>
+              <label htmlFor="pi-edge" className="mb-1.5 block text-compact font-medium text-ink-2">{t('form.location')}</label>
               {pluginKind === 'connector' ? (
-                <p className="rounded-lg bg-surface-2 px-3.5 py-2.5 text-[13px] text-ink-2">
+                <p className="rounded-tile bg-surface-2 px-3.5 py-2.5 text-compact text-ink-2">
                   {t('form.connectorNoInstance')}
                 </p>
               ) : pluginKind === 'application' ? (
-                <select id="pi-edge" className={SELECT_CLS} value="server" disabled>
+                <Select id="pi-edge" className="overflow-hidden" compact value="server" disabled>
                   <option value="server">{t('host.server')}</option>
-                </select>
+                </Select>
               ) : pluginKind === 'driver' ? (
-                <select id="pi-edge" className={SELECT_CLS} value={effectiveEdge} onChange={(e) => setEdgeId(e.target.value)}>
+                <Select id="pi-edge" className="overflow-hidden" compact value={effectiveEdge} onChange={(e) => setEdgeId(e.target.value)}>
                   {edges.length === 0 && <option value="">{t('form.noEdge')}</option>}
                   {edges.map((edge) => (
                     <option key={edge.edge_id} value={edge.edge_id}>
                       {optionLabel(`${edge.edge_id}${edge.online ? '' : t('form.edgeOffline')}`, 40)}
                     </option>
                   ))}
-                </select>
+                </Select>
               ) : (
-                <p className="rounded-lg bg-surface-2 px-3.5 py-2.5 text-[13px] text-ink-2">
+                <p className="rounded-tile bg-surface-2 px-3.5 py-2.5 text-compact text-ink-2">
                   {t('form.choosePlugin')}
                 </p>
               )}
-              <p className="mt-1.5 text-xs text-ink-3">
+              <p className="mt-1.5 text-meta text-ink-3">
                 {pluginKind === 'application'
                   ? t('form.appLocationHint')
                   : pluginKind === 'driver'
@@ -214,11 +212,11 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
           </>
         ) : (
           <div className="sm:col-span-2">
-            <p className="rounded-lg bg-surface-2 px-3.5 py-2.5 text-xs break-words text-ink-2">
+            <p className="rounded-tile bg-surface-2 px-3.5 py-2.5 text-meta break-words text-ink-2">
               {t('form.editMeta', { location: instance?.edge_id === 'server' ? t('host.server') : t('location.edge', { id: instance?.edge_id || '—' }), name: d?.instance_id || '—' })}
             </p>
             {hostMismatch && (
-              <p role="alert" className="mt-2 rounded-lg bg-warn/12 px-3 py-2 text-[12px] leading-relaxed text-warn">
+              <p role="alert" className="mt-2 rounded-tile bg-warn/12 px-3 py-2 text-meta leading-relaxed text-warn">
                 {t('form.hostMismatch')}
               </p>
             )}
@@ -226,31 +224,31 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
         )}
 
         <div>
-          <label htmlFor="pi-version" className="mb-1.5 block text-[13px] font-medium text-ink-2">{t('form.version')}</label>
+          <label htmlFor="pi-version" className="mb-1.5 block text-compact font-medium text-ink-2">{t('form.version')}</label>
           {versionOptions.length > 0 ? (
-            <select id="pi-version" className={SELECT_CLS} value={effectiveVersion}
+            <Select id="pi-version" className="overflow-hidden" compact value={effectiveVersion}
               onChange={(e) => setVersion(e.target.value)}>
               {versionOptions.map((v) => <option key={v} value={v}>{v}</option>)}
-            </select>
+            </Select>
           ) : (
-            <input id="pi-version" className="input text-[13px]" value={version} placeholder={t('form.versionPlaceholder')}
+            <input id="pi-version" className="input text-compact" value={version} placeholder={t('form.versionPlaceholder')}
               autoComplete="off" spellCheck={false} onChange={(e) => setVersion(e.target.value)} />
           )}
-          <p className="mt-1.5 text-xs text-ink-3">
+          <p className="mt-1.5 text-meta text-ink-3">
             {selected?.version ? t('form.currentVersion', { version: selected.version }) : t('form.versionUnavailable')}
           </p>
         </div>
 
         <div>
-          <label htmlFor="pi-iso" className="mb-1.5 block text-[13px] font-medium text-ink-2">{t('form.isolation')}</label>
-          <select id="pi-iso" className={SELECT_CLS} value={isolation} onChange={(e) => setIsolation(e.target.value as 'shared' | 'per-instance')}>
+          <label htmlFor="pi-iso" className="mb-1.5 block text-compact font-medium text-ink-2">{t('form.isolation')}</label>
+          <Select id="pi-iso" className="overflow-hidden" compact value={isolation} onChange={(e) => setIsolation(e.target.value as 'shared' | 'per-instance')}>
             {ISOLATIONS.map((o) => <option key={o.value} value={o.value}>{t(o.labelKey)}</option>)}
-          </select>
-          <p className="mt-1.5 text-xs text-ink-3">{t('form.isolationHint')}</p>
+          </Select>
+          <p className="mt-1.5 text-meta text-ink-3">{t('form.isolationHint')}</p>
         </div>
 
         <div className="flex items-end pb-1">
-          <label className="flex cursor-pointer items-center gap-2.5 text-[13px]">
+          <label className="flex cursor-pointer items-center gap-2.5 text-compact">
             <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)}
               className="h-4 w-4 shrink-0 accent-accent" />
             {mode === 'create' ? t('form.enableOnCreate') : t('form.enableOnUpdate')}
@@ -259,8 +257,8 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
       </div>
 
       {/* ---- 权限确认 ---- */}
-      <div className="rounded-lg bg-surface-2 p-3.5">
-        <p className="mb-2 text-[13px] font-medium">{t('form.pluginPermissions')}</p>
+      <div className="rounded-tile bg-surface-2 p-3.5">
+        <p className="mb-2 text-compact font-medium">{t('form.pluginPermissions')}</p>
         <PermissionList
           permissions={selected?.permissions}
           emptyHint={selected ? t('form.noPermissions') : t('form.pluginMissing')}
@@ -269,39 +267,39 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
           <label className="mt-3 flex cursor-pointer items-start gap-2.5 border-t border-hairline pt-3">
             <input type="checkbox" checked={permAcked} onChange={(e) => setPermAcked(e.target.checked)}
               className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
-            <span className="min-w-0 text-[12px] leading-relaxed">
+            <span className="min-w-0 text-meta leading-relaxed">
               {t('form.permissionsAck', { count: perms })}
             </span>
           </label>
         )}
       </div>
 
-      <details className="rounded-lg border border-hairline p-3.5" open={mode === 'edit' && (rows.length > 0 || refsText.length > 0)}>
-        <summary className="cursor-pointer text-[13px] font-medium">{t('form.advanced')}</summary>
+      <details className="rounded-tile border border-hairline p-3.5" open={mode === 'edit' && (rows.length > 0 || refsText.length > 0)}>
+        <summary className="cursor-pointer text-compact font-medium">{t('form.advanced')}</summary>
         <div className="mt-4 space-y-4">
           <div>
             <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-[13px] font-medium">{t('form.pluginConfig')}</p>
+              <p className="text-compact font-medium">{t('form.pluginConfig')}</p>
               <Button type="button" variant="ghost" onClick={() => setRows((r) => [...r, { key: '', value: '' }])}>
                 <Plus size={13} /> {t('form.addParam')}
               </Button>
             </div>
             {rows.length === 0 ? (
-              <p className="text-xs text-ink-3">{t('form.noParams')}</p>
+              <p className="text-meta text-ink-3">{t('form.noParams')}</p>
             ) : (
               <div className="space-y-2">
                 {rows.map((r, i) => (
                   <div key={i} className="flex min-w-0 gap-2">
                     <label className="sr-only" htmlFor={`cfg-k-${i}`}>{t('form.paramName')}</label>
-                    <input id={`cfg-k-${i}`} className="input num min-w-0 flex-1 font-mono text-[12px]"
+                    <input id={`cfg-k-${i}`} className="input num min-w-0 flex-1 font-mono text-meta"
                       placeholder="{t('form.paramName')}" value={r.key} autoComplete="off" spellCheck={false}
                       onChange={(e) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, key: e.target.value } : x)))} />
                     <label className="sr-only" htmlFor={`cfg-v-${i}`}>{t('form.paramValue')}</label>
-                    <input id={`cfg-v-${i}`} className="input num min-w-0 flex-1 font-mono text-[12px]"
+                    <input id={`cfg-v-${i}`} className="input num min-w-0 flex-1 font-mono text-meta"
                       placeholder="{t('form.paramValue')}" value={r.value} autoComplete="off" spellCheck={false}
                       onChange={(e) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))} />
                     <button type="button" aria-label={t('form.deleteParam', { name: r.key || i + 1 })}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-3 transition-colors hover:text-bad"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-pill text-ink-3 transition-colors hover:text-bad"
                       onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))}>
                       <X size={14} />
                     </button>
@@ -312,19 +310,19 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
           </div>
 
           <div>
-            <label htmlFor="pi-refs" className="mb-1.5 flex items-center gap-1.5 text-[13px] font-medium">
+            <label htmlFor="pi-refs" className="mb-1.5 flex items-center gap-1.5 text-compact font-medium">
               <KeyRound size={13} className="shrink-0" /> {t('form.secretRefs')}
             </label>
             <textarea
               id="pi-refs" rows={3} value={refsText} autoComplete="off" spellCheck={false}
               placeholder={t('form.secretPlaceholder')}
               onChange={(e) => setRefsText(e.target.value)}
-              className="input num resize-y font-mono text-[12px]"
+              className="input num resize-y font-mono text-meta"
             />
-            <p className="mt-1.5 text-[12px] leading-relaxed text-ink-3">
+            <p className="mt-1.5 text-meta leading-relaxed text-ink-3">
               {t('form.secretHint')}
             </p>
-            <details className="mt-1.5 text-[12px] text-ink-3">
+            <details className="mt-1.5 text-meta text-ink-3">
               <summary className="cursor-pointer">{t('common.technicalDetails')}</summary>
               <p className="mt-1.5 leading-relaxed">{t('form.secretPrefixHint')}</p>
             </details>
@@ -342,7 +340,7 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
       </details>
 
       {missing.length > 0 && (
-        <p className="text-[12px] text-ink-3">{t('form.missing', { items: missing.join('、') })}</p>
+        <p className="text-meta text-ink-3">{t('form.missing', { items: missing.join('、') })}</p>
       )}
       {error ? <PluginErrorNote error={error} /> : null}
 

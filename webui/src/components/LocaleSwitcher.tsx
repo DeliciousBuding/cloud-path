@@ -20,7 +20,7 @@ export function LocaleSwitcher({ className }: { className?: string }) {
           setLocaleState(next)
           void setLocale(next)
         }}
-        className="min-h-11 min-w-0 rounded-full border border-hairline bg-surface px-2 py-1 text-[12px] font-medium outline-none transition-colors focus:border-accent sm:min-h-0"
+        className="min-h-touch min-w-0 rounded-pill border border-hairline bg-surface px-2 py-1 text-meta font-medium outline-none transition-colors focus:border-accent sm:min-h-0"
       >
         {SUPPORTED_LOCALES.map((value) => (
           <option key={value} value={value}>

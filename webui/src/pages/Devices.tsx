@@ -80,7 +80,7 @@ export default function Devices() {
             <input
               id="dev-search" type="search" value={q} placeholder={t('list.search.placeholder')}
               onChange={(e) => setQ(e.target.value)}
-              className="input input-search min-h-11 max-w-full sm:min-h-0"
+              className="input input-search max-w-full"
             />
           </span>
           {q && (
@@ -109,11 +109,11 @@ export default function Devices() {
             {shown.slice(0, 300).map((d) => <DeviceRow key={d.id} d={d} />)}
           </ul>
           {shown.length > 300 && (
-            <p className="border-t border-hairline px-4 py-3 text-center text-[12px] text-ink-3">
+            <p className="border-t border-hairline px-4 py-3 text-center text-meta text-ink-3">
               {t('list.limit', { count: shown.length })}
             </p>
           )}
-          <p className="flex items-center gap-1.5 border-t border-hairline px-4 py-2.5 text-[12px] text-ink-3">
+          <p className="flex items-center gap-1.5 border-t border-hairline px-4 py-2.5 text-meta text-ink-3">
             <Cpu size={11} className="shrink-0" />
             {t('list.note')}
           </p>

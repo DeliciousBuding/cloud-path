@@ -2,8 +2,9 @@
 import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import Layout from '@/components/Layout'
+import { i18n } from '@/i18n'
 import { useAuth } from '@/store/auth'
 import { toast } from '@/store/toast'
 import { useLive } from '@/store/ws'
@@ -23,11 +24,13 @@ function renderLayout() {
   )
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage('zh-CN')
   resetStores()
   useAuth.setState({ status: 'in', user: admin })
   installFetch((url) => (url === '/healthz' ? stubResponse(200, health) : stubResponse(404, {})))
 })
+afterEach(async () => { await i18n.changeLanguage('zh-CN') })
 
 describe('地标与键盘入口', () => {
   it('有 main 地标、跳转链接与主导航', () => {
@@ -111,6 +114,35 @@ describe('任务导向导航', () => {
     const nav = screen.getAllByRole('navigation', { name: '主导航' })[0] as HTMLElement
     expect(await within(nav).findByRole('link', { name: '药盒提醒' })).toHaveAttribute('href', '/apps/pillbox')
     expect(within(nav).queryByRole('link', { name: '驱动页面' })).not.toBeInTheDocument()
+  })
+
+  it('插件导航标题跟随语言切换即时更新', async () => {
+    installFetch((url) => {
+      if (url === '/healthz') return stubResponse(200, health)
+      if (url === '/api/plugins') return stubResponse(200, { plugins: [{
+        id: 'example.pillbox', kind: 'application', version: 'v1', source: '', digest: '', verified: true,
+        protocol: 1, permissions: {}, contributes: { applications: [{ id: 'pillbox', title: '药盒', ui: {
+          apiVersion: 1, navigation: { title: '药盒提醒', i18n: { 'zh-CN': '药盒提醒', 'en-US': 'Pillbox reminders' }, route: 'pillbox' },
+          pages: [{ id: 'home', title: '药盒提醒', sections: [{ type: 'status' }] }],
+        } }] },
+      }] })
+      if (url === '/api/plugin-instances') return stubResponse(200, { instances: [{
+        id: 'server/pillbox-a', tenant_id: 1, edge_id: 'server', desired: {
+          instance_id: 'pillbox-a', plugin_id: 'example.pillbox', version: 'v1', enabled: true,
+          isolation: 'shared', revision: 1, updated_at: 1,
+        }, has_observed: true, observed: { state: 'running', health: 'HEALTHY', restart_count: 0 },
+        edge_online: false, desired_revision: 1, applied_revision: 1, drift: false, stale: false,
+      }] })
+      return stubResponse(404, {})
+    })
+    renderLayout()
+    const nav = screen.getAllByRole('navigation', { name: '主导航' })[0] as HTMLElement
+    expect(await within(nav).findByRole('link', { name: '药盒提醒' })).toHaveAttribute('href', '/apps/pillbox')
+
+    await act(async () => { await i18n.changeLanguage('en-US') })
+
+    expect(within(nav).getByRole('link', { name: 'Pillbox reminders' })).toHaveAttribute('href', '/apps/pillbox')
+    expect(within(nav).queryByRole('link', { name: '药盒提醒' })).not.toBeInTheDocument()
   })
 
   it('移动端“更多”支持 Escape 和点击外部关闭', async () => {

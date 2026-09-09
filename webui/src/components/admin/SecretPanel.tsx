@@ -44,15 +44,15 @@ export function SecretPanel({ secret, onClose }: { secret: CreatedToken; onClose
       aria-describedby={`${id}-warn`}
       className="card mb-4 border-bad/30 p-5 fade-up"
     >
-      <h3 id={`${id}-title`} className="flex items-center gap-1.5 text-[15px] font-semibold tracking-[-0.01em] text-bad">
+      <h3 id={`${id}-title`} className="flex items-center gap-1.5 text-lead font-semibold tracking-[-0.01em] text-bad">
         <ShieldAlert size={15} className="shrink-0" />
         <span className="min-w-0 break-words">{t('secret.title')}</span>
       </h3>
-      <p id={`${id}-warn`} className="mt-2 text-xs leading-relaxed text-ink-2 break-words">
+      <p id={`${id}-warn`} className="mt-2 text-meta leading-relaxed text-ink-2 break-words">
         {t('secret.warning')}
       </p>
 
-      <label htmlFor={`${id}-secret`} className="mt-4 mb-1.5 block text-[13px] font-medium text-ink-2">
+      <label htmlFor={`${id}-secret`} className="mt-4 mb-1.5 block text-compact font-medium text-ink-2">
         {t('secret.label')}
       </label>
       <div className="flex gap-2">
@@ -64,7 +64,7 @@ export function SecretPanel({ secret, onClose }: { secret: CreatedToken; onClose
           spellCheck={false}
           autoComplete="off"
           aria-describedby={`${id}-status`}
-          className="num min-w-0 flex-1 rounded-lg border border-hairline bg-surface-2 px-3 py-2 font-mono text-xs break-all outline-none focus:border-accent"
+          className="num min-w-0 flex-1 rounded-tile border border-hairline bg-surface-2 px-3 py-2 font-mono text-meta break-all outline-none focus:border-accent"
         />
         <button
           type="button"
@@ -76,7 +76,7 @@ export function SecretPanel({ secret, onClose }: { secret: CreatedToken; onClose
           {copied ? <Check size={14} /> : <Copy size={14} />}{copied ? t('secret.copied') : t('secret.copy')}
         </button>
       </div>
-      <p id={`${id}-status`} role="status" aria-live="polite" className="mt-2 text-xs leading-relaxed text-ink-3 break-words">
+      <p id={`${id}-status`} role="status" aria-live="polite" className="mt-2 text-meta leading-relaxed text-ink-3 break-words">
         {copied ? t('secret.status.copied') : copyFailed ? t('secret.status.failed') : t('secret.status.idle')}
       </p>
 

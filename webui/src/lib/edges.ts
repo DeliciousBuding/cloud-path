@@ -2,6 +2,7 @@
 //
 // 一条硬要求：一台网关 掉线**不得影响**其他网关 的呈现 —— 所以这里对每台网关
 // 独立算事实，缺数据就是缺数据（0 / 0 时间戳），绝不借用别的网关的值补齐。
+import { i18n } from '@/i18n'
 import type { DeviceView, EdgeView } from './types'
 
 export interface EdgeFacts {
@@ -69,5 +70,5 @@ export function filterEdgeFacts(facts: EdgeFacts[], filter: EdgeFilter): EdgeFac
 export function deviceLabel(d: DeviceView): string {
   if (d.name) return d.name
   const tail = d.id.split('/').pop()
-  return tail || d.id || '未命名设备'
+  return tail || d.id || i18n.t('descriptor.unnamed', { ns: 'devices' })
 }

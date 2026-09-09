@@ -57,7 +57,7 @@ function ReadContent<T>({ title, query, empty, children }: {
       hint={status === 403 ? t('plane.permissionHint') : t('plane.loadHint')}
       onRetry={() => { void query.refetch() }} retrying={query.isFetching} />
   }
-  if (empty) return <p className="py-3 text-sm text-ink-3">{t('plane.empty', { title })}</p>
+  if (empty) return <p className="py-3 text-body text-ink-3">{t('plane.empty', { title })}</p>
   return children
 }
 
@@ -68,15 +68,15 @@ function parseRecord(record: AppDomainRecordView): { value: unknown; readable: b
 
 function RecordDetails({ record }: { record: AppDomainRecordView }) {
   const { t } = useTranslation('plugin')
-  return <details className="mt-2 min-w-0 text-xs text-ink-2">
-    <summary className="flex min-h-11 cursor-pointer items-center">{t('plane.viewDetails')}</summary>
-    <dl className="mt-2 space-y-1 rounded-lg bg-surface-2 px-3 py-2.5">
+  return <details className="mt-2 min-w-0 text-meta text-ink-2">
+    <summary className="flex min-h-touch cursor-pointer items-center">{t('plane.viewDetails')}</summary>
+    <dl className="mt-2 space-y-1 rounded-tile bg-surface-2 px-3 py-2.5">
       <div><dt className="inline">{t('plane.recordId')}</dt><dd className="num inline break-all">{record.record_id}</dd></div>
       <div><dt className="inline">{t('plane.recordType')}</dt><dd className="num inline break-all">{record.record_type}</dd></div>
       <div><dt className="inline">{t('plane.version')}</dt><dd className="inline">{record.version || t('common.notProvided')}</dd></div>
     </dl>
     <pre tabIndex={0} role="group" aria-label={t('plane.rawAria')}
-      className="num mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-surface-2 p-3 font-mono text-xs">{record.data_json}</pre>
+      className="num mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-tile bg-surface-2 p-3 font-mono text-meta">{record.data_json}</pre>
   </details>
 }
 
@@ -92,21 +92,21 @@ function RecordItem({ record, index, presentation }: {
     : { title: t('plane.record', { number: index + 1 }), usedKeys: [] }
   if (presentation === 'table') {
     return <tr className="border-t border-hairline align-top">
-      <td className="min-w-40 px-3 py-3 text-sm font-medium">{headline.title}</td>
-      <td className="num whitespace-nowrap px-3 py-3 text-xs text-ink-3">{appTime(record.updated_at)}</td>
-      <td className="px-3 py-3 text-sm">{parsed.readable
+      <td className="min-w-40 px-3 py-3 text-body font-medium">{headline.title}</td>
+      <td className="num whitespace-nowrap px-3 py-3 text-meta text-ink-3">{appTime(record.updated_at)}</td>
+      <td className="px-3 py-3 text-body">{parsed.readable
         ? <StructuredValue value={parsed.value} omitKeys={headline.usedKeys} />
         : <span className="text-warn">{t('plane.unreadableShort')}</span>}</td>
     </tr>
   }
   return <article className="min-w-0 border-t border-hairline py-5 first:border-0 first:pt-0">
     <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-      <h3 className="min-w-0 break-words text-sm font-medium [overflow-wrap:anywhere]">{headline.title}</h3>
-      <p className="shrink-0 text-xs text-ink-3">{t('plane.updatedAt')} <time>{appTime(record.updated_at)}</time></p>
+      <h3 className="min-w-0 break-words text-body font-medium [overflow-wrap:anywhere]">{headline.title}</h3>
+      <p className="shrink-0 text-meta text-ink-3">{t('plane.updatedAt')} <time>{appTime(record.updated_at)}</time></p>
     </div>
     {parsed.readable
-      ? <div className="min-w-0 text-sm"><StructuredValue value={parsed.value} omitKeys={headline.usedKeys} /></div>
-      : <p className="text-sm text-warn">{t('plane.unreadable')}</p>}
+      ? <div className="min-w-0 text-body"><StructuredValue value={parsed.value} omitKeys={headline.usedKeys} /></div>
+      : <p className="text-body text-warn">{t('plane.unreadable')}</p>}
     <RecordDetails record={record} />
   </article>
 }
@@ -122,14 +122,14 @@ function RecordsSection({ query, section }: { query: SectionQuery<AppDomainRecor
   return <Panel title={<span className="flex items-center gap-1.5"><ListTree size={14} />{section.type === 'timeline' ? t('sections.timeline') : t('sections.records')}</span>}>
     <ReadContent title={t('sections.records')} query={query} empty={rows.length === 0}>
       {presentation === 'table'
-        ? <div className="overflow-x-auto rounded-lg border border-hairline">
+        ? <div className="overflow-x-auto rounded-tile border border-hairline">
           <table className="w-full min-w-[36rem] border-collapse text-left">
-            <thead><tr className="text-xs text-ink-3"><th className="px-3 py-2 font-medium">{t('sections.record')}</th><th className="px-3 py-2 font-medium">{t('sections.time')}</th><th className="px-3 py-2 font-medium">{t('sections.content')}</th></tr></thead>
+            <thead><tr className="text-meta text-ink-3"><th className="px-3 py-2 font-medium">{t('sections.record')}</th><th className="px-3 py-2 font-medium">{t('sections.time')}</th><th className="px-3 py-2 font-medium">{t('sections.content')}</th></tr></thead>
             <tbody>{rows.map((record, index) => <RecordItem key={record.record_id} record={record} index={index} presentation="table" />)}</tbody>
           </table>
         </div>
         : presentation === 'cards'
-          ? <div className="grid gap-3 sm:grid-cols-2">{rows.map((record, index) => <div key={record.record_id} className="rounded-lg bg-surface-2 p-3"><RecordItem record={record} index={index} presentation="cards" /></div>)}</div>
+          ? <div className="grid gap-3 sm:grid-cols-2">{rows.map((record, index) => <div key={record.record_id} className="rounded-tile bg-surface-2 p-3"><RecordItem record={record} index={index} presentation="cards" /></div>)}</div>
           : <div className={presentation === 'timeline' ? 'border-l border-hairline pl-4' : ''}>{rows.map((record, index) => <RecordItem key={record.record_id} record={record} index={index} presentation={presentation} />)}</div>}
     </ReadContent>
   </Panel>
@@ -139,15 +139,15 @@ function BindingTable({ query, presentation }: { query: SectionQuery<AppBindings
   const { t } = useTranslation('plugin')
   return <Panel title={<span className="flex items-center gap-1.5"><Table2 size={14} />{t('sections.bindings')}</span>}>
     <ReadContent title={t('sections.bindings')} query={query} empty={!query.data?.bindings.length}>
-      <div className="overflow-x-auto rounded-lg border border-hairline">
-        <table className="w-full min-w-[30rem] border-collapse text-left text-sm">
-          <thead><tr className="text-xs text-ink-3"><th className="px-3 py-2 font-medium">{t('sections.requirement')}</th><th className="px-3 py-2 font-medium">{t('sections.capability')}</th><th className="px-3 py-2 font-medium">{t('sections.entity')}</th></tr></thead>
+      <div className="overflow-x-auto rounded-tile border border-hairline">
+        <table className="w-full min-w-[30rem] border-collapse text-left text-body">
+          <thead><tr className="text-meta text-ink-3"><th className="px-3 py-2 font-medium">{t('sections.requirement')}</th><th className="px-3 py-2 font-medium">{t('sections.capability')}</th><th className="px-3 py-2 font-medium">{t('sections.entity')}</th></tr></thead>
           <tbody>{query.data?.bindings.map((binding) => {
             const labels = bindingLabels(binding, presentation)
             return <tr key={binding.requirement_id + binding.entity_id} className="border-t border-hairline">
               <td className="px-3 py-2">{binding.requirement_id}</td>
               <td className="px-3 py-2 text-ink-2">{labels.capability}</td>
-              <td className="num px-3 py-2 font-mono text-xs">{labels.entity || binding.entity_id}</td>
+              <td className="num px-3 py-2 font-mono text-meta">{labels.entity || binding.entity_id}</td>
             </tr>
           })}</tbody>
         </table>
@@ -164,9 +164,9 @@ function ScheduleSection({ query }: { query: SectionQuery<AppJobsView> }) {
       <div className="divide-y divide-hairline">{rows.map((job: AppScheduledJobView, index) => {
         const state = ({ active: t('plane.active'), cancelled: t('plane.cancelled'), paused: t('plane.paused') } as Record<string, string>)[job.state] ?? t('plane.statusUnknown')
         return <article key={job.schedule_id} className="py-3 first:pt-0">
-          <div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-medium">{t('plane.schedule', { number: index + 1 })}</h3><Badge tone={job.state === 'active' ? 'accent' : 'idle'}>{state}</Badge></div>
-          <p className="mt-2 text-sm">{scheduleSummary(job.cron)}<span className="ml-2 text-xs text-ink-3">{scheduleZone(job.timezone)}</span></p>
-          <p className="mt-1 text-xs text-ink-3">{t('sections.next')}{job.next_run_at ? appTime(job.next_run_at, job.timezone) : t('plane.notScheduled')}</p>
+          <div className="flex flex-wrap items-center gap-2"><h3 className="text-body font-medium">{t('plane.schedule', { number: index + 1 })}</h3><Badge tone={job.state === 'active' ? 'accent' : 'idle'}>{state}</Badge></div>
+          <p className="mt-2 text-body">{scheduleSummary(job.cron)}<span className="ml-2 text-meta text-ink-3">{scheduleZone(job.timezone)}</span></p>
+          <p className="mt-1 text-meta text-ink-3">{t('sections.next')}{job.next_run_at ? appTime(job.next_run_at, job.timezone) : t('plane.notScheduled')}</p>
         </article>
       })}</div>
     </ReadContent>
@@ -185,7 +185,7 @@ function metricEntries(section: PluginUISection, records: AppDomainRecordView[])
 function MetricsSection({ section, records }: { section: PluginUISection; records: AppDomainRecordView[] }) {
   const { t } = useTranslation('plugin')
   const entries = metricEntries(section, recordsForSection(records, section))
-  if (entries.length === 0) return <Panel title={t('sections.metrics')}><p className="text-sm text-ink-3">{t('sections.noMetrics')}</p></Panel>
+  if (entries.length === 0) return <Panel title={t('sections.metrics')}><p className="text-body text-ink-3">{t('sections.noMetrics')}</p></Panel>
   return <Panel title={<span className="flex items-center gap-1.5"><BarChart3 size={14} />{t('sections.metrics')}</span>}>
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{entries.map((entry) => <StatTile key={entry.label} label={entry.label}
       value={typeof entry.value === 'boolean' ? (entry.value ? t('sections.yes') : t('sections.no')) : entry.value === undefined ? '—' : String(entry.value)} />)}</div>
@@ -198,9 +198,9 @@ function ChartSection({ section, records }: { section: PluginUISection; records:
   const firstNumeric = values.flatMap((value) => Object.entries(value).filter(([, item]) => typeof item === 'number'))[0]
   const series = firstNumeric ? values.map((value) => typeof value[firstNumeric[0]] === 'number' ? value[firstNumeric[0]] as number : 0) : []
   const max = Math.max(...series, 1)
-  if (!firstNumeric || series.length === 0) return <Panel title={t('sections.trend')}><p className="text-sm text-ink-3">{t('sections.noTrend')}</p></Panel>
+  if (!firstNumeric || series.length === 0) return <Panel title={t('sections.trend')}><p className="text-body text-ink-3">{t('sections.noTrend')}</p></Panel>
   return <Panel title={<span className="flex items-center gap-1.5"><BarChart3 size={14} />{t('sections.trend')}</span>}>
-    <p className="mb-3 text-xs text-ink-3">{t('sections.recent', { count: series.length, field: recordFieldLabel(firstNumeric[0]) })}</p>
+    <p className="mb-3 text-meta text-ink-3">{t('sections.recent', { count: series.length, field: recordFieldLabel(firstNumeric[0]) })}</p>
     <div className="flex h-28 items-end gap-1" role="img" aria-label={t('sections.trendAria', { field: recordFieldLabel(firstNumeric[0]) })}>
       {series.slice().reverse().map((value, index) => <span key={index} title={String(value)} className="min-h-1 flex-1 rounded-t bg-accent/60" style={{ height: `${Math.max(4, value / max * 100)}%` }} />)}
     </div>
@@ -210,7 +210,7 @@ function ChartSection({ section, records }: { section: PluginUISection; records:
 function MarkdownSection({ text }: { text: string }) {
   const { t } = useTranslation('plugin')
   const lines = text.split(/\r?\n/)
-  return <Panel title={t('sections.description')}><div className="space-y-2 text-sm leading-relaxed text-ink-2">
+  return <Panel title={t('sections.description')}><div className="space-y-2 text-body leading-relaxed text-ink-2">
     {lines.map((line, index) => {
       if (line.startsWith('### ')) return <h4 key={index} className="font-semibold text-ink">{line.slice(4)}</h4>
       if (line.startsWith('## ')) return <h3 key={index} className="font-semibold text-ink">{line.slice(3)}</h3>
@@ -226,14 +226,14 @@ function DiagnosticsSection({ instance, bindings, jobs }: { instance: PluginInst
   const { t } = useTranslation('plugin')
   const config = safeConfigEntries(instance.desired.config)
   return <Panel title={<span className="flex items-center gap-1.5"><AlertTriangle size={14} />{t('sections.diagnostics')}</span>}>
-    <dl className="space-y-2 text-sm">
-      <div className="flex justify-between gap-3"><dt className="text-ink-2">{t('sections.instance')}</dt><dd className="num min-w-0 truncate font-mono text-xs">{instance.desired.instance_id || instance.id}</dd></div>
+    <dl className="space-y-2 text-body">
+      <div className="flex justify-between gap-3"><dt className="text-ink-2">{t('sections.instance')}</dt><dd className="num min-w-0 truncate font-mono text-meta">{instance.desired.instance_id || instance.id}</dd></div>
       <div className="flex justify-between gap-3"><dt className="text-ink-2">{t('sections.state')}</dt><dd>{instance.has_observed ? instance.observed?.state || t('common.notProvided') : t('common.notReported')}</dd></div>
       <div className="flex justify-between gap-3"><dt className="text-ink-2">{t('sections.desiredRevision')}</dt><dd className="num">{instance.desired_revision}</dd></div>
       <div className="flex justify-between gap-3"><dt className="text-ink-2">{t('sections.appliedRevision')}</dt><dd className="num">{instance.applied_revision}</dd></div>
     </dl>
-    <details className="mt-3 text-xs text-ink-2"><summary className="flex min-h-11 cursor-pointer items-center">{t('sections.rawConfig')}</summary>
-      <div className="mt-2 space-y-2 rounded-lg bg-surface-2 p-3">
+    <details className="mt-3 text-meta text-ink-2"><summary className="flex min-h-touch cursor-pointer items-center">{t('sections.rawConfig')}</summary>
+      <div className="mt-2 space-y-2 rounded-tile bg-surface-2 p-3">
         {config.map((entry) => <p key={entry.key} className="break-all"><span className="text-ink-3">{entry.key}：</span>{entry.isSecret ? t('sections.secretHidden') : entry.value}</p>)}
         <p>{t('sections.bindingCount', { count: bindings.data?.bindings.length ?? 0, jobs: jobs.data?.job_descriptors.length ?? 0 })}</p>
       </div>
@@ -273,6 +273,6 @@ export function ApplicationSection(props: ApplicationSectionProps) {
     case 'custom':
       return <PluginUIBridge pluginId={catalog.id} version={catalog.version || instance.desired.version} instance={instance} section={section} />
     default:
-      return <div role="alert" className="rounded-lg bg-warn/12 px-3.5 py-3 text-sm text-warn">{t('sections.unsupported')}</div>
+      return <div role="alert" className="rounded-tile bg-warn/12 px-3.5 py-3 text-body text-warn">{t('sections.unsupported')}</div>
   }
 }

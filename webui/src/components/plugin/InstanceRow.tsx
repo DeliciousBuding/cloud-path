@@ -29,11 +29,11 @@ export function InstanceRow({ v, catalog, onEdit }: {
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <StatusDot online={status.key === 'normal'} />
         <Link to={`/plugins/${encodeURIComponent(v.id)}`}
-          className="num inline-flex min-h-11 min-w-0 max-w-full items-center truncate text-[14px] font-semibold tracking-[-0.01em] no-underline hover:text-accent sm:min-h-0"
+          className="num inline-flex min-h-touch min-w-0 max-w-full items-center truncate text-body font-semibold tracking-[-0.01em] no-underline hover:text-accent sm:min-h-0"
           title={t('instance.rowTitle', { id: v.id })}>
           {v.desired.instance_id || v.id}
         </Link>
-        <span className="flex min-w-0 items-center gap-1 text-[12px] text-ink-3"
+        <span className="flex min-w-0 items-center gap-1 text-meta text-ink-3"
           title={pluginDisplayName(catalog)}>
           <Boxes size={11} className="shrink-0" />
           <span className="min-w-0 truncate">{pluginDisplayName(catalog)}</span>
@@ -41,7 +41,7 @@ export function InstanceRow({ v, catalog, onEdit }: {
         <span className="ml-auto shrink-0"><Badge tone={status.tone}>{status.label}</Badge></span>
       </div>
 
-      <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-ink-3">
+      <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-meta text-ink-3">
         <span className="flex min-w-0 items-center gap-1">
           <Server size={11} className="shrink-0" />
           {serverHosted ? <span>{t('host.server')}</span> : (
@@ -54,26 +54,26 @@ export function InstanceRow({ v, catalog, onEdit }: {
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2.5">
-        <div className="min-w-0 rounded-lg bg-surface-2 px-3 py-2.5">
-          <p className="text-[12px] font-medium text-ink-3">{t('desired.desired')}</p>
-          <p className="mt-1 flex min-w-0 items-baseline gap-1 text-[12px] font-medium"
+        <div className="min-w-0 rounded-tile bg-surface-2 px-3 py-2.5">
+          <p className="text-meta font-medium text-ink-3">{t('desired.desired')}</p>
+          <p className="mt-1 flex min-w-0 items-baseline gap-1 text-meta font-medium"
             title={`${v.desired.enabled ? t('desired.enabledValue') : t('desired.disabledValue')} · ${v.desired.version}`}>
             <span className="shrink-0">{v.desired.enabled ? t('desired.enabledValue') : t('desired.disabledValue')}</span>
             <span className="shrink-0 text-ink-3">·</span>
             <span className="num min-w-0 truncate">{v.desired.version || '—'}</span>
           </p>
         </div>
-        <div className="min-w-0 rounded-lg bg-surface-2 px-3 py-2.5">
-          <p className="text-[12px] font-medium text-ink-3">{t('desired.observed')}</p>
+        <div className="min-w-0 rounded-tile bg-surface-2 px-3 py-2.5">
+          <p className="text-meta font-medium text-ink-3">{t('desired.observed')}</p>
           {v.has_observed ? (
             <>
-              <p className={`mt-1 break-words text-[12px] font-medium ${
+              <p className={`mt-1 break-words text-meta font-medium ${
                 status.tone === 'ok' ? 'text-ok' : status.tone === 'bad' ? 'text-bad'
                   : status.tone === 'warn' ? 'text-warn' : ''}`}
                 title={`${st.label} · ${v.observed?.version ?? t('instance.versionNotProvided')}`}>
                 {status.summary}
               </p>
-              <p className="mt-0.5 break-words text-[12px] text-ink-3">
+              <p className="mt-0.5 break-words text-meta text-ink-3">
                 {v.observed?.health
                   ? (hl.tone === 'idle' ? t('instance.healthUnavailable') : t('instance.health', { label: hl.label }))
                   : t('instance.healthNotReported')}
@@ -82,8 +82,8 @@ export function InstanceRow({ v, catalog, onEdit }: {
             </>
           ) : (
             <>
-              <p className="mt-1 truncate text-[12px] font-medium text-ink-2">{t('common.statusUnknown')}</p>
-              <p className="mt-0.5 min-w-0 truncate text-[12px] text-ink-3">
+              <p className="mt-1 truncate text-meta font-medium text-ink-2">{t('common.statusUnknown')}</p>
+              <p className="mt-0.5 min-w-0 truncate text-meta text-ink-3">
                 {serverHosted ? t('instance.noServerStatus') : v.edge_online ? t('instance.noEdgeStatusOnline') : t('instance.edgeOffline')}
               </p>
             </>
@@ -92,22 +92,22 @@ export function InstanceRow({ v, catalog, onEdit }: {
       </div>
 
       {status.needsAttention && status.next && (
-        <div className="mt-3 rounded-lg bg-warn/10 px-3 py-2.5 text-[12px] leading-relaxed text-ink-2">
+        <div className="mt-3 rounded-tile bg-warn/10 px-3 py-2.5 text-meta leading-relaxed text-ink-2">
           {t('desired.next', { text: status.next })}
         </div>
       )}
 
-      <details className="mt-3 min-w-0 text-xs text-ink-2">
-        <summary className="flex min-h-11 cursor-pointer items-center">{t('common.technicalDetails')}</summary>
-        <dl className="mt-2 space-y-1 rounded-lg bg-surface-2 px-3 py-2.5">
+      <details className="mt-3 min-w-0 text-meta text-ink-2">
+        <summary className="flex min-h-touch cursor-pointer items-center">{t('common.technicalDetails')}</summary>
+        <dl className="mt-2 space-y-1 rounded-tile bg-surface-2 px-3 py-2.5">
           <div><dt className="inline">{t('facts.location')}：</dt><dd className="inline">{hostLocation}</dd></div>
           <div><dt className="inline">{t('facts.isolation')}：</dt><dd className="inline">{isolationLabel(v.desired.isolation)}</dd></div>
           <div><dt className="inline">{t('facts.lastUpdated')}：</dt><dd className="num inline">{v.last_ack_at ? fmtDateTime(v.last_ack_at) : t('instance.notUpdated')}</dd></div>
           <div><dt className="inline">{t('facts.pluginId')}：</dt><dd className="num inline break-all">{v.desired.plugin_id || '—'}</dd></div>
           <div><dt className="inline">{t('instance.currentVersion')}：</dt><dd className="num inline">{v.has_observed ? (v.observed?.version || t('instance.versionNotProvided')) : t('common.notReported')}</dd></div>
-          <div><dt className="inline">{t('facts.desiredRevision')}：</dt><dd className="num inline">{v.desired_revision}</dd></div>
-          <div><dt className="inline">{t('facts.appliedRevision')}：</dt><dd className="num inline">{v.applied_revision}</dd></div>
-          <div><dt className="inline">{t('desired.stateRaw')}</dt><dd className="num inline break-all">{v.observed?.state || '—'}</dd></div>
+          <div><dt className="inline">{t('facts.expectedVersion')}</dt><dd className="num inline">{v.desired_revision}</dd></div>
+          <div><dt className="inline">{t('facts.actualVersion')}</dt><dd className="num inline">{v.applied_revision}</dd></div>
+          <div><dt className="inline">{t('plane.stateRaw')}</dt><dd className="num inline break-all">{v.observed?.state || '—'}</dd></div>
           <div><dt className="inline">{t('instance.healthRaw')}</dt><dd className="num inline break-all">{v.observed?.health || '—'}</dd></div>
         </dl>
       </details>

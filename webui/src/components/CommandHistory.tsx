@@ -49,9 +49,9 @@ export function CommandHistory({ deviceId, targetLabel, actions, limit, footer, 
     <Panel
       title={<span className="flex items-center gap-1.5"><History size={14} />{t('tabs.commands')}</span>}
       right={!isLoading && !error ? (
-        <span className="flex items-center gap-2 text-[12px] text-ink-3">
+        <span className="flex items-center gap-2 text-meta text-ink-3">
           <span className="num">{t('command.count', { count: shown.length })}</span>
-          <button type="button" className="btn btn-ghost btn-sm h-7 min-h-11 px-2 sm:min-h-0" disabled={isFetching}
+          <button type="button" className="btn btn-ghost btn-sm h-7 min-h-touch px-2 sm:min-h-0" disabled={isFetching}
             aria-label={t('command.refreshAria')} onClick={() => { void refetch() }}>
             <RefreshCw size={12} className={isFetching ? 'animate-spin' : undefined} />
             {t('refresh')}
@@ -66,7 +66,7 @@ export function CommandHistory({ deviceId, targetLabel, actions, limit, footer, 
           hint={t('command.loadErrorHint')}
           onRetry={() => { void refetch() }} retrying={isFetching} />
       ) : rows.length === 0 ? (
-        <p className="py-4 text-center text-sm text-ink-3">{t('command.empty')}</p>
+        <p className="py-4 text-center text-body text-ink-3">{t('command.empty')}</p>
       ) : (
         <>
         <ul className="divide-y divide-hairline">
@@ -84,20 +84,20 @@ export function CommandHistory({ deviceId, targetLabel, actions, limit, footer, 
             return (
               <li key={c.id} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-3">
                 <Badge tone={st.tone} className="shrink-0">{statusLabel}</Badge>
-                <span className="min-w-0 truncate text-xs font-medium" title={meta.hint || meta.label}>
+                <span className="min-w-0 truncate text-meta font-medium" title={meta.hint || meta.label}>
                   {meta.label}
                 </span>
-                <time className="num shrink-0 font-mono text-[11px] text-ink-3"
+                <time className="num shrink-0 font-mono text-micro text-ink-3"
                   title={c.acked_at ? t('command.completedAt', { time: fmtDateTime(c.acked_at) }) : fmtDateTime(c.created_at)}>
                   {fmtTime(c.created_at)}
                 </time>
 
                 {progress && (
-                  <p className="col-span-3 min-w-0 text-[12px] text-ink-3">{progressCopy}{t('command.progressSuffix')}</p>
+                  <p className="col-span-3 min-w-0 text-meta text-ink-3">{progressCopy}{t('command.progressSuffix')}</p>
                 )}
 
                 {failure && info && (
-                  <div className="col-span-3 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2 rounded-lg bg-bad/8 px-2.5 py-2 text-[12px]">
+                  <div className="col-span-3 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2 rounded-tile bg-bad/8 px-2.5 py-2 text-meta">
                     <span className="min-w-0 flex-1 break-words text-ink-2">
                       <span className="font-medium text-bad">{info.message}</span>
                       <span className="text-ink-3"> · {info.next}</span>
@@ -107,9 +107,9 @@ export function CommandHistory({ deviceId, targetLabel, actions, limit, footer, 
                     ) : action && !retryError ? (
                       <CommandButton deviceId={deviceId} targetLabel={targetLabel} action={action} args={c.args ?? ''}
                         buttonLabel={t('command.retry')} buttonAriaLabel={t('command.retryAria', { label: meta.label })}
-                        className="btn-sm min-h-11 w-full sm:min-h-0 sm:w-auto" />
+                        className="btn-sm min-h-touch w-full sm:min-h-0 sm:w-auto" />
                     ) : (
-                      <Link to={controlPath(deviceId)} className="link inline-flex min-h-11 shrink-0 items-center sm:min-h-0">
+                      <Link to={controlPath(deviceId)} className="link inline-flex min-h-touch shrink-0 items-center sm:min-h-0">
                         {t('command.goRetry')}
                       </Link>
                     )}
@@ -117,16 +117,16 @@ export function CommandHistory({ deviceId, targetLabel, actions, limit, footer, 
                 )}
 
                 {unknown && (
-                  <p className="col-span-3 min-w-0 text-[12px] text-ink-3">
+                  <p className="col-span-3 min-w-0 text-meta text-ink-3">
                     {t('command.unknown')}
                   </p>
                 )}
 
-                <details className="col-span-3 min-w-0 text-[12px]">
-                  <summary className="flex min-h-11 cursor-pointer select-none items-center text-ink-3 sm:min-h-0">
+                <details className="col-span-3 min-w-0 text-meta">
+                  <summary className="flex min-h-touch cursor-pointer select-none items-center text-ink-3 sm:min-h-0">
                     {t('command.technicalDetails')}
                   </summary>
-                  <dl className="mt-1.5 grid gap-1 rounded-lg bg-ink-3/5 p-2 text-ink-2 sm:grid-cols-2">
+                  <dl className="mt-1.5 grid gap-1 rounded-tile bg-ink-3/5 p-2 text-ink-2 sm:grid-cols-2">
                     <div className="min-w-0"><dt className="inline text-ink-3">{t('command.statusCode')}</dt><dd className="inline break-all font-mono">{c.status}</dd></div>
                     <div className="min-w-0"><dt className="inline text-ink-3">{t('command.recordId')}</dt><dd className="num inline font-mono">{c.id}</dd></div>
                     <div className="min-w-0 sm:col-span-2"><dt className="inline text-ink-3">{t('command.argsLabel')}</dt><dd className="inline break-all font-mono">{c.args || '—'}</dd></div>

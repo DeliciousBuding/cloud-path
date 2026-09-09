@@ -90,6 +90,7 @@ tasks:
       - go test ./... -count=1
       - cd webui && pnpm exec tsc --noEmit
       - cd webui && pnpm test -- --run
+      - task: check:design-tokens
 
   test:race:
     desc: 带竞态检测的 Go 测试（需 cgo；Windows 上通常不可用，Linux/CI 用）
@@ -157,6 +158,12 @@ tasks:
       - '{{.PY}} scripts/check_contract.py --self-test'
       - '{{.PY}} scripts/check_contract.py'
 
+  check:design-tokens:
+    desc: WebUI 设计 token 防回退门禁（stdlib-only，含自检）
+    cmds:
+      - '{{.PY}} scripts/check_design_tokens.py --self-test'
+      - '{{.PY}} scripts/check_design_tokens.py'
+
   test:templates:
     desc: Go 插件模板（driver/application）build/vet/test/自测/无 internal import
     cmds:
@@ -187,5 +194,6 @@ tasks:
       - task: audit:public
       - task: check:links
       - task: check:contract
+      - task: check:design-tokens
       - task: check:workflows
       - task: selftest:scripts

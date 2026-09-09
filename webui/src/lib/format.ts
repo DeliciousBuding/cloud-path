@@ -104,12 +104,17 @@ export function payloadHasMore(payload: string | undefined): boolean {
   return Object.keys(parsed as Record<string, unknown>).some((k) => k !== 'type')
 }
 
-/** 事件动词平台词典（声明缺席时的回退层）：机器动词 → 中文；未知动词回落 humanize，不猜业务语义 */
-const EVENT_VERB: Record<string, string> = {
-  press: '按下', pressed: '按下', release: '释放', released: '释放',
-  quake: '振动', changed: '状态变化', close: '靠近', away: '离开',
-  direction: '方向变化', tick: '滴答', opened: '打开', closed: '关闭',
-  taken: '已取药', remind: '提醒', missed: '错过',
+/** 事件动词平台词典（声明缺席时的回退层）：机器动词 → i18n key；未知动词回落 humanize，不猜业务语义 */
+const EVENT_VERB_KEYS: Record<string, string> = {
+  press: 'press', pressed: 'pressed', release: 'release', released: 'released',
+  quake: 'quake', changed: 'changed', close: 'close', away: 'away',
+  direction: 'direction', tick: 'tick', opened: 'opened', closed: 'closed',
+  taken: 'taken', remind: 'remind', missed: 'missed',
+}
+
+function eventVerbLabel(verb: string): string {
+  const key = EVENT_VERB_KEYS[verb]
+  return key ? i18n.t(`event.verbs.${key}`, { ns: 'activity' }) : humanize(verb)
 }
 
 /** 脏标签判定：历史脏数据（二进制串口碎片被写成事件类型）含控制符/替换符，原样展示即乱码 */
@@ -126,24 +131,31 @@ function composeEventLabel(type: string, index?: CapabilityIndex): string {
   if (!rest) return cap
   const dir = rest.match(/^(\d+):(.+)$/)
   const verb = dir ? dir[2] : rest
-  const verbLabel = EVENT_VERB[verb] ?? humanize(verb)
-  return dir ? `${cap} · 方向${dir[1]}${verbLabel}` : `${cap} · ${verbLabel}`
+  const verbLabel = eventVerbLabel(verb)
+  return dir
+    ? i18n.t('event.direction', { ns: 'activity', number: dir[1], verb: verbLabel })
+    : `${cap} · ${verbLabel}`
 }
 
 /** 平台级事件类型词汇（device.* 是平台生命周期事件，非设备语义） */
-const EVENT_TYPE_LABEL: Record<string, string> = {
-  'device.boot': '设备启动', 'device-booted': '设备启动',
-  'device.online': '设备上线', 'device-online': '设备上线',
-  'device.offline': '设备离线', 'device-offline': '设备离线',
-  'device.state': '状态上报', 'device-state': '状态上报',
-  'device.descriptor': '描述更新', 'device-descriptor': '描述更新',
+const EVENT_TYPE_KEYS: Record<string, string> = {
+  'device.boot': 'deviceBooted', 'device-booted': 'deviceBooted',
+  'device.online': 'deviceOnline', 'device-online': 'deviceOnline',
+  'device.offline': 'deviceOffline', 'device-offline': 'deviceOffline',
+  'device.state': 'deviceState', 'device-state': 'deviceState',
+  'device.descriptor': 'deviceDescriptor', 'device-descriptor': 'deviceDescriptor',
+}
+
+function eventTypeLabel(type: string): string | undefined {
+  const key = EVENT_TYPE_KEYS[type]
+  return key ? i18n.t(`event.labels.${key}`, { ns: 'activity' }) : undefined
 }
 
 /** 事件展示名：后端 label > 脏数据降级 > 平台事件词汇 > Capability 声明 title > 组合中文名 > humanize */
 export function eventLabel(type: string, index?: CapabilityIndex, label?: string): string {
   if (label && !isDirtyLabel(label)) return label
-  if (isDirtyLabel(type)) return '无效事件（历史脏数据）'
-  return EVENT_TYPE_LABEL[type]
+  if (isDirtyLabel(type)) return i18n.t('event.labels.invalid', { ns: 'activity' })
+  return eventTypeLabel(type)
     || (index ? eventDecl(type, index)?.title : undefined)
     || composeEventLabel(type, index)
 }
@@ -162,21 +174,22 @@ export function cmdMeta(
   if (a) return { label: a.label, hint: a.hint ?? '' }
   const decl = idx ? commandDecl(cmd, idx) : undefined
   if (decl?.title) return { label: decl.title, hint: decl.description ?? '' }
-  const friendly: Record<string, string> = {
-    tone: '播放音调',
-    tone_sequence: '播放音序',
-    isp: '进入下载模式',
+  const friendlyKey: Record<string, string> = {
+    tone: 'tone',
+    tone_sequence: 'toneSequence',
+    isp: 'isp',
   }
-  return { label: friendly[cmd] ?? commandLabel(cmd), hint: '' }
+  const key = friendlyKey[cmd]
+  return { label: key ? i18n.t(`event.commandLabels.${key}`, { ns: 'activity' }) : commandLabel(cmd), hint: '' }
 }
 
 /** 操作生命周期状态 → 徽标语义（平台级状态机，非设备语义） */
 export const CMD_STATUS_META: Record<string, { label: string; tone: Tone }> = {
-  pending: { label: '待发送', tone: 'idle' },
-  sent:    { label: '已下发', tone: 'accent' },
-  ok:      { label: '成功',   tone: 'ok' },
-  failed:  { label: '失败',   tone: 'bad' },
-  timeout: { label: '超时',   tone: 'warn' },
+  get pending() { return { label: i18n.t('command.status.pending', { ns: 'activity' }), tone: 'idle' as Tone } },
+  get sent() { return { label: i18n.t('command.status.sent', { ns: 'activity' }), tone: 'accent' as Tone } },
+  get ok() { return { label: i18n.t('command.status.ok', { ns: 'activity' }), tone: 'ok' as Tone } },
+  get failed() { return { label: i18n.t('command.status.failed', { ns: 'activity' }), tone: 'bad' as Tone } },
+  get timeout() { return { label: i18n.t('command.status.timeout', { ns: 'activity' }), tone: 'warn' as Tone } },
 }
 
 export function cmdStatusMeta(status: string) {

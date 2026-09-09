@@ -18,7 +18,7 @@ import { usePageTitle } from '@/hooks/usePageTitle'
 import { useAuth } from '@/store/auth'
 
 /**
- * 运行实例详情：期望状态与实际状态**分离**呈现，外加 Version / 网关 / Trust / Permissions /
+ * 插件实例详情：期望状态与实际状态**分离**呈现，外加 Version / Edge / Trust / Permissions /
  * Health / Revision / Last ACK。写操作（启停 / reconcile / 编辑 / 删除）都在这一页可完成，
  * 390px 下同样可操作。
  */
@@ -88,7 +88,7 @@ export default function PluginInstanceDetail() {
             : t('detail.permissionsUnavailable')}
         />
         {catalog?.verified && (
-          <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
+          <p className="mt-3 border-t border-hairline pt-3 text-meta leading-relaxed text-ink-3">
             {t('detail.verifiedPermissions')}
           </p>
         )}
@@ -100,7 +100,7 @@ export default function PluginInstanceDetail() {
 
       <Panel title={<span className="flex items-center gap-1.5"><SlidersHorizontal size={14} />{t('detail.settings')}</span>}>
         <ConfigTable config={instance.desired.config} />
-        <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
+        <p className="mt-3 border-t border-hairline pt-3 text-meta leading-relaxed text-ink-3">
           {t('detail.settingsHint')}
         </p>
       </Panel>
@@ -112,18 +112,18 @@ export default function PluginInstanceDetail() {
       <BackLink to="/plugins" label={t('detail.back')} />
 
       <header className="mb-5 flex flex-wrap items-center gap-2.5 fade-up">
-        <h1 className="metric num min-w-0 max-w-full break-all text-[24px] font-semibold sm:truncate" title={instance.id}>
+        <h1 className="metric num min-w-0 max-w-full break-all text-hero font-semibold sm:truncate" title={instance.id}>
           {instance.desired.instance_id || instance.id}
         </h1>
-        {/* 插件/网关 ID 是机器标识：mono 文本，不用胶囊（状态才配胶囊） */}
-        <span className="flex min-w-0 items-center gap-1 text-[12px] text-ink-3"
+        {/* 插件/节点 ID 是机器标识：mono 文本，不用胶囊（状态才配胶囊） */}
+        <span className="flex min-w-0 items-center gap-1 text-meta text-ink-3"
           title={pluginDisplayName(catalog)}>
           <Puzzle size={11} className="shrink-0" />
           <span className="min-w-0 truncate">{pluginDisplayName(catalog)}</span>
         </span>
-        {serverHosted ? <span className="flex items-center gap-1 text-xs text-ink-2"><Server size={13} />{t('detail.server')}</span> : <>
+        {serverHosted ? <span className="flex items-center gap-1 text-meta text-ink-2"><Server size={13} />{t('detail.server')}</span> : <>
           <Link to={`/edges/${encodeURIComponent(instance.edge_id)}`}
-            className="flex min-w-0 max-w-full items-center gap-1 font-mono text-[11px] text-ink-3 no-underline transition-colors hover:text-accent"
+            className="flex min-w-0 max-w-full items-center gap-1 font-mono text-micro text-ink-3 no-underline transition-colors hover:text-accent"
             title={t('detail.edgeTitle', { id: instance.edge_id })}>
             <Server size={11} className="shrink-0" />
             <span className="min-w-0 truncate">{t('detail.edge', { id: instance.edge_id || '—' })}</span>
@@ -162,7 +162,7 @@ export default function PluginInstanceDetail() {
           )}
 
           <details className="min-w-0">
-            <summary className="mb-4 flex min-h-11 cursor-pointer items-center text-sm text-ink-2">{t('detail.showDetails')}</summary>
+            <summary className="mb-4 flex min-h-touch cursor-pointer items-center text-body text-ink-2">{t('detail.showDetails')}</summary>
             {facts}
           </details>
         </>

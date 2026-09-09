@@ -260,7 +260,7 @@ describe('widget 推导（presentation 是 Hint，不是语义真相）', () => 
     }
   })
 
-  it('inferWidget：未知结构一律落表格 / JSON，不会白屏', () => {
+  it('inferWidget：未知结构一律落表格 / 结构化数据，不会白屏', () => {
     expect(inferWidget(1)).toBe('number')
     expect(inferWidget(true)).toBe('boolean')
     expect(inferWidget('2026-09-03T10:00:00Z')).toBe('timestamp')
@@ -283,7 +283,7 @@ describe('值格式化与语义色', () => {
     expect(formatValue(false)).toBe('否')
     expect(formatValue([1, 2, 3])).toBe('3 项')
     expect(formatValue({ label: 'ok' })).toBe('ok')
-    expect(formatValue({ nested: { a: 1 } })).toBe('JSON')
+    expect(formatValue({ nested: { a: 1 } })).toBe('结构化数据')
   })
 
   it('formatTimestamp：有效时间本地化，无效原样，非时间值走 formatValue', () => {

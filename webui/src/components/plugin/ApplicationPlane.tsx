@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
-import { Badge, ErrorState, Panel } from '@/components/ui'
+import { Badge, ErrorState, Panel, Select } from '@/components/ui'
 import { StructuredValue } from '@/components/StructuredValue'
 import { ApplicationActions } from './ApplicationActions'
 import { RowSkeleton } from '@/components/Skeleton'
@@ -33,7 +33,7 @@ function ReadContent({ title, query, empty, emptyText, children }: {
         ? t('plane.filterHint') : t('plane.loadHint')}
       onRetry={() => { void query.refetch() }} retrying={query.isFetching} />
   }
-  if (empty) return <p className="py-3 text-sm text-ink-3">{emptyText ?? t('plane.empty', { title })}</p>
+  if (empty) return <p className="py-3 text-body text-ink-3">{emptyText ?? t('plane.empty', { title })}</p>
   return children
 }
 
@@ -42,9 +42,9 @@ function TechnicalDetails({ children }: { children: ReactNode }) {
   const [expanded, setExpanded] = useState(false)
   const id = useId()
   return <div className="mt-2 min-w-0">
-    <button type="button" className="btn btn-ghost min-h-11 w-full sm:w-auto" aria-expanded={expanded} aria-controls={id}
+    <button type="button" className="btn btn-ghost min-h-touch w-full sm:w-auto" aria-expanded={expanded} aria-controls={id}
       onClick={() => setExpanded(!expanded)}>{expanded ? t('plane.collapseDetails') : t('plane.viewDetails')}</button>
-    {expanded && <div id={id} className="mt-2 min-w-0 space-y-2 break-words text-xs text-ink-2 [overflow-wrap:anywhere]">{children}</div>}
+    {expanded && <div id={id} className="mt-2 min-w-0 space-y-2 break-words text-meta text-ink-2 [overflow-wrap:anywhere]">{children}</div>}
   </div>
 }
 
@@ -58,11 +58,11 @@ function RecordRow({ record, number }: { record: AppDomainRecordView; number: nu
     : { title: t('plane.record', { number }), usedKeys: [] }
   return <article className="min-w-0 border-t border-hairline py-5 first:border-0 first:pt-0">
     <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-      <h3 className="min-w-0 break-words text-sm font-medium [overflow-wrap:anywhere]"
+      <h3 className="min-w-0 break-words text-body font-medium [overflow-wrap:anywhere]"
         title={headline.title}>{headline.title}</h3>
-      <p className="shrink-0 text-xs text-ink-3">{t('plane.updatedAt')} <time>{appTime(record.updated_at)}</time></p>
+      <p className="shrink-0 text-meta text-ink-3">{t('plane.updatedAt')} <time>{appTime(record.updated_at)}</time></p>
     </div>
-    <div className="min-w-0 text-sm">{readable ? <StructuredValue value={content} omitKeys={headline.usedKeys} />
+    <div className="min-w-0 text-body">{readable ? <StructuredValue value={content} omitKeys={headline.usedKeys} />
       : <p className="text-warn">{t('plane.unreadable')}</p>}</div>
     <TechnicalDetails>
       <dl className="space-y-1">
@@ -71,7 +71,7 @@ function RecordRow({ record, number }: { record: AppDomainRecordView; number: nu
         <div><dt className="inline">{t('plane.version')}</dt><dd className="inline">{record.version || t('common.notProvided')}</dd></div>
       </dl>
       <pre tabIndex={0} role="group" aria-label={t('plane.rawAria')}
-        className="num max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-surface-2 p-3 font-mono text-xs">{record.data_json}</pre>
+        className="num max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-tile bg-surface-2 p-3 font-mono text-meta">{record.data_json}</pre>
     </TechnicalDetails>
   </article>
 }
@@ -81,11 +81,11 @@ function ScheduledRow({ job, number }: { job: AppScheduledJobView; number: numbe
   const state = ({ active: t('plane.active'), cancelled: t('plane.cancelled'), paused: t('plane.paused') } as Record<string, string>)[job.state] ?? t('plane.statusUnknown')
   return <article className="min-w-0 border-t border-hairline py-3 first:border-0">
     <div className="flex flex-wrap items-center gap-2">
-      <h4 className="text-sm font-medium">{t('plane.schedule', { number })}</h4>
+      <h4 className="text-body font-medium">{t('plane.schedule', { number })}</h4>
       <Badge tone={job.state === 'active' ? 'accent' : 'idle'}>{state}</Badge>
     </div>
-    <p className="mt-2 break-words text-sm">{scheduleSummary(job.cron)}<span className="ml-2 text-xs text-ink-3">{scheduleZone(job.timezone)}</span></p>
-    <dl className="mt-2 space-y-1 text-xs text-ink-2">
+    <p className="mt-2 break-words text-body">{scheduleSummary(job.cron)}<span className="ml-2 text-meta text-ink-3">{scheduleZone(job.timezone)}</span></p>
+    <dl className="mt-2 space-y-1 text-meta text-ink-2">
       <div><dt className="inline">{t('plane.nextRun')}</dt><dd className="inline">{job.state === 'active'
         ? job.next_run_at ? appTime(job.next_run_at, job.timezone) : t('plane.notScheduled') : t('plane.notRun')}</dd></div>
       <div><dt className="inline">{t('plane.lastRun')}</dt><dd className="inline">{job.last_run_at ? appTime(job.last_run_at, job.timezone) : t('plane.neverRun')}</dd></div>
@@ -95,7 +95,7 @@ function ScheduledRow({ job, number }: { job: AppScheduledJobView; number: numbe
     <TechnicalDetails>
       <p>{t('plane.scheduleId')}{job.schedule_id}</p><p>{t('plane.cron')}{job.cron}</p>
       <p>{t('plane.timezone')}{job.timezone || t('common.notProvided')}</p><p>{t('plane.stateRaw')}{job.state}</p>
-      <p>{t('plane.revision')}{job.revision}</p><p>{t('plane.missedRaw')}{job.missed_policy}</p>
+      <p>{t('plane.version')}{job.revision}</p><p>{t('plane.missedRaw')}{job.missed_policy}</p>
     </TechnicalDetails>
   </article>
 }
@@ -129,19 +129,19 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState, desir
   const recordTypes = [...new Set(rows.map((row) => row.record_type).filter(Boolean))].sort()
   const refreshing = records.isFetching || bindings.isFetching || jobs.isFetching
   if (!canRead) return <Panel title={t('plane.appData')} className="mb-5">
-    <p className="text-sm text-ink-2">{t('plane.loginHint')}</p>
+    <p className="text-body text-ink-2">{t('plane.loginHint')}</p>
     <Link to="/login" className="btn btn-ghost mt-3">{t('plane.login')}</Link>
   </Panel>
   return <section className="mb-5 min-w-0 space-y-5" aria-label={t('plane.appData')}>
     <div className="flex flex-wrap items-center gap-2">
-      <h2 className="text-[15px] font-semibold">{t('plane.appData')}</h2>
+      <h2 className="text-body font-semibold">{t('plane.appData')}</h2>
       {runningState !== 'unknown' && <Badge tone={runningState === 'running' ? 'ok' : runningState === 'conflict' ? 'warn' : 'idle'}>{runningState === 'running' ? t('plane.appRunning') : runningState === 'conflict' ? t('plane.stateConflict') : desiredEnabled ? t('plane.appStopped') : t('plane.disabled')}</Badge>}
-      <p role="status" className="text-xs text-ink-3">{status === 'open' ? t('plane.realtimeOpen')
+      <p role="status" className="text-meta text-ink-3">{status === 'open' ? t('plane.realtimeOpen')
         : status === 'connecting' ? t('plane.realtimeConnecting') : t('plane.realtimeClosed')}</p>
-      {refreshing && <span className="text-xs text-ink-3">{t('plane.syncing')}</span>}
+      {refreshing && <span className="text-meta text-ink-3">{t('plane.syncing')}</span>}
     </div>
-    {runningConflict && <p className="text-sm text-ink-2">{t('plane.conflictHint')}</p>}
-    {runningState === 'stopped' && <p className="text-sm text-ink-2">{desiredEnabled ? t('plane.stoppedHint') : t('plane.disabledHint')}</p>}
+    {runningConflict && <p className="text-body text-ink-2">{t('plane.conflictHint')}</p>}
+    {runningState === 'stopped' && <p className="text-body text-ink-2">{desiredEnabled ? t('plane.stoppedHint') : t('plane.disabledHint')}</p>}
     <Panel title={t('plane.appActions')}>
       {(jobs.isPending || jobs.isError) && <ReadContent title={t('plane.appActions')} query={jobs} empty={false}>{null}</ReadContent>}
       <ApplicationActions instanceID={instanceID} jobs={jobs.data} running={actionRunning} conflict={runningConflict} desiredEnabled={desiredEnabled}
@@ -149,29 +149,29 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState, desir
     </Panel>
     <Panel title={t('plane.appRecords')}>
       <details className="mb-4 min-w-0">
-        <summary className="flex min-h-11 cursor-pointer items-center text-xs text-ink-2">{t('plane.filter')}{filter ? t('plane.filtered') : ''}</summary>
+        <summary className="flex min-h-touch cursor-pointer items-center text-meta text-ink-2">{t('plane.filter')}{filter ? t('plane.filtered') : ''}</summary>
         <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={(event) => {
           event.preventDefault(); setOffset(0); setFilter(draft.trim())
         }}>
-          <label className="min-w-0 text-xs text-ink-2">{t('plane.category')}
-            <select className="input mt-1 block min-h-11 w-full" value={draft} onChange={(event) => setDraft(event.target.value)}>
+          <label className="min-w-0 text-meta text-ink-2">{t('plane.category')}
+            <Select className="mt-1 block w-full" value={draft} onChange={(event) => setDraft(event.target.value)}>
               <option value="">{t('plane.allCategories')}</option>
               {recordTypes.map((type) => <option key={type} value={type}>{type}</option>)}
               {draft && !recordTypes.includes(draft) && <option value={draft}>{draft}</option>}
-            </select>
+            </Select>
           </label>
           <button type="submit" className="btn btn-ghost">{t('plane.applyFilter')}</button>
           {(filter || draft) && <button type="button" className="btn btn-ghost" onClick={() => {
             setFilter(''); setDraft(''); setOffset(0)
           }}>{t('plane.clearFilter')}</button>}
         </form>
-        <p className="mt-2 text-xs text-ink-3">{t('plane.filterHelp')}</p>
+        <p className="mt-2 text-meta text-ink-3">{t('plane.filterHelp')}</p>
       </details>
       <ReadContent title={t('plane.appRecords')} query={records} empty={!rows.length} emptyText={filter ? t('plane.noRecords') : undefined}>
-        <p className="mb-4 text-xs text-ink-3">{t('plane.recordsHelp')}</p>
+        <p className="mb-4 text-meta text-ink-3">{t('plane.recordsHelp')}</p>
         {rows.map((row, index) => <RecordRow key={JSON.stringify([row.record_type, row.record_id])} record={row} number={offset + index + 1} />)}
       </ReadContent>
-      <nav aria-label={t('plane.pagination')} className="mt-3 flex flex-wrap items-center gap-2 text-xs text-ink-3">
+      <nav aria-label={t('plane.pagination')} className="mt-3 flex flex-wrap items-center gap-2 text-meta text-ink-3">
         <button type="button" className="btn btn-ghost" disabled={offset === 0 || records.isFetching}
           onClick={() => setOffset(Math.max(0, offset - APP_RECORD_PAGE_SIZE))}>{t('plane.previous')}</button>
         <span>{t('plane.page', { page: offset / APP_RECORD_PAGE_SIZE + 1 })}</span>
@@ -182,32 +182,32 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState, desir
     <div className="grid min-w-0 items-start gap-5 lg:grid-cols-2">
     <Panel title={t('plane.bindings')}>
       <ReadContent title={t('plane.bindings')} query={bindings} empty={!bindings.data?.bindings.length}>
-        <p className="mb-3 text-xs text-ink-3">{t('plane.bindingsHelp')}</p>
+        <p className="mb-3 text-meta text-ink-3">{t('plane.bindingsHelp')}</p>
         <ul className="divide-y divide-hairline">{bindings.data?.bindings.map((binding, index) => {
           const labels = bindingLabels(binding, presentation)
           return <li key={JSON.stringify([binding.requirement_id, binding.entity_id])} className="min-w-0 py-3 first:pt-0">
-            <p className="break-words text-sm font-medium [overflow-wrap:anywhere]">{labels.entity || t('plane.bindingFallback', { number: index + 1 })}</p>
-            {labels.capability !== labels.entity && <p className="mt-1 break-words text-xs text-ink-2">{labels.capability}</p>}
-            <TechnicalDetails><p>{t('plane.entityId')}{binding.entity_id}</p><p>{t('plane.capabilityId')}{binding.capability}</p><p>{t('plane.requirementId')}{binding.requirement_id}</p></TechnicalDetails>
+            <p className="break-words text-body font-medium [overflow-wrap:anywhere]">{labels.entity || t('plane.bindingFallback', { number: index + 1 })}</p>
+            {labels.capability !== labels.entity && <p className="mt-1 break-words text-meta text-ink-2">{labels.capability}</p>}
+            <TechnicalDetails><p>{t('plane.bindingFallback', { number: binding.entity_id })}</p><p>{t('plane.capabilityId')}{binding.capability}</p><p>{t('plane.requirementId')}{binding.requirement_id}</p></TechnicalDetails>
           </li>
         })}</ul>
       </ReadContent>
     </Panel>
     <Panel title={t('plane.scheduled')}>
       <ReadContent title={t('plane.scheduled')} query={jobs} empty={!temporaryJobs.length && !jobs.data?.scheduled.length}>
-        <p className="mb-4 text-xs text-ink-3">{t('plane.jobsHelp')}</p>
-        <h3 className="text-sm font-medium">{t('plane.temporary')}</h3>
+        <p className="mb-4 text-meta text-ink-3">{t('plane.jobsHelp')}</p>
+        <h3 className="text-body font-medium">{t('plane.temporary')}</h3>
         {temporaryJobs.length ? <ul className="mb-4 divide-y divide-hairline">{temporaryJobs.map((job) => {
           const descriptor = jobs.data?.job_descriptors?.find((item) => item.id === job)
           const title = descriptor?.title?.trim() || t('plane.background')
           return <li key={job} className="py-3">
-            <p className="break-words text-sm font-medium [overflow-wrap:anywhere]">{title}</p>
+            <p className="break-words text-body font-medium [overflow-wrap:anywhere]">{title}</p>
             <TechnicalDetails><p>{t('plane.jobId')}{job}</p></TechnicalDetails>
           </li>
-        })}</ul> : <p className="mb-4 mt-2 text-xs text-ink-3">{t('plane.noTemporary')}</p>}
-        <h3 className="text-sm font-medium">{t('plane.savedSchedules')}</h3>
+        })}</ul> : <p className="mb-4 mt-2 text-meta text-ink-3">{t('plane.noTemporary')}</p>}
+        <h3 className="text-body font-medium">{t('plane.savedSchedules')}</h3>
         {jobs.data?.scheduled.length ? jobs.data.scheduled.map((job, index) => <ScheduledRow key={job.schedule_id} job={job} number={index + 1} />)
-          : <p className="mt-2 text-xs text-ink-3">{t('plane.noSchedules')}</p>}
+          : <p className="mt-2 text-meta text-ink-3">{t('plane.noSchedules')}</p>}
       </ReadContent>
     </Panel>
     </div>

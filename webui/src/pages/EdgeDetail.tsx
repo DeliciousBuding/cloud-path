@@ -75,17 +75,17 @@ export default function EdgeDetail() {
       <BackLink to="/edges" label={t('detail.back')} />
 
       <header className="mb-7 flex flex-wrap items-center gap-3">
-        <h1 className="min-w-0 max-w-full truncate font-mono text-[24px] font-semibold" title={e.edge_id}>
+        <h1 className="min-w-0 max-w-full truncate font-mono text-hero font-semibold" title={e.edge_id}>
           {e.edge_id}
         </h1>
         <Badge tone={e.online ? 'ok' : 'idle'}>
           {e.online ? t('detail.statusOnline') : t('detail.statusOffline')}
         </Badge>
         {e.version && (
-          <span className="min-w-0 truncate font-mono text-[11px] text-ink-3"
+          <span className="min-w-0 truncate font-mono text-micro text-ink-3"
             title={t('detail.versionTitle', { version: e.version })}>{e.version}</span>
         )}
-        <span className="ml-auto text-xs text-ink-3"
+        <span className="ml-auto text-meta text-ink-3"
           title={e.connected_at ? fmtDateTime(e.connected_at) : undefined}>
           {e.online ? t('detail.connectedAt') : t('detail.lastOnlinePrefix')}
           {e.connected_at ? <span className="num">{timeAgo(e.connected_at)}</span> : '—'}
@@ -93,7 +93,7 @@ export default function EdgeDetail() {
       </header>
 
       {!e.online && (
-        <div className="banner mb-5 rounded-lg" role="status">
+        <div className="banner mb-5 rounded-tile" role="status">
           {t('detail.offlineBanner')}
         </div>
       )}
@@ -112,7 +112,7 @@ export default function EdgeDetail() {
             )}
           </dl>
           {f.declared.length !== f.devices.length && (
-            <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
+            <p className="mt-3 border-t border-hairline pt-3 text-meta leading-relaxed text-ink-3">
               {t('detail.mismatch')}
             </p>
           )}
@@ -120,9 +120,9 @@ export default function EdgeDetail() {
 
         <Panel className="lg:col-span-2"
           title={<span className="flex items-center gap-1.5"><Cpu size={14} />{t('detail.devicesTitle')}</span>}
-          right={<span className="text-[12px] text-ink-3">{t('detail.devicesOnline', { online: f.onlineDevices, total: f.devices.length })}</span>}>
+          right={<span className="text-meta text-ink-3">{t('detail.devicesOnline', { online: f.onlineDevices, total: f.devices.length })}</span>}>
           {f.devices.length === 0 ? (
-            <p className="py-8 text-center text-sm text-ink-3">{t('detail.devicesEmpty')}</p>
+            <p className="py-8 text-center text-body text-ink-3">{t('detail.devicesEmpty')}</p>
           ) : (
             <ul className="divide-y divide-hairline">
               {f.devices.map((d) => {
@@ -133,17 +133,17 @@ export default function EdgeDetail() {
                       {d.online ? t('detail.online') : t('detail.offline')}
                     </Badge>
                     <Link to={`/devices/${encodeURIComponent(e.edge_id)}/${encodeURIComponent(dev)}`}
-                      className="flex min-h-11 min-w-0 flex-1 flex-col justify-center no-underline">
-                      <span className="block truncate text-[13px] font-medium hover:text-accent" title={deviceLabel(d)}>
+                      className="flex min-h-touch min-w-0 flex-1 flex-col justify-center no-underline">
+                      <span className="block truncate text-compact font-medium hover:text-accent" title={deviceLabel(d)}>
                         <span className="sr-only">{d.online ? t('detail.onlineSr') : t('detail.offlineSr')}</span>
                         {deviceLabel(d)}
                       </span>
-                      <span className="num block truncate font-mono text-[11px] text-ink-3"
+                      <span className="num block truncate font-mono text-micro text-ink-3"
                         title={`${d.adapter || t('detail.unknownAdapter')}${d.port ? ` · ${d.port}` : ''}`}>
                         {d.port ? t('detail.port', { port: d.port }) : t('detail.portUnknown')}
                       </span>
                     </Link>
-                    <span className="num shrink-0 font-mono text-[11px] text-ink-3 sm:text-right"
+                    <span className="num shrink-0 font-mono text-micro text-ink-3 sm:text-right"
                       title={d.online ? t('detail.lastUpdate') : t('detail.lastOnline')}>
                       <span className="sm:hidden">{t('detail.lastReport')} </span>
                       {(d.online ? d.updated_at : d.last_seen)
@@ -158,7 +158,7 @@ export default function EdgeDetail() {
 
         <Panel className="lg:col-span-3"
           title={<span className="flex items-center gap-1.5"><History size={14} />{t('detail.eventsTitle')}</span>}
-          right={<span className="num text-[12px] text-ink-3">{t('detail.eventsCount', { count: events.length })}</span>}>
+          right={<span className="num text-meta text-ink-3">{t('detail.eventsCount', { count: events.length })}</span>}>
           {evLoading && events.length === 0 ? (
             <RowSkeleton rows={5} />
           ) : evError && events.length === 0 ? (
@@ -166,15 +166,15 @@ export default function EdgeDetail() {
               hint={t('detail.eventsLoadHint')}
               onRetry={() => { void refetchEvents() }} />
           ) : events.length === 0 ? (
-            <p className="py-8 text-center text-sm text-ink-3">{t('detail.eventsEmpty')}</p>
+            <p className="py-8 text-center text-body text-ink-3">{t('detail.eventsEmpty')}</p>
           ) : (
             <>
               <EventFeed events={events} limit={20} dayGrouped />
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3 text-xs">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3 text-meta">
                 <span className="text-ink-3">
                   {events.length > 20 ? t('detail.eventsMore', { count: events.length - 20 }) : t('detail.eventsOnly')}
                 </span>
-                <Link to="/activity" className="link flex min-h-11 items-center gap-0.5">
+                <Link to="/activity" className="link flex min-h-touch items-center gap-0.5">
                   {t('detail.viewAllActivity')} <ArrowRight size={12} />
                 </Link>
               </div>

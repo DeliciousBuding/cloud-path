@@ -31,7 +31,7 @@ if (!i18n.isInitialized) {
 }
 
 export function currentLocale(): Locale {
-  return normalizeLocale(readStoredLocale() ?? i18n.resolvedLanguage ?? i18n.language)
+  return normalizeLocale(i18n.resolvedLanguage ?? readStoredLocale() ?? i18n.language)
 }
 
 if (typeof document !== 'undefined') document.documentElement.lang = currentLocale()

@@ -87,7 +87,7 @@ const ROW_COLS = 'lg:grid-cols-[minmax(0,1.4fr)_4.5rem_5rem_minmax(0,1.2fr)_10.5
 function EdgeRowHead() {
   const { t } = useTranslation('edges')
   return (
-    <li aria-hidden className={`hidden gap-x-4 px-4 pb-2 text-[11px] font-medium text-ink-3 lg:grid ${ROW_COLS}`}>
+    <li aria-hidden className={`hidden gap-x-4 px-4 pb-2 text-micro font-medium text-ink-3 lg:grid ${ROW_COLS}`}>
       <span>{t('list.columns.gateway')}</span><span>{t('list.columns.status')}</span>
       <span>{t('list.columns.version')}</span><span>{t('list.columns.devices')}</span>
       <span className="text-right">{t('list.columns.lastReport')}</span><span />
@@ -104,7 +104,7 @@ function EdgeRow({ f }: { f: EdgeFacts }) {
       {/* 网关 ID 是运维标识：mono；点击进详情 */}
       <div className="flex min-w-0 items-center gap-2">
         <Link to={`/edges/${encodeURIComponent(e.edge_id)}`}
-          className="inline-flex min-h-11 min-w-0 items-center truncate font-mono text-[13px] font-medium no-underline hover:text-accent sm:min-h-0"
+          className="inline-flex min-h-touch min-w-0 items-center truncate font-mono text-compact font-medium no-underline hover:text-accent sm:min-h-0"
           title={t('list.viewTitle', { id: e.edge_id })}>
           {e.edge_id}
         </Link>
@@ -112,7 +112,7 @@ function EdgeRow({ f }: { f: EdgeFacts }) {
       <div className="hidden lg:block">
         <Badge tone={e.online ? 'ok' : 'idle'}>{e.online ? t('detail.statusOnline') : t('detail.statusOffline')}</Badge>
       </div>
-      <div className="hidden min-w-0 truncate font-mono text-[11px] text-ink-2 lg:block"
+      <div className="hidden min-w-0 truncate font-mono text-micro text-ink-2 lg:block"
         title={t('list.versionTitle', { version: e.version || t('list.unknownVersion') })}>
         {e.version || t('list.unknownVersion')}
       </div>
@@ -121,9 +121,9 @@ function EdgeRow({ f }: { f: EdgeFacts }) {
           <Badge tone={e.online ? 'ok' : 'idle'}>{e.online ? t('detail.statusOnline') : t('detail.statusOffline')}</Badge>
         </span>
         {f.devices.length === 0 ? (
-          <span className="text-[12px] text-ink-3">{t('list.noDevices')}</span>
+          <span className="text-meta text-ink-3">{t('list.noDevices')}</span>
         ) : (
-          <span className="num shrink-0 text-[12px] text-ink-2"
+          <span className="num shrink-0 text-meta text-ink-2"
             title={t('list.devicesTitle', { total: f.devices.length, online: f.onlineDevices, offline: offlineNote })}>
             {t('list.devicesSummary', { total: f.devices.length, online: f.onlineDevices })}
             {f.devices.length > f.onlineDevices && (
@@ -132,13 +132,13 @@ function EdgeRow({ f }: { f: EdgeFacts }) {
           </span>
         )}
       </div>
-      <div className="num min-w-0 truncate text-left font-mono text-[11px] text-ink-3 lg:text-right"
+      <div className="num min-w-0 truncate text-left font-mono text-micro text-ink-3 lg:text-right"
         title={f.lastReport ? fmtDateTime(f.lastReport) : t('list.neverUpdated')}>
         <span className="lg:hidden">{t('list.columns.lastReport')} </span>
         {f.lastReport ? fmtDateTime(f.lastReport) : t('list.neverUpdated')}
       </div>
       <Link to={`/edges/${encodeURIComponent(e.edge_id)}`}
-        className="link hidden justify-self-end text-[12px] lg:block"
+        className="link hidden justify-self-end text-meta lg:block"
         aria-label={t('list.viewAria', { id: e.edge_id })}>
         {t('list.view')}
       </Link>

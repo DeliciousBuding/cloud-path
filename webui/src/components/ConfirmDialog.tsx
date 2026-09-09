@@ -7,6 +7,8 @@
 //   - busy 期间两个按钮都禁用，避免重复提交产生第二个 revision；
 //   - 390px：宽度用 w-full + max-w，内边距相对单位，不写死像素宽。
 import { useEffect, useId, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import '@/i18n'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, Info } from 'lucide-react'
@@ -32,9 +34,11 @@ export interface ConfirmDialogProps {
 }
 
 export function ConfirmDialog({
-  open, title, body, confirmLabel, cancelLabel = '取消', tone = 'danger',
+  open, title, body, confirmLabel, cancelLabel, tone = 'danger',
   busy = false, requireAck, extra, onConfirm, onCancel,
 }: ConfirmDialogProps) {
+  const { t } = useTranslation()
+  const cancelText = cancelLabel ?? t('actions.cancel')
   const titleId = useId()
   const cancelRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -94,7 +98,7 @@ export function ConfirmDialog({
   // Portal 避开页面动画 transform 的 fixed containing block，遮罩始终覆盖真实视口。
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto px-4 py-6 sm:items-center"
+      className="fixed inset-0 z-overlay flex items-end justify-center overflow-y-auto px-4 py-6 sm:items-center"
       onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onCancel() }}
     >
       {/* 遮罩：颜色走 token 混色，不写死 rgba */}
@@ -105,25 +109,25 @@ export function ConfirmDialog({
         className="card dialog relative max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto p-6 fade-up"
       >
         <div className="flex items-start gap-3.5">
-          <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-full', iconCls)}>
+          <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-pill', iconCls)}>
             <Icon aria-hidden="true" size={18} />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 id={titleId} className="text-[15px] font-semibold tracking-[-0.01em] break-words">{title}</h2>
-            <div id={titleId + '-body'} className="mt-1.5 text-sm leading-relaxed break-words text-ink-2">{body}</div>
+            <h2 id={titleId} className="text-lead font-semibold tracking-[-0.01em] break-words">{title}</h2>
+            <div id={titleId + '-body'} className="mt-1.5 text-body leading-relaxed break-words text-ink-2">{body}</div>
           </div>
         </div>
 
         {extra && <div className="mt-4">{extra}</div>}
 
         {requireAck && (
-          <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg bg-surface-2 p-3.5">
+          <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-tile bg-surface-2 p-3.5">
             <input
               type="checkbox" checked={acked} disabled={busy}
               onChange={(e) => setAcked(e.target.checked)}
               className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
             />
-            <span className="min-w-0 text-[13px] leading-relaxed break-words">{requireAck}</span>
+            <span className="min-w-0 text-compact leading-relaxed break-words">{requireAck}</span>
           </label>
         )}
 
@@ -131,7 +135,7 @@ export function ConfirmDialog({
           <button
             ref={cancelRef} type="button" className="btn btn-ghost" disabled={busy} onClick={onCancel}
           >
-            {cancelLabel}
+            {cancelText}
           </button>
           <button
             type="button"

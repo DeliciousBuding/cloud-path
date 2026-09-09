@@ -182,7 +182,7 @@ export default function Login() {
               aria-label={reveal ? t('login.fields.password.hide') : t('login.fields.password.show')}
               title={reveal ? t('login.fields.password.hide') : t('login.fields.password.show')}
               aria-pressed={reveal}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-ink-3 transition-colors hover:text-ink"
+              className="flex h-7 w-7 items-center justify-center rounded-pill text-ink-3 transition-colors hover:text-ink"
             >
               {reveal ? <EyeOff size={15} /> : <Eye size={15} />}
             </button>
@@ -191,7 +191,7 @@ export default function Login() {
 
         {/* 表单级错误：凭据错 / 限流 / 不可达。role=alert 让读屏立即播报 */}
         {formError && (
-          <p role="alert" className="rounded-lg bg-bad/10 px-3.5 py-2.5 text-[13px] leading-relaxed break-words text-bad">
+          <p role="alert" className="rounded-tile bg-bad/10 px-3.5 py-2.5 text-compact leading-relaxed break-words text-bad">
             {formError}
           </p>
         )}
@@ -209,7 +209,7 @@ export default function Login() {
           onClick={() => setTokenOpen((v) => !v)}
           aria-expanded={tokenOpen}
           aria-controls="token-signin"
-          className="flex min-h-11 w-full items-center gap-1.5 text-xs font-medium text-ink-2 transition-colors hover:text-ink"
+          className="flex min-h-touch w-full items-center gap-1.5 text-meta font-medium text-ink-2 transition-colors hover:text-ink"
         >
           <KeyRound size={13} className="shrink-0" />
           {t('login.token.toggle')}
@@ -235,7 +235,7 @@ export default function Login() {
               {tokenBusy ? t('login.token.submitting') : t('login.token.submit')}
             </Button>
             {getToken() && (
-              <p className="text-[12px] text-ink-3">
+              <p className="text-meta text-ink-3">
                 {t('login.token.stored')}
               </p>
             )}

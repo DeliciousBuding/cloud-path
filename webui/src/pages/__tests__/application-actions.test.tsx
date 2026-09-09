@@ -94,11 +94,11 @@ describe('应用操作的授权、生命周期与明确用户意图', () => {
     expect(actionRequests(http)).toHaveLength(0)
   })
 
-  it('无参数操作不显示技术参数输入框，并明确说明可直接执行', async () => {
+  it('无参数操作不显示参数内容输入框，并明确说明可直接执行', async () => {
     installFetch((url) => actionResponse(url, { descriptors: [emptyJob] }))
     renderWithProviders(<ApplicationPlane instanceID="app-a" />)
     expect(await screen.findByText('无需填写参数，点击即可执行。')).toBeVisible()
-    expect(screen.queryByText('技术参数')).not.toBeInTheDocument()
+    expect(screen.queryByText('参数内容')).not.toBeInTheDocument()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '执行「刷新记录」' })).toBeEnabled()
   })
@@ -142,8 +142,8 @@ describe('参数与不可信执行结果', () => {
     const user = userEvent.setup()
     renderWithProviders(<ApplicationPlane instanceID="app-a" />)
     await ready()
-    await user.click(screen.getByRole('button', { name: '更新计数 技术人员选项' }))
-    const input = screen.getByRole('textbox', { name: '更新计数 技术参数' })
+    await user.click(screen.getByRole('button', { name: '更新计数 高级参数' }))
+    const input = screen.getByRole('textbox', { name: '更新计数 参数内容' })
     for (const value of ['{"count":0}', '{"count":9}', '{"count":1.5}']) {
       fireEvent.change(input, { target: { value } })
       expect(execute()).toBeDisabled()
@@ -159,8 +159,8 @@ describe('参数与不可信执行结果', () => {
     const user = userEvent.setup()
     renderWithProviders(<ApplicationPlane instanceID="app-a" />)
     await ready()
-    await user.click(screen.getByRole('button', { name: '更新计数 技术人员选项' }))
-    const input = screen.getByRole('textbox', { name: '更新计数 技术参数' })
+    await user.click(screen.getByRole('button', { name: '更新计数 高级参数' }))
+    const input = screen.getByRole('textbox', { name: '更新计数 参数内容' })
     for (const value of ['[]', 'null', '{bad', JSON.stringify({ count: 2, note: '字'.repeat(1500) })]) {
       fireEvent.change(input, { target: { value } })
       expect(execute()).toBeDisabled()
@@ -180,7 +180,7 @@ describe('参数与不可信执行结果', () => {
       { ...emptyJob, input_schema_json: '{"type":"object","$ref":"#/$defs/input"}' },
     ] }))
     renderWithProviders(<ApplicationPlane instanceID="app-a" />)
-    expect(await screen.findByText('操作参数声明无效，暂不能执行。')).toBeVisible()
+    expect(await screen.findByText('操作参数格式不正确，暂时不能执行。')).toBeVisible()
     expect(screen.queryByRole('button', { name: '执行「损坏声明」' })).not.toBeInTheDocument()
     expect(screen.getByText(/最终结果由插件确认/)).toHaveTextContent('$ref')
   })
@@ -197,8 +197,8 @@ describe('参数与不可信执行结果', () => {
     expect(container.textContent).toContain(dangerous)
     expect(screen.queryByText('javascript:alert(3)')).not.toBeInTheDocument()
     expect(container.querySelector('img, script, a[href^="javascript:"]')).toBeNull()
-    await user.click(screen.getByText('查看结果原文'))
-    expect(screen.getByRole('group', { name: '执行结果原文' }).textContent).toBe(JSON.stringify(result))
+    await user.click(screen.getByText('查看原始结果'))
+    expect(screen.getByRole('group', { name: '执行原始结果' }).textContent).toBe(JSON.stringify(result))
     expect(screen.getByText('操作已受理')).toBeVisible()
     expect(screen.queryByText('板端成功')).not.toBeInTheDocument()
   })
@@ -213,9 +213,9 @@ describe('参数与不可信执行结果', () => {
     expect(await screen.findByText(/自检完成 · 执行次数 3 · 完成时间/)).toBeVisible()
     expect(screen.queryByText('run_count')).not.toBeInTheDocument()
     expect(screen.queryByText('finished_at')).not.toBeInTheDocument()
-    await user.click(screen.getByText('查看结果原文'))
-    expect(screen.getByRole('group', { name: '执行结果原文' })).toHaveTextContent('run_count')
-    expect(screen.getByRole('group', { name: '执行结果原文' })).toHaveTextContent('finished_at')
+    await user.click(screen.getByText('查看原始结果'))
+    expect(screen.getByRole('group', { name: '执行原始结果' })).toHaveTextContent('run_count')
+    expect(screen.getByRole('group', { name: '执行原始结果' })).toHaveTextContent('finished_at')
   })
   it.each(['', '<svg onload="alert(1)">raw response</svg>'])('空或非 JSON 结果不伪造结构：%s', async (result_json) => {
     installFetch((url, init) => init?.method === 'POST'
@@ -226,8 +226,8 @@ describe('参数与不可信执行结果', () => {
     expect(await screen.findByText('操作已受理')).toBeVisible()
     expect(screen.getByText(result_json ? '应用返回的内容无法直接展示，请查看原文。' : '应用未返回结果内容，请查看应用记录。')).toBeVisible()
     if (result_json) {
-      fireEvent.click(screen.getByText('查看结果原文'))
-      expect(screen.getByRole('group', { name: '执行结果原文' })).toHaveTextContent(result_json)
+      fireEvent.click(screen.getByText('查看原始结果'))
+      expect(screen.getByRole('group', { name: '执行原始结果' })).toHaveTextContent(result_json)
       expect(container.querySelector('svg[onload]')).toBeNull()
     }
   })

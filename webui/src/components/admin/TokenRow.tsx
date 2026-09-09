@@ -42,13 +42,13 @@ export function TokenRow({ token: t }: { token: TokenView }) {
     <li className="py-4 first:pt-0">
       <div className="flex min-w-0 items-start gap-2">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold" title={t.name}>{t.name || translate('tokenRow.unnamed')}</p>
+          <p className="truncate text-body font-semibold" title={t.name}>{t.name || translate('tokenRow.unnamed')}</p>
         </div>
         <span className="shrink-0"><Badge tone={tone}>{stateLabel}</Badge></span>
       </div>
 
       <div className="mt-3">
-        <p className="mb-1.5 text-[11px] font-medium text-ink-3">{translate('tokenRow.scopeLabel')}</p>
+        <p className="mb-1.5 text-micro font-medium text-ink-3">{translate('tokenRow.scopeLabel')}</p>
         {(t.scopes ?? []).length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
             {(t.scopes ?? []).map((s) => (
@@ -58,7 +58,7 @@ export function TokenRow({ token: t }: { token: TokenView }) {
             ))}
           </div>
         ) : (
-          <p className="text-[12px] text-ink-3">{translate('tokenRow.noScopes')}</p>
+          <p className="text-meta text-ink-3">{translate('tokenRow.noScopes')}</p>
         )}
       </div>
 
@@ -69,8 +69,8 @@ export function TokenRow({ token: t }: { token: TokenView }) {
         {revoked && <KeyValue k={translate('tokenRow.fields.revokedAt')} v={<span className="font-mono">{fmtDateTime(t.revoked_at ?? 0)}</span>} />}
       </dl>
 
-      <details className="mt-3 text-xs text-ink-2">
-        <summary className="flex min-h-11 cursor-pointer items-center">{translate('tokenRow.details')}</summary>
+      <details className="mt-3 text-meta text-ink-2">
+        <summary className="flex min-h-touch cursor-pointer items-center">{translate('tokenRow.details')}</summary>
         <dl className="mt-2 space-y-2">
           <KeyValue k={translate('tokenRow.technicalFields.id')} v={<span className="font-mono">{t.id}</span>} />
           <KeyValue k={translate('tokenRow.technicalFields.prefix')} v={t.prefix} mono />
@@ -89,7 +89,7 @@ export function TokenRow({ token: t }: { token: TokenView }) {
 
       {!revoked && confirming && (
         <div className="mt-3 space-y-3 border-t border-hairline pt-3">
-          <p className="text-xs leading-relaxed text-warn break-words">
+          <p className="text-meta leading-relaxed text-warn break-words">
             {translate('tokenRow.confirm', { name: t.name })}
           </p>
           {revoke.isError && <ErrorNote message={adminErrorMessage(revoke.error)} />}
@@ -107,7 +107,7 @@ export function TokenRow({ token: t }: { token: TokenView }) {
       )}
 
       {revoked && (
-        <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3 break-words">
+        <p className="mt-3 border-t border-hairline pt-3 text-meta leading-relaxed text-ink-3 break-words">
           {translate('tokenRow.revokedHint')}
         </p>
       )}

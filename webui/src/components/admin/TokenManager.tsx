@@ -63,17 +63,17 @@ export function TokenManager() {
       ) : isPending ? (
         <RowSkeleton rows={2} />
       ) : tokens.length === 0 ? (
-        <p className="py-6 text-center text-sm text-ink-3">{t('tokenManager.empty')}</p>
+        <p className="py-6 text-center text-body text-ink-3">{t('tokenManager.empty')}</p>
       ) : (
         <ul className="divide-y divide-hairline" aria-label={t('tokenManager.listAria')}>
           {tokens.map((tok) => <TokenRow key={tok.id} token={tok} />)}
         </ul>
       )}
 
-      <div className="mt-4 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
+      <div className="mt-4 border-t border-hairline pt-3 text-meta leading-relaxed text-ink-3">
         <p>{t('tokenManager.hint')}</p>
         <details className="mt-1.5">
-          <summary className="flex min-h-11 cursor-pointer items-center">{t('tokenManager.details')}</summary>
+          <summary className="flex min-h-touch cursor-pointer items-center">{t('tokenManager.details')}</summary>
           <p className="mt-1 break-words">{t('tokenManager.detailsHint')}</p>
         </details>
       </div>

@@ -66,7 +66,7 @@ export function CreateTokenForm({ onCreated, onCancel }: {
       />
 
       <fieldset className="mt-4">
-        <legend className="mb-2 text-[13px] font-medium text-ink-2">{t('createToken.scopes.legend')}</legend>
+        <legend className="mb-2 text-compact font-medium text-ink-2">{t('createToken.scopes.legend')}</legend>
         <div className="space-y-2.5">
           {SCOPE_OPTIONS.map((o) => (
             <CheckRow

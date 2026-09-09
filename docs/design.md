@@ -29,7 +29,7 @@
 | 串口 | go.bug.st/serial | 跨平台、无 CGO |
 | 前端 | React 19 + TypeScript + Vite 6 | 现代 SPA 标准栈，`strict` + `noUnusedLocals` |
 | 路由 | React Router 7 | 声明式 SPA 路由 + 路由级懒加载 |
-| 样式 | Tailwind CSS 4 + 自建设计系统 | CSS 变量主题（浅/深）、手写原语组件，无组件库依赖 |
+| 样式 | Tailwind CSS 4 + 自建设计系统 | 语义 token 在 `webui/src/index.css`，浅/深主题、手写原语组件，无组件库依赖 |
 | 数据层 | TanStack Query 5（REST）+ zustand 5（WS 实时态） | 查询缓存与实时推送分离 |
 | 图表 | recharts | 漂移趋势（按需加载 chunk） |
 | 图标 | lucide-react | 线性图标，随 `currentColor` |

@@ -60,17 +60,17 @@ describe('概览：有数据', () => {
   it('首屏先给整体状态，再用一组紧凑指标补充事实', async () => {
     route(FULL)
     renderWithProviders(<Overview />)
-    expect(await screen.findByText('现在怎样')).toBeInTheDocument()
+    expect(await screen.findByText('当前状态')).toBeInTheDocument()
     expect(await screen.findByText('有 4 项需要处理')).toBeInTheDocument()
     expect(await screen.findByText('在线设备')).toBeInTheDocument()
     expect(screen.getByText('在线网关')).toBeInTheDocument()
-    expect(screen.getByText('应用正常')).toBeInTheDocument()
-    expect(screen.getByText('失败操作')).toBeInTheDocument()
+    expect(screen.getByText('应用运行正常')).toBeInTheDocument()
+    expect(screen.getByText('失败的操作')).toBeInTheDocument()
     expect(screen.getByText('2/3')).toBeInTheDocument()
     expect(screen.getAllByText('1/2')).toHaveLength(2)
     expect(screen.getByText('需要关注')).toBeInTheDocument()
     const text = document.body.textContent ?? ''
-    for (const word of ['Schema', 'Descriptor', 'Capability', 'Adapter', 'ACK', 'JSON', '契约', '回执', '收敛', '快照', 'server', 'cookie', 'SQLite', 'WebSocket']) {
+    for (const word of ['Schema', 'Descriptor', 'Capability', 'Adapter', 'ACK', '结构化数据', '契约', '回执', '收敛', '快照', 'server', 'cookie', 'SQLite', 'WebSocket']) {
       expect(text).not.toContain(word)
     }
   })
@@ -82,15 +82,15 @@ describe('概览：有数据', () => {
     expect(await screen.findByText('Current status')).toBeInTheDocument()
     expect(await screen.findByText('Devices online')).toBeInTheDocument()
     expect(screen.getByText('Gateways online')).toBeInTheDocument()
-    expect(screen.getByText('Apps healthy')).toBeInTheDocument()
-    expect(screen.getByText('Failed operations')).toBeInTheDocument()
+    expect(screen.getByText('Apps running normally')).toBeInTheDocument()
+    expect(screen.getByText('Failed actions')).toBeInTheDocument()
   })
 
   it('需要关注栏只给聚合主行与去向：失败明细的单一证据家是活动页，概览不复述 ledger', async () => {
     route(FULL)
     const { container } = renderWithProviders(<Overview />)
     expect(await screen.findByText('部分设备离线')).toBeInTheDocument()
-    expect(screen.getByText('有操作未完成')).toBeInTheDocument()
+    expect(screen.getByText('有些操作没有完成')).toBeInTheDocument()
     // 机器操作名/状态徽章/明细时间不在概览二次出现（同屏同一答案只留一处）
     expect(screen.queryByText('Relay On')).not.toBeInTheDocument()
     expect(screen.queryByText('失败')).not.toBeInTheDocument()
@@ -98,11 +98,11 @@ describe('概览：有数据', () => {
     expect(links).toContain('/activity')
   })
 
-  it('网关离线与运行实例未活跃各生成一条可执行的提醒（含去向链接）', async () => {
+  it('网关离线与运行项未活跃各生成一条可执行的提醒（含去向链接）', async () => {
     route(FULL)
     const { container } = renderWithProviders(<Overview />)
     expect(await screen.findByText('网关连接中断')).toBeInTheDocument()
-    expect(screen.getByText('应用尚未就绪')).toBeInTheDocument()
+    expect(screen.getByText('应用还没有正常运行')).toBeInTheDocument()
     const links = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))
     expect(links).toContain('/edges')
     expect(links).toContain('/plugins')
@@ -127,13 +127,13 @@ describe('概览：空态（禁止假数据）', () => {
     renderWithProviders(<Overview />)
     expect(await screen.findByText('在线设备')).toBeInTheDocument()
     // 统计瓦片给出「等待接入」这类空态说明，而不是塞个看起来合理的数
-    expect(screen.getByText('等待网关接入设备')).toBeInTheDocument()
-    expect(screen.getByText('尚未有网关注册')).toBeInTheDocument()
+    expect(screen.getAllByText('等待设备连接').length).toBeGreaterThan(0)
+    expect(screen.getByText('还没有网关连接')).toBeInTheDocument()
     expect(await screen.findByText('还没有应用')).toBeInTheDocument()
     // 无异常是明确说出来的，不是空白
-    expect(screen.getByText('当前没有需要处理的异常。')).toBeInTheDocument()
+    expect(screen.getByText('当前没有需要处理的问题。')).toBeInTheDocument()
     // 设备舰队与事件各自给出空态说明（不得空白）
-    expect(screen.getByText('还没有设备接入')).toBeInTheDocument()
+    expect(screen.getAllByText('还没有设备连接').length).toBeGreaterThan(0)
     expect(screen.getByText('暂无运行记录')).toBeInTheDocument()
 
   })
@@ -145,7 +145,7 @@ describe('概览：空态（禁止假数据）', () => {
     }])
     renderWithProviders(<Overview />)
     expect(await screen.findByText('真实设备')).toBeInTheDocument()
-    expect(screen.getByText('等待网关接入设备')).toBeInTheDocument()
+    expect(screen.getAllByText('等待设备连接').length).toBeGreaterThan(0)
   })
 })
 
@@ -159,7 +159,7 @@ describe('概览：加载与错误态（不得白屏）', () => {
       return stubResponse(404, {})
     })
     renderWithProviders(<Overview />)
-    expect(await screen.findByText('服务状态正常')).toBeInTheDocument()
+    expect(await screen.findByText('服务运行正常')).toBeInTheDocument()
     expect(document.body.textContent).not.toContain('NaN')
   })
 
@@ -176,7 +176,7 @@ describe('概览：加载与错误态（不得白屏）', () => {
       port: 'COM3', online: true, state: {}, updated_at: 1, last_seen: 1,
     }])
     renderWithProviders(<Overview />)
-    expect(await screen.findByText(/部分状态暂不可用，当前显示设备和网关的最新结果/)).toBeInTheDocument()
+    expect(await screen.findByText(/部分状态暂时无法加载，当前显示设备和网关的最新结果/)).toBeInTheDocument()
     // 降级统计来自设备列表通道的真实字段
     expect(await screen.findByText('仍在上报的设备')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '设备状态' })).toBeInTheDocument()
@@ -193,9 +193,9 @@ describe('概览：加载与错误态（不得白屏）', () => {
     expect(screen.getByText('状态暂时不可用')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '重新加载' })).toBeInTheDocument()
     // 失败 ≠ 空：不许出现「还没有设备接入」或「没有异常」这种假空态
-    expect(screen.getByText('状态不可用，暂时无法判断是否需要处理。')).toBeInTheDocument()
-    expect(screen.queryByText('当前没有需要处理的异常。')).not.toBeInTheDocument()
-    expect(screen.queryByText('还没有设备接入')).not.toBeInTheDocument()
+    expect(screen.getByText('状态暂时不可用，无法判断是否有事项需要处理。')).toBeInTheDocument()
+    expect(screen.queryByText('当前没有需要处理的问题。')).not.toBeInTheDocument()
+    expect(screen.queryByText('还没有设备连接')).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '设备状态' })).not.toBeInTheDocument()
   })
 

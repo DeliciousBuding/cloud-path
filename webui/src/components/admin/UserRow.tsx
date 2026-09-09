@@ -68,9 +68,9 @@ export function UserRow({ user: u }: { user: UserView }) {
       <div className="flex min-w-0 items-start gap-2">
         {/* 用户名/显示名由管理员填写，长度不可控：必须各自截断 */}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold" title={u.name || u.username}>{u.name || u.username}</p>
+          <p className="truncate text-body font-semibold" title={u.name || u.username}>{u.name || u.username}</p>
           {u.name && u.name !== u.username && (
-            <p className="num mt-0.5 truncate font-mono text-xs text-ink-3" title={u.username}>{u.username}</p>
+            <p className="num mt-0.5 truncate font-mono text-meta text-ink-3" title={u.username}>{u.username}</p>
           )}
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
@@ -81,8 +81,8 @@ export function UserRow({ user: u }: { user: UserView }) {
         </div>
       </div>
 
-      <details className="mt-3 text-xs text-ink-2">
-        <summary className="flex min-h-11 cursor-pointer items-center">{t('userRow.details')}</summary>
+      <details className="mt-3 text-meta text-ink-2">
+        <summary className="flex min-h-touch cursor-pointer items-center">{t('userRow.details')}</summary>
         <dl className="mt-2 space-y-2">
           <KeyValue k={t('userRow.fields.id')} v={<span className="font-mono">{u.id}</span>} />
           <KeyValue k={t('userRow.fields.username')} v={u.username} mono />
@@ -126,7 +126,7 @@ export function UserRow({ user: u }: { user: UserView }) {
       {mode === 'reset' && (
         <form onSubmit={saveReset} aria-label={t('userRow.reset.formAria', { username: u.username })}
           className="mt-3 space-y-3 border-t border-hairline pt-3">
-          <p className="text-xs leading-relaxed text-warn break-words">
+          <p className="text-meta leading-relaxed text-warn break-words">
             {t('userRow.reset.warning')}
           </p>
           <TextField label={t('userRow.reset.newPassword')} type="password" value={password} error={passwordErr}

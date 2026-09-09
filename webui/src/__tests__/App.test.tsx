@@ -110,20 +110,20 @@ describe('Schema 端点缺席时的设备详情页', () => {
     await user.click(screen.getByRole('tab', { name: /高级/ }))
     await user.click(screen.getByRole('button', { name: '状态与趋势' }))
     expect(await screen.findByText('该设备尚未同步能力信息，此处按已接收的数据显示')).toBeInTheDocument()
-    expect(screen.getByText('设备数据（通用视图）')).toBeInTheDocument()
+    expect(screen.getByText('设备数据')).toBeInTheDocument()
     expect(screen.getByText('Mode')).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Slots 数据表' })).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Diag 完整数据' })).toBeInTheDocument()
 
     // 控制分区：操作面板回落到后端白名单，而不是前端自己编一张命令表
     await user.click(screen.getByRole('tab', { name: /设备操作/ }))
-    expect(await screen.findByText('高级：手动输入参数')).toBeInTheDocument()
+    expect(await screen.findByText('更多操作：手动输入参数')).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: '选择操作' })).toBeInTheDocument()
 
-    // 高级 → 设备能力：没有 Descriptor 就明说，不猜能力
+    // 高级 → 设备功能：没有 Descriptor 就明说，不猜能力
     await user.click(screen.getByRole('tab', { name: /高级/ }))
-    await user.click(screen.getByRole('button', { name: '设备能力' }))
-    expect(await screen.findByText('该设备还没有同步设备能力')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '设备功能' }))
+    expect(await screen.findByText('该设备还没有同步设备功能')).toBeInTheDocument()
   })
 
   it('旧高级查询参数映射到高级子视图', async () => {
@@ -135,8 +135,8 @@ describe('Schema 端点缺席时的设备详情页', () => {
     })
     renderApp('/devices/edge-1/dev-9?tab=capabilities')
     expect(await screen.findByRole('tab', { name: /高级/ })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('button', { name: '设备能力' })).toHaveAttribute('aria-pressed', 'true')
-    expect(await screen.findByText('该设备还没有同步设备能力')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '设备功能' })).toHaveAttribute('aria-pressed', 'true')
+    expect(await screen.findByText('该设备还没有同步设备功能')).toBeInTheDocument()
   })
 
   it('设备不存在 → 明确空态而不是崩溃', async () => {

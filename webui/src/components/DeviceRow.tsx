@@ -39,13 +39,13 @@ export function DeviceRow({ d }: { d: DeviceView }) {
       <div className="col-span-2 flex min-w-0 items-center gap-2 lg:col-span-1">
         <Link
           to={`/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`}
-          className="flex min-h-11 min-w-0 items-center gap-1 text-[13px] font-medium no-underline hover:text-accent sm:min-h-0"
+          className="flex min-h-touch min-w-0 items-center gap-1 text-compact font-medium no-underline hover:text-accent sm:min-h-0"
           title={`${name} · ${d.id}`}
         >
           <span className="min-w-0 truncate">{name}</span>
           <ChevronRight size={11} className="shrink-0 text-ink-3" />
         </Link>
-        <span className="num hidden shrink-0 truncate font-mono text-[11px] text-ink-3 2xl:inline" title={d.id}>
+        <span className="num hidden shrink-0 truncate font-mono text-micro text-ink-3 2xl:inline" title={d.id}>
           {devId}
         </span>
         <span className="ml-auto shrink-0 lg:hidden">
@@ -54,7 +54,7 @@ export function DeviceRow({ d }: { d: DeviceView }) {
       </div>
 
       {/* 网关 */}
-      <div className="num col-span-2 min-w-0 truncate text-xs text-ink-2 lg:col-span-1" title={gatewayTitle}>
+      <div className="num col-span-2 min-w-0 truncate text-meta text-ink-2 lg:col-span-1" title={gatewayTitle}>
         <span className="text-ink-3 lg:hidden">{t('row.gatewayPrefix')}</span>
         {d.edge_id || '—'}
       </div>
@@ -62,12 +62,12 @@ export function DeviceRow({ d }: { d: DeviceView }) {
       {/* 关键读数（声明主观测；能力全量事实面在详情页「能力」tab） */}
       <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 lg:hidden xl:col-span-1 xl:flex">
         {!descriptor ? (
-          <span className="text-[12px] text-ink-3" title={t('row.metricsWaitingTitle')}>{t('row.metricsWaiting')}</span>
+          <span className="text-meta text-ink-3" title={t('row.metricsWaitingTitle')}>{t('row.metricsWaiting')}</span>
         ) : metrics.length === 0 ? (
-          <span className="text-[12px] text-ink-3" title={t('row.noMetricsTitle')}>{t('row.noMetrics')}</span>
+          <span className="text-meta text-ink-3" title={t('row.noMetricsTitle')}>{t('row.noMetrics')}</span>
         ) : (
           metrics.map((m, i) => (
-            <span key={`${m.label}-${i}`} className="num flex min-w-0 items-baseline gap-1 text-[12px]" title={m.title}>
+            <span key={`${m.label}-${i}`} className="num flex min-w-0 items-baseline gap-1 text-meta" title={m.title}>
               <span className="min-w-0 truncate text-ink-3">{m.label}</span>
               <span className="min-w-0 truncate font-medium text-ink-2">
                 {m.text}{m.unit ? ` ${m.unit}` : ''}
@@ -75,7 +75,7 @@ export function DeviceRow({ d }: { d: DeviceView }) {
             </span>
           ))
         )}
-        <span className="num ml-auto shrink-0 font-mono text-[11px] text-ink-3 lg:hidden"
+        <span className="num ml-auto shrink-0 font-mono text-micro text-ink-3 lg:hidden"
           title={seen ? fmtDateTime(seen) : t('row.never')}>
           {d.online
             ? t('row.updatedAt', { time: seen ? fmtDateTime(seen) : t('row.never') })
@@ -89,7 +89,7 @@ export function DeviceRow({ d }: { d: DeviceView }) {
       </div>
 
       {/* Last Seen（桌面列；窄屏已并入读数行） */}
-      <div className="num hidden min-w-0 truncate text-right font-mono text-[11px] text-ink-3 lg:block" title={seen ? fmtDateTime(seen) : t('row.never')}>
+      <div className="num hidden min-w-0 truncate text-right font-mono text-micro text-ink-3 lg:block" title={seen ? fmtDateTime(seen) : t('row.never')}>
         {seen ? fmtDateTime(seen) : t('row.never')}
       </div>
     </li>
@@ -102,7 +102,7 @@ export function DeviceRowHead() {
   return (
     <li
       aria-hidden
-      className="hidden gap-x-4 px-4 pb-2 text-[12px] font-medium text-ink-3 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_5.5rem_9.5rem] xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,1.2fr)_5.5rem_9.5rem]"
+      className="hidden gap-x-4 px-4 pb-2 text-meta font-medium text-ink-3 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)_5.5rem_9.5rem] xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,1.2fr)_5.5rem_9.5rem]"
     >
       <span>{t('row.device')}</span><span>{t('row.gateway')}</span><span className="hidden xl:inline">{t('row.keyData')}</span><span>{t('row.status')}</span><span className="text-right">{t('row.lastReport')}</span>
     </li>

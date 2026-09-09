@@ -27,12 +27,12 @@ function InlineError({ title, hint, onRetry, retrying }: {
 }) {
   const { t } = useTranslation('settings')
   return (
-    <div role="alert" className="rounded-lg bg-bad/10 px-3.5 py-3 text-bad">
-      <p className="flex items-start gap-2 text-[13px] font-semibold">
+    <div role="alert" className="rounded-tile bg-bad/10 px-3.5 py-3 text-bad">
+      <p className="flex items-start gap-2 text-compact font-semibold">
         <AlertCircle size={14} className="mt-0.5 shrink-0" />
         <span>{title}</span>
       </p>
-      <p className="mt-1 text-[12px] leading-relaxed opacity-90">{hint}</p>
+      <p className="mt-1 text-meta leading-relaxed opacity-90">{hint}</p>
       {onRetry && (
         <button type="button" className="btn btn-ghost mt-2.5" onClick={onRetry} disabled={retrying}>
           {retrying ? t('retry.busy') : t('retry.idle')}
@@ -169,7 +169,7 @@ export default function Settings() {
     <>
       <PageHeader title={t('page.title')} subtitle={t('page.subtitle')} />
 
-      <p className="mb-5 max-w-[62ch] text-sm leading-relaxed text-ink-2">
+      <p className="mb-5 max-w-[62ch] text-body leading-relaxed text-ink-2">
         {authStatus === 'in' ? t('page.introSignedIn') : t('page.introSignedOut')}
       </p>
 
@@ -183,14 +183,14 @@ export default function Settings() {
           {authStatus === 'in' && user ? (
             <>
               <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-accent/10 text-accent">
                   <UserRound size={18} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[15px] font-semibold" title={user.name || user.username}>
+                  <p className="truncate text-lead font-semibold" title={user.name || user.username}>
                     {user.name || user.username}
                   </p>
-                  <p className="num mt-0.5 truncate font-mono text-xs text-ink-3" title={user.username}>
+                  <p className="num mt-0.5 truncate font-mono text-meta text-ink-3" title={user.username}>
                     {user.username}
                   </p>
                 </div>
@@ -199,12 +199,12 @@ export default function Settings() {
                 </Badge>
               </div>
 
-              <p className="mt-4 rounded-lg bg-surface-2 px-3.5 py-3 text-[13px] leading-relaxed text-ink-2">
+              <p className="mt-4 rounded-tile bg-surface-2 px-3.5 py-3 text-compact leading-relaxed text-ink-2">
                 {t(roleSummaryKey(user.role))}
               </p>
 
-              <details className="mt-4 border-t border-hairline pt-3 text-xs text-ink-2">
-                <summary className="flex min-h-11 cursor-pointer select-none items-center">{t('account.details')}</summary>
+              <details className="mt-4 border-t border-hairline pt-3 text-meta text-ink-2">
+                <summary className="flex min-h-touch cursor-pointer select-none items-center">{t('account.details')}</summary>
                 <dl className="mt-2.5 space-y-2.5">
                   <KeyValue k={t('account.fields.username')} v={<span className="font-mono">{user.username}</span>} />
                   {isAdmin && (
@@ -216,7 +216,7 @@ export default function Settings() {
                 </dl>
               </details>
 
-              <p className="mt-3 text-[12px] leading-relaxed text-ink-3">
+              <p className="mt-3 text-meta leading-relaxed text-ink-3">
                 {t('account.persisted')}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -230,14 +230,14 @@ export default function Settings() {
               </div>
             </>
           ) : (
-            <p className="text-xs leading-relaxed text-ink-2">
+            <p className="text-meta leading-relaxed text-ink-2">
               {authStatus === 'open' ? t('account.open') : t('account.signedOut')}
             </p>
           )}
         </Panel>
 
         <Panel title={<span className="flex items-center gap-1.5"><Sun size={14} />{t('appearance.title')}</span>}>
-          <p className="text-xs leading-relaxed text-ink-2">
+          <p className="text-meta leading-relaxed text-ink-2">
             {t('appearance.hint')}
           </p>
           <div className="mt-4">
@@ -258,13 +258,13 @@ export default function Settings() {
           className="lg:col-span-2"
           right={authStatus === 'open' && hasStoredToken ? <Badge tone="ok">{t('token.saved')}</Badge> : undefined}>
           {authStatus === 'in' ? (
-            <p className="text-xs leading-relaxed text-ink-2">
+            <p className="text-meta leading-relaxed text-ink-2">
               {t('token.signedIn')}
             </p>
           ) : (
             <>
               {hasStoredToken && (
-                <p className="mb-3 text-xs leading-relaxed text-ink-2">
+                <p className="mb-3 text-meta leading-relaxed text-ink-2">
                   {t('token.stored')}
                 </p>
               )}
@@ -289,18 +289,18 @@ export default function Settings() {
       </div>
 
       <details
-        className="mt-6 rounded-xl border border-hairline bg-surface p-4"
+        className="mt-6 rounded-card border border-hairline bg-surface p-4"
         onToggle={(e) => setDiagnosticsOpen(e.currentTarget.open)}
       >
-        <summary className="flex min-h-11 cursor-pointer select-none flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-ink-2">
+        <summary className="flex min-h-touch cursor-pointer select-none flex-wrap items-center gap-x-2 gap-y-1 text-body font-medium text-ink-2">
           <span className="flex items-center gap-1.5"><Activity size={14} />{t('diagnostics.title')}</span>
-          <span className="hidden text-xs font-normal text-ink-3 sm:inline">{t('diagnostics.subtitle')}</span>
-          <span className="ml-auto flex items-center gap-1 text-xs font-normal text-ink-3">
+          <span className="hidden text-meta font-normal text-ink-3 sm:inline">{t('diagnostics.subtitle')}</span>
+          <span className="ml-auto flex items-center gap-1 text-meta font-normal text-ink-3">
             {diagnosticsOpen ? t('diagnostics.close') : t('diagnostics.open')}
             <ChevronDown size={14} className={diagnosticsOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
           </span>
         </summary>
-        <p className="mt-1 max-w-[62ch] text-xs leading-relaxed text-ink-3">
+        <p className="mt-1 max-w-[62ch] text-meta leading-relaxed text-ink-3">
           {t('diagnostics.hint')}
         </p>
 
@@ -314,7 +314,7 @@ export default function Settings() {
                 retrying={healthFetching}
               />
             ) : healthPending && !health ? (
-              <p className="py-4 text-center text-sm text-ink-3">{t('health.loading')}</p>
+              <p className="py-4 text-center text-body text-ink-3">{t('health.loading')}</p>
             ) : (
               <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                 <StatTile icon={<Server size={13} />} label={t('health.fields.version')}
@@ -342,7 +342,7 @@ export default function Settings() {
                   <KeyValue k={t('live.rows.access')}
                     v={statsError ? t('live.platform.unavailable') : stats ? authModeLabel(stats.auth_mode) : statsPending ? t('live.accessLoading') : t('live.platform.unknown')} />
                 </dl>
-                <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">{liveHint}</p>
+                <p className="mt-3 border-t border-hairline pt-3 text-meta leading-relaxed text-ink-3">{liveHint}</p>
                 <button type="button" className="btn btn-ghost mt-4"
                   onClick={() => { reconnectLive(); void refetchHealth(); toast.info(t('live.reconnecting')) }}>
                   {t('live.reconnect')}
@@ -350,12 +350,12 @@ export default function Settings() {
               </Panel>
 
               <Panel title={<span className="flex items-center gap-1.5"><Database size={14} />{t('records.title')}</span>}
-                right={<span className="text-[12px] text-ink-3">{t('records.autoCleanup')}</span>}>
+                right={<span className="text-meta text-ink-3">{t('records.autoCleanup')}</span>}>
                 {statsError ? (
                   <InlineError title={t('records.errorTitle')} hint={t('records.errorHint')}
                     onRetry={() => void refetchStats()} retrying={statsFetching} />
                 ) : statsPending && !stats ? (
-                  <p className="py-4 text-center text-sm text-ink-3">{t('records.loading')}</p>
+                  <p className="py-4 text-center text-body text-ink-3">{t('records.loading')}</p>
                 ) : stats ? (
                   <>
                     <dl className="space-y-2.5">
@@ -366,9 +366,9 @@ export default function Settings() {
                       <KeyValue k={t('records.fields.retention')} v={t('records.retentionDays', { count: stats.retention_days })} />
                     </dl>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3">
-                      <Link to="/activity" className="link text-[12px]">{t('records.view')}</Link>
+                      <Link to="/activity" className="link text-meta">{t('records.view')}</Link>
                       {isAdmin && (
-                        <details className="text-[12px] text-ink-3">
+                        <details className="text-meta text-ink-3">
                           <summary className="cursor-pointer">{t('records.technical')}</summary>
                           <p className="mt-1">{t('records.schemaVersion', { version: stats.schema_version })}</p>
                         </details>
@@ -376,29 +376,29 @@ export default function Settings() {
                     </div>
                   </>
                 ) : (
-                  <p className="py-4 text-center text-sm text-ink-3">{t('records.unavailable')}</p>
+                  <p className="py-4 text-center text-body text-ink-3">{t('records.unavailable')}</p>
                 )}
               </Panel>
 
               <Panel title={<span className="flex items-center gap-1.5"><Plug size={14} />{t('adapters.title')}</span>}
-                right={<span className="text-[12px] text-ink-3">{adapters
+                right={<span className="text-meta text-ink-3">{adapters
                   ? t(isAdmin ? 'adapters.countRegistered' : 'adapters.countKinds', { count: adapters.adapters.length })
                   : '—'}</span>}>
                 {adaptersError ? (
                   <InlineError title={t('adapters.errorTitle')} hint={t('adapters.errorHint')}
                     onRetry={() => void refetchAdapters()} retrying={adaptersFetching} />
                 ) : adaptersPending && !adapters ? (
-                  <p className="py-4 text-center text-sm text-ink-3">{t('adapters.loading')}</p>
+                  <p className="py-4 text-center text-body text-ink-3">{t('adapters.loading')}</p>
                 ) : adapters ? (
                   adapters.adapters.length === 0 ? (
-                    <p className="py-4 text-center text-sm text-ink-3">{t('adapters.empty')}</p>
+                    <p className="py-4 text-center text-body text-ink-3">{t('adapters.empty')}</p>
                   ) : isAdmin ? (
                     <div className="space-y-4">
                       {adapters.adapters.map((a) => (
                         <div key={a.name}>
                           <div className="flex min-w-0 items-center gap-2">
-                            <span className="num min-w-0 truncate font-mono text-[13px] font-semibold" title={a.name}>{a.name}</span>
-                            <span className="shrink-0 text-[12px] text-ink-3">{t('adapters.commands', { count: a.commands.length })}</span>
+                            <span className="num min-w-0 truncate font-mono text-compact font-semibold" title={a.name}>{a.name}</span>
+                            <span className="shrink-0 text-meta text-ink-3">{t('adapters.commands', { count: a.commands.length })}</span>
                           </div>
                           <div className="mt-2 flex flex-wrap gap-1.5">
                             {a.commands.map((c) => (
@@ -410,24 +410,24 @@ export default function Settings() {
                         </div>
                       ))}
                       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3">
-                        <p className="max-w-[42ch] text-[12px] leading-relaxed text-ink-3">
+                        <p className="max-w-[42ch] text-meta leading-relaxed text-ink-3">
                           {t('adapters.adminHint')}
                         </p>
-                        <Link to="/devices" className="link text-[12px]">{t('adapters.view')}</Link>
+                        <Link to="/devices" className="link text-meta">{t('adapters.view')}</Link>
                       </div>
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      <p className="text-[13px] leading-relaxed text-ink-2">
+                      <p className="text-compact leading-relaxed text-ink-2">
                         {t('adapters.guestHint', { count: adapters.adapters.length })}
                       </p>
                       <div className="border-t border-hairline pt-3">
-                        <Link to="/devices" className="link text-[12px]">{t('adapters.view')}</Link>
+                        <Link to="/devices" className="link text-meta">{t('adapters.view')}</Link>
                       </div>
                     </div>
                   )
                 ) : (
-                  <p className="py-4 text-center text-sm text-ink-3">{t('adapters.unavailable')}</p>
+                  <p className="py-4 text-center text-body text-ink-3">{t('adapters.unavailable')}</p>
                 )}
               </Panel>
             </div>

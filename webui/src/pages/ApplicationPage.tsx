@@ -2,13 +2,14 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { Boxes, Layers3, ShieldAlert } from 'lucide-react'
-import { BackLink, EmptyState, ErrorState, PageHeader, Panel } from '@/components/ui'
+import { BackLink, EmptyState, ErrorState, PageHeader, Panel, Select } from '@/components/ui'
 import { ApiError } from '@/lib/api'
 import { PageSkeleton } from '@/components/Skeleton'
 import { ApplicationConsole } from '@/components/plugin-ui/ApplicationConsole'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { usePluginCatalog, usePluginInstances } from '@/hooks/usePlugins'
 import { applicationUIReadable, resolveApplicationRoute } from '@/lib/plugin-ui'
+import { resolveLocalizedText } from '@/i18n/pluginText'
 import { useAuth } from '@/store/auth'
 
 function ApplicationLink() {
@@ -17,7 +18,7 @@ function ApplicationLink() {
 }
 
 export default function ApplicationPage() {
-  const { t } = useTranslation('plugins')
+  const { t, i18n } = useTranslation('plugins')
   const { appRoute = '', pageId } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedInstance = searchParams.get('instance') ?? undefined
@@ -29,7 +30,10 @@ export default function ApplicationPage() {
   const resolution = useMemo(() => resolveApplicationRoute(
     catalog.plugins, instanceList.instances, appRoute, pageId, requestedInstance, readable,
   ), [appRoute, catalog.plugins, instanceList.instances, pageId, readable, requestedInstance])
-  const title = resolution.kind === 'ready' ? resolution.page.title : t('application.fallbackTitle')
+  const locale = i18n.resolvedLanguage ?? i18n.language
+  const title = resolution.kind === 'ready'
+    ? resolveLocalizedText(resolution.page, 'title', locale) ?? resolution.page.title
+    : t('application.fallbackTitle')
   usePageTitle(title)
 
   if (catalog.loading || instanceList.loading) return <PageSkeleton />
@@ -83,31 +87,34 @@ export default function ApplicationPage() {
         const query = params.toString()
         return `/apps/${encodeURIComponent(appRoute)}${id === pages[0]?.id ? '' : `/${encodeURIComponent(id)}`}${query ? `?${query}` : ''}`
       }
+      const navigationTitle = resolveLocalizedText(resolution.navigation, 'title', locale) ?? resolution.navigation.title
+      const applicationTitle = resolveLocalizedText(resolution.contribution, 'title', locale)
+        ?? resolution.contribution.title ?? resolution.plugin.id
       const lifecycleKey = JSON.stringify([selected.desired.revision, selected.desired.enabled,
         selected.has_observed, selected.observed?.state, selected.applied_revision, selected.stale])
       return <>
         <BackLink to="/plugins" label={t('application.back')} />
         <PageHeader
-          title={resolution.navigation.title}
-          subtitle={resolution.contribution.title || resolution.plugin.id}
+          title={navigationTitle}
+          subtitle={applicationTitle}
           actions={resolution.instances.length > 1
-            ? <label className="flex items-center gap-2 text-xs text-ink-2">
+            ? <label className="flex items-center gap-2 text-meta text-ink-2">
               <span>{t('application.instance')}</span>
-              <select className="input min-h-11 max-w-[14rem]" value={selected.desired.instance_id}
+              <Select className="max-w-[14rem]" value={selected.desired.instance_id}
                 onChange={(event) => setInstance(event.target.value)}>
                 {resolution.instances.map((instance) => <option key={instance.id} value={instance.desired.instance_id}>
                   {instance.desired.instance_id}{instance.desired.enabled ? '' : t('application.instanceDisabled')}
                 </option>)}
-              </select>
+              </Select>
             </label>
             : undefined}
         />
         {pages.length > 1 && <nav className="mb-5 flex min-w-0 flex-wrap gap-2" aria-label={t('application.pagesAria')}>
           {pages.map((page) => <Link key={page.id} to={pageLink(page.id)}
-            className={`btn ${page.id === resolution.page.id ? 'btn-primary' : 'btn-ghost'}`}>{page.title}</Link>)}
+            className={`btn ${page.id === resolution.page.id ? 'btn-primary' : 'btn-ghost'}`}>{resolveLocalizedText(page, 'title', locale) ?? page.title}</Link>)}
         </nav>}
         {selected.desired.instance_id !== requestedInstance && resolution.instances.length > 1
-          ? <Panel className="mb-5"><p className="text-sm text-ink-2">{t('application.defaultInstance')}</p></Panel>
+          ? <Panel className="mb-5"><p className="text-body text-ink-2">{t('application.defaultInstance')}</p></Panel>
           : null}
         <ApplicationConsole instance={selected} catalog={resolution.plugin} page={resolution.page}
           readOnly={authStatus !== 'in' || user?.role === 'viewer'} lifecycleKey={lifecycleKey} />

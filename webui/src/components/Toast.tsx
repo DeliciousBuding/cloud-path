@@ -1,4 +1,6 @@
 import { X, CheckCircle2, XCircle, Info } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import '@/i18n'
 import { useToasts, type ToastTone } from '@/store/toast'
 import { cn } from '@/lib/cn'
 
@@ -15,33 +17,34 @@ const TONE_ICON: Record<ToastTone, { icon: typeof Info; cls: string }> = {
  * 390px：宽度上限跟随视口（max-w-[calc(100vw-3rem)]），不产生横向溢出。
  */
 export function ToastViewport() {
+  const { t } = useTranslation()
   const items = useToasts((s) => s.items)
   const dismiss = useToasts((s) => s.dismiss)
   return (
     <div
       role="status"
       aria-live="polite"
-      aria-label="通知"
-      className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2 sm:bottom-6 sm:right-6"
+      aria-label={t('toast.region')}
+      className="pointer-events-none fixed bottom-4 right-4 z-overlay flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2 sm:bottom-6 sm:right-6"
     >
-      {items.map((t) => {
-        const meta = TONE_ICON[t.tone]
+      {items.map((item) => {
+        const meta = TONE_ICON[item.tone]
         const Icon = meta.icon
         return (
           <div
-            key={t.id}
-            className="bg-surface pointer-events-auto flex items-start gap-3 rounded-xl border border-hairline px-4 py-3 text-left shadow-lift"
+            key={item.id}
+            className="bg-surface pointer-events-auto flex items-start gap-3 rounded-card border border-hairline px-4 py-3 text-left shadow-lift"
           >
             <Icon size={17} className={cn('mt-0.5 shrink-0', meta.cls)} strokeWidth={2} aria-hidden />
             <span className="min-w-0 flex-1">
-              <span className="block text-[13px] font-semibold leading-snug">{t.title}</span>
-              {t.detail && <span className="mt-0.5 line-clamp-2 block text-xs text-ink-2">{t.detail}</span>}
+              <span className="block text-compact font-semibold leading-snug">{item.title}</span>
+              {item.detail && <span className="mt-0.5 line-clamp-2 block text-meta text-ink-2">{item.detail}</span>}
             </span>
             <button
               type="button"
-              onClick={() => dismiss(t.id)}
-              aria-label={`关闭提示：${t.title}`}
-              className="-mr-1 shrink-0 rounded-full p-1 text-ink-3 transition-colors hover:text-ink"
+              onClick={() => dismiss(item.id)}
+              aria-label={t('toast.close', { title: item.title })}
+              className="-mr-1 shrink-0 rounded-pill p-1 text-ink-3 transition-colors hover:text-ink"
             >
               <X size={14} aria-hidden />
             </button>

@@ -23,13 +23,13 @@ export function PluginErrorNote({ error, className }: { error: unknown; classNam
   const box = copy.tone === 'bad' ? 'bg-bad/10 text-bad'
     : copy.tone === 'warn' ? 'bg-warn/12 text-warn' : 'bg-ink-3/10 text-ink-2'
   return (
-    <div role="alert" className={`rounded-lg px-3.5 py-3 ${box} ${className ?? ''}`}>
-      <p className="text-[13px] font-semibold break-words">{copy.title}</p>
-      <p className="mt-0.5 text-[12px] leading-relaxed break-words opacity-90">{copy.hint}</p>
+    <div role="alert" className={`rounded-tile px-3.5 py-3 ${box} ${className ?? ''}`}>
+      <p className="text-compact font-semibold break-words">{copy.title}</p>
+      <p className="mt-0.5 text-meta leading-relaxed break-words opacity-90">{copy.hint}</p>
       {copy.code && (
         <details className="mt-2 min-w-0">
-          <summary className="flex min-h-11 cursor-pointer items-center text-[12px] opacity-80">{t('facts.technicalDetails')}</summary>
-          <p className="num mt-1 break-all text-[12px] opacity-70">{t('facts.errorCode')} {copy.code}</p>
+          <summary className="flex min-h-touch cursor-pointer items-center text-meta opacity-80">{t('facts.technicalDetails')}</summary>
+          <p className="num mt-1 break-all text-meta opacity-70">{t('facts.errorCode')} {copy.code}</p>
         </details>
       )}
     </div>
@@ -44,13 +44,13 @@ export function PermissionList({ permissions, emptyHint }: {
   const { t } = useTranslation('plugin')
   const groups = permissionGroups(permissions)
   if (groups.length === 0) {
-    return <p className="py-2 text-[12px] text-ink-3">{emptyHint ?? t('facts.noPermissionsDeclared')}</p>
+    return <p className="py-2 text-meta text-ink-3">{emptyHint ?? t('facts.noPermissionsDeclared')}</p>
   }
   return (
     <div className="space-y-2.5">
       {groups.map((g) => (
         <div key={g.key} className="min-w-0">
-          <p className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-ink-2">
+          <p className="mb-1 flex items-center gap-1.5 text-meta font-medium text-ink-2">
             {g.key === 'secrets'
               ? <KeyRound size={11} className="shrink-0" />
               : g.key === 'network'
@@ -80,7 +80,7 @@ export function SecretRefList({ refs }: { refs: string[] | undefined }) {
   // 只取 handle 名；去重后排序，避免同一 handle 重复占位
   const entries = [...new Set((refs ?? []).map(secretHandleName))].sort()
   if (entries.length === 0) {
-    return <p className="py-1 text-[12px] text-ink-3">{t('facts.noSecrets')}</p>
+    return <p className="py-1 text-meta text-ink-3">{t('facts.noSecrets')}</p>
   }
   return (
     <div>
@@ -94,7 +94,7 @@ export function SecretRefList({ refs }: { refs: string[] | undefined }) {
           </li>
         ))}
       </ul>
-      <p className="mt-1.5 text-[12px] leading-relaxed text-ink-3">
+      <p className="mt-1.5 text-meta leading-relaxed text-ink-3">
         {t('facts.secretsHint')}
       </p>
     </div>
@@ -105,13 +105,13 @@ export function SecretRefList({ refs }: { refs: string[] | undefined }) {
 export function ConfigTable({ config }: { config: Record<string, string> | undefined }) {
   const { t } = useTranslation('plugin')
   const rows = safeConfigEntries(config)
-  if (rows.length === 0) return <p className="py-1 text-[12px] text-ink-3">{t('facts.noConfig')}</p>
+  if (rows.length === 0) return <p className="py-1 text-meta text-ink-3">{t('facts.noConfig')}</p>
   return (
     <dl className="m-0">
       {rows.map((r) => (
         <KeyValue
           key={r.key}
-          k={<span className="num min-w-0 truncate font-mono text-[12px]" title={r.key}>{r.key}</span>}
+          k={<span className="num min-w-0 truncate font-mono text-meta" title={r.key}>{r.key}</span>}
           v={r.isSecret
             ? <span className="flex min-w-0 items-center justify-end gap-1"><Lock size={10} className="shrink-0" /><span className="truncate">{r.value}</span></span>
             : <span className="num min-w-0 truncate font-mono" title={r.value}>{r.value}</span>}
@@ -138,15 +138,15 @@ export function InstanceFacts({ v, catalog }: { v: PluginInstanceView; catalog?:
     <dl className="m-0 space-y-2.5">
       {rows.map((r) => <KeyValue key={r.k} k={r.k} v={r.node} />)}
       <div className="flex min-w-0 items-baseline justify-between gap-2 border-t border-hairline pt-2.5">
-        <dt className="shrink-0 text-[13px] text-ink-2">{t('facts.sourceVerification')}</dt>
+        <dt className="shrink-0 text-compact text-ink-2">{t('facts.sourceVerification')}</dt>
         <dd className="min-w-0 truncate text-right">
           {trust
             ? <Badge tone={trust.tone}>{trust.label}</Badge>
-            : <span className="text-[12px] text-ink-3">{t('common.notProvided')}</span>}
+            : <span className="text-meta text-ink-3">{t('common.notProvided')}</span>}
         </dd>
       </div>
-      <details className="min-w-0 border-t border-hairline pt-2.5 text-xs text-ink-2">
-        <summary className="flex min-h-11 cursor-pointer items-center">{t('facts.technicalDetails')}</summary>
+      <details className="min-w-0 border-t border-hairline pt-2.5 text-meta text-ink-2">
+        <summary className="flex min-h-touch cursor-pointer items-center">{t('facts.technicalDetails')}</summary>
         <div className="mt-2 space-y-1.5">
           <div className="flex min-w-0 items-baseline justify-between gap-2">
             <dt className="shrink-0">{t('facts.instanceId')}</dt>
@@ -157,11 +157,11 @@ export function InstanceFacts({ v, catalog }: { v: PluginInstanceView; catalog?:
             <dd className="num min-w-0 truncate text-right font-mono" title={v.desired.plugin_id}>{v.desired.plugin_id || '—'}</dd>
           </div>
           <div className="flex min-w-0 items-baseline justify-between gap-2">
-            <dt className="shrink-0">{t('facts.desiredRevision')}</dt>
+            <dt className="shrink-0">{t('facts.expectedVersion')}</dt>
             <dd className="num min-w-0 truncate text-right">{v.desired_revision}</dd>
           </div>
           <div className="flex min-w-0 items-baseline justify-between gap-2">
-            <dt className="shrink-0">{t('facts.appliedRevision')}</dt>
+            <dt className="shrink-0">{t('facts.actualVersion')}</dt>
             <dd className="num min-w-0 truncate text-right">{v.applied_revision}</dd>
           </div>
           <div className="flex min-w-0 items-baseline justify-between gap-2">

@@ -50,7 +50,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
     }
   }
 
-  if (readOnly) return <p className="text-sm text-ink-3">{t('controls.readOnly')}</p>
+  if (readOnly) return <p className="text-body text-ink-3">{t('controls.readOnly')}</p>
 
   const toggleLabel = v.desired.enabled ? t('controls.disable') : t('controls.enable')
   const needsReapply = v.drift || v.stale || !v.has_observed
@@ -87,7 +87,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
 
       {variant === 'detail' && (
         <details className="mt-3 border-t border-hairline pt-3">
-          <summary className="flex min-h-11 cursor-pointer items-center text-xs text-ink-2">{t('controls.more')}</summary>
+          <summary className="flex min-h-touch cursor-pointer items-center text-meta text-ink-2">{t('controls.more')}</summary>
           <button
             type="button" className="btn btn-danger-ghost mt-2" disabled={busy}
             onClick={() => { setPurge(false); setDeleteOpen(true) }}
@@ -107,7 +107,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
         body={
           <>
             <p>{t('controls.permissionBody')}</p>
-            <div className="mt-3 rounded-lg bg-surface-2 p-3">
+            <div className="mt-3 rounded-tile bg-surface-2 p-3">
               <PermissionList
                 permissions={catalog?.permissions}
                 emptyHint={t('controls.permissionUnknown')}
@@ -138,7 +138,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
                 ? t('controls.reconcileUnreported', { host })
                 : t('controls.reconcileDrift', { host })}
             </p>
-            <p className="mt-2 text-xs text-ink-2">
+            <p className="mt-2 text-meta text-ink-2">
               {v.edge_id !== 'server' && !v.edge_online && t('controls.reconcileOffline')}
               {v.edge_id !== 'server' && v.edge_online && t('controls.reconcileOnline')}
               {v.edge_id === 'server' && t('controls.reconcileServer')}
@@ -148,10 +148,10 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
         confirmLabel={t('controls.reconcileConfirm')}
         busy={reconcile.isPending}
         extra={
-          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg bg-surface-2 p-3">
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-tile bg-surface-2 p-3">
             <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)}
               className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
-            <span className="min-w-0 text-[12px] leading-relaxed">
+            <span className="min-w-0 text-meta leading-relaxed">
               {t('controls.forceReconcile', { host })}
             </span>
           </label>
@@ -175,7 +175,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
             <p>
               {t('controls.deleteBody', { host })}
             </p>
-            <p className="mt-2 text-xs text-ink-3">
+            <p className="mt-2 text-meta text-ink-3">
               {t('controls.deleteMeta', { location: v.edge_id === 'server' ? t('host.server') : t('location.edge', { id: v.edge_id || '—' }), version: v.desired.version || '—' })}
             </p>
           </>
@@ -184,10 +184,10 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
         busy={remove.isPending}
         requireAck={t('controls.deleteAck')}
         extra={
-          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg bg-surface-2 p-3">
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-tile bg-surface-2 p-3">
             <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)}
               className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
-            <span className="min-w-0 text-[12px] leading-relaxed">
+            <span className="min-w-0 text-meta leading-relaxed">
               {t('controls.purge')}
             </span>
           </label>

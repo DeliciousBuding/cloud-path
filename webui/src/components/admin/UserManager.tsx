@@ -37,14 +37,14 @@ export function UserManager() {
       ) : isPending ? (
         <RowSkeleton rows={3} />
       ) : users.length === 0 ? (
-        <p className="py-6 text-center text-sm text-ink-3">{t('userManager.empty')}</p>
+        <p className="py-6 text-center text-body text-ink-3">{t('userManager.empty')}</p>
       ) : (
         <ul className="divide-y divide-hairline" aria-label={t('userManager.listAria')}>
           {users.map((u) => <UserRow key={u.id} user={u} />)}
         </ul>
       )}
 
-      <p className="mt-4 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3 break-words">
+      <p className="mt-4 border-t border-hairline pt-3 text-meta leading-relaxed text-ink-3 break-words">
         {t('userManager.hint')}
       </p>
     </Panel>

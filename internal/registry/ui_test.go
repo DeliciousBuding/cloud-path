@@ -21,6 +21,9 @@ contributes:
         apiVersion: 1
         navigation:
           title: 药盒提醒
+          i18n:
+            zh-CN: 药盒提醒
+            en-US: Pillbox reminders
           icon: pill
           order: 30
           route: pillbox
@@ -28,6 +31,9 @@ contributes:
         pages:
           - id: home
             title: 药盒提醒
+            i18n:
+              zh-CN: 药盒提醒
+              en-US: Pillbox reminders
             sections:
               - type: status
               - type: actions
@@ -48,6 +54,13 @@ contributes:
 	}
 	if len(ui.Pages) != 1 || len(ui.Pages[0].Sections) != 4 {
 		t.Fatalf("UI pages/sections not parsed: %+v", ui)
+	}
+	if ui.Navigation.I18n["en-US"] != "Pillbox reminders" || ui.Pages[0].I18n["en-US"] != "Pillbox reminders" {
+		t.Fatalf("UI i18n not parsed: navigation=%+v page=%+v", ui.Navigation.I18n, ui.Pages[0].I18n)
+	}
+	public := m.PublicContributions()
+	if public.Applications[0].UI.Navigation.I18n["en-US"] != "Pillbox reminders" || public.Applications[0].UI.Pages[0].I18n["en-US"] != "Pillbox reminders" {
+		t.Fatalf("UI i18n not projected: %+v", public.Applications[0].UI)
 	}
 }
 

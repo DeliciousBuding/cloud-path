@@ -31,8 +31,8 @@ function plugin(over: Partial<PluginCatalogView> = {}): PluginCatalogView {
         id: 'example.app', title: '示例应用',
         ui: {
           apiVersion: 1,
-          navigation: { title: '示例页面', route: 'example', icon: 'box', order: 10 },
-          pages: [{ id: 'home', title: '示例页面', sections: [{ type: 'status' }, { type: 'records', recordType: 'sample', presentation: 'timeline' }] }],
+          navigation: { title: '示例页面', i18n: { 'en-US': 'Example page' }, route: 'example', icon: 'box', order: 10 },
+          pages: [{ id: 'home', title: '示例页面', i18n: { 'en-US': 'Example page' }, sections: [{ type: 'status' }, { type: 'records', recordType: 'sample', presentation: 'timeline' }] }],
         },
       }],
     },
@@ -65,6 +65,16 @@ describe('plugin UI normalization and asset URLs', () => {
     expect(ui?.pages?.[0]?.sections).toHaveLength(2)
     expect(ui?.pages?.[0]?.sections[0]).toMatchObject({ type: 'custom', entry: undefined, scopes: ['jobs.run'] })
     expect(ui?.pages?.[0]?.sections[1].fields).toEqual([{ key: 'name', required: true, type: undefined, label: undefined, description: undefined, placeholder: undefined, minimum: undefined, maximum: undefined, pattern: undefined, secret: undefined }])
+  })
+
+  it('preserves navigation/page i18n maps and drops invalid values', () => {
+    const ui = normalizePluginUI({
+      apiVersion: 1,
+      navigation: { title: '示例', i18n: { 'en-US': 'Example', 'zh-CN': 1, '': 'ignored' }, route: 'example' },
+      pages: [{ id: 'home', title: '首页', i18n: { 'en-US': 'Home' }, sections: [{ type: 'status' }] }],
+    })
+    expect(ui?.navigation?.i18n).toEqual({ 'en-US': 'Example' })
+    expect(ui?.pages?.[0]?.i18n).toEqual({ 'en-US': 'Home' })
   })
 
   it('normalizeCatalog drops malformed UI contributions without dropping the plugin', () => {

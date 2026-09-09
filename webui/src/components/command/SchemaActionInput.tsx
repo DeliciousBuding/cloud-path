@@ -1,6 +1,9 @@
 import { useId, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { ReactNode } from 'react'
+import { i18n } from '@/i18n'
 import { cn } from '@/lib/cn'
+import { Select } from '@/components/ui'
 import { commandArgsErrorCopy, commandForm, unsupportedSchemaKeywords } from '@/lib/command-schema'
 import type { CommandField } from '@/lib/command-schema'
 
@@ -21,11 +24,15 @@ interface SchemaActionInputProps {
 
 type Draft = Record<string, string>
 
+function tr(key: string, options?: Record<string, unknown>): string {
+  return String(i18n.t(`commandInput.${key}`, { ns: 'common', ...options }))
+}
+
 function parseFieldValue(field: CommandField, raw: string): { value?: unknown; error?: string } {
   if (field.type === 'number' || field.type === 'integer') {
     const value = Number(raw)
     if (!Number.isFinite(value) || (field.type === 'integer' && !Number.isInteger(value))) {
-      return { error: field.label + '：请输入有效数值' }
+      return { error: tr('error.number', { label: field.label }) }
     }
     return { value }
   }
@@ -38,21 +45,21 @@ function parseRows(field: CommandField, raw: string): { value?: unknown[]; error
   const nested = field.fields ?? []
   const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
   if (field.minItems != null && lines.length < field.minItems) {
-    return { error: field.label + '：至少填写 ' + field.minItems + ' 项' }
+    return { error: tr('error.minItems', { label: field.label, count: field.minItems }) }
   }
   if (field.maxItems != null && lines.length > field.maxItems) {
-    return { error: field.label + '：最多填写 ' + field.maxItems + ' 项' }
+    return { error: tr('error.maxItems', { label: field.label, count: field.maxItems }) }
   }
   const rows: Record<string, unknown>[] = []
   for (const [lineIndex, line] of lines.entries()) {
     const parts = nested.length === 1 ? [line] : line.split(/\s*[,，;；\t]\s*/).filter(Boolean)
     if (parts.length !== nested.length) {
-      return { error: field.label + '：第 ' + (lineIndex + 1) + ' 行需要 ' + nested.length + ' 项（' + nested.map((item) => item.label).join('、') + '）' }
+      return { error: tr('error.rowsCount', { label: field.label, line: lineIndex + 1, count: nested.length, fields: nested.map((item) => item.label).join(tr('listSeparator')) }) }
     }
     const row: Record<string, unknown> = {}
     for (const [partIndex, nestedField] of nested.entries()) {
       const parsed = parseFieldValue(nestedField, parts[partIndex] ?? '')
-      if (parsed.error) return { error: field.label + '：第 ' + (lineIndex + 1) + ' 行 ' + parsed.error }
+      if (parsed.error) return { error: tr('error.row', { label: field.label, line: lineIndex + 1, error: parsed.error }) }
       row[nestedField.key] = parsed.value
     }
     rows.push(row)
@@ -100,8 +107,8 @@ function arrayText(value: unknown, itemType?: CommandField['itemType']): string 
 }
 
 function choiceLabel(choice: unknown): string {
-  if (typeof choice === 'boolean') return choice ? '是' : '否'
-  if (choice === null) return '无'
+  if (typeof choice === 'boolean') return choice ? tr('yes') : tr('no')
+  if (choice === null) return tr('none')
   if (typeof choice === 'string' && choice) return choice
   return JSON.stringify(choice)
 }
@@ -137,7 +144,7 @@ function exampleLabel(example: unknown): string | undefined {
 function exampleText(field: CommandField, example: unknown, index: number): { value: string; label: string } | null {
   const raw = exampleValue(example)
   let value: string | null = null
-  let fallback = '预设 ' + (index + 1)
+  let fallback = tr('preset', { number: index + 1 })
   if (field.type === 'array') {
     value = arrayText(raw, field.itemType)
     if (value !== null) fallback = value
@@ -148,7 +155,7 @@ function exampleText(field: CommandField, example: unknown, index: number): { va
     if (choice >= 0) { value = String(choice); fallback = String(raw) }
   } else if (field.type === 'boolean' && typeof raw === 'boolean') {
     value = String(raw)
-    fallback = raw ? '是' : '否'
+    fallback = raw ? tr('yes') : tr('no')
   } else if ((field.type === 'number' || field.type === 'integer') && typeof raw === 'number' && Number.isFinite(raw)) {
     value = String(raw)
     fallback = String(raw)
@@ -167,17 +174,17 @@ function fieldArgs(fields: CommandField[], values: Draft): { args: string; error
     if (field.type === 'array') {
       const parts = arrayParts(field, raw)
       if (field.minItems != null && parts.length < field.minItems) {
-        return { args: '', error: field.label + '：至少填写 ' + field.minItems + ' 项' }
+        return { args: '', error: tr('error.minItems', { label: field.label, count: field.minItems }) }
       }
       if (field.maxItems != null && parts.length > field.maxItems) {
-        return { args: '', error: field.label + '：最多填写 ' + field.maxItems + ' 项' }
+        return { args: '', error: tr('error.maxItems', { label: field.label, count: field.maxItems }) }
       }
       const parsed: unknown[] = []
       for (const part of parts) {
         if (field.itemType === 'number' || field.itemType === 'integer') {
           const n = Number(part)
           if (!Number.isFinite(n) || (field.itemType === 'integer' && !Number.isInteger(n))) {
-            return { args: '', error: field.label + '：请填写数值' }
+            return { args: '', error: tr('error.numeric', { label: field.label }) }
           }
           parsed.push(n)
         } else {
@@ -235,6 +242,7 @@ function fieldDraft(fields: CommandField[], args: string): Draft | null {
 export function SchemaActionInput({ action, validate, description, emptyHint, validationSource,
   showTitle = true, emptyArgs = '', disabled, onEdit, renderSubmit }: SchemaActionInputProps) {
   const id = useId()
+  const { t } = useTranslation('common')
   const form = useMemo(() => action.inputSchema ? commandForm(action.inputSchema) : null, [action.inputSchema])
   const unsupported = useMemo(() => action.inputSchema ? unsupportedSchemaKeywords(action.inputSchema) : [], [action.inputSchema])
   const [branch, setBranch] = useState(0)
@@ -244,7 +252,7 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
   const activeFields = form?.choices ? form.choices[branch]?.fields ?? [] : form?.fields ?? []
   const built = fieldArgs(activeFields, values)
   const args = json ?? (edited ? built.args : emptyArgs)
-  const error = json === null && !edited && !emptyArgs ? '请填写参数'
+  const error = json === null && !edited && !emptyArgs ? t('commandInput.error.required')
     : (json === null ? built.error : undefined) ?? validate(args)
   const backToFields = json !== null && activeFields.length > 0 ? fieldDraft(activeFields, json) : null
   const descriptionId = description ? id + '-hint' : undefined
@@ -273,8 +281,8 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
           .filter((item): item is { value: string; label: string } => item !== null)
         return (
           <div key={field.key} className={cn('min-w-0', field.type === 'object-rows' && 'sm:col-span-2')}>
-            <label htmlFor={fieldId} className="mb-1 block break-words text-[12px] text-ink-2">
-              {field.label}{field.required && <span aria-hidden="true" className="ml-1 text-ink-3">必填</span>}
+            <label htmlFor={fieldId} className="mb-1 block break-words text-meta text-ink-2">
+              {field.label}{field.required && <span aria-hidden="true" className="ml-1 text-ink-3">{t('commandInput.required')}</span>}
             </label>
             {fieldExamples.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-1.5">
@@ -286,24 +294,24 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
             )}
             {field.type === 'object-rows' ? (
               <div className="min-w-0">
-                <p className="mb-1 text-[12px] text-ink-3">
-                  每行按 {(field.fields ?? []).map((nested) => nested.label).join('、')} 顺序填写，用逗号分隔。
+                <p className="mb-1 text-meta text-ink-3">
+                  {t('commandInput.rowsHint', { fields: (field.fields ?? []).map((nested) => nested.label).join(t('commandInput.listSeparator')) })}
                 </p>
                 <textarea id={fieldId} rows={4} value={value} required={field.required}
                   placeholder={(field.fields ?? []).map((nested) => nested.label).join(', ')}
                   aria-describedby={[fieldDescription, describedBy].filter(Boolean).join(' ')}
                   onChange={(e) => setField(field.key, e.target.value)}
-                  className="input input-sm min-h-11 min-w-0 font-mono sm:min-h-0" />
+                  className="input input-sm min-w-0 font-mono" />
               </div>
             ) : field.type === 'enum' || field.type === 'boolean' ? (
-              <select id={fieldId} value={value} required={field.required}
+              <Select id={fieldId} compact value={value} required={field.required}
                 aria-describedby={[fieldDescription, describedBy].filter(Boolean).join(' ')}
-                className="input input-sm min-h-11 min-w-0 sm:min-h-0"
+                className="min-w-0"
                 onChange={(e) => setField(field.key, e.target.value)}>
-                <option value="">请选择</option>
-                {field.type === 'boolean' ? <><option value="true">是</option><option value="false">否</option></>
+                <option value="">{t('commandInput.select')}</option>
+                {field.type === 'boolean' ? <><option value="true">{t('commandInput.yes')}</option><option value="false">{t('commandInput.no')}</option></>
                   : field.choices?.map((choice, i) => <option key={i} value={String(i)}>{field.choiceLabels?.[i] ?? choiceLabel(choice)}</option>)}
-              </select>
+              </Select>
             ) : (
               <input id={fieldId} type={field.type === 'string' || field.type === 'array' ? 'text' : 'number'}
                 value={value} required={field.required}
@@ -312,13 +320,13 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
                 max={typeof field.schema.maximum === 'number' ? field.schema.maximum : undefined}
                 placeholder={field.type === 'array'
                   ? (field.minItems != null && field.minItems > 1
-                    ? `可连续填写 ${field.minItems} 个数字，或用逗号/空格分隔`
-                    : '用逗号或空格分隔')
+                    ? t('commandInput.arrayPlaceholderWithMin', { count: field.minItems })
+                    : t('commandInput.arrayPlaceholder'))
                   : undefined}
                 aria-describedby={[fieldDescription, describedBy].filter(Boolean).join(' ')}
-                onChange={(e) => setField(field.key, e.target.value)} className="input input-sm min-h-11 min-w-0 sm:min-h-0" />
+                onChange={(e) => setField(field.key, e.target.value)} className="min-w-0" />
             )}
-            {field.description && <p id={fieldDescription} className="mt-1 break-words text-[12px] text-ink-3">{field.description}</p>}
+            {field.description && <p id={fieldDescription} className="mt-1 break-words text-meta text-ink-3">{field.description}</p>}
           </div>
         )
       })}
@@ -327,21 +335,21 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
 
   return (
     <fieldset className={cn('min-w-0', showTitle && 'border-t border-hairline pt-3')} aria-describedby={describedBy} disabled={disabled}>
-      <legend className={cn('max-w-full break-words text-[13px] text-ink-2 [overflow-wrap:anywhere]',
+      <legend className={cn('max-w-full break-words text-compact text-ink-2 [overflow-wrap:anywhere]',
         showTitle ? 'mb-1.5' : 'sr-only')}>
         {action.label}
       </legend>
-      {descriptionId && <p id={descriptionId} className="mb-2 text-[12px] leading-relaxed text-ink-3">{description}</p>}
+      {descriptionId && <p id={descriptionId} className="mb-2 text-meta leading-relaxed text-ink-3">{description}</p>}
 
       {form && json === null ? (
         <>
           {form.choices && form.choices.length > 0 && (
             <div className="mb-3">
-              <p className="mb-1.5 text-[12px] text-ink-2">设置方式</p>
-              <div role="radiogroup" aria-label="设置方式" className="grid gap-2 sm:grid-cols-2">
+              <p className="mb-1.5 text-meta text-ink-2">{t('commandInput.settingMethod')}</p>
+              <div role="radiogroup" aria-label={t('commandInput.settingMethod')} className="grid gap-2 sm:grid-cols-2">
                 {form.choices.map((choice, index) => (
                   <label key={choice.key} className={cn(
-                    'flex min-w-0 cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-[12px] transition-colors',
+                    'flex min-w-0 cursor-pointer items-start gap-2 rounded-tile border px-3 py-2 text-meta transition-colors',
                     branch === index ? 'border-accent/60 bg-accent/8 text-ink' : 'border-hairline text-ink-2 hover:bg-ink-3/5',
                   )}>
                     <input type="radio" name={id + '-branch'} checked={branch === index}
@@ -356,24 +364,24 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
         </>
       ) : (
         <div>
-          <label htmlFor={id + '-args'} className="mb-1 block text-[12px] text-ink-2">
-            {action.inputSchema ? '技术参数' : '参数'}
+          <label htmlFor={id + '-args'} className="mb-1 block text-meta text-ink-2">
+            {action.inputSchema ? t('commandInput.technicalParams') : t('commandInput.params')}
           </label>
           <textarea id={id + '-args'} rows={form ? 3 : 2} spellCheck={false}
-            aria-label={action.label + (action.inputSchema ? ' 技术参数' : ' 参数')}
+            aria-label={action.inputSchema ? t('commandInput.technicalParamsAria', { label: action.label }) : t('commandInput.paramsAria', { label: action.label })}
             aria-invalid={shownError ? true : undefined} aria-describedby={describedBy}
             value={json ?? args} onChange={(e) => { onEdit?.(); setJSON(e.target.value); setEdited(true) }}
-            placeholder={action.inputPlaceholder ?? (form ? '按设备要求填写参数' : '参数')}
+            placeholder={action.inputPlaceholder ?? (form ? t('commandInput.parameterPlaceholder') : t('commandInput.params'))}
             className={cn('input input-sm min-w-0 font-mono', shownError && 'input-error')} />
         </div>
       )}
 
-      {shownError && <p id={errorId} role="alert" className="mt-2 break-words text-[12px] text-bad">{shownError}</p>}
-      {!edited && error && <p className="sr-only text-[12px] text-ink-3 sm:not-sr-only sm:mt-2 sm:block">{emptyHint}</p>}
+      {shownError && <p id={errorId} role="alert" className="mt-2 break-words text-meta text-bad">{shownError}</p>}
+      {!edited && error && <p className="sr-only text-meta text-ink-3 sm:not-sr-only sm:mt-2 sm:block">{emptyHint}</p>}
       {unsupported.length > 0 && (json !== null || !form) && (
-        <details className="mt-2 text-[12px] text-ink-3">
-          <summary className="flex min-h-11 cursor-pointer select-none items-center transition-colors hover:text-ink-2 sm:min-h-0">部分参数由{validationSource}确认</summary>
-          <p className="mt-1 break-words">未校验：{unsupported.join('、')}；最终结果由{validationSource}确认。</p>
+        <details className="mt-2 text-meta text-ink-3">
+          <summary className="flex min-h-touch cursor-pointer select-none items-center transition-colors hover:text-ink-2 sm:min-h-0">{t('commandInput.unsupportedSummary', { source: validationSource })}</summary>
+          <p className="mt-1 break-words">{t('commandInput.unsupportedDetail', { unsupported: unsupported.join(t('commandInput.listSeparator')), source: validationSource })}</p>
         </details>
       )}
       <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
@@ -381,18 +389,18 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
       </div>
       {form && json === null && activeFields.length > 0 && (
         <div className="mt-2 flex justify-end">
-          <button type="button" className="link inline-flex min-h-11 items-center text-[12px] text-ink-3 sm:min-h-0" aria-label={action.label + ' 技术人员选项'}
+          <button type="button" className="link inline-flex min-h-touch items-center text-meta text-ink-3 sm:min-h-0" aria-label={t('commandInput.technicalOptionsAria', { label: action.label })}
             onClick={() => { onEdit?.(); setJSON(args); setEdited(true) }}>
-            技术人员选项
+            {t('commandInput.technicalOptions')}
           </button>
         </div>
       )}
-      {form && json !== null && backToFields === null && <p className="mt-2 text-[12px] text-ink-3">当前参数无法自动转换为表单，请继续在高级参数中编辑。</p>}
+      {form && json !== null && backToFields === null && <p className="mt-2 text-meta text-ink-3">{t('commandInput.cannotConvert')}</p>}
       {form && json !== null && (
-        <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-[12px]">
-          <button type="button" className="link inline-flex min-h-11 items-center sm:min-h-0" disabled={backToFields === null} aria-label={action.label + ' 使用表单填写'}
+        <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-meta">
+          <button type="button" className="link inline-flex min-h-touch items-center sm:min-h-0" disabled={backToFields === null} aria-label={t('commandInput.useFormAria', { label: action.label })}
             onClick={() => { if (backToFields) { setValues(backToFields); setJSON(null); setEdited(true) } }}>
-            使用表单填写
+            {t('commandInput.useForm')}
           </button>
         </div>
       )}

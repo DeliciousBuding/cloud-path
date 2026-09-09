@@ -5,7 +5,7 @@ import { Link, useParams, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {Activity, ArrowRight, Braces, Command, Grid3x3, History, LayoutDashboard, RadioTower, Sparkles, Zap} from 'lucide-react'
 import {
-  BackLink, Badge, EmptyState, ErrorState, KeyValue, Panel, Segmented, StatusDot, TabBar, TabPanel,
+  BackLink, Badge, EmptyState, ErrorState, KeyValue, Panel, Segmented, Select, StatusDot, TabBar, TabPanel,
 } from '@/components/ui'
 import type { TabItem } from '@/components/ui'
 import {
@@ -304,18 +304,18 @@ export default function DeviceDetail() {
 
       <header className="mb-5 flex flex-wrap items-center gap-3 fade-up">
         <StatusDot online={d.online} />
-        <h1 className="min-w-0 max-w-full truncate text-[24px] font-semibold tracking-[-0.01em]" title={d.id}>
+        <h1 className="min-w-0 max-w-full truncate text-hero font-semibold tracking-[-0.01em]" title={d.id}>
           {d.name || deviceId}
         </h1>
         <Badge tone={deviceStatusMeta(d.online, descriptor?.status).tone}>{deviceStatusMeta(d.online, descriptor?.status).label}</Badge>
-        <span className="num ml-auto truncate font-mono text-[11px] text-ink-3" title={t('detail.header.deviceId', { id: d.id })}>
+        <span className="num ml-auto truncate font-mono text-micro text-ink-3" title={t('detail.header.deviceId', { id: d.id })}>
           {d.online
             ? t('detail.header.updatedAt', { time: timeAgo(d.updated_at) })
             : t('detail.header.lastSeen', { time: timeAgo(d.last_seen) })}
         </span>
       </header>
 
-      <div className="mb-5 [&_button]:min-h-11 sm:[&_button]:min-h-0">
+      <div className="mb-5 [&_button]:min-h-touch sm:[&_button]:min-h-0">
         <TabBar items={tabs} value={tab} onChange={setTab} label={t('detail.tabsAria')} />
       </div>
 
@@ -328,7 +328,7 @@ export default function DeviceDetail() {
       )}
 
       {tab === 'advanced' && (
-        <div className="mb-5 [&_button]:min-h-11 sm:[&_button]:min-h-0">
+        <div className="mb-5 [&_button]:min-h-touch sm:[&_button]:min-h-0">
           <Segmented
             label={t('detail.advanced.label')}
             options={[
@@ -350,7 +350,7 @@ export default function DeviceDetail() {
               {tiles.map((t, i) => <MetricTile key={`${t.label}-${i}`} v={t} />)}
             </div>
             {tiles.length === 0 && (
-              <p className="py-2 text-center text-sm text-ink-3">
+              <p className="py-2 text-center text-body text-ink-3">
                 {d.online ? t('detail.overview.connectedNoPrimary') : t('detail.overview.offlineNoPrimary')}
               </p>
             )}
@@ -369,12 +369,12 @@ export default function DeviceDetail() {
                 title={<span className="flex items-center gap-1.5"><Activity size={14} />{t('detail.overview.recentEvents')}</span>}
                 right={
                   <button type="button" onClick={() => setTab('events')}
-                    className="link flex items-center gap-0.5 text-xs">
+                    className="link flex items-center gap-0.5 text-meta">
                     {t('detail.overview.viewRecord')} <ArrowRight size={12} />
                   </button>
                 }>
                 {events.length === 0
-                  ? <p className="py-6 text-center text-sm text-ink-3">{t('detail.overview.noEvents')}</p>
+                  ? <p className="py-6 text-center text-body text-ink-3">{t('detail.overview.noEvents')}</p>
                   : <EventFeed events={events} showDevice={false} limit={8} />}
               </Panel>
               <CommandHistory deviceId={key} targetLabel={d.name || deviceId} actions={commands.actions} limit={8} online={actionsOnline} />
@@ -390,7 +390,7 @@ export default function DeviceDetail() {
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-0.5">
               <span className="flex items-center gap-2">
                 <StatusDot online={d.online} />
-                <span className="text-[12px] font-medium text-ink-2">{d.online ? t('detail.state.live') : t('detail.state.offline')}</span>
+                <span className="text-meta font-medium text-ink-2">{d.online ? t('detail.state.live') : t('detail.state.offline')}</span>
                 {!d.online && <Badge tone="warn">{t('detail.state.showingLastUpdate')}</Badge>}
               </span>
                 <Segmented
@@ -431,7 +431,7 @@ export default function DeviceDetail() {
                     />
                   </div>
                   {seriesKeys.length === 0 ? (
-                    <p className="py-8 text-center text-xs text-ink-3">
+                    <p className="py-8 text-center text-meta text-ink-3">
                       {t('detail.state.noTrend')}
                     </p>
                   ) : (
@@ -443,14 +443,14 @@ export default function DeviceDetail() {
                         return (
                           <div key={k} className="card min-w-0 p-3.5">
                             <div className="flex items-baseline justify-between gap-2">
-                              <span className="min-w-0 truncate text-[12px] font-medium text-ink-2">
+                              <span className="min-w-0 truncate text-meta font-medium text-ink-2">
                                 {seriesLabel(k)}
                               </span>
                               <span className="flex shrink-0 items-baseline gap-1.5">
-                                <span className="num text-[13px] font-semibold tracking-[-0.01em]">
+                                <span className="num text-compact font-semibold tracking-[-0.01em]">
                                   {pts.length ? formatValue(pts[pts.length - 1].v) : '—'}
                                 </span>
-                                <span className="num text-[12px] text-ink-3">{t('detail.state.points', { count: pts.length })}</span>
+                                <span className="num text-meta text-ink-3">{t('detail.state.points', { count: pts.length })}</span>
                               </span>
                             </div>
                             <TrendChart points={pts} kind={chartKind} height={104} unit={seriesUnit(k)} />
@@ -459,7 +459,7 @@ export default function DeviceDetail() {
                       })}
                     </div>
                   )}
-                  <p className="mt-3 px-0.5 text-[12px] leading-relaxed text-ink-3">
+                  <p className="mt-3 px-0.5 text-meta leading-relaxed text-ink-3">
                     {t('detail.state.trendNote')}
                   </p>
                 </div>
@@ -475,7 +475,7 @@ export default function DeviceDetail() {
             <div className="grid items-start gap-5 lg:grid-cols-3">
               {descriptorFailed
                 ? <Panel title={t('detail.controls.title')} className="lg:col-span-2">
-                  <p className="py-4 text-center text-sm text-ink-3">{t('detail.controls.descriptorFailed')}</p>
+                  <p className="py-4 text-center text-body text-ink-3">{t('detail.controls.descriptorFailed')}</p>
                 </Panel>
                 : <ActionPanel deviceId={key} targetLabel={d.name || deviceId} set={commands} online={actionsOnline} offlineReason={actionsOfflineReason} className="lg:col-span-2" />}
               {actuators.length > 0 && (
@@ -501,30 +501,30 @@ export default function DeviceDetail() {
           <div className="space-y-5">
             <CommandHistory deviceId={key} targetLabel={d.name || deviceId} actions={commands.actions} online={actionsOnline} />
             <details className="card overflow-hidden">
-              <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-4 py-3 text-[13px] font-semibold">
+              <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-4 py-3 text-compact font-semibold">
                 <span className="flex items-center gap-1.5"><Activity size={14} />{t('detail.events.title')}</span>
-                <span className="num text-[12px] font-normal text-ink-3">{t('detail.events.count', { count: events.length })}</span>
+                <span className="num text-meta font-normal text-ink-3">{t('detail.events.count', { count: events.length })}</span>
               </summary>
               <div className="border-t border-hairline p-4">
                 {eventKinds.length > 1 && (
                   <div className="mb-3 flex items-center gap-2">
-                    <label htmlFor="ev-kind" className="shrink-0 text-[12px] text-ink-3">{t('detail.events.filter')}</label>
-                    <select id="ev-kind" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}
-                      className="input input-sm min-h-11 min-w-0 max-w-[18rem] sm:min-h-0">
+                    <label htmlFor="ev-kind" className="shrink-0 text-meta text-ink-3">{t('detail.events.filter')}</label>
+                    <Select id="ev-kind" compact value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}
+                      className="min-w-0 max-w-[18rem]">
                       <option value="">{t('detail.events.all')}</option>
                       {eventKinds.map(([t, l]) => <option key={t} value={t}>{optionLabel(l, 40)}</option>)}
-                    </select>
+                    </Select>
                   </div>
                 )}
                 {evLoading && events.length === 0
                   ? <RowSkeleton rows={5} />
                   : shownEvents.length === 0
-                    ? <p className="py-4 text-center text-sm text-ink-3">{t('detail.events.empty')}</p>
+                    ? <p className="py-4 text-center text-body text-ink-3">{t('detail.events.empty')}</p>
                     : (
                       <>
                         <EventFeed events={shownEvents} showDevice={false} limit={30} dayGrouped />
                         {shownEvents.length > 30 && (
-                          <Link to="/activity" className="link mt-3 flex min-h-11 items-center gap-0.5 border-t border-hairline pt-3 text-xs">
+                          <Link to="/activity" className="link mt-3 flex min-h-touch items-center gap-0.5 border-t border-hairline pt-3 text-meta">
                             {t('detail.events.limited', { count: shownEvents.length })} <ArrowRight size={12} />
                           </Link>
                         )}
@@ -540,7 +540,7 @@ export default function DeviceDetail() {
         <TabPanel value={tab}>
           {descriptorFailed ? (
             <Panel title={<span className="flex items-center gap-1.5"><Sparkles size={14} />{t('detail.capabilities.title')}</span>}>
-              <p className="py-4 text-center text-sm text-ink-3">{t('detail.capabilities.loadFailed')}</p>
+              <p className="py-4 text-center text-body text-ink-3">{t('detail.capabilities.loadFailed')}</p>
             </Panel>
           ) : !descriptor ? (
             <EmptyState icon={<Sparkles size={24} />} title={t('detail.capabilities.emptyTitle')}
@@ -548,9 +548,9 @@ export default function DeviceDetail() {
           ) : (
             <Panel
               title={<span className="flex items-center gap-1.5"><Sparkles size={14} />{t('detail.capabilities.title')}</span>}
-              right={<span className="num text-[12px] text-ink-3">{t('detail.capabilities.synced', { count: capRefs.length, docs: capabilities.docs.length })}</span>}>
+              right={<span className="num text-meta text-ink-3">{t('detail.capabilities.synced', { count: capRefs.length, docs: capabilities.docs.length })}</span>}>
               <CapabilityBrowser descriptor={descriptor} idx={capabilities} />
-              <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
+              <p className="mt-3 border-t border-hairline pt-3 text-meta leading-relaxed text-ink-3">
                 {t('detail.capabilities.note')}<span className="sm:hidden">{t('detail.capabilities.mobileNote')}</span>
               </p>
             </Panel>
@@ -563,7 +563,7 @@ export default function DeviceDetail() {
           <div className="space-y-5">
             <Panel
               title={<span className="flex items-center gap-1.5"><Braces size={14} />{t('detail.diagnostics.title')}</span>}
-              right={<span className="num text-[12px] text-ink-3">
+              right={<span className="num text-meta text-ink-3">
                 {t('detail.diagnostics.referenceTime', { time: now.toLocaleTimeString(i18n.language, { hour12: false }) })}
               </span>}>
               <div className="grid gap-5 md:grid-cols-2">
@@ -588,13 +588,13 @@ export default function DeviceDetail() {
               </div>
               {descriptor && (
                 <details className="mt-3">
-                  <summary className="flex min-h-11 cursor-pointer select-none items-center text-[12px] text-ink-3 transition-colors hover:text-ink-2">
+                  <summary className="flex min-h-touch cursor-pointer select-none items-center text-meta text-ink-3 transition-colors hover:text-ink-2">
                     {t('detail.diagnostics.descriptorRaw')}
                   </summary>
                   <JsonBlock className="mt-1.5" value={descriptor} maxHeight="max-h-56" label={t('detail.diagnostics.descriptorRaw')} />
                 </details>
               )}
-              <p className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-0.5 border-t border-hairline pt-3 text-[12px] text-ink-3">
+              <p className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-0.5 border-t border-hairline pt-3 text-meta text-ink-3">
                 <Grid3x3 size={11} className="shrink-0" />
                 {t('detail.diagnostics.summary', {
                   entities: descriptor ? descriptor.entities.length : 0,
@@ -607,7 +607,7 @@ export default function DeviceDetail() {
             {descriptor && (
               <Panel title={<span className="flex items-center gap-1.5"><Grid3x3 size={14} />{t('detail.diagnostics.inventoryTitle')}</span>}>
                 <EntityInventory descriptor={descriptor} />
-                <p className="mt-2 text-[11px] text-ink-3 sm:hidden">{t('detail.diagnostics.mobileNote')}</p>
+                <p className="mt-2 text-micro text-ink-3 sm:hidden">{t('detail.diagnostics.mobileNote')}</p>
               </Panel>
             )}
           </div>
@@ -626,12 +626,12 @@ function StateTable({ descriptor, idx, nowSec }: {
   const { t } = useTranslation('devices')
   const rows = descriptor.entities.flatMap((e) =>
     observationsOf(e).map((o) => ({ e, o })))
-  if (!rows.length) return <p className="py-6 text-center text-sm text-ink-3">{t('detail.stateTable.empty')}</p>
+  if (!rows.length) return <p className="py-6 text-center text-body text-ink-3">{t('detail.stateTable.empty')}</p>
   return (
     <div className="card overflow-x-auto" tabIndex={0} role="region" aria-label={t('detail.stateTable.aria')}>
-      <table className="w-full min-w-[44rem] border-collapse text-left text-xs">
+      <table className="w-full min-w-[44rem] border-collapse text-left text-meta">
         <thead>
-          <tr className="border-b border-hairline text-[12px] text-ink-3">
+          <tr className="border-b border-hairline text-meta text-ink-3">
             <th className="px-3 py-2 font-medium">{t('detail.stateTable.entity')}</th>
             <th className="px-3 py-2 font-medium">{t('detail.stateTable.property')}</th>
             <th className="px-3 py-2 text-right font-medium">{t('detail.stateTable.value')}</th>
@@ -655,7 +655,7 @@ function StateTable({ descriptor, idx, nowSec }: {
                   ? <Badge tone={qualityTone(o.quality)}>{t(`quality.${o.quality}`)}</Badge>
                   : <span className="text-ink-3">—</span>}
               </td>
-              <td className="num whitespace-nowrap px-3 py-1.5 text-right font-mono text-[11px] text-ink-3">
+              <td className="num whitespace-nowrap px-3 py-1.5 text-right font-mono text-micro text-ink-3">
                 {o.received_at ? formatTimestamp(o.received_at) : '—'}
                 {o.received_at && isStaleObs(o, nowSec) && (
                   <Badge tone="warn" className="ml-1">{t('detail.stateTable.stale')}</Badge>

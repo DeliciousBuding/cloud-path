@@ -68,15 +68,15 @@ beforeEach(() => {
 })
 
 describe('操作集来自设备支持的操作', () => {
-  it('适配器提供的命令逐条渲染成按钮，并放在高级：手动输入参数入口', async () => {
+  it('适配器提供的命令逐条渲染成按钮，并放在更多操作：手动输入参数入口', async () => {
     route({ adapters: [{ name: 'demo', commands: ['raw', 'identify', 'query_state'] }] })
     renderDetail()
     await gotoControls()
-    expect(await screen.findByText('高级：手动输入参数')).toBeInTheDocument()
+    expect(await screen.findByText('更多操作：手动输入参数')).toBeInTheDocument()
     // 无 schema 的适配器命令走高级手动参数入口，候选来自白名单，不多不少
     const select = screen.getByRole('combobox', { name: '选择操作' })
     const options = within(select).getAllByRole('option').map((o) => o.textContent).filter((t) => t !== '选择操作')
-    expect(options).toEqual(['原始操作', 'Identify', 'Query State'])
+    expect(options).toEqual(['操作', 'Identify', 'Query State'])
   })
 
 
@@ -84,7 +84,7 @@ describe('操作集来自设备支持的操作', () => {
     route({ adapters: [{ name: 'demo', commands: ['alpha_only'] }] })
     renderDetail()
     await gotoControls()
-    await screen.findByText('高级：手动输入参数')
+    await screen.findByText('更多操作：手动输入参数')
     const select = screen.getByRole('combobox', { name: '选择操作' })
     expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['选择操作', 'Alpha Only'])
   })
@@ -143,7 +143,7 @@ describe('有设备能力声明时以声明为准', () => {
     for (const declared of ['闭合', '断开', '恢复出厂']) {
       expect(within(panel).getByRole('button', { name: declared }), `声明动作 ${declared} 未渲染`).toBeInTheDocument()
     }
-    expect(within(panel).getByRole('combobox', { name: '选择参数操作' })).toHaveValue('pulse')
+    expect(within(panel).getByRole('combobox', { name: '选择要执行的操作' })).toHaveValue('pulse')
     // 白名单命令不再另立入口（声明优先）
     expect(screen.queryByRole('combobox', { name: '选择操作' })).not.toBeInTheDocument()
   })
@@ -217,7 +217,7 @@ describe('设备分区深链接', () => {
   it('controls 查询参数直接打开正确设备的控制区', async () => {
     route({ adapters: [{ name: 'demo', commands: ['identify'] }] })
     renderDetail(ROUTE + '?tab=controls')
-    expect(await screen.findByText('高级：手动输入参数')).toBeInTheDocument()
+    expect(await screen.findByText('更多操作：手动输入参数')).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: '选择操作' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /设备操作/ })).toHaveAttribute('aria-selected', 'true')
   })
@@ -252,7 +252,7 @@ describe('操作记录', () => {
     expect(screen.getByText('已发送，正在等待设备确认，请勿重复操作。')).toBeInTheDocument()
     expect(screen.queryByText('操作失败，请稍后重试')).not.toBeInTheDocument()
 
-    const failedDetails = screen.getAllByText('技术详情')[0].closest('details') as HTMLElement
+    const failedDetails = screen.getAllByText('更多信息')[0].closest('details') as HTMLElement
     expect(within(failedDetails).getByText('ERR_BUSY queue full; raw=0x05')).toBeInTheDocument()
   })
 

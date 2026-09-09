@@ -2,7 +2,9 @@
 // Segmented / KeyValue / Spinner / Button / TextField / ThemeToggle / AuthCard
 // 颜色一律走 index.css token（Tailwind 主题类或 .btn/.input/.card 基类），组件内禁止裸色值。
 import { useId, useState } from 'react'
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
+import '@/i18n'
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
 import { ArrowLeft, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
 import { Link } from 'react-router'
 import { cn } from '@/lib/cn'
@@ -34,7 +36,7 @@ export function StatusDot({ online, className }: { online: boolean; className?: 
   return (
     <span
       aria-hidden="true"
-      className={cn('inline-block h-2 w-2 shrink-0 rounded-full',
+      className={cn('inline-block h-2 w-2 shrink-0 rounded-pill',
         online ? 'bg-ok' : 'bg-idle/50', className)}
     />
   )
@@ -47,7 +49,7 @@ export function Panel({ title, right, className, children }: {
     <section className={cn('card p-4 sm:p-5', className)}>
       {(title || right) && (
         <div className="mb-4 flex items-center justify-between gap-3">
-          {title && <h2 className="text-[15px] font-semibold tracking-[-0.01em]">{title}</h2>}
+          {title && <h2 className="text-lead font-semibold tracking-[-0.01em]">{title}</h2>}
           {right && <div className={cn(!title && 'ml-auto')}>{right}</div>}
         </div>
       )}
@@ -63,8 +65,8 @@ export function PageHeader({ title, subtitle, actions }: {
     <header className="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3 sm:mb-8 sm:items-end">
       <div className="min-w-0">
         {/* -0.025em 档负字距是拉丁刻度；中文标题字面全角，超过 -0.01em 会挤，故用 CJK 安全值 */}
-        <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.01em] sm:text-[28px]">{title}</h1>
-        {subtitle && <p className="mt-1.5 max-w-[62ch] text-sm text-ink-2">{subtitle}</p>}
+        <h1 className="text-title font-semibold leading-tight tracking-[-0.01em] sm:text-page-title">{title}</h1>
+        {subtitle && <p className="mt-1.5 max-w-[62ch] text-body text-ink-2">{subtitle}</p>}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </header>
@@ -77,15 +79,15 @@ export function StatTile({ icon, label, value, unit, sub }: {
   return (
     // 390px：两列统计瓦片内宽仅约 8rem，长版本号等不可断字符串必须换行，否则撑出横向滚动
     <div className="card min-w-0 p-3.5 sm:p-4">
-      <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-ink-2">
+      <div className="flex min-w-0 items-center gap-1.5 text-meta font-medium text-ink-2">
         {icon}<span className="truncate">{label}</span>
       </div>
-      <div className="metric num mt-1.5 break-words text-[26px] font-semibold leading-none sm:text-[30px]">
+      <div className="metric num mt-1.5 break-words text-title font-semibold leading-none sm:text-display">
         {value}
-        {unit && <span className="ml-1 text-base font-normal text-ink-3">{unit}</span>}
+        {unit && <span className="ml-1 text-body font-normal text-ink-3">{unit}</span>}
       </div>
       {/* sub 行恒预留：peer 瓦片共享 label→value→detail 内部行（Vercel 节奏纪律），高度结构一致不互撑 */}
-      <div className="mt-0.5 min-h-4 text-xs text-ink-3 break-words">{sub}</div>
+      <div className="mt-0.5 min-h-4 text-meta text-ink-3 break-words">{sub}</div>
     </div>
   )
 }
@@ -100,8 +102,8 @@ export function EmptyState({ icon, title, hint, action, compact, plain }: {
       compact ? 'py-8' : 'py-12',
     )}>
       <span aria-hidden="true" className="text-ink-3">{icon}</span>
-      <p className="mt-3 text-[15px] font-semibold">{title}</p>
-      {hint && <p className="mt-1 max-w-sm text-sm text-ink-2">{hint}</p>}
+      <p className="mt-3 text-lead font-semibold">{title}</p>
+      {hint && <p className="mt-1 max-w-sm text-body text-ink-2">{hint}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>
   )
@@ -111,10 +113,12 @@ export function EmptyState({ icon, title, hint, action, compact, plain }: {
  * 错误态：说清「拿不到什么」+ 一键重试。
  * 不复述服务端技术细节，也不把错误渲染成空白（空白 = 用户以为没数据）。
  */
-export function ErrorState({ icon, title, hint, onRetry, retrying, compact, plain, retryLabel = '重新加载' }: {
+export function ErrorState({ icon, title, hint, onRetry, retrying, compact, plain, retryLabel }: {
   icon?: ReactNode; title: string; hint?: ReactNode
   onRetry?: () => void; retrying?: boolean; compact?: boolean; plain?: boolean; retryLabel?: string
 }) {
+  const { t } = useTranslation()
+  const retryText = retryLabel ?? t('ui.reload')
   return (
     <div
       role="alert"
@@ -122,26 +126,28 @@ export function ErrorState({ icon, title, hint, onRetry, retrying, compact, plai
         !plain && 'card', compact ? 'py-8' : 'py-12')}
     >
       <span aria-hidden="true" className="text-bad">{icon ?? <RefreshCw size={22} />}</span>
-      <p className="mt-3 text-[15px] font-semibold">{title}</p>
-      {hint && <p className="mt-1 max-w-md text-sm break-words text-ink-2">{hint}</p>}
+      <p className="mt-3 text-lead font-semibold">{title}</p>
+      {hint && <p className="mt-1 max-w-md text-body break-words text-ink-2">{hint}</p>}
       {onRetry && (
         <button type="button" className="btn btn-primary mt-5" onClick={onRetry} disabled={retrying}>
-          {retrying ? <Spinner size={13} /> : <RefreshCw size={13} />} {retryLabel}
+          {retrying ? <Spinner size={13} /> : <RefreshCw size={13} />} {retryText}
         </button>
       )}
     </div>
   )
 }
 
-export function Segmented<T extends string>({ options, value, onChange, label = '视图切换' }: {
+export function Segmented<T extends string>({ options, value, onChange, label }: {
   options: { value: T; label: string; icon?: ReactNode }[]
   value: T
   onChange: (v: T) => void
   /** 分组可读名称（读屏用户需要知道这组按钮在切换什么） */
   label?: string
 }) {
+  const { t } = useTranslation()
+  const groupLabel = label ?? t('ui.viewSwitch')
   return (
-    <div className="inline-flex max-w-full rounded-full bg-ink-3/10 p-0.5" role="group" aria-label={label}>
+    <div className="inline-flex max-w-full rounded-pill bg-ink-3/10 p-0.5" role="group" aria-label={groupLabel}>
       {options.map((o) => (
         <button
           key={o.value}
@@ -149,7 +155,7 @@ export function Segmented<T extends string>({ options, value, onChange, label = 
           aria-pressed={value === o.value}
           onClick={() => onChange(o.value)}
           className={cn(
-            'inline-flex min-h-11 items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-all sm:min-h-0',
+            'inline-flex min-h-touch items-center gap-1 rounded-pill px-3 py-1 text-meta font-medium transition-colors sm:min-h-0',
             value === o.value
               ? 'bg-surface text-ink shadow-sm'
               : 'text-ink-2 hover:text-ink',
@@ -175,12 +181,14 @@ export interface TabItem<T extends string> {
   count?: number
 }
 
-export function TabBar<T extends string>({ items, value, onChange, label = '分页切换' }: {
+export function TabBar<T extends string>({ items, value, onChange, label }: {
   items: TabItem<T>[]
   value: T
   onChange: (v: T) => void
   label?: string
 }) {
+  const { t } = useTranslation()
+  const tablistLabel = label ?? t('ui.tabSwitch')
   const idx = Math.max(0, items.findIndex((i) => i.value === value))
 
   const move = (delta: number) => {
@@ -194,7 +202,7 @@ export function TabBar<T extends string>({ items, value, onChange, label = '分�
     // 390px：标签条在自身容器内横向滚动，不把溢出推给 body（与移动端主导航同一手法）
     <div className="-mx-1 overflow-x-auto px-1 pb-1">
       <div
-        role="tablist" aria-label={label}
+        role="tablist" aria-label={tablistLabel}
         className="flex min-w-max gap-5 border-b border-hairline"
         onKeyDown={(e) => {
           if (e.key === 'ArrowRight') { e.preventDefault(); move(1) }
@@ -219,14 +227,14 @@ export function TabBar<T extends string>({ items, value, onChange, label = '分�
               tabIndex={selected ? 0 : -1}
               onClick={() => onChange(it.value)}
               className={cn(
-                '-mb-px inline-flex min-h-11 items-center gap-1.5 border-b-2 px-0.5 pb-2 text-[13px] font-medium whitespace-nowrap transition-colors sm:min-h-0',
+                '-mb-px inline-flex min-h-touch items-center gap-1.5 border-b-2 px-0.5 pb-2 text-compact font-medium whitespace-nowrap transition-colors sm:min-h-0',
                 selected ? 'border-ink text-ink' : 'border-transparent text-ink-3 hover:text-ink-2',
               )}
             >
               {it.icon}
               {it.label}
               {typeof it.count === 'number' && (
-                <span className="num text-[12px] text-ink-3">
+                <span className="num text-meta text-ink-3">
                   {it.count}
                 </span>
               )}
@@ -258,7 +266,7 @@ export function KeyValue({ k, v, mono, wrap }: { k: ReactNode; v: ReactNode; mon
   return (
     <div className="kv">
       <dt>{k}</dt>
-      <dd className={cn('min-w-0', wrap ? 'break-words' : 'truncate', mono && 'num font-mono text-xs text-ink-2')}>{v}</dd>
+      <dd className={cn('min-w-0', wrap ? 'break-words' : 'truncate', mono && 'num font-mono text-meta text-ink-2')}>{v}</dd>
     </div>
   )
 }
@@ -287,6 +295,14 @@ export function Button({ variant = 'primary', lg, className, ...rest }: {
   )
 }
 
+/** 原生 select 原语：默认走 .select，pill 只用于筛选器，compact 只用于紧凑表单。 */
+export function Select({ pill, compact, className, ...rest }: {
+  pill?: boolean
+  compact?: boolean
+} & SelectHTMLAttributes<HTMLSelectElement>) {
+  return <select className={cn('select', pill && 'select-pill', compact && 'select-sm', className)} {...rest} />
+}
+
 /** 带标签/提示/错误的表单输入行（error 优先于 hint 展示）。
  *  `suffix` 挂在输入框右侧（如密码显示/隐藏切换）：输入框自动留出右内边距，不与文字重叠。 */
 export function TextField({ label, hint, error, className, suffix, ...rest }: {
@@ -302,7 +318,7 @@ export function TextField({ label, hint, error, className, suffix, ...rest }: {
   const desc = message ? `${id}-desc` : undefined
   return (
     <div className={className}>
-      <label htmlFor={id} className="mb-1.5 block text-[13px] font-medium text-ink-2">{label}</label>
+      <label htmlFor={id} className="mb-1.5 block text-compact font-medium text-ink-2">{label}</label>
       <div className="relative">
       <input
         id={id}
@@ -314,7 +330,7 @@ export function TextField({ label, hint, error, className, suffix, ...rest }: {
       {suffix && <div className="absolute inset-y-0 right-1.5 flex items-center">{suffix}</div>}
       </div>
       {desc && (
-        <p id={desc} className={cn('mt-1.5 text-xs', error ? 'text-bad' : 'text-ink-3')}>
+        <p id={desc} className={cn('mt-1.5 text-meta', error ? 'text-bad' : 'text-ink-3')}>
           {message}
         </p>
       )}
@@ -326,22 +342,23 @@ export function TextField({ label, hint, error, className, suffix, ...rest }: {
  *  与侧栏 ThemeControl 同一三态语义（浅色 → 深色 → 跟随系统）循环，
  *  图标反映当前模式、文案预告下一模式——不让「跟随系统」在独立页被悄悄丢掉。 */
 export function ThemeToggle({ className }: { className?: string }) {
+  const { t } = useTranslation()
   const [mode, setMode] = useState<ThemeMode>(() => getTheme())
   const META: Record<ThemeMode, { icon: typeof Sun; label: string }> = {
-    light: { icon: Sun, label: '浅色外观' },
-    dark: { icon: Moon, label: '深色外观' },
-    system: { icon: Monitor, label: '跟随系统' },
+    light: { icon: Sun, label: t('theme.light') },
+    dark: { icon: Moon, label: t('theme.dark') },
+    system: { icon: Monitor, label: t('theme.system') },
   }
   const next: ThemeMode = mode === 'light' ? 'dark' : mode === 'dark' ? 'system' : 'light'
   const Cur = META[mode].icon
   return (
     <button
       type="button"
-      title={`当前：${META[mode].label} · 点击切换为${META[next].label}`}
-      aria-label={`切换为${META[next].label}`}
+      title={t('theme.switchTitle', { current: META[mode].label, next: META[next].label })}
+      aria-label={t('theme.switchTo', { label: META[next].label })}
       onClick={() => { setTheme(next); setMode(next) }}
       className={cn(
-        'flex h-11 w-11 items-center justify-center rounded-full border border-hairline sm:h-8 sm:w-8',
+        'flex h-touch w-touch items-center justify-center rounded-pill border border-hairline sm:h-8 sm:w-8',
         'bg-surface/70 text-ink-2 transition-colors hover:text-ink',
         className,
       )}
@@ -363,14 +380,14 @@ export function AuthCard({ title, subtitle, children, footer }: {
       <ThemeToggle className="absolute right-4 top-4" />
       <div className="w-full max-w-sm fade-up">
         <div className="mb-8 flex flex-col items-center text-center">
-          <span aria-hidden="true" className="flex h-14 w-14 items-center justify-center rounded-xl bg-accent/10 text-accent">
+          <span aria-hidden="true" className="flex h-14 w-14 items-center justify-center rounded-card bg-accent/10 text-accent">
             <Logo size={30} />
           </span>
-          <h1 className="mt-4 text-[26px] font-semibold leading-tight tracking-[-0.01em]">{title}</h1>
-          {subtitle && <p className="mt-1.5 text-sm text-ink-2">{subtitle}</p>}
+          <h1 className="mt-4 text-title font-semibold leading-tight tracking-[-0.01em]">{title}</h1>
+          {subtitle && <p className="mt-1.5 text-body text-ink-2">{subtitle}</p>}
         </div>
         <div className="card p-6">{children}</div>
-        {footer && <div className="mt-5 text-center text-xs text-ink-3">{footer}</div>}
+        {footer && <div className="mt-5 text-center text-meta text-ink-3">{footer}</div>}
       </div>
     </div>
   )
@@ -380,7 +397,7 @@ export function AuthCard({ title, subtitle, children, footer }: {
 export function BackLink({ to, label }: { to: string; label: string }) {
   return (
     <Link to={to}
-      className="mb-5 inline-flex min-h-11 items-center gap-1 text-sm text-ink-2 transition-colors hover:text-accent fade-up sm:min-h-0">
+      className="mb-5 inline-flex min-h-touch items-center gap-1 text-body text-ink-2 transition-colors hover:text-accent fade-up sm:min-h-0">
       <ArrowLeft size={15} /> {label}
     </Link>
   )

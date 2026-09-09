@@ -233,9 +233,9 @@ func TestSanitizeDetail(t *testing.T) {
 func TestProjectionCatalogProjectsUIAndRejectsRouteConflict(t *testing.T) {
 	ui := &api.PluginUIData{
 		APIVersion: 1,
-		Navigation: &api.PluginUINavigationData{Title: "药盒提醒", Route: "pillbox"},
+		Navigation: &api.PluginUINavigationData{Title: "药盒提醒", I18n: map[string]string{"en-US": "Pillbox reminders"}, Route: "pillbox"},
 		Pages: []api.PluginUIPageData{{
-			ID: "home", Title: "药盒提醒",
+			ID: "home", Title: "药盒提醒", I18n: map[string]string{"en-US": "Pillbox reminders"},
 			Sections: []api.PluginUISectionData{{Type: "status"}, {Type: "custom", Entry: "ui/index.html", Scopes: []string{"instance.read"}, Fields: []map[string]any{{"label": "C:\\secret\\ui"}}}},
 		}},
 	}
@@ -253,13 +253,21 @@ func TestProjectionCatalogProjectsUIAndRejectsRouteConflict(t *testing.T) {
 	if len(views) != 1 || views[0].Contributes.Applications[0].UI == nil || views[0].Contributes.Applications[0].UI.Navigation.Route != "pillbox" {
 		t.Fatalf("UI 未投影: %+v", views)
 	}
+	if views[0].Contributes.Applications[0].UI.Navigation.I18n["en-US"] != "Pillbox reminders" || views[0].Contributes.Applications[0].UI.Pages[0].I18n["en-US"] != "Pillbox reminders" {
+		t.Fatalf("UI i18n 未投影: %+v", views[0].Contributes.Applications[0].UI)
+	}
 	views[0].Contributes.Applications[0].UI.Pages[0].Sections[0].Type = "mutated"
+	views[0].Contributes.Applications[0].UI.Navigation.I18n["en-US"] = "mutated"
+	views[0].Contributes.Applications[0].UI.Pages[0].I18n["en-US"] = "mutated"
 	again, err := c.Plugins("tenant-a")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if again[0].Contributes.Applications[0].UI.Pages[0].Sections[0].Type != "status" {
 		t.Fatal("UI 投影必须深拷贝，响应改动不得污染源数据")
+	}
+	if again[0].Contributes.Applications[0].UI.Navigation.I18n["en-US"] != "Pillbox reminders" || again[0].Contributes.Applications[0].UI.Pages[0].I18n["en-US"] != "Pillbox reminders" {
+		t.Fatal("UI i18n 投影必须深拷贝，响应改动不得污染源数据")
 	}
 	if got := again[0].Contributes.Applications[0].UI.Pages[0].Sections[1].Fields[0]["label"]; got != "[path]" {
 		t.Fatalf("UI fields 中的本机路径必须脱敏: %v", got)

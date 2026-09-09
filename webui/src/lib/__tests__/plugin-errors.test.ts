@@ -79,23 +79,23 @@ describe('稳定错误码 → 文案', () => {
     expect(pluginErrorCopy(err(400, PluginErr.PermissionConfirm)).hint).toMatch(/确认/)
   })
 
-  it('运行位置不匹配时说明 Driver 走网关、Application 走中心服务，主文案不露机器码', () => {
+  it('运行位置不匹配时说明 Driver 走网关、Application 走平台服务，主文案不露机器码', () => {
     const copy = pluginErrorCopy(err(409, 'plugin_instance_host_mismatch'))
     expect(copy.code).toBe('plugin_instance_host_mismatch')
     expect(copy.title).toMatch(/运行位置.*不匹配/)
     expect(copy.hint).toMatch(/驱动.*网关/)
-    expect(copy.hint).toMatch(/应用.*中心服务/)
+    expect(copy.hint).toMatch(/应用.*平台服务/)
     expect(copy.hint).toMatch(/选择.*运行位置/)
     expect(`${copy.title} ${copy.hint}`).not.toMatch(/plugin_instance_host_mismatch/)
     expect(copy.retryable).toBe(false)
   })
 
-  it('Connector 无运行时必须如实拒绝，不把换宿主说成解法', () => {
+  it('Connector 当前无法运行时必须如实拒绝，不把换运行位置说成解法', () => {
     const copy = pluginErrorCopy(err(409, 'plugin_instance_kind_unsupported'))
     expect(copy.code).toBe('plugin_instance_kind_unsupported')
     expect(copy.title).toMatch(/暂不支持/)
-    expect(copy.hint).toMatch(/连接器.*没有可用运行时/)
-    expect(copy.hint).toMatch(/选择网关或中心服务都不能/)
+    expect(copy.hint).toMatch(/连接器.*无法运行/)
+    expect(copy.hint).toMatch(/选择网关或平台服务都不能/)
     expect(`${copy.title} ${copy.hint}`).not.toMatch(/plugin_instance_kind_unsupported/)
     expect(copy.retryable).toBe(false)
   })
@@ -123,12 +123,13 @@ describe('稳定错误码 → 文案', () => {
     expect(copy.hint).toMatch(/不显示明文|只显示名称/)
   })
 
-  it('服务端未给码时只报状态，不复述服务端 message 当业务规则', () => {
+  it('服务端未给码时只报可理解的失败，不复述服务端 message 或状态码', () => {
     const copy = pluginErrorCopy(err(409, undefined, '不能禁用最后一个 admin'))
     expect(copy.code).toBeUndefined()
     expect(copy.title).not.toMatch(/最后一个 admin/)
     expect(copy.hint).not.toMatch(/最后一个 admin/)
-    expect(copy.title).toMatch(/409/)
+    expect(copy.title).toMatch(/保存失败/)
+    expect(copy.title).not.toMatch(/409/)
   })
 
   it('401/403/429 有本地可解释语义；网络不可达不当成服务端拒绝', () => {
@@ -230,7 +231,7 @@ describe('Edge 上报的运行态语义（规范大写名）', () => {
     expect(stateMeta('running').label).toBe('运行中')
     expect(stateMeta('stopping').label).toBe('停止中')
     expect(stateMeta('failed').tone).toBe('bad')
-    expect(hostDetailLabel('server-apphost')).toBe('中心服务')
+    expect(hostDetailLabel('server-apphost')).toBe('平台服务')
     expect(healthMeta('DEGRADED').tone).toBe('warn')
     expect(healthMeta('UNKNOWN').tone).toBe('idle')
   })

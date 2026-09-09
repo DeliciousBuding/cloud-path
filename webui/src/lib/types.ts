@@ -424,6 +424,7 @@ export interface PluginUISection {
 
 export interface PluginUINavigation {
   title: string
+  i18n?: I18nText
   icon?: string
   order?: number
   route: string
@@ -433,6 +434,7 @@ export interface PluginUINavigation {
 export interface PluginUIPage {
   id: string
   title: string
+  i18n?: I18nText
   sections: PluginUISection[]
 }
 

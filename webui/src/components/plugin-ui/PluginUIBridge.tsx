@@ -151,19 +151,19 @@ export function PluginUIBridge({ pluginId, version, instance, section }: {
   }
 
   if (!src) {
-    return <div role="alert" className="rounded-lg bg-bad/10 px-4 py-3 text-sm text-bad">
+    return <div role="alert" className="rounded-tile bg-bad/10 px-4 py-3 text-body text-bad">
       <p className="flex items-center gap-2 font-medium"><ShieldAlert size={15} /> {t('bridge.unavailable')}</p>
-      <p className="mt-1 text-xs leading-relaxed opacity-90">{t('bridge.unavailableHint')}</p>
+      <p className="mt-1 text-meta leading-relaxed opacity-90">{t('bridge.unavailableHint')}</p>
     </div>
   }
 
   return <Panel title={<span className="flex items-center gap-1.5"><ExternalLink size={14} /> {t('bridge.title')}</span>}>
-    <p id={titleId} className="mb-3 text-xs leading-relaxed text-ink-3">
+    <p id={titleId} className="mb-3 text-meta leading-relaxed text-ink-3">
       {t('bridge.hint')}
     </p>
-    <div className="relative min-h-64 overflow-hidden rounded-lg border border-hairline bg-surface-2">
-      {state === 'loading' && <p role="status" className="absolute inset-0 z-10 flex items-center justify-center text-sm text-ink-3">{t('bridge.loading')}</p>}
-      {state === 'error' && <div role="alert" className="absolute inset-0 z-10 flex items-center justify-center px-6 text-center text-sm text-bad">{t('bridge.loadFailed')}</div>}
+    <div className="relative min-h-64 overflow-hidden rounded-tile border border-hairline bg-surface-2">
+      {state === 'loading' && <p role="status" className="absolute inset-0 z-local flex items-center justify-center text-body text-ink-3">{t('bridge.loading')}</p>}
+      {state === 'error' && <div role="alert" className="absolute inset-0 z-local flex items-center justify-center px-6 text-center text-body text-bad">{t('bridge.loadFailed')}</div>}
       <iframe
         ref={frame}
         src={src}

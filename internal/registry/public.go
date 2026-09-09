@@ -43,7 +43,7 @@ func publicPluginUI(in *PluginUI) *api.PluginUIData {
 	out := &api.PluginUIData{APIVersion: in.APIVersion}
 	if in.Navigation != nil {
 		out.Navigation = &api.PluginUINavigationData{
-			Title: in.Navigation.Title, Icon: in.Navigation.Icon,
+			Title: in.Navigation.Title, I18n: in.Navigation.I18n, Icon: in.Navigation.Icon,
 			Order: in.Navigation.Order, Route: in.Navigation.Route,
 			Visibility: in.Navigation.Visibility,
 		}
@@ -52,7 +52,7 @@ func publicPluginUI(in *PluginUI) *api.PluginUIData {
 		out.Pages = make([]api.PluginUIPageData, 0, len(in.Pages))
 		for _, page := range in.Pages {
 			out.Pages = append(out.Pages, api.PluginUIPageData{
-				ID: page.ID, Title: page.Title, Sections: publicUISections(page.Sections),
+				ID: page.ID, Title: page.Title, I18n: page.I18n, Sections: publicUISections(page.Sections),
 			})
 		}
 	}

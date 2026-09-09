@@ -4,7 +4,9 @@
 import '@testing-library/jest-dom/vitest'
 import { configure } from '@testing-library/dom'
 import { cleanup } from '@testing-library/react'
-import { afterEach } from 'vitest'
+import { afterEach, beforeEach } from 'vitest'
+import { i18n } from '@/i18n'
+import { DEFAULT_LOCALE } from '@/i18n/config'
 import { installMatchMediaStub } from './media'
 
 const hasDom = typeof window !== 'undefined' && typeof document !== 'undefined'
@@ -26,6 +28,11 @@ if (hasDom) {
     })
   }
 }
+
+beforeEach(async () => {
+  if (!hasDom) return
+  await i18n.changeLanguage(DEFAULT_LOCALE)
+})
 
 afterEach(() => {
   if (!hasDom) return

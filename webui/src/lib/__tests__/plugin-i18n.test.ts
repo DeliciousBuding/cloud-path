@@ -37,6 +37,14 @@ describe('resolveLocalizedText', () => {
   it('locale key 大小写和连字符宽容', () => {
     expect(resolveLocalizedText({ i18n: { EN_us: 'English' } }, 'title', 'en-US')).toBe('English')
   })
+
+  it('解析插件 UI 导航和页面标题', () => {
+    const navigation = { title: '药盒提醒', i18n: { 'zh-CN': '药盒提醒', 'en-US': 'Pillbox reminders' }, route: 'pillbox' }
+    const page = { id: 'home', title: '首页', i18n: { 'en-US': 'Home' }, sections: [] }
+    expect(resolveLocalizedText(navigation, 'title', 'en-US')).toBe('Pillbox reminders')
+    expect(resolveLocalizedText(page, 'title', 'en-US')).toBe('Home')
+    expect(resolveLocalizedText(navigation, 'title', 'zh-CN')).toBe('药盒提醒')
+  })
 })
 
 describe('descriptor i18n parsing', () => {

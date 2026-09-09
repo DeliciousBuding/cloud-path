@@ -1,7 +1,8 @@
-import { screen } from '@testing-library/react'
+import { act, screen } from '@testing-library/react'
 import { Route, Routes } from 'react-router'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import ApplicationPage from '@/pages/ApplicationPage'
+import { i18n } from '@/i18n'
 import { installFetch, stubResponse } from '@/test/http'
 import { renderWithProviders, resetStores } from '@/test/render'
 import { useAuth } from '@/store/auth'
@@ -49,9 +50,42 @@ function mockData(plugins: PluginCatalogView[], instances: PluginInstanceView[])
   })
 }
 
-beforeEach(() => resetStores())
+beforeEach(async () => { await i18n.changeLanguage('zh-CN'); resetStores() })
+afterEach(async () => { await i18n.changeLanguage('zh-CN') })
 
 describe('application deep links', () => {
+  it('localizes plugin navigation, page title, subtitle and tabs in the active locale', async () => {
+    useAuth.setState({ status: 'open', user: null })
+    const localized: PluginCatalogView = {
+      ...catalog,
+      contributes: {
+        applications: [{
+          id: 'example.app', title: '示例应用', i18n: { 'zh-CN': '示例应用', 'en-US': 'Example app' },
+          ui: {
+            apiVersion: 1,
+            navigation: { title: '示例页面', i18n: { 'zh-CN': '示例页面', 'en-US': 'Example page' }, route: 'example' },
+            pages: [
+              { id: 'home', title: '首页', i18n: { 'zh-CN': '首页', 'en-US': 'Home' }, sections: [{ type: 'form', fields: [{ key: 'name', label: 'Name' }] }] },
+              { id: 'settings', title: '设置', i18n: { 'zh-CN': '设置', 'en-US': 'Settings' }, sections: [{ type: 'form', fields: [{ key: 'name', label: 'Name' }] }] },
+            ],
+          },
+        }],
+      },
+    }
+    mockData([localized], [instance()])
+    renderPage()
+    expect(await screen.findByRole('heading', { name: '示例页面' })).toBeInTheDocument()
+
+    await act(async () => { await i18n.changeLanguage('en-US') })
+
+    expect(screen.getByRole('heading', { name: 'Example page' })).toBeInTheDocument()
+    expect(screen.getByText('Example app')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/apps/example')
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/apps/example/settings')
+    expect(document.querySelector('[aria-label="Home"]')).toBeInTheDocument()
+    expect(document.title).toBe('Home · CloudPath')
+  })
+
   it('open L0 can read the console but the form stays read-only', async () => {
     useAuth.setState({ status: 'open', user: null })
     mockData([catalog], [instance()])

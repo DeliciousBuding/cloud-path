@@ -1,5 +1,6 @@
 // 操作输入使用的 JSON Schema 子集：不代入 default，不转换类型；支持组合，不解析引用。
 // 不支持的关键字显式反馈，仍允许 JSON 编辑；设备端才是完整契约的最终裁决者。
+import { i18n } from '@/i18n'
 import { argsError } from './format'
 
 type Schema = Record<string, unknown>
@@ -7,11 +8,23 @@ type Validation = { state: 'valid' | 'unknown' } | { state: 'invalid'; error: st
 const VALID: Validation = { state: 'valid' }
 const UNKNOWN: Validation = { state: 'unknown' }
 const COMBINATORS = ['oneOf', 'anyOf', 'allOf'] as const
-const TYPE_NAMES: Record<string, string> = { object: '对象', array: '数组', string: '文本', number: '数值', integer: '整数', boolean: '布尔值', null: '空值' }
-const FIELD_LABEL: Record<string, string> = {
-  notes: '音符序列', frequency_hz: '频率 (Hz)', duration_ms: '时长 (ms)', gap_ms: '音符间隔 (ms)',
+const TYPES = ['object', 'array', 'string', 'number', 'integer', 'boolean', 'null']
+const FIELD_LABEL_KEYS: Record<string, string> = {
+  notes: 'notes', frequency_hz: 'frequency_hz', duration_ms: 'duration_ms', gap_ms: 'gap_ms',
 }
-const TYPES = Object.keys(TYPE_NAMES)
+
+function tr(key: string, options?: Record<string, unknown>): string {
+  return i18n.t(`commandSchema.${key}`, { ns: 'devices', ...options })
+}
+
+function typeName(type: string): string {
+  return tr(`types.${type}`)
+}
+
+function knownFieldLabel(key: string): string | undefined {
+  const labelKey = FIELD_LABEL_KEYS[key]
+  return labelKey ? tr(`fields.${labelKey}`) : undefined
+}
 const ANNOTATIONS = new Set(['title', 'description', 'default', 'examples', 'unit', 'enumNames', '$schema', '$id', '$comment', '$defs', 'definitions', 'readOnly', 'writeOnly', 'deprecated'])
 
 function object(v: unknown): v is Record<string, unknown> {
@@ -110,43 +123,49 @@ function propertyLabel(key: string, schema: unknown): string {
   for (const label of [schema.title, schema.description]) {
     if (typeof label === 'string' && label.trim()) return label
   }
-  return FIELD_LABEL[key] ?? key
+  return knownFieldLabel(key) ?? key
 }
 
-function validate(value: unknown, schema: unknown, at = '参数'): Validation {
-  const fail = (why: string): Validation => ({ state: 'invalid', error: at + '：' + why })
-  if (schema === false) return fail('不允许此值')
+function validate(value: unknown, schema: unknown, at?: string): Validation {
+  const root = at === undefined
+  const path = at ?? tr('parameter')
+  const fail = (why: string): Validation => ({ state: 'invalid', error: path + tr('pathSeparator') + why })
+  if (schema === false) return fail(tr('validation.valueNotAllowed'))
   if (schema === true) return VALID
   if (!object(schema)) return UNKNOWN
   let uncertain = Object.entries(schema).some(([key, v]) => !supportedKeyword(key, v, schema))
   const declaredTypes = types(schema.type)
   if (declaredTypes && !declaredTypes.some((t) => matchesType(value, t))) {
-    return fail('需要' + declaredTypes.map((type) => TYPE_NAMES[type]).join('或') + '类型')
+    return fail(tr('validation.expectedType', {
+      types: declaredTypes.map(typeName).join(tr('typeJoin')),
+    }))
   }
-  if (Array.isArray(schema.enum) && !schema.enum.some((v) => equal(value, v))) return fail('请选择允许的值')
-  if (Object.hasOwn(schema, 'const') && !equal(value, schema.const)) return fail('必须等于 ' + JSON.stringify(schema.const))
+  if (Array.isArray(schema.enum) && !schema.enum.some((v) => equal(value, v))) return fail(tr('validation.chooseAllowed'))
+  if (Object.hasOwn(schema, 'const') && !equal(value, schema.const)) {
+    return fail(tr('validation.mustEqual', { value: JSON.stringify(schema.const) }))
+  }
   if (number(value)) {
-    if (number(schema.minimum) && value < schema.minimum) return fail('不能小于 ' + schema.minimum)
-    if (number(schema.maximum) && value > schema.maximum) return fail('不能大于 ' + schema.maximum)
-    if (number(schema.exclusiveMinimum) && value <= schema.exclusiveMinimum) return fail('必须大于 ' + schema.exclusiveMinimum)
-    if (number(schema.exclusiveMaximum) && value >= schema.exclusiveMaximum) return fail('必须小于 ' + schema.exclusiveMaximum)
+    if (number(schema.minimum) && value < schema.minimum) return fail(tr('validation.minimum', { value: schema.minimum }))
+    if (number(schema.maximum) && value > schema.maximum) return fail(tr('validation.maximum', { value: schema.maximum }))
+    if (number(schema.exclusiveMinimum) && value <= schema.exclusiveMinimum) return fail(tr('validation.exclusiveMinimum', { value: schema.exclusiveMinimum }))
+    if (number(schema.exclusiveMaximum) && value >= schema.exclusiveMaximum) return fail(tr('validation.exclusiveMaximum', { value: schema.exclusiveMaximum }))
     if (number(schema.multipleOf) && schema.multipleOf > 0) {
       const quotient = value / schema.multipleOf
       if (!Number.isFinite(quotient) || Math.abs(quotient - Math.round(quotient)) > Number.EPSILON * Math.max(1, Math.abs(quotient)) * 4) {
-        return fail('必须是 ' + schema.multipleOf + ' 的倍数')
+        return fail(tr('validation.multipleOf', { value: schema.multipleOf }))
       }
     }
   }
   if (typeof value === 'string') {
     const length = [...value].length // JSON Schema 的字符串长度是 Unicode 码点，不是传输字节数。
-    if (count(schema.minLength) && length < schema.minLength) return fail('至少 ' + schema.minLength + ' 个字符')
-    if (count(schema.maxLength) && length > schema.maxLength) return fail('最多 ' + schema.maxLength + ' 个字符')
+    if (count(schema.minLength) && length < schema.minLength) return fail(tr('validation.minLength', { count: schema.minLength }))
+    if (count(schema.maxLength) && length > schema.maxLength) return fail(tr('validation.maxLength', { count: schema.maxLength }))
   }
   if (Array.isArray(value)) {
-    if (count(schema.minItems) && value.length < schema.minItems) return fail('至少 ' + schema.minItems + ' 项')
-    if (count(schema.maxItems) && value.length > schema.maxItems) return fail('最多 ' + schema.maxItems + ' 项')
+    if (count(schema.minItems) && value.length < schema.minItems) return fail(tr('validation.minItems', { count: schema.minItems }))
+    if (count(schema.maxItems) && value.length > schema.maxItems) return fail(tr('validation.maxItems', { count: schema.maxItems }))
     if (schema.uniqueItems === true && value.some((v, i) => value.slice(0, i).some((other) => equal(v, other)))) {
-      return fail('数组项不能重复')
+      return fail(tr('validation.uniqueItems'))
     }
     if (Object.hasOwn(schema, 'items') && !('prefixItems' in schema)) {
       for (const [i, item] of value.entries()) {
@@ -161,20 +180,22 @@ function validate(value: unknown, schema: unknown, at = '参数'): Validation {
     const properties = object(schema.properties) ? schema.properties : {}
     if (Array.isArray(schema.required) && schema.required.every((k) => typeof k === 'string')) {
       for (const key of schema.required) {
-        if (!Object.hasOwn(value, key)) return fail('缺少必填参数 ' + propertyLabel(key, properties[key]))
+        if (!Object.hasOwn(value, key)) {
+          return fail(tr('validation.missingRequired', { field: propertyLabel(key, properties[key]) }))
+        }
       }
     }
-    if (count(schema.minProperties) && keys.length < schema.minProperties) return fail('至少填写 ' + schema.minProperties + ' 个参数')
-    if (count(schema.maxProperties) && keys.length > schema.maxProperties) return fail('最多填写 ' + schema.maxProperties + ' 个参数')
+    if (count(schema.minProperties) && keys.length < schema.minProperties) return fail(tr('validation.minProperties', { count: schema.minProperties }))
+    if (count(schema.maxProperties) && keys.length > schema.maxProperties) return fail(tr('validation.maxProperties', { count: schema.maxProperties }))
     for (const key of keys) {
       const label = propertyLabel(key, properties[key])
-      const child = at === '参数' ? label : at + ' / ' + label
+      const child = root ? label : path + ' / ' + label
       if (Object.hasOwn(properties, key)) {
         const result = validate(value[key], properties[key], child)
         if (result.state === 'invalid') return result
         if (result.state === 'unknown') uncertain = true
       } else if (Object.hasOwn(schema, 'additionalProperties') && !('patternProperties' in schema)) {
-        if (schema.additionalProperties === false) return fail('不支持的参数 ' + key)
+        if (schema.additionalProperties === false) return fail(tr('validation.unsupportedProperty', { key }))
         const result = validate(value[key], schema.additionalProperties, child)
         if (result.state === 'invalid') return result
         if (result.state === 'unknown') uncertain = true
@@ -192,11 +213,11 @@ function validate(value: unknown, schema: unknown, at = '参数'): Validation {
       if (failure) return failure
       if (matches !== results.length) uncertain = true
     } else if (keyword === 'anyOf') {
-      if (possible === 0) return fail('请至少选择一种设置方式')
+      if (possible === 0) return fail(tr('validation.anyOf'))
       if (matches === 0) uncertain = true
     } else {
-      if (matches > 1) return fail('请只选择一种设置方式')
-      if (possible === 0) return fail('请选择一种设置方式')
+      if (matches > 1) return fail(tr('validation.oneOfMultiple'))
+      if (possible === 0) return fail(tr('validation.oneOfNone'))
       // 未知方案既不算匹配，也不算失败；只在所有可能性都不合法时拒绝。
       if (matches !== 1 || possible !== 1) uncertain = true
     }
@@ -207,7 +228,7 @@ function validate(value: unknown, schema: unknown, at = '参数'): Validation {
 /** 用户可见文案：机器单位的传输错误只用于内部校验，不直接展示给普通用户。 */
 export function commandArgsErrorCopy(error?: string): string | undefined {
   if (!error) return undefined
-  if (/\d+ 字节，超过 \d+ 字节上限/.test(error)) return '内容太长，请减少输入内容'
+  if (/\d+ \u5b57\u8282\uff0c\u8d85\u8fc7 \d+ \u5b57\u8282\u4e0a\u9650/.test(error)) return tr('args.tooLong')
   return error
 }
 
@@ -219,7 +240,7 @@ export function commandArgsError(args: string, schema?: Schema, maxBytes?: numbe
 
 /** JSON/schema validation only; each action transport owns its byte/control-character limits. */
 export function schemaArgsError(args: string, schema: Schema): string | undefined {
-  if (!args.trim()) return '请填写参数'
+  if (!args.trim()) return tr('args.required')
   let value: unknown
   try {
     value = JSON.parse(args, (_key, v: unknown) => {
@@ -227,7 +248,7 @@ export function schemaArgsError(args: string, schema: Schema): string | undefine
       return v
     })
   } catch {
-    return '参数格式无效，请检查括号、引号和数值'
+    return tr('args.invalidJson')
   }
   const result = validate(value, schema)
   return result.state === 'invalid' ? result.error : undefined
@@ -341,7 +362,7 @@ function branchLabel(root: Schema, branch: Schema, index: number): string {
   const required = Array.isArray(branch.required) ? branch.required.filter((key): key is string => typeof key === 'string') : []
   const properties = object(root.properties) ? root.properties : {}
   const labels = required.map((key) => propertyLabel(key, properties[key]))
-  return labels.length > 0 ? labels.join(' / ') : '方式 ' + (index + 1)
+  return labels.length > 0 ? labels.join(' / ') : tr('args.fallbackChoice', { number: index + 1 })
 }
 
 /** 普通参数表单：支持平铺字段与根级 oneOf 的“设置方式”选择；其余复杂结构保留 JSON 回落。 */

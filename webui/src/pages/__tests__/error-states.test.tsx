@@ -108,14 +108,14 @@ describe('详情页：失败态不冒充「不存在」', () => {
     expect(await screen.findByText('设备未注册')).toBeInTheDocument()
   })
 
-  it('EdgeDetail：接口 500 → 「网关信息加载失败」，不是「不存在」', async () => {
+  it('EdgeDetail：接口 500 → 「无法加载网关信息」，不是「不存在」', async () => {
     failing()
     renderWithProviders(
       <Routes><Route path="/edges/:edgeId" element={<EdgeDetail />} /></Routes>,
       '/edges/edge-1',
     )
     expect(await screen.findByRole('alert')).toBeInTheDocument()
-    expect(screen.getByText('网关信息加载失败')).toBeInTheDocument()
+    expect(screen.getByText('无法加载网关信息')).toBeInTheDocument()
     expect(screen.queryByText('网关不存在')).not.toBeInTheDocument()
   })
 })
@@ -129,7 +129,7 @@ describe('操作下发失败 → 人话（docs/design.md REST 错误约定）', 
     [409, /网关离线/],
     [429, /频繁/],
     [503, /服务暂时不可用或网关忙碌/],
-    [500, /HTTP 500/],
+    [500, /操作失败/],
   ]
   for (const [status, re] of cases) {
     it(`${status} → 说明可执行的下一步，不复述服务端原文`, () => {

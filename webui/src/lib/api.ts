@@ -11,6 +11,7 @@ import type {
   PluginInstanceWriteResponse, StatsView, TokenView, UpdateUserInput, UserView,
 } from './types'
 import { PLUGIN_ERR_CODES } from './types'
+import { i18n } from '@/i18n'
 import { markUnauthenticated } from '@/store/auth'
 
 const LEGACY_TOKEN_KEY = 'cloudpath.token'
@@ -93,7 +94,7 @@ async function req<T>(path: string, init?: RequestInit, opts?: ReqOptions): Prom
     res = await fetch(path, { ...init, headers, credentials: 'same-origin' })
   } catch (error) {
     if (init?.signal?.aborted) throw error
-    throw new Error('无法连接服务（服务未启动或网络不可达）')
+    throw new Error(i18n.t('network', { ns: 'errors' }))
   }
   init?.signal?.throwIfAborted()
   if (!res.ok) {

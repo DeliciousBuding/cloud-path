@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
+import '@/i18n'
 import { Loader2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/store/auth'
@@ -14,11 +16,11 @@ import { commandErrorCopy } from '@/lib/format'
 import type { CommandAction } from '@/lib/descriptor'
 
 /** ACK detail 可能是设备内部 key=value/JSON；轻提示只给人话，原文留在操作记录。 */
-function ackDetailCopy(detail?: string): string | undefined {
+function ackDetailCopy(detail: string | undefined, fallback: string): string | undefined {
   const text = detail?.trim()
   if (!text) return undefined
   if (/^[\[{]/.test(text) || /(?:^|\s)[a-z][a-z0-9_]*\s*=/.test(text)) {
-    return '设备已返回确认，结果请在操作记录中查看。'
+    return fallback
   }
   return text
 }
@@ -50,6 +52,7 @@ export function CommandButton(props: CommandButtonProps) {
 /** POST → WS ACK → 历史刷新/超时；危险确认只取声明，不认识设备或具体操作名。 */
 function ScopedCommandButton({ deviceId, targetLabel, action, args, buttonLabel, buttonAriaLabel, className, disabled, scope }: CommandButtonProps & { scope: string }) {
   const acks = useLive((s) => s.acks)
+  const { t } = useTranslation()
   const qc = useQueryClient()
   const refreshHistory = useCallback(() => {
     void qc.invalidateQueries({ queryKey: ['device-commands', deviceId] })
@@ -84,22 +87,22 @@ function ScopedCommandButton({ deviceId, targetLabel, action, args, buttonLabel,
     setBusy(false)
     setPendingId(null)
     refreshHistory()
-    if (ack.status === 'ok') toast.ok(label + '已完成', ackDetailCopy(ack.detail))
-    else toast.bad(label + '失败', '设备返回失败，请在操作记录中查看结果。')
+    if (ack.status === 'ok') toast.ok(t('command.completed', { label }), ackDetailCopy(ack.detail, t('command.ackDetail')))
+    else toast.bad(t('command.failed', { label }), t('command.failedDetail'))
   }, [acks, pendingId, label, current, refreshHistory])
 
   useEffect(() => {
     if (pendingId == null) return
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       if (settled.current.has(pendingId) || !current()) return
       settled.current.add(pendingId)
       sending.current = false
       setBusy(false)
       setPendingId(null)
       refreshHistory()
-      toast.info(label + '仍在等待确认', '已下发，设备暂未返回结果；请到操作记录查看，避免重复执行。')
+      toast.info(t('command.pending', { label }), t('command.pendingDetail'))
     }, ACK_TIMEOUT_MS)
-    return () => clearTimeout(t)
+    return () => clearTimeout(timer)
   }, [pendingId, label, current, refreshHistory])
 
   const send = async () => {
@@ -117,7 +120,7 @@ function ScopedCommandButton({ deviceId, targetLabel, action, args, buttonLabel,
       if (!current()) return
       sending.current = false
       setBusy(false)
-      toast.bad(label + '没有执行', commandErrorCopy(e))
+      toast.bad(t('command.notRun', { label }), commandErrorCopy(e))
     }
   }
 
@@ -138,18 +141,18 @@ function ScopedCommandButton({ deviceId, targetLabel, action, args, buttonLabel,
           'bg-bad/10 text-bad hover:bg-bad/16': action.variant === 'danger',
         }, className)}>
         {busy && <Loader2 size={14} className="shrink-0 animate-spin" />}
-        <span className="truncate">{busy ? '正在执行…' : (buttonLabel ?? label)}</span>
+        <span className="truncate">{busy ? t('command.running') : (buttonLabel ?? label)}</span>
       </button>
       <ConfirmDialog open={confirming !== null && confirming.args === args && !blocked}
-        tone={action.variant === 'danger' ? 'danger' : 'warn'} title={'确认执行「' + label + '」？'}
+        tone={action.variant === 'danger' ? 'danger' : 'warn'} title={t('command.confirmTitle', { label })}
         body={<>
-          <p>{action.confirmText ?? '请确认要执行此操作。'}</p>
-          <p className="num mt-2 text-xs text-ink-3">
-            目标设备 <span className="break-all">{displayTarget}</span>
+          <p>{action.confirmText ?? t('command.confirmBody')}</p>
+          <p className="num mt-2 text-meta text-ink-3">
+            {t('command.target', { target: displayTarget })}
           </p>
         </>}
         confirmLabel={label} busy={busy}
-        requireAck={action.variant === 'danger' ? '我已确认操作目标，并知悉此操作可能无法撤销。' : undefined}
+        requireAck={action.variant === 'danger' ? t('command.confirmAck') : undefined}
         onCancel={() => setConfirming(null)}
         onConfirm={() => {
           if (!confirming || confirming.args !== args || blocked || !current()) return

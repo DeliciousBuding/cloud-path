@@ -4,7 +4,7 @@ import {
   Ban, Boxes, Layers, PackagePlus, PackageOpen, Plus, Puzzle, Server, ShieldCheck,
 } from 'lucide-react'
 import {
-  Badge, EmptyState, ErrorState, PageHeader, Panel, TabBar, TabPanel,
+  Badge, EmptyState, ErrorState, PageHeader, Panel, Select, TabBar, TabPanel,
 } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { InstanceForm } from '@/components/plugin/InstanceForm'
@@ -29,7 +29,7 @@ const LIST_CAP = 200
 function StatusPill({ label, count, tone }: { label: string; count: number; tone: 'ok' | 'warn' | 'idle' }) {
   return <span className="inline-flex min-w-0 items-center gap-1.5">
     <Badge tone={tone}>{label}</Badge>
-    <span className="num text-[13px] font-semibold">{count}</span>
+    <span className="num text-compact font-semibold">{count}</span>
   </span>
 }
 
@@ -156,7 +156,7 @@ export default function Plugins() {
                 return (
                   <Panel key={p.id} className="fade-up">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <span className="min-w-0 max-w-full truncate text-[15px] font-semibold tracking-[-0.01em]" title={pluginDisplayName(p)}>
+                      <span className="min-w-0 max-w-full truncate text-lead font-semibold tracking-[-0.01em]" title={pluginDisplayName(p)}>
                         {pluginDisplayName(p)}
                       </span>
                       <span className="ml-auto flex shrink-0 items-center gap-1.5">
@@ -176,12 +176,12 @@ export default function Plugins() {
                     </dl>
 
                     <div className="mt-3.5 border-t border-hairline pt-3">
-                      <p className="mb-2 text-[12px] font-medium text-ink-3">{t('page.permissionsRequired')}</p>
+                      <p className="mb-2 text-meta font-medium text-ink-3">{t('page.permissionsRequired')}</p>
                       <PermissionList permissions={p.permissions} emptyHint={t('page.noExtraPermissions')} />
                     </div>
 
-                    <details className="mt-3.5 min-w-0 border-t border-hairline pt-3 text-xs text-ink-2">
-                      <summary className="flex min-h-11 cursor-pointer items-center">{t('page.technicalDetails')}</summary>
+                    <details className="mt-3.5 min-w-0 border-t border-hairline pt-3 text-meta text-ink-2">
+                      <summary className="flex min-h-touch cursor-pointer items-center">{t('page.technicalDetails')}</summary>
                       <dl className="mt-2 space-y-1.5">
                         <div className="kv"><dt>{t('page.pluginId')}</dt>
                           <dd className="num min-w-0 truncate font-mono" title={p.id}>{p.id}</dd></div>
@@ -216,11 +216,11 @@ export default function Plugins() {
                           <Plus size={13} /> {t('page.createInstanceButton')}
                         </button>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-ink-2">
+                        <span className="inline-flex items-center gap-1.5 text-meta font-medium text-ink-2">
                           <Ban size={13} className="shrink-0" /> {t('page.connectorNoInstance')}
                         </span>
                       )}
-                      <span className="min-w-0 text-[12px] leading-relaxed text-ink-3">
+                      <span className="min-w-0 text-meta leading-relaxed text-ink-3">
                         {t('page.availableHint')}
                       </span>
                     </div>
@@ -230,7 +230,7 @@ export default function Plugins() {
             </div>
           )}
           {plugins.length > LIST_CAP && (
-            <p className="mt-4 text-center text-[12px] text-ink-3">
+            <p className="mt-4 text-center text-meta text-ink-3">
               {t('page.listCapPlugins', { cap: LIST_CAP, count: plugins.length })}
             </p>
           )}
@@ -267,18 +267,18 @@ export default function Plugins() {
             </div>
           ) : (
             <div className="grid gap-4">
-              <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 rounded-lg bg-surface-2 px-3.5 py-2.5">
-                <span className="text-[12px] font-medium text-ink-3">{t('page.statusOverview')}</span>
+              <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 rounded-tile bg-surface-2 px-3.5 py-2.5">
+                <span className="text-meta font-medium text-ink-3">{t('page.statusOverview')}</span>
                 <StatusPill label={t('page.statusNormal')} count={statusCounts.normal} tone="ok" />
                 <StatusPill label={t('page.statusAttention')} count={statusCounts.attention} tone="warn" />
                 <StatusPill label={t('page.statusUnknown')} count={statusCounts.unknown} tone="idle" />
                 <StatusPill label={t('page.statusStopped')} count={statusCounts.stopped} tone="idle" />
               </div>
-              <div className="flex min-w-0 flex-col gap-2 rounded-lg bg-surface-2 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <label htmlFor="instance-location" className="flex min-w-0 shrink-0 items-center gap-2 whitespace-nowrap text-[13px] font-medium text-ink-2">
+              <div className="flex min-w-0 flex-col gap-2 rounded-tile bg-surface-2 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <label htmlFor="instance-location" className="flex min-w-0 shrink-0 items-center gap-2 whitespace-nowrap text-compact font-medium text-ink-2">
                   <Server size={14} className="shrink-0" /> {t('page.location')}
                 </label>
-                <select id="instance-location" className="input min-h-11 max-w-full text-[13px] sm:min-h-0 sm:w-72"
+                <Select id="instance-location" compact className="max-w-full sm:w-72"
                   value={edgeFilter} onChange={(e) => setEdgeFilter(e.target.value)}>
                   <option value="all">{t('page.allLocations', { count: instances.length })}</option>
                   {edgeOptions.map((edge) => (
@@ -286,7 +286,7 @@ export default function Plugins() {
                       {edge === 'server' ? t('page.server') : edge ? t('page.edge', { id: edge }) : t('page.edgeUnknown')}（{instances.filter((v) => v.edge_id === edge).length}）
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
 
               {visibleInstances.length === 0 ? (
@@ -299,14 +299,14 @@ export default function Plugins() {
                       onEdit={() => setEditing(v)} />
                   ))}
                   {visibleInstances.length > LIST_CAP && (
-                    <p className="text-center text-[12px] text-ink-3">
+                    <p className="text-center text-meta text-ink-3">
                       {t('page.listCapInstances', { cap: LIST_CAP, count: visibleInstances.length })}
                     </p>
                   )}
                 </>
               )}
 
-              <p className="text-[12px] leading-relaxed text-ink-3">
+              <p className="text-meta leading-relaxed text-ink-3">
                 {t('page.listHint')}
               </p>
             </div>

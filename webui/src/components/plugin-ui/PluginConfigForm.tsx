@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { FormEvent } from 'react'
 import { Braces, Save } from 'lucide-react'
-import { Button, TextField } from '@/components/ui'
+import { Button, Select, TextField } from '@/components/ui'
 import { PluginErrorNote } from '@/components/plugin/PluginFacts'
 import { useUpdateInstance } from '@/hooks/usePlugins'
 import { safeConfigEntries } from '@/lib/plugins'
@@ -121,9 +121,9 @@ export function PluginConfigForm({ instance, section, readOnly }: {
 
   if (fields.length === 0) {
     return <div className="space-y-3">
-      <div role="alert" className="rounded-lg bg-warn/12 px-3.5 py-3 text-sm text-warn">
+      <div role="alert" className="rounded-tile bg-warn/12 px-3.5 py-3 text-body text-warn">
         <p className="font-medium">{t('config.unavailable')}</p>
-        <p className="mt-1 text-xs leading-relaxed opacity-90">{t('config.unavailableHint')}</p>
+        <p className="mt-1 text-meta leading-relaxed opacity-90">{t('config.unavailableHint')}</p>
       </div>
       <AdvancedConfig config={config} />
     </div>
@@ -149,7 +149,7 @@ export function PluginConfigForm({ instance, section, readOnly }: {
   }
 
   return <form className="space-y-4" onSubmit={(event) => void submit(event)}>
-    {readOnly && <p className="rounded-lg bg-ink-3/10 px-3.5 py-3 text-sm text-ink-2">{t('config.readOnly')}</p>}
+    {readOnly && <p className="rounded-tile bg-ink-3/10 px-3.5 py-3 text-body text-ink-2">{t('config.readOnly')}</p>}
     <div className="grid gap-4 sm:grid-cols-2">
       {fields.map((field) => {
         const value = values[field.key] ?? ''
@@ -160,22 +160,22 @@ export function PluginConfigForm({ instance, section, readOnly }: {
           disabled: readOnly || update.isPending,
         }
         if (field.type === 'boolean') {
-          return <label key={field.key} className="flex min-h-11 items-center gap-2 self-end text-sm text-ink-2">
+          return <label key={field.key} className="flex min-h-touch items-center gap-2 self-end text-body text-ink-2">
             <input type="checkbox" checked={value === 'true'} disabled={common.disabled}
               onChange={(event) => setValues((current) => ({ ...current, [field.key]: String(event.target.checked) }))} />
             <span>{common.label}</span>
           </label>
         }
         if (field.enum?.length || field.type === 'select') {
-          return <label key={field.key} className="min-w-0 text-[13px] font-medium text-ink-2">
+          return <label key={field.key} className="min-w-0 text-compact font-medium text-ink-2">
             <span className="mb-1.5 block">{common.label}{field.required ? ' *' : ''}</span>
-            <select className="input min-h-11 w-full" value={value} disabled={common.disabled}
+            <Select className="w-full" value={value} disabled={common.disabled}
               aria-invalid={common.error ? true : undefined}
               onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))}>
               <option value="">{t('config.select')}</option>
               {(field.enum ?? []).map((option) => <option key={String(option)} value={String(option)}>{String(option)}</option>)}
-            </select>
-            {common.error && <span className="mt-1.5 block text-xs text-bad">{common.error}</span>}
+            </Select>
+            {common.error && <span className="mt-1.5 block text-meta text-bad">{common.error}</span>}
           </label>
         }
         return <TextField key={field.key} {...common} type={field.type === 'number' || field.type === 'integer' ? 'number' : 'text'}
@@ -196,10 +196,10 @@ export function PluginConfigForm({ instance, section, readOnly }: {
 function AdvancedConfig({ config }: { config: Record<string, string> }) {
   const { t } = useTranslation('plugin')
   const entries = safeConfigEntries(config)
-  return <details className="min-w-0 text-xs text-ink-2">
-    <summary className="flex min-h-11 cursor-pointer items-center gap-1.5"><Braces size={12} />{t('config.advanced')}</summary>
+  return <details className="min-w-0 text-meta text-ink-2">
+    <summary className="flex min-h-touch cursor-pointer items-center gap-1.5"><Braces size={12} />{t('config.advanced')}</summary>
     <p className="mt-2 leading-relaxed text-ink-3">{t('config.advancedHint')}</p>
-    <dl className="mt-2 space-y-1 rounded-lg bg-surface-2 p-3">
+    <dl className="mt-2 space-y-1 rounded-tile bg-surface-2 p-3">
       {entries.map((entry) => <div key={entry.key} className="flex min-w-0 justify-between gap-3">
         <dt className="shrink-0">{entry.key}</dt>
         <dd className="num min-w-0 break-all text-right font-mono" title={entry.value}>{entry.isSecret ? t('config.secretHidden') : entry.value}</dd>

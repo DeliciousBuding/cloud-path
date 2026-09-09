@@ -36,7 +36,7 @@ describe('机器名中文优先展示名', () => {
     const machineName = 'Device Compartment Opened'
     renderWithProviders(<EventFeed events={[{ ...ev(1, Math.floor(Date.now() / 1000)), type: machineName }]} limit={10} />)
     expect(screen.getByText('设备舱门已打开')).toBeInTheDocument()
-    expect(screen.getByTitle(`原始类型：${machineName}`)).toBeInTheDocument()
+    expect(screen.getByTitle(`类型：${machineName}`)).toBeInTheDocument()
     expect(screen.queryByText(machineName)).toBeNull()
   })
 
