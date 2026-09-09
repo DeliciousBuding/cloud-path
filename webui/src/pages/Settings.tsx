@@ -279,7 +279,7 @@ export default function Settings() {
                   hint={t('token.hint')}
                 />
                 <Button className="lg:mb-[1.625rem]" loading={tokenSaving} onClick={() => void saveToken()}>
-                  {saved && <Check size={14} />}{tokenSaving ? t('token.saving') : saved ? t('token.saved') : t('token.save')}
+                  {!tokenSaving && saved && <Check size={14} />}{tokenSaving ? t('token.saving') : saved ? t('token.saved') : t('token.save')}
                 </Button>
               </div>
             </>
