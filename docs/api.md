@@ -64,14 +64,27 @@
 | `GET /ws` | 读 | 浏览器实时通道（快照 + fan-out）；Origin 策略见下 |
 | `GET /ws/edge` | edge 令牌 | edge 接入；hello 携带 `token` |
 
-鉴权/RBAC 中间件在业务 handler 之前拒绝时统一返回
-`{"error":"<code>","code":"<code>","message":"<人读文本>","request_id":"…"}`：
-`authentication_required`（401）、`permission_denied`（403 角色不足）、`write_forbidden`（403 来源受限）。
-其它 handler 的既有错误仍至少保留 `error` 兼容字段；插件写面完整错误表见 §5.6。
+本契约覆盖鉴权、用户/令牌、设备命令、插件目录/实例/资产和应用 job 写面；这些路径的 JSON API 失败统一返回：
 
-路由表之外的 `/api/*`（含 `/api/auth/*` 下不存在的子路径）一律 `404 {"error":"未知 API 端点"}`，
-**不会**回落到内嵌前端的 `index.html`；缺失的 `/assets/*` 同样回 `404`。SPA 的 `index.html`
-兜底只服务前端路由路径（`/`、`/devices`、…），这样客户端才能把「端点不存在」和「页面」区分开。
+```json
+{"error":"<code>","code":"<code>","message":"<诊断文本>","request_id":"req-…","params":{"field":"…"}}
+```
+
+`error` 与 `code` 保留同一稳定码；`message` 只供日志、诊断和旧客户端兼容，
+新 UI 必须按 `code` + `params` 本地化。`params` 可选，键名稳定且只含机器可翻译参数。
+通用码：`invalid_request`、`invalid_credentials`、`invalid_role`、`invalid_scopes`、
+`authentication_required`、`permission_denied`、`write_forbidden`、`not_found`、`rate_limited`、
+`store_unavailable`、`internal_error`、`setup_forbidden`、`setup_already_complete`、
+`username_conflict`、`user_not_found`、`last_admin_protected`、`token_not_found`、
+`plugin_catalog_unavailable`、`plugin_not_found`、`device_not_found`、`edge_offline`、
+`unsupported_command`、`command_delivery_failed`、`plugin_ui_asset_*`、`application_*`、
+`job_not_found`、`invalid_idempotency_key`、`invalid_args`、`invalid_plugin_response`。
+插件写面完整错误表见 §5.6；canonical 注册表在 `internal/api/types.go`。
+
+路由表之外的 `/api/*`（含 `/api/auth/*` 下不存在的子路径）一律返回
+`404` 的稳定错误体 `code=not_found`，**不会**回落到内嵌前端的 `index.html`；
+缺失的 `/assets/*` 同样回 `404`。SPA 的 `index.html` 兜底只服务前端路由路径
+（`/`、`/devices`、…），这样客户端才能把「端点不存在」和「页面」区分开。
 
 ### 2.3 WS Origin 策略
 
@@ -312,8 +325,9 @@ jobs 响应新增 `job_descriptors`：每项含 `id`、`title`、`input_schema_j
 
 ### 5.6 插件写面稳定错误码
 
-错误响应统一 `{"error":"<code>","code":"<code>","message":"<人读文本>","request_id":"…"}`。
-前端按 `code` 呈现，绝不解析 `message`。
+错误响应统一包含 `error`、`code`、`message`、`request_id`，需要参数时增加 `params`。
+前端按 `code` 呈现，绝不解析 `message`。常用参数名：`field`、`edge_id`、`device_id`、
+`instance_id`、`plugin_id`、`job_id`、`limit`、`usage`、`reasons`、`allowed`、`max_*`。
 
 | code | HTTP | 触发条件 |
 |---|---|---|

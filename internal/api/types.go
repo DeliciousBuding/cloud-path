@@ -604,4 +604,110 @@ const (
 	PluginErrEdgeOffline       = "plugin_edge_offline"
 	PluginErrSecretForbidden   = "plugin_secret_forbidden"
 	PluginErrInvalidConfig     = "plugin_invalid_config"
+	PluginErrStoreUnavailable  = "plugin_store_unavailable"
+	PluginErrKindUnavailable   = "plugin_instance_kind_unavailable"
+	PluginErrHostMismatch      = "plugin_instance_host_mismatch"
+	PluginErrKindUnsupported   = "plugin_instance_kind_unsupported"
 )
+
+// ErrorResponse 是所有 JSON API 失败的规范响应体。Error 与 Code 保留同一稳定码，
+// Message 只用于日志、诊断和旧客户端兼容；新 UI 必须按 Code + Params 本地化。
+type ErrorResponse struct {
+	Error     string         `json:"error"`
+	Code      string         `json:"code"`
+	Message   string         `json:"message"`
+	RequestID string         `json:"request_id"`
+	Params    map[string]any `json:"params,omitempty"`
+}
+
+// API 稳定错误码。新增错误必须先在此注册，再通过 writeAPIError 输出。
+const (
+	APIErrInvalidRequest              = "invalid_request"
+	APIErrInvalidCredentials          = "invalid_credentials"
+	APIErrInvalidRole                 = "invalid_role"
+	APIErrInvalidScopes               = "invalid_scopes"
+	APIErrAuthenticationRequired      = "authentication_required"
+	APIErrPermissionDenied            = "permission_denied"
+	APIErrWriteForbidden              = "write_forbidden"
+	APIErrNotFound                    = "not_found"
+	APIErrConflict                    = "conflict"
+	APIErrRateLimited                 = "rate_limited"
+	APIErrStoreUnavailable            = "store_unavailable"
+	APIErrInternal                    = "internal_error"
+	APIErrSetupForbidden              = "setup_forbidden"
+	APIErrSetupAlreadyComplete        = "setup_already_complete"
+	APIErrUsernameConflict            = "username_conflict"
+	APIErrUserNotFound                = "user_not_found"
+	APIErrLastAdminProtected          = "last_admin_protected"
+	APIErrTokenNotFound               = "token_not_found"
+	APIErrPluginCatalogUnavailable    = "plugin_catalog_unavailable"
+	APIErrPluginNotFound              = "plugin_not_found"
+	APIErrDeviceNotFound              = "device_not_found"
+	APIErrEdgeOffline                 = "edge_offline"
+	APIErrUnsupportedCommand          = "unsupported_command"
+	APIErrCommandDeliveryFailed       = "command_delivery_failed"
+	APIErrPluginUIAssetNotFound       = "plugin_ui_asset_not_found"
+	APIErrPluginUIAssetForbidden      = "plugin_ui_asset_forbidden"
+	APIErrPluginUIAssetTypeNotAllowed = "plugin_ui_asset_type_not_allowed"
+	APIErrPluginUIAssetTooLarge       = "plugin_ui_asset_too_large"
+	APIErrApplicationUnavailable      = "application_unavailable"
+	APIErrApplicationRejected         = "application_rejected"
+	APIErrJobNotFound                 = "job_not_found"
+	APIErrInvalidIdempotencyKey       = "invalid_idempotency_key"
+	APIErrInvalidArgs                 = "invalid_args"
+	APIErrInvalidPluginResponse       = "invalid_plugin_response"
+)
+
+var canonicalErrorCodes = map[string]struct{}{
+	APIErrInvalidRequest:              {},
+	APIErrInvalidCredentials:          {},
+	APIErrInvalidRole:                 {},
+	APIErrInvalidScopes:               {},
+	APIErrAuthenticationRequired:      {},
+	APIErrPermissionDenied:            {},
+	APIErrWriteForbidden:              {},
+	APIErrNotFound:                    {},
+	APIErrConflict:                    {},
+	APIErrRateLimited:                 {},
+	APIErrStoreUnavailable:            {},
+	APIErrInternal:                    {},
+	APIErrSetupForbidden:              {},
+	APIErrSetupAlreadyComplete:        {},
+	APIErrUsernameConflict:            {},
+	APIErrUserNotFound:                {},
+	APIErrLastAdminProtected:          {},
+	APIErrTokenNotFound:               {},
+	APIErrPluginCatalogUnavailable:    {},
+	APIErrPluginNotFound:              {},
+	APIErrDeviceNotFound:              {},
+	APIErrEdgeOffline:                 {},
+	APIErrUnsupportedCommand:          {},
+	APIErrCommandDeliveryFailed:       {},
+	APIErrPluginUIAssetNotFound:       {},
+	APIErrPluginUIAssetForbidden:      {},
+	APIErrPluginUIAssetTypeNotAllowed: {},
+	APIErrPluginUIAssetTooLarge:       {},
+	APIErrApplicationUnavailable:      {},
+	APIErrApplicationRejected:         {},
+	APIErrJobNotFound:                 {},
+	APIErrInvalidIdempotencyKey:       {},
+	APIErrInvalidArgs:                 {},
+	APIErrInvalidPluginResponse:       {},
+	PluginErrNotFound:                 {},
+	PluginErrConflict:                 {},
+	PluginErrQuota:                    {},
+	PluginErrPermissionConfirm:        {},
+	PluginErrEdgeOffline:              {},
+	PluginErrSecretForbidden:          {},
+	PluginErrInvalidConfig:            {},
+	PluginErrStoreUnavailable:         {},
+	PluginErrKindUnavailable:          {},
+	PluginErrHostMismatch:             {},
+	PluginErrKindUnsupported:          {},
+}
+
+// IsKnownErrorCode 报告 code 是否属于已注册的 canonical 错误码。
+func IsKnownErrorCode(code string) bool {
+	_, ok := canonicalErrorCodes[code]
+	return ok
+}

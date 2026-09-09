@@ -47,7 +47,7 @@ func (s *Server) handleListPlugins(w http.ResponseWriter, r *http.Request) {
 	}
 	views, err := s.pluginCatalog.Plugins(tenant)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "plugin catalog unavailable"})
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrPluginCatalogUnavailable, "plugin catalog unavailable")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"plugins": views})
@@ -59,16 +59,16 @@ func (s *Server) handleGetPlugin(w http.ResponseWriter, r *http.Request) {
 	s.primePluginTenant(r)
 	tenant := s.catalogTenant(r)
 	if s.pluginCatalog == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "plugin not found"})
+		writeAPIError(w, r, http.StatusNotFound, api.APIErrPluginNotFound, "plugin not found", map[string]any{"plugin_id": id})
 		return
 	}
 	view, ok, err := s.pluginCatalog.Plugin(tenant, id)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "plugin catalog unavailable"})
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrPluginCatalogUnavailable, "plugin catalog unavailable")
 		return
 	}
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "plugin not found"})
+		writeAPIError(w, r, http.StatusNotFound, api.APIErrPluginNotFound, "plugin not found", map[string]any{"plugin_id": id})
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
@@ -85,7 +85,7 @@ func (s *Server) handleListPluginInstances(w http.ResponseWriter, r *http.Reques
 	tenant := s.catalogTenant(r)
 	views, err := plugincatalog.InstanceViews(pluginProjection{s}, tenant)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "plugin catalog unavailable"})
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrPluginCatalogUnavailable, "plugin catalog unavailable")
 		return
 	}
 	writeJSON(w, http.StatusOK, api.PluginInstanceListResponse{Instances: views})
@@ -98,7 +98,7 @@ func (s *Server) handleGetPluginInstance(w http.ResponseWriter, r *http.Request)
 	tenant := s.catalogTenant(r)
 	views, err := plugincatalog.InstanceViews(pluginProjection{s}, tenant)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "plugin catalog unavailable"})
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrPluginCatalogUnavailable, "plugin catalog unavailable")
 		return
 	}
 	for _, v := range views {
@@ -107,8 +107,5 @@ func (s *Server) handleGetPluginInstance(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
-	writeJSON(w, http.StatusNotFound, map[string]any{
-		"error": api.PluginErrNotFound, "code": api.PluginErrNotFound,
-		"message": "plugin instance not found",
-	})
+	writeAPIError(w, r, http.StatusNotFound, api.PluginErrNotFound, "plugin instance not found", map[string]any{"instance_id": id})
 }

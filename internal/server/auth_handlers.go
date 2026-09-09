@@ -102,12 +102,12 @@ func (s *Server) auditSetupRejected(r *http.Request, reason string) {
 func (s *Server) handleAuthSetup(w http.ResponseWriter, r *http.Request) {
 	if !s.setupAuthorized(r) {
 		s.auditSetupRejected(r, "not_local_client")
-		writeJSON(w, http.StatusForbidden, map[string]string{
-			"error": "setup 需要本机直连来源或一次性 setup token"})
+		writeAPIError(w, r, http.StatusForbidden, api.APIErrSetupForbidden,
+			"setup requires local origin or one-time setup token")
 		return
 	}
 	if s.cfg.Store == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store unavailable"})
+		writeAPIError(w, r, http.StatusServiceUnavailable, api.APIErrStoreUnavailable, "store unavailable")
 		return
 	}
 	// 已初始化 → 恒定拒绝（幂等，与来源无关）：本机来源也不能重置或抢注管理员。
@@ -115,7 +115,7 @@ func (s *Server) handleAuthSetup(w http.ResponseWriter, r *http.Request) {
 	users, err := s.cfg.Store.CountUsers()
 	if err != nil {
 		slog.Warn("setup: count users", "err", err)
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store unavailable"})
+		writeAPIError(w, r, http.StatusServiceUnavailable, api.APIErrStoreUnavailable, "store unavailable")
 		return
 	}
 	if users > 0 {
@@ -125,7 +125,7 @@ func (s *Server) handleAuthSetup(w http.ResponseWriter, r *http.Request) {
 			Outcome:  audit.OutcomeFailure,
 			Metadata: audit.NewMetadata().String("reason", "already_initialized").Map(),
 		})
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "already set up"})
+		writeAPIError(w, r, http.StatusConflict, api.APIErrSetupAlreadyComplete, "setup already complete")
 		return
 	}
 	var body struct {
@@ -134,17 +134,16 @@ func (s *Server) handleAuthSetup(w http.ResponseWriter, r *http.Request) {
 		Name     string `json:"name"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": `body 需为 {"username":"...","password":"..."}`})
+		writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidRequest, "body must contain username and password", map[string]any{"field": "body"})
 		return
 	}
 	username := strings.TrimSpace(body.Username)
 	if username == "" || body.Password == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "username 与 password 必填"})
+		writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidRequest, "username and password are required", map[string]any{"fields": []string{"username", "password"}})
 		return
 	}
 	if len(username) > 64 || len(body.Password) > 256 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "username <=64 / password <=256"})
+		writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidRequest, "username or password is too long", map[string]any{"username_max_len": 64, "password_max_len": 256})
 		return
 	}
 	name := strings.TrimSpace(body.Name)
@@ -153,12 +152,13 @@ func (s *Server) handleAuthSetup(w http.ResponseWriter, r *http.Request) {
 	}
 	hash, err := auth.HashPassword(body.Password)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "hash password"})
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrInternal, "password hashing failed")
 		return
 	}
 	u, created, err := s.cfg.Store.CreateInitialAdmin(username, name, hash)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Warn("setup: create initial admin", "err", err)
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrInternal, "setup failed")
 		return
 	}
 	if !created {
@@ -167,7 +167,7 @@ func (s *Server) handleAuthSetup(w http.ResponseWriter, r *http.Request) {
 			Action: audit.ActionSetup, TargetType: audit.TargetTenant, TargetID: defaultTenantSlug,
 			Outcome: audit.OutcomeFailure,
 		})
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "already set up"})
+		writeAPIError(w, r, http.StatusConflict, api.APIErrSetupAlreadyComplete, "setup already complete")
 		return
 	}
 	s.authForced.Store(true)     // 首个用户落库后立即进入账号模式（全鉴权）
@@ -190,12 +190,13 @@ func (s *Server) handleAuthSetup(w http.ResponseWriter, r *http.Request) {
 // handleAuthLogin 用户名密码登录：成功创建新会话并 set-cookie；错 401；超限 429。
 func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.Store == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store unavailable"})
+		writeAPIError(w, r, http.StatusServiceUnavailable, api.APIErrStoreUnavailable, "store unavailable")
 		return
 	}
 	if ok, retry := s.loginLimiter.Allow(auth.ClientIP(r, s.trustedProxies)); !ok {
 		w.Header().Set("Retry-After", strconv.Itoa(int(retry.Seconds())+1))
-		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "登录尝试过多，请稍后再试"})
+		writeAPIError(w, r, http.StatusTooManyRequests, api.APIErrRateLimited, "too many login attempts",
+			map[string]any{"scope": "login", "retry_after_seconds": int(retry.Seconds()) + 1})
 		return
 	}
 	var body struct {
@@ -203,8 +204,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": `body 需为 {"username":"...","password":"..."}`})
+		writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidRequest, "body must contain username and password", map[string]any{"field": "body"})
 		return
 	}
 	username := strings.TrimSpace(body.Username)
@@ -233,15 +233,17 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 			Action: audit.ActionLogin, TargetType: audit.TargetTenant, TargetID: targetSlug,
 			Outcome: audit.OutcomeFailure,
 		})
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "用户名或密码错误"})
+		writeAPIError(w, r, http.StatusUnauthorized, api.APIErrInvalidCredentials, "invalid username or password")
 		return
 	}
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Warn("login: resolve user", "err", err)
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrInternal, "login failed")
 		return
 	}
 	if err := s.newSessionFor(w, r, u.ID); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Warn("login: create session", "err", err)
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrInternal, "session creation failed")
 		return
 	}
 	s.audit(r, audit.Event{
@@ -273,7 +275,7 @@ func (s *Server) newSessionFor(w http.ResponseWriter, r *http.Request, userID in
 func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(auth.SessionCookieName)
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "not authenticated"})
+		writeAPIError(w, r, http.StatusUnauthorized, api.APIErrAuthenticationRequired, "authentication required")
 		return
 	}
 	if s.cfg.Store != nil {
@@ -296,7 +298,7 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
 	p := s.currentPrincipal(r)
 	if p == nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "not authenticated"})
+		writeAPIError(w, r, http.StatusUnauthorized, api.APIErrAuthenticationRequired, "authentication required")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"user": api.UserView{

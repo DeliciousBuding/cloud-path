@@ -141,12 +141,13 @@ func tokenView(row store.TokenRow) api.TokenView {
 func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	p := auth.FromContext(r.Context())
 	if s.cfg.Store == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store unavailable"})
+		writeAPIError(w, r, http.StatusServiceUnavailable, api.APIErrStoreUnavailable, "store unavailable")
 		return
 	}
 	users, err := s.cfg.Store.ListUsersTenant(p.TenantID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Warn("users: list", "err", err)
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrInternal, "list users failed")
 		return
 	}
 	out := make([]api.UserView, 0, len(users))
@@ -160,7 +161,7 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	p := auth.FromContext(r.Context())
 	if s.cfg.Store == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store unavailable"})
+		writeAPIError(w, r, http.StatusServiceUnavailable, api.APIErrStoreUnavailable, "store unavailable")
 		return
 	}
 	var body struct {
@@ -170,17 +171,16 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": `body 需为 {"username":"...","password":"...","role":"..."}`})
+		writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidRequest, "body must contain username, password, and role", map[string]any{"field": "body"})
 		return
 	}
 	username := strings.TrimSpace(body.Username)
 	if username == "" || body.Password == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "username 与 password 必填"})
+		writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidRequest, "username and password are required", map[string]any{"fields": []string{"username", "password"}})
 		return
 	}
 	if len(username) > 64 || len(body.Password) > 256 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "username <=64 / password <=256"})
+		writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidRequest, "username or password is too long", map[string]any{"username_max_len": 64, "password_max_len": 256})
 		return
 	}
 	role := strings.TrimSpace(body.Role)
@@ -188,7 +188,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		role = string(api.RoleOperator)
 	}
 	if role != string(api.RoleAdmin) && role != string(api.RoleOperator) && role != string(api.RoleViewer) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "role 必须为 admin|operator|viewer"})
+		writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidRole, "invalid role", map[string]any{"allowed": []string{"admin", "operator", "viewer"}})
 		return
 	}
 	name := strings.TrimSpace(body.Name)
@@ -197,7 +197,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	hash, err := auth.HashPassword(body.Password)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "hash password"})
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrInternal, "password hashing failed")
 		return
 	}
 	u, err := s.cfg.Store.CreateUser(p.TenantID, username, name, role, hash)
@@ -209,15 +209,16 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 			Outcome:  audit.OutcomeFailure,
 			Metadata: audit.NewMetadata().String("target_username", username).Map(),
 		})
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "username 已存在"})
+		writeAPIError(w, r, http.StatusConflict, api.APIErrUsernameConflict, "username already exists", map[string]any{"username": username})
 		return
 	}
 	if errors.Is(err, store.ErrInvalidRole) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "role 必须为 admin|operator|viewer"})
+		writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidRole, "invalid role", map[string]any{"allowed": []string{"admin", "operator", "viewer"}})
 		return
 	}
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Warn("users: create", "err", err)
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrInternal, "create user failed")
 		return
 	}
 	at, aid, an := auditActor(p)
@@ -234,12 +235,12 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	p := auth.FromContext(r.Context())
 	if s.cfg.Store == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store unavailable"})
+		writeAPIError(w, r, http.StatusServiceUnavailable, api.APIErrStoreUnavailable, "store unavailable")
 		return
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
+		writeAPIError(w, r, http.StatusNotFound, api.APIErrUserNotFound, "user not found", map[string]any{"user_id": chi.URLParam(r, "id")})
 		return
 	}
 	var body struct {
@@ -249,26 +250,25 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		Password *string `json:"password"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": `body 需为 {"name":"...","role":"...","disabled":false,"password":"..."}`})
+		writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidRequest, "body must be a valid user patch", map[string]any{"field": "body"})
 		return
 	}
 	patch := store.UserPatch{Name: body.Name, Role: body.Role, Disabled: body.Disabled}
 	if body.Password != nil {
 		if *body.Password == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password 不能为空"})
+			writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidRequest, "password must not be empty", map[string]any{"field": "password"})
 			return
 		}
 		hash, err := auth.HashPassword(*body.Password)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "hash password"})
+			writeAPIError(w, r, http.StatusInternalServerError, api.APIErrInternal, "password hashing failed")
 			return
 		}
 		patch.Password = &hash
 	}
 	if body.Name != nil {
 		if strings.TrimSpace(*body.Name) == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name 不能为空"})
+			writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidRequest, "name must not be empty", map[string]any{"field": "name"})
 			return
 		}
 		trimmed := strings.TrimSpace(*body.Name)
@@ -277,7 +277,7 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	if body.Role != nil {
 		role := strings.TrimSpace(*body.Role)
 		if role != string(api.RoleAdmin) && role != string(api.RoleOperator) && role != string(api.RoleViewer) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "role 必须为 admin|operator|viewer"})
+			writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidRole, "invalid role", map[string]any{"allowed": []string{"admin", "operator", "viewer"}})
 			return
 		}
 		patch.Role = &role
@@ -285,19 +285,20 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	u, err := s.cfg.Store.UpdateUser(p.TenantID, id, patch)
 	if errors.Is(err, sql.ErrNoRows) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
+		writeAPIError(w, r, http.StatusNotFound, api.APIErrUserNotFound, "user not found", map[string]any{"user_id": id})
 		return
 	}
 	if errors.Is(err, store.ErrLastAdmin) {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "不能禁用或降级最后一个可用 admin"})
+		writeAPIError(w, r, http.StatusConflict, api.APIErrLastAdminProtected, "cannot disable or demote the last active admin", map[string]any{"user_id": id})
 		return
 	}
 	if errors.Is(err, store.ErrInvalidRole) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "role 必须为 admin|operator|viewer"})
+		writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidRole, "invalid role", map[string]any{"allowed": []string{"admin", "operator", "viewer"}})
 		return
 	}
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Warn("users: update", "err", err)
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrInternal, "update user failed")
 		return
 	}
 	action := audit.ActionUserUpdate
@@ -325,12 +326,13 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListTokens(w http.ResponseWriter, r *http.Request) {
 	p := auth.FromContext(r.Context())
 	if s.cfg.Store == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store unavailable"})
+		writeAPIError(w, r, http.StatusServiceUnavailable, api.APIErrStoreUnavailable, "store unavailable")
 		return
 	}
 	rows, err := s.cfg.Store.ListTenantTokens(p.TenantID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Warn("tokens: list", "err", err)
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrInternal, "list tokens failed")
 		return
 	}
 	out := make([]api.TokenView, 0, len(rows))
@@ -345,7 +347,7 @@ func (s *Server) handleListTokens(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 	p := auth.FromContext(r.Context())
 	if s.cfg.Store == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store unavailable"})
+		writeAPIError(w, r, http.StatusServiceUnavailable, api.APIErrStoreUnavailable, "store unavailable")
 		return
 	}
 	var body struct {
@@ -354,29 +356,29 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt *int64   `json:"expires_at"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": `body 需为 {"name":"...","scopes":["read","write","admin","edge"],"expires_at":...}`})
+		writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidRequest, "body must contain token scopes and optional metadata", map[string]any{"field": "body"})
 		return
 	}
 	scopes := normalizeScopes(body.Scopes)
 	if len(scopes) == 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "scopes 必须为非空 read|write|admin|edge 子集"})
+		writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidScopes, "invalid token scopes", map[string]any{"allowed": []string{"read", "write", "admin", "edge"}})
 		return
 	}
 	for _, sc := range scopes {
 		if !tokenScopes[sc] {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "scopes 必须为非空 read|write|admin|edge 子集"})
+			writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidScopes, "invalid token scopes", map[string]any{"allowed": []string{"read", "write", "admin", "edge"}})
 			return
 		}
 	}
 	plain, hash, prefix, err := auth.NewTenantToken()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "generate token"})
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrInternal, "token generation failed")
 		return
 	}
 	row, err := s.cfg.Store.CreateTenantToken(p.TenantID, strings.TrimSpace(body.Name), hash, prefix, jsonArray(scopes), body.ExpiresAt)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Warn("tokens: create", "err", err)
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrInternal, "create token failed")
 		return
 	}
 	view := tokenView(row)
@@ -400,25 +402,26 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDeleteToken(w http.ResponseWriter, r *http.Request) {
 	p := auth.FromContext(r.Context())
 	if s.cfg.Store == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store unavailable"})
+		writeAPIError(w, r, http.StatusServiceUnavailable, api.APIErrStoreUnavailable, "store unavailable")
 		return
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "token not found"})
+		writeAPIError(w, r, http.StatusNotFound, api.APIErrTokenNotFound, "token not found", map[string]any{"token_id": chi.URLParam(r, "id")})
 		return
 	}
 	hit, err := s.cfg.Store.RevokeTenantToken(id, p.TenantID)
 	if errors.Is(err, sql.ErrNoRows) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "token not found"})
+		writeAPIError(w, r, http.StatusNotFound, api.APIErrTokenNotFound, "token not found", map[string]any{"token_id": id})
 		return
 	}
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Warn("tokens: revoke", "err", err)
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrInternal, "revoke token failed")
 		return
 	}
 	if !hit {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "token not found"})
+		writeAPIError(w, r, http.StatusNotFound, api.APIErrTokenNotFound, "token not found", map[string]any{"token_id": id})
 		return
 	}
 	at, aid, an := auditActor(p)
