@@ -138,7 +138,7 @@ unicode-range 只接管 CJK，拉丁/数字仍走 Geist；可复现构建见 web
 ### 10.10 形状与结构
 
 - 圆角只有三种语义：tile 8px（`rounded-tile`，卡内子面/内联 note/控件）、card 12px（`rounded-card`，.card/浮层 Toast/品牌 logo）、pill 999px（`rounded-pill`，状态点/胶囊/圆形按钮）；`rounded-sm/md/lg/xl/2xl` 不再作为业务类使用。
-- 列表在 Panel 内用 divider rows（`divide-y`），不套子卡（嵌套卡片是硬反模式）；Admin 用户/令牌行已行化。
+- 列表在 Panel 内用 divider rows（`divide-y`），不套子卡（嵌套卡片是硬反模式）；Admin 成员用行化列表，访问令牌用全宽表格（表头 + 列对齐 + 行内操作），不再并排成两列卡片。
 - 表格体单元格 `vertical-align: baseline`（对齐行首基线；多行表头才底对齐）。
 - 长 ledger（运行记录页事件记录/操作记录）本地滚动（max-h + overflow-y-auto），页面保持一屏可读；天分组头 sticky 于滚动容器顶，跨天查找不迷路。
 - 空态/错误态不用装饰性图标瓷砖（彩色圆底）：plain 语义色图标即可。
@@ -155,13 +155,16 @@ unicode-range 只接管 CJK，拉丁/数字仍走 Geist；可复现构建见 web
 
 ### 10.12 组件库与复用边界
 
-- 四层职责固定：token（`webui/src/index.css` 的 `@theme`）→ primitive（`webui/src/components/ui.tsx`）→ 领域组件（`webui/src/components/**`）→ 页面组合（`webui/src/pages/**`）。页面负责数据与组合，不复制控件行为。
-- primitive 是自建组件库，不引入第三方 UI kit。当前公开面覆盖布局/状态、导航、表单和反馈：`Panel / PageHeader / StatTile / EmptyState / ErrorState`、`TabBar / TabPanel / Segmented / BackLink`、`Button / IconButton / ButtonLink`、`Input / Textarea / Checkbox / Radio / Select / TextField`、`Badge / StatusDot / KeyValue / Spinner`。
+- 四层职责固定：token（`webui/src/index.css` 的 `@theme`）→ primitive（`webui/src/components/ui.tsx` 基础原语 + `webui/src/components/ui/*` 交互原语）→ 领域组件（`webui/src/components/**`）→ 页面组合（`webui/src/pages/**`）。页面负责数据与组合，不复制控件行为。
+- 基础 primitive 自建，覆盖布局/状态、导航、表单和反馈：`Panel / PageHeader / StatTile / EmptyState / ErrorState`、`TabBar / TabPanel / Segmented / BackLink`、`Button / IconButton / ButtonLink`、`Input / Textarea / Checkbox / Radio / Select / TextField`、`Badge / StatusDot / KeyValue / Spinner`。复杂交互原语采用 shadcn 结构 + Radix，视觉仍只消费本文件 token。
 - 可复用控件必须进入 primitive 或领域组件层，并带行为测试；不要在两个页面各写一份按钮、下拉、弹层或键盘逻辑。领域组件只负责业务语义，不能复制 primitive 的交互和样式。
 - 动作统一走 `Button / IconButton / ButtonLink`：`variant` 只允许 `primary / ghost / quiet / bare / danger / danger-ghost`，`size` 只允许 `sm / md / lg`。原生 `<button>` 只保留给导航、分段选择、`<details>` 这类语义明确的专用控件，并仍须消费 token 类。
 - 表单控件统一走 `Input / Textarea / Checkbox / Radio / Select`。业务源码不得直写 `<input>`、`<textarea>`、`<select>`；`scripts/check_design_tokens.py` 会直接拒绝这类漂移，primitive 文件是唯一例外。
 - primitive 负责交互与无障碍，领域组件负责业务语义，页面负责数据与布局；跨层直写原生控件或裸样式视为设计系统漂移。
 - `scripts/check_design_tokens.py` 同时守 token、原生表单控件和 `<select>` 边界；新增 primitive 行为必须有组件测试。
+- 复杂交互不手搓：焦点陷阱、Esc、遮罩/外部点击、portal、菜单定位交给 Radix；业务组件只保留状态与业务语义。`components.json` 与 `components/ui/*` 是 shadcn 风格原语的唯一入口。
+- `src/components/data-table/` 是表格层：列定义、排序、列可见性和筛选工具栏统一走 TanStack Table；业务页不再手写 `<table>`。
+- Admin 访问令牌采用 NewAPI 式工作流：搜索 + 状态/scope 筛选 + 列可见性 + 全宽表格 + Drawer 创建 + 行内二次确认。吸收的是工作流与交互纪律，不复制 NewAPI 的品牌色、类名或组件结构。
 
 ### 10.13 设计 token（2026-09-09 收口）
 

@@ -4,11 +4,14 @@
 // for pill boxes, music or any other showcase. Unknown values stay values;
 // machine identifiers and raw JSON live in diagnostics/advanced details.
 import { useState, type ReactNode } from 'react'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, BarChart3, Clock3, ListTree, Table2 } from 'lucide-react'
+import { createColumnHelper } from '@tanstack/react-table'
 import { Badge, ErrorState, Panel, StatTile } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { StructuredValue } from '@/components/StructuredValue'
+import { StaticDataTable, dataTableFeatures } from '@/components/data-table'
 import { ApplicationActions } from '@/components/plugin/ApplicationActions'
 import { InstanceStatusSummary } from '@/components/plugin/DesiredObserved'
 import { PluginConfigForm } from './PluginConfigForm'
@@ -69,6 +72,70 @@ function ReadContent<T>({ title, query, empty, emptyText, children }: {
   }
   if (empty) return <p className="py-3 text-body text-ink-3">{emptyText?.trim() || t('plane.empty', { title })}</p>
   return children
+}
+
+const recordColumn = createColumnHelper<typeof dataTableFeatures, AppDomainRecordView>()
+
+type BindingRow = AppBindingsView['bindings'][number]
+const bindingColumn = createColumnHelper<typeof dataTableFeatures, BindingRow>()
+
+function recordColumns(t: TFunction, section: PluginUISection) {
+  return recordColumn.columns([
+    recordColumn.display({
+      id: 'record',
+      header: t('sections.record'),
+      enableSorting: false,
+      meta: { label: t('sections.record'), cellClassName: 'min-w-40 text-body font-medium' },
+      cell: ({ row }) => {
+        const parsed = parseRecord(row.original)
+        return parsed.readable
+          ? recordHeadline(parsed.value, t('plane.record', { number: row.index + 1 })).title
+          : t('plane.record', { number: row.index + 1 })
+      },
+    }),
+    recordColumn.display({
+      id: 'time',
+      header: t('sections.time'),
+      enableSorting: false,
+      meta: { label: t('sections.time'), cellClassName: 'num whitespace-nowrap text-meta text-ink-3' },
+      cell: ({ row }) => appTime(row.original.updated_at),
+    }),
+    recordColumn.display({
+      id: 'content',
+      header: t('sections.content'),
+      enableSorting: false,
+      meta: { label: t('sections.content'), cellClassName: 'text-body' },
+      cell: ({ row }) => {
+        const parsed = parseRecord(row.original)
+        const headline = parsed.readable
+          ? recordHeadline(parsed.value, t('plane.record', { number: row.index + 1 }))
+          : { usedKeys: [] }
+        return parsed.readable
+          ? <RecordFields record={row.original} fields={section.fields} omitKeys={headline.usedKeys} />
+          : <span className="text-warn">{t('plane.unreadableShort')}</span>
+      },
+    }),
+  ])
+}
+
+function bindingColumns(t: TFunction, presentation: unknown) {
+  return bindingColumn.columns([
+    bindingColumn.accessor('requirement_id', {
+      id: 'requirement',
+      header: t('sections.requirement'),
+      meta: { label: t('sections.requirement') },
+    }),
+    bindingColumn.accessor((row) => bindingLabels(row, presentation).capability, {
+      id: 'capability',
+      header: t('sections.capability'),
+      meta: { label: t('sections.capability'), cellClassName: 'text-ink-2' },
+    }),
+    bindingColumn.accessor((row) => bindingLabels(row, presentation).entity || row.entity_id, {
+      id: 'entity',
+      header: t('sections.entity'),
+      meta: { label: t('sections.entity'), cellClassName: 'num font-mono text-meta' },
+    }),
+  ])
 }
 
 function parseRecord(record: AppDomainRecordView): { value: unknown; readable: boolean } {
@@ -140,10 +207,9 @@ function RecordDetails({ record }: { record: AppDomainRecordView }) {
   </details>
 }
 
-function RecordItem({ record, index, presentation, section }: {
+function RecordItem({ record, index, section }: {
   record: AppDomainRecordView
   index: number
-  presentation: string
   section: PluginUISection
 }) {
   const { t } = useTranslation('plugin')
@@ -151,15 +217,6 @@ function RecordItem({ record, index, presentation, section }: {
   const headline = parsed.readable
     ? recordHeadline(parsed.value, t('plane.record', { number: index + 1 }))
     : { title: t('plane.record', { number: index + 1 }), usedKeys: [] }
-  if (presentation === 'table') {
-    return <tr className="border-t border-hairline align-top">
-      <td className="min-w-40 px-3 py-3 text-body font-medium">{headline.title}</td>
-      <td className="num whitespace-nowrap px-3 py-3 text-meta text-ink-3">{appTime(record.updated_at)}</td>
-      <td className="px-3 py-3 text-body">{parsed.readable
-        ? <RecordFields record={record} fields={section.fields} omitKeys={headline.usedKeys} />
-        : <span className="text-warn">{t('plane.unreadableShort')}</span>}</td>
-    </tr>
-  }
   return <article className="min-w-0 border-t border-hairline py-4 first:border-0 first:pt-0">
     <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
       <h3 className="min-w-0 break-words text-body font-medium [overflow-wrap:anywhere]">{headline.title}</h3>
@@ -187,15 +244,18 @@ function RecordsSection({ query, section }: { query: SectionQuery<AppDomainRecor
     <SectionIntro text={section.description} />
     <ReadContent title={title} query={query} empty={rows.length === 0} emptyText={section.emptyText}>
       {presentation === 'table'
-        ? <div className="overflow-x-auto rounded-tile border border-hairline">
-          <table className="w-full min-w-[36rem] border-collapse text-left">
-            <thead><tr className="text-meta text-ink-3"><th className="px-3 py-2 font-medium">{t('sections.record')}</th><th className="px-3 py-2 font-medium">{t('sections.time')}</th><th className="px-3 py-2 font-medium">{t('sections.content')}</th></tr></thead>
-            <tbody>{visible.map((record, index) => <RecordItem key={record.record_id} record={record} index={index} presentation="table" section={section} />)}</tbody>
-          </table>
-        </div>
+        ? <StaticDataTable<AppDomainRecordView>
+          ariaLabel={title}
+          columns={recordColumns(t, section)}
+          data={visible}
+          getRowId={(record) => record.record_id}
+          empty={section.emptyText?.trim() || t('plane.empty', { title })}
+          minWidthClassName="min-w-[36rem]"
+          containerClassName="rounded-tile border border-hairline"
+        />
         : presentation === 'cards'
-          ? <div className="grid gap-3 sm:grid-cols-2">{visible.map((record, index) => <div key={record.record_id} className="rounded-tile bg-surface-2 p-4"><RecordItem record={record} index={index} presentation="cards" section={section} /></div>)}</div>
-          : <div className={presentation === 'timeline' ? 'border-l border-hairline pl-4' : ''}>{visible.map((record, index) => <RecordItem key={record.record_id} record={record} index={index} presentation={presentation} section={section} />)}</div>}
+          ? <div className="grid gap-3 sm:grid-cols-2">{visible.map((record, index) => <div key={record.record_id} className="rounded-tile bg-surface-2 p-4"><RecordItem record={record} index={index} section={section} /></div>)}</div>
+          : <div className={presentation === 'timeline' ? 'border-l border-hairline pl-4' : ''}>{visible.map((record, index) => <RecordItem key={record.record_id} record={record} index={index} section={section} />)}</div>}
       {rows.length > 5 && <button type="button" className="btn btn-ghost mt-3" onClick={() => setExpanded((value) => !value)}>
         {expanded ? t('sections.showLess') : t('sections.showMore', { count: rows.length - 5 })}
       </button>}
@@ -209,19 +269,16 @@ function BindingTable({ query, presentation, section }: { query: SectionQuery<Ap
   return <Panel title={<span className="flex items-center gap-1.5"><Table2 size={14} />{title}</span>}>
     <SectionIntro text={section.description} />
     <ReadContent title={title} query={query} empty={!query.data?.bindings.length} emptyText={section.emptyText}>
-      <div className="overflow-x-auto rounded-tile border border-hairline">
-        <table className="w-full min-w-[30rem] border-collapse text-left text-body">
-          <thead><tr className="text-meta text-ink-3"><th className="px-3 py-2 font-medium">{t('sections.requirement')}</th><th className="px-3 py-2 font-medium">{t('sections.capability')}</th><th className="px-3 py-2 font-medium">{t('sections.entity')}</th></tr></thead>
-          <tbody>{query.data?.bindings.map((binding) => {
-            const labels = bindingLabels(binding, presentation)
-            return <tr key={binding.requirement_id + binding.entity_id} className="border-t border-hairline">
-              <td className="px-3 py-2">{binding.requirement_id}</td>
-              <td className="px-3 py-2 text-ink-2">{labels.capability}</td>
-              <td className="num px-3 py-2 font-mono text-meta">{labels.entity || binding.entity_id}</td>
-            </tr>
-          })}</tbody>
-        </table>
-      </div>
+      <StaticDataTable<BindingRow>
+        ariaLabel={title}
+        columns={bindingColumns(t, presentation)}
+        data={query.data?.bindings ?? []}
+        getRowId={(binding) => binding.requirement_id + binding.entity_id}
+        empty={section.emptyText?.trim() || t('plane.empty', { title })}
+        minWidthClassName="min-w-[30rem]"
+        containerClassName="rounded-tile border border-hairline"
+        tableClassName="text-body"
+      />
     </ReadContent>
   </Panel>
 }

@@ -7,6 +7,7 @@
 import { Activity, Boxes, SlidersHorizontal, Stethoscope, Zap, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Badge, Panel, TONE_CLS, TONE_TEXT_CLS, type Tone } from './ui'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table'
 import { cn } from '@/lib/cn'
 import { Sparkline } from '@/components/charts/Sparkline'
 import type { SeriesPoint } from '@/store/ws'
@@ -105,30 +106,30 @@ export function GenericTable({ value, className, label }: {
     // 390px：表格只在自身容器内横向滚动（overflow-x-auto），不把横向溢出推给 body；
     // 容器可聚焦并带名称，键盘/读屏用户才能进入这块滚动区。
     <div tabIndex={0} role="group" aria-label={displayLabel} className={cn('overflow-x-auto', className)}>
-      <table className="w-full border-collapse text-left text-meta">
-        <thead>
-          <tr className="text-meta text-ink-3">
-            <th className="px-1 pb-1.5 font-medium">#</th>
+      <Table className="text-meta">
+        <TableHeader className="border-0 bg-transparent">
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="px-1 pb-1.5 pt-0">#</TableHead>
             {cols.map((c) => (
-              <th key={c} className="whitespace-nowrap px-1 pb-1.5 font-medium">
+              <TableHead key={c} className="whitespace-nowrap px-1 pb-1.5 pt-0">
                 {c === 'value' ? t('table.value') : propertyLabel(c)}
-              </th>
+              </TableHead>
             ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-hairline">
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((r, i) => (
-            <tr key={i}>
-              <td className="num px-1 py-1.5 text-ink-3">{i + 1}</td>
+            <TableRow key={i}>
+              <TableCell className="num px-1 py-1.5 text-ink-3">{i + 1}</TableCell>
               {cols.map((c) => (
-                <td key={c} className="max-w-[9rem] truncate px-1 py-1.5" title={cellText(r[c])}>
+                <TableCell key={c} className="max-w-[9rem] truncate px-1 py-1.5" title={cellText(r[c])}>
                   {cellText(r[c])}
-                </td>
+                </TableCell>
               ))}
-            </tr>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   )
 }
@@ -579,31 +580,31 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
                 {props.length > 0 && (
                   <div tabIndex={0} role="region"
                     aria-label={t('capability.fieldsAria', { name: capabilityLabel(ref, idx) })} className="overflow-x-auto">
-                    <table className="w-full min-w-[34rem] border-collapse text-left text-meta">
-                      <thead>
-                        <tr className="text-meta text-ink-3">
-                          <th className="px-1 pb-1 font-medium">{t('capability.property')}</th>
-                          <th className="px-1 pb-1 font-medium">{t('capability.fieldId')}</th>
-                          <th className="px-1 pb-1 font-medium">{t('capability.type')}</th>
-                          <th className="px-1 pb-1 font-medium">{t('capability.unit')}</th>
-                          <th className="px-1 pb-1 font-medium">{t('capability.access')}</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-hairline">
+                    <Table className="w-full min-w-[34rem] text-meta">
+                      <TableHeader className="border-0 bg-transparent">
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="px-1 pb-1 pt-0">{t('capability.property')}</TableHead>
+                          <TableHead className="px-1 pb-1 pt-0">{t('capability.fieldId')}</TableHead>
+                          <TableHead className="px-1 pb-1 pt-0">{t('capability.type')}</TableHead>
+                          <TableHead className="px-1 pb-1 pt-0">{t('capability.unit')}</TableHead>
+                          <TableHead className="px-1 pb-1 pt-0">{t('capability.access')}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {props.map(([name, decl]) => {
                           const d = (decl ?? {}) as Record<string, unknown>
                           return (
-                            <tr key={name}>
-                              <td className="whitespace-nowrap px-1 py-1.5">{declTitle(d, propertyLabel(name, ref, idx))}</td>
-                              <td className="num select-all whitespace-nowrap px-1 py-1.5 font-mono text-micro text-ink-3">{name}</td>
-                              <td className="px-1 py-1.5 text-ink-2">{String(d.type ?? '—')}</td>
-                              <td className="num px-1 py-1.5 text-ink-2">{String(d.unit ?? '—')}</td>
-                              <td className="px-1 py-1.5 text-ink-2">{String(d.access ?? '—')}</td>
-                            </tr>
+                            <TableRow key={name}>
+                              <TableCell className="whitespace-nowrap px-1 py-1.5">{declTitle(d, propertyLabel(name, ref, idx))}</TableCell>
+                              <TableCell className="num select-all whitespace-nowrap px-1 py-1.5 font-mono text-micro text-ink-3">{name}</TableCell>
+                              <TableCell className="px-1 py-1.5 text-ink-2">{String(d.type ?? '—')}</TableCell>
+                              <TableCell className="num px-1 py-1.5 text-ink-2">{String(d.unit ?? '—')}</TableCell>
+                              <TableCell className="px-1 py-1.5 text-ink-2">{String(d.access ?? '—')}</TableCell>
+                            </TableRow>
                           )
                         })}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
                 )}
                 {actions.length > 0 && (
@@ -651,22 +652,22 @@ export function EntityInventory({ descriptor, className }: {
   const { t } = useTranslation('devices')
   return (
     <div tabIndex={0} role="region" aria-label={t('entity.inventoryAria')} className={cn('overflow-x-auto', className)}>
-      <table className="w-full min-w-[44rem] border-collapse text-left text-meta">
-        <thead>
-          <tr className="text-meta text-ink-3">
-            <th className="px-1 pb-1.5 font-medium">{t('entity.entity')}</th>
-            <th className="px-1 pb-1.5 font-medium">{t('entity.id')}</th>
-            <th className="px-1 pb-1.5 font-medium">{t('entity.category')}</th>
-            <th className="px-1 pb-1.5 font-medium">{t('entity.capabilityId')}</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-hairline">
+      <Table className="w-full min-w-[44rem] text-meta">
+        <TableHeader className="border-0 bg-transparent">
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="px-1 pb-1.5 pt-0">{t('entity.entity')}</TableHead>
+            <TableHead className="px-1 pb-1.5 pt-0">{t('entity.id')}</TableHead>
+            <TableHead className="px-1 pb-1.5 pt-0">{t('entity.category')}</TableHead>
+            <TableHead className="px-1 pb-1.5 pt-0">{t('entity.capabilityId')}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {descriptor.entities.map((e) => (
-            <tr key={e.entity_id || e.unique_key}>
-              <td className="whitespace-nowrap px-1 py-1.5">{entityTitle(e)}</td>
-              <td className="num select-all whitespace-nowrap px-1 py-1.5 font-mono text-micro text-ink-3">{e.entity_id}</td>
-              <td className="px-1 py-1.5 text-ink-2">{t(`category.${e.category}`)}</td>
-              <td className="px-1 py-1.5">
+            <TableRow key={e.entity_id || e.unique_key}>
+              <TableCell className="whitespace-nowrap px-1 py-1.5">{entityTitle(e)}</TableCell>
+              <TableCell className="num select-all whitespace-nowrap px-1 py-1.5 font-mono text-micro text-ink-3">{e.entity_id}</TableCell>
+              <TableCell className="px-1 py-1.5 text-ink-2">{t(`category.${e.category}`)}</TableCell>
+              <TableCell className="px-1 py-1.5">
                 <span className="flex min-w-0 flex-wrap gap-1">
                   {e.capabilities.length === 0
                     ? <span className="text-ink-3">—</span>
@@ -676,11 +677,11 @@ export function EntityInventory({ descriptor, className }: {
                       </span>
                     ))}
                 </span>
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   )
 }

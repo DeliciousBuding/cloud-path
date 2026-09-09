@@ -32,7 +32,7 @@ export default function Admin() {
   return (
     <>
       <PageHeader title={t('page.title')} subtitle={t('page.subtitle')} />
-      <div className="grid items-start gap-5 xl:grid-cols-2">
+      <div className="grid gap-5">
         <UserManager />
         <TokenManager />
       </div>

@@ -157,7 +157,8 @@ describe('TestCreateTokenSecretShownOnce', () => {
     expect(screen.queryByText(SECRET)).toBeNull()
     // 列表里只有 prefix 与元数据
     expect(screen.getAllByText(PREFIX).length).toBeGreaterThan(0)
-    expect(screen.getByRole('list', { name: '访问令牌列表' })).toBeInTheDocument()
+    // 模态打开时背景对辅助技术隐藏，但列表仍在 DOM 中且只含元数据
+    expect(document.querySelector('table[aria-label="访问令牌列表"]')).not.toBeNull()
     // toast 只带名称，不带明文
     expect(JSON.stringify(useToasts.getState().items)).not.toContain(SECRET)
   })
@@ -176,7 +177,7 @@ describe('TestCreateTokenSecretShownOnce', () => {
     expect(document.body.textContent).not.toContain(SECRET)
     expect(document.body.innerHTML).not.toContain(SECRET)
     // 列表仍在，但只有元数据：没有任何「查看明文」入口
-    expect(screen.getByRole('list', { name: '访问令牌列表' })).toBeInTheDocument()
+    expect(screen.getByRole('table', { name: '访问令牌列表' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /查看明文|显示令牌/ })).toBeNull()
   })
 
@@ -309,7 +310,8 @@ describe('TestRevokeToken', () => {
     })
     renderWithProviders(<Admin />)
 
-    const list = await screen.findByRole('list', { name: '访问令牌列表' })
+    const list = await screen.findByRole('table', { name: '访问令牌列表' })
+    await screen.findByText('ci-deploy')
     expect(within(list).getByText('有效')).toBeInTheDocument()
 
     await user.click(within(list).getByRole('button', { name: '吊销令牌 ci-deploy' }))
@@ -317,7 +319,7 @@ describe('TestRevokeToken', () => {
     expect(screen.getByText(/立即失效且无法恢复/)).toBeInTheDocument()
     expect(http.to('/api/tokens/7')).toHaveLength(0)
 
-    await user.click(screen.getByRole('button', { name: '确认吊销令牌 ci-deploy' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '确认吊销' }))
     await waitFor(() => expect(http.to('/api/tokens/7')).toHaveLength(1))
     expect(http.to('/api/tokens/7')[0]?.method).toBe('DELETE')
     expect(http.to('/api/tokens/7')[0]?.credentials).toBe('same-origin')
@@ -334,9 +336,10 @@ describe('TestRevokeToken', () => {
     const http = installFetch(tokenRoute())
     renderWithProviders(<Admin />)
 
-    const list = await screen.findByRole('list', { name: '访问令牌列表' })
+    const list = await screen.findByRole('table', { name: '访问令牌列表' })
+    await screen.findByText('ci-deploy')
     await user.click(within(list).getByRole('button', { name: '吊销令牌 ci-deploy' }))
-    await user.click(screen.getByRole('button', { name: '取消吊销 ci-deploy' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '取消' }))
 
     expect(http.to('/api/tokens/7')).toHaveLength(0)
     expect(screen.queryByText(/确认吊销「ci-deploy」/)).toBeNull()
@@ -350,12 +353,13 @@ describe('TestRevokeToken', () => {
     const http = installFetch(tokenRoute({ tokens: [expired] }))
     renderWithProviders(<Admin />)
 
-    const list = await screen.findByRole('list', { name: '访问令牌列表' })
+    const list = await screen.findByRole('table', { name: '访问令牌列表' })
+    await screen.findByText('old-ci')
     expect(within(list).getByText('已过期')).toBeInTheDocument()
     expect(within(list).queryByText('已吊销')).toBeNull()
 
     await user.click(within(list).getByRole('button', { name: '吊销令牌 old-ci' }))
-    await user.click(screen.getByRole('button', { name: '确认吊销令牌 old-ci' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '确认吊销' }))
     await waitFor(() => expect(http.to('/api/tokens/7')).toHaveLength(1))
     expect(http.to('/api/tokens/7')[0]?.method).toBe('DELETE')
   })
@@ -368,7 +372,7 @@ describe('TestRevokeToken', () => {
 
     await submitCreateToken(user)
     expect(await screen.findByRole('alert')).toHaveTextContent('当前账号没有管理权限。请联系管理员。')
-    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
     expect(document.body.innerHTML).not.toContain(SECRET)
   })
 })
@@ -379,7 +383,8 @@ describe('令牌列表卫生', () => {
     installFetch(tokenRoute())
     renderWithProviders(<Admin />)
 
-    const list = await screen.findByRole('list', { name: '访问令牌列表' })
+    const list = await screen.findByRole('table', { name: '访问令牌列表' })
+    await screen.findByText('ci-deploy')
     expect(within(list).getByText('ci-deploy')).toBeInTheDocument()
     expect(within(list).getByText(PREFIX)).toBeInTheDocument()
     expect(within(list).getByText('查看设备与记录')).toBeInTheDocument()
