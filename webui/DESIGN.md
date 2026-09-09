@@ -148,7 +148,16 @@ unicode-range 只接管 CJK，拉丁/数字仍走 Geist；可复现构建见 web
 - 面积图平涂 `fillOpacity 0.1`：装饰性渐变/渐变淡出是硬反模式，渐变只允许作为有标注的连续数据标尺。
 - 用户可见文案不用破折号「——」接续句子（改逗号/句号）；代码注释不受此限。
 
-### 10.12 设计 token（2026-09-09 收口）
+### 10.12 组件库与复用边界
+
+- 四层职责固定：token（`webui/src/index.css` 的 `@theme`）→ primitive（`webui/src/components/ui.tsx`）→ 领域组件（`webui/src/components/**`）→ 页面组合（`webui/src/pages/**`）。页面负责数据与组合，不复制控件行为。
+- 可复用控件必须进入 primitive 或领域组件层，并带行为测试；不要在两个页面各写一份按钮、下拉、弹层或键盘逻辑。
+- 页面不得直接写 `<select>`；统一走 `Select` primitive。原生 `<button>` / `<input>` 只允许用于语义明确的专用控件（如 checkbox、range、file），且仍须消费 token 类。
+- primitive 负责交互与无障碍，领域组件负责业务语义，页面负责数据与布局；跨层直写原生控件或裸样式视为设计系统漂移。
+- `scripts/check_design_tokens.py` 同时守 token 与 `<select>` 边界；新增 primitive 行为必须有组件测试。
+
+### 10.13 设计 token（2026-09-09 收口）
+
 
 - SSOT 是 `webui/src/index.css` 的 `@theme`。组件只消费语义 token，不写裸色值、任意 px 字号、裸圆角、裸 z-index、裸动效时长。
 - 颜色：`--color-*`（canvas/surface/ink/accent/ok/warn/bad/idle）；语义色只表达状态，不作为装饰。
@@ -157,7 +166,7 @@ unicode-range 只接管 CJK，拉丁/数字仍走 Geist；可复现构建见 web
 - 层级：`--z-local` / `--z-sticky` / `--z-nav` / `--z-overlay`；动效：`--motion-fast` / `--motion-base` / `--motion-slow` / `--motion-shimmer`，统一 `--ease-standard`。
 - 焦点：`--focus-ring-color` / `--focus-ring-width` / `--focus-ring-offset` / `--focus-halo` / `--focus-halo-bad`；键盘焦点必须可见，输入框错误态用红色 halo。
 - 状态：`--opacity-disabled`；骨架屏 1.6s 微光，`prefers-reduced-motion` 下关闭。
-- 原生 `select` 通过 `Select` 原语统一：默认 `.select`，筛选器用 `pill`，紧凑表单用 `compact`；弹层通过 `color-scheme` + `appearance: base-select` + `::picker(select)` 纳入深浅主题和圆角 token，不支持 `base-select` 的浏览器至少跟随系统主题。
+- 下拉框统一走 `Select` 原语：触发器与弹层都在 DOM 中，使用 combobox/listbox ARIA、键盘导航、外点关闭和 token 化圆角/阴影；视觉隐藏的原生 `select` 只保留表单与读屏语义，不再依赖 `appearance: base-select` 或浏览器原生弹层。筛选器用 `pill`，紧凑表单用 `compact`。
 - 输入框和 Select 的高度只走 `--spacing-control-sm` / `--spacing-control` / `--spacing-touch`，禁用态统一 `--opacity-disabled`；组件不再自己叠 `min-h-11` / `sm:min-h-0`。
 - `theme-color` 随手动浅/深主题更新；Firefox 使用 token 色滚动条，WebKit 使用同一 token 色。
 - CI 由 `scripts/check_design_tokens.py` 守门，禁止任意 px 字号、裸圆角、裸 z-index、`min-h-11`、`transition-all` 和业务源码裸色值。

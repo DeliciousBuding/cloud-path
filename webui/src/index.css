@@ -352,46 +352,41 @@ p { text-wrap: pretty; }
   box-shadow: var(--focus-halo-bad);
 }
 
-/* 原生 select 的展开菜单由浏览器绘制，普通 CSS 改不到圆角和主题。
- * Chromium/Edge 支持 appearance:base-select 时，用 picker 伪元素把弹出层纳入设计 token；
- * 不支持的浏览器保留原生箭头，并通过 color-scheme 至少跟随深浅主题。 */
-select:not([multiple]) { appearance: auto; }
-@supports (appearance: base-select) {
-  select:not([multiple]) { appearance: base-select; }
-  select:not([multiple]):open {
-    outline: none;
-    background: var(--color-surface);
-    border-color: var(--focus-ring-color);
-    box-shadow: var(--focus-halo);
-  }
-  select:not([multiple])::picker-icon { color: var(--color-ink-3); }
-  select:not([multiple])::picker(select) {
-    margin-top: 6px;
-    padding: 4px;
-    background: var(--color-surface);
-    color: var(--color-ink);
-    border: 1px solid var(--color-hairline);
-    border-radius: var(--radius-card);
-    box-shadow: var(--shadow-lift);
-    overflow: clip;
-  }
-  select:not([multiple]) option {
-    margin: 2px 0;
-    padding: 8px 10px;
-    border-radius: var(--radius-tile);
-    appearance: none;
-    background: var(--color-surface);
-    color: var(--color-ink);
-  }
-  select:not([multiple]) option:checked {
-    background: var(--color-accent);
-    color: var(--color-accent-ink);
-  }
-  select:not([multiple]) option:hover,
-  select:not([multiple]) option:focus {
-    background: color-mix(in srgb, var(--color-ink) 8%, var(--color-surface));
-  }
+/* 可主题化 Select：原生 select 只做隐藏语义层，弹层由 DOM 渲染。 */
+.select-wrap { position: relative; min-width: 0; }
+.select-wrap-pill { display: inline-block; max-width: 100%; vertical-align: middle; }
+.select-trigger {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; padding-right: 10px; text-align: left;
 }
+.select-pill.select-trigger { width: auto; }
+.select-wrap:focus-within .select-trigger {
+  outline: none;
+  background: var(--color-surface);
+  border-color: var(--focus-ring-color);
+  box-shadow: var(--focus-halo);
+}
+.select-trigger:disabled { opacity: var(--opacity-disabled); cursor: not-allowed; }
+.select-menu {
+  position: absolute; z-index: var(--z-overlay); top: calc(100% + 6px); left: 0;
+  min-width: 100%; width: max-content; max-width: min(28rem, calc(100vw - 2rem));
+  max-height: 16rem; overflow: auto; padding: 4px;
+  background: var(--color-surface); color: var(--color-ink);
+  border: 1px solid var(--color-hairline); border-radius: var(--radius-card);
+  box-shadow: var(--shadow-lift);
+}
+.select-list { margin: 0; padding: 0; list-style: none; }
+.select-group { padding: 6px 10px 3px; color: var(--color-ink-3); font-size: var(--text-meta); font-weight: 500; }
+.select-option {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; padding: 8px 10px; border-radius: var(--radius-tile);
+  color: var(--color-ink); cursor: pointer; font-size: var(--text-body);
+}
+.select-option[aria-selected="true"] { background: var(--color-accent); color: var(--color-accent-ink); }
+.select-option[data-active="true"]:not([aria-selected="true"]) {
+  background: color-mix(in srgb, var(--color-ink) 8%, var(--color-surface));
+}
+.select-option[aria-disabled="true"] { opacity: var(--opacity-disabled); cursor: not-allowed; }
 
 /* 大号按钮（认证页主操作） */
 .btn-lg { padding: 11px 20px; font-size: var(--text-lead); font-weight: 600; }
