@@ -38,6 +38,10 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 
 ## Unreleased
 
+- WebUI：建立 `zh-CN` / `en-US` 国际化，语言选择持久化；导航、页面、表单、错误态和插件生命周期文案全部走 i18n，硬编码中文清零。
+- 插件契约：Manifest、Descriptor、Capability 与插件 UI 标题支持可选 `i18n` map，旧 `title` / `name` / `description` 保持兼容；后端错误改用稳定 `code` + `params`。
+- 文案：面向普通用户重写状态、错误和操作提示，隐藏契约、实体、运行时、revision 等工程术语；设计 token 与 i18n 门禁同时纳入 CI。
+
 - 插件 UI：Manifest 新增声明式 `ui` 契约与真实 schema 校验，支持 Application 导航/页面、Driver 设备扩展、受控 custom section；公开 API 与插件目录完成白名单投影，旧 manifest 无 `ui` 时完全兼容。
 - 插件 UI：新增 `GET /api/plugin-ui/assets/{pluginID}/{version}/{path:.*}`，只服务已声明 custom entry 的本地 AppHost 插件 `ui/` 子树；账号模式强制认证，open 模式按空租户可见性校验，路径/symlink/MIME/大小均 fail-closed。
 - 插件目录：同一 `plugin_id` 先按 semver 取最高版本，同版本 Edge 事实优先，避免旧 Edge 安装遮蔽新版 AppHost Application。

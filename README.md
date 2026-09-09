@@ -470,6 +470,7 @@ Connector/通知运行时、Transform/WASM、MQTT/Modbus 接入、远程 OTA、�
 | [docs/architecture/how-to-build-driver.md](docs/architecture/how-to-build-driver.md) | 新增 Driver 的操作入口 |
 | [docs/architecture/capability-model.md](docs/architecture/capability-model.md) | Device/Entity/Capability 模型 |
 | [docs/architecture/name-lexicon.md](docs/architecture/name-lexicon.md) | 用户侧中文名称与机器标识映射 |
+| [docs/architecture/i18n.md](docs/architecture/i18n.md) | WebUI 国际化、locale 回退与插件本地化契约 |
 | [docs/architecture/control-plane-sync.md](docs/architecture/control-plane-sync.md) | 声明式快照 + 单调 revision 同步语义 |
 | [docs/architecture/tenant-security-policy.md](docs/architecture/tenant-security-policy.md) | 租户配额、保留期与 secret 边界 |
 | [docs/architecture/repository-strategy.md](docs/architecture/repository-strategy.md) | 仓库组合、命名、拆仓条件与公开边界 |
