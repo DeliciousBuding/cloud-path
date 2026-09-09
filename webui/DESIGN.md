@@ -45,12 +45,17 @@ resolver 均为纯函数并有确定性单测（fallback 顺序、脏数据降�
 而非大字号——半屏大的「否」是排版错误；胶囊语义色只接 warn/bad，其余保持中性。单位经展示层单一
 出口 `unitLabel()` 人话化（s→秒、Cel→°C），科学单位（V/lux/%）原样；诊断页 raw JSON 不受影响。
 
-计数/频次图必须零基线（TrendChart `zeroBase`）：负轴或悬空基线会夸大差异，属数据可视化谎言；
+计数/频次图必须零基线（`TimeSeriesChart` `zeroBase`）：负轴或悬空基线会夸大差异，属数据可视化谎言；
 窄高 sparkline 模式（`hideY`）连同横向网格省去，峰值由标题说人话；X 轴刻度粒度由调用方传入
 （分桶图传时分，秒对 ≥1 分钟的桶是噪音）。
 
 设备概览首屏三段：KPI 行 → [最近事件 2/3 | 设备状况 1/3] → 操作历史通栏置底（限 8 条 + 控制页
 出口）。操作历史放右栏会拉到 20 行、把左栏踢出一大片空洞。
+
+趋势卡片显示会话内实时采样；点击整张波形卡进入设备详情的子路由
+`/devices/:edgeId/:deviceId/trends/:seriesKey`。详情页使用 REST 历史（按秒保存、游标分页），
+不依赖设备在线态，设备离线时仍能查看已保存采样；大图用 `TimeSeriesChart` 的 Brush 做视窗缩放，
+明细表按页读取更早数据。通用图表契约见 [`src/components/charts/README.md`](src/components/charts/README.md)。
 
 运行实例状态词汇覆盖两套后端事实源：edge pluginhost.State（大写 STOPPED/HEALTHY…）与 server
 AppHost 的 appruntime.InstanceState（小写 running/stopping/failed…，internal/appruntime/types.go）；

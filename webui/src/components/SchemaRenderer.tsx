@@ -8,7 +8,7 @@ import { Activity, Boxes, SlidersHorizontal, Stethoscope, Zap, type LucideIcon }
 import { useTranslation } from 'react-i18next'
 import { Badge, Panel, TONE_CLS, TONE_TEXT_CLS, type Tone } from './ui'
 import { cn } from '@/lib/cn'
-import { Sparkline } from './Sparkline'
+import { Sparkline } from '@/components/charts/Sparkline'
 import type { SeriesPoint } from '@/store/ws'
 import {
   CATEGORY_ORDER, EMPTY_INDEX, capabilityLabel, commandLabel,

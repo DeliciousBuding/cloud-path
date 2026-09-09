@@ -843,6 +843,7 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/api/devices", s.handleListDevices)
 			r.Get("/api/devices/{edgeID}/{deviceID}", s.handleGetDevice)
 			r.Get("/api/devices/{edgeID}/{deviceID}/descriptor", s.handleDeviceDescriptor)
+			r.Get("/api/devices/{edgeID}/{deviceID}/samples", s.handleListSeriesSamples)
 			r.Get("/api/descriptors", s.handleListDescriptors)
 			r.Get("/api/capabilities", s.handleCapabilities)
 			r.Get("/api/events", s.handleListEvents)
@@ -1500,8 +1501,12 @@ func (s *Server) pruneOnce() {
 	if err != nil {
 		slog.Warn("retention: prune commands", "err", err)
 	}
-	if ev > 0 || cmd > 0 {
-		slog.Info("retention: pruned", "events", ev, "commands", cmd, "days", s.cfg.retentionDays())
+	samples, err := s.cfg.Store.PruneObservationSamples(cutoff)
+	if err != nil {
+		slog.Warn("retention: prune observation samples", "err", err)
+	}
+	if ev > 0 || cmd > 0 || samples > 0 {
+		slog.Info("retention: pruned", "events", ev, "commands", cmd, "samples", samples, "days", s.cfg.retentionDays())
 	}
 }
 
