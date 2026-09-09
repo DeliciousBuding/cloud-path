@@ -273,14 +273,15 @@ func CaseDuplicateOutOfOrder(t *testing.T) {
 	// A different device is an independent sequence scope.
 	h.driver.Publish(instanceID, "dev-2", obs(1))
 
-	wait := func(seq uint64) {
+	wait := func(device string, seq uint64) {
 		if _, ok := h.core.WaitForMessage(3*time.Second, func(m *driver.DriverMessage) bool {
-			return m.DeviceID == dev && m.Sequence == seq
+			return m.DeviceID == device && m.Sequence == seq
 		}); !ok {
-			t.Fatalf("missing message seq=%d", seq)
+			t.Fatalf("missing message %s seq=%d", device, seq)
 		}
 	}
-	wait(3)
+	wait(dev, 3)
+	wait("dev-2", 1)
 
 	// Accepted stream must contain exactly the three unique sequences for
 	// dev-1 plus the first sequence of dev-2, in order.
