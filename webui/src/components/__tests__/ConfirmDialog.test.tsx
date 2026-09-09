@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -24,9 +24,9 @@ describe('确认框的视口与键盘边界', () => {
     await user.click(screen.getByRole('button', { name: '打开确认' }))
     const dialog = screen.getByRole('dialog', { name: '确认修改？' })
     expect(container).not.toContainElement(dialog)
-    expect(dialog.parentElement?.parentElement).toBe(document.body)
+    expect(document.body).toContainElement(dialog)
     expect(dialog).toHaveAccessibleDescription('将修改当前设备的输出。')
-    expect(document.body.style.overflow).toBe('hidden')
+    expect(document.body).toHaveAttribute('data-scroll-locked', '1')
     expect(screen.getByRole('button', { name: '取消' })).toHaveFocus()
   })
 
@@ -56,10 +56,10 @@ describe('确认框的视口与键盘边界', () => {
     render(<DialogHarness onCancel={cancel} />)
     const trigger = screen.getByRole('button', { name: '打开确认' })
     await user.click(trigger)
-    await user.keyboard('{Escape}')
+    fireEvent.keyDown(document, { key: 'Escape' })
     expect(cancel).toHaveBeenCalledOnce()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(trigger).toHaveFocus()
+    await waitFor(() => expect(trigger).toHaveFocus())
     expect(document.body.style.overflow).toBe('auto')
   })
 
@@ -71,8 +71,10 @@ describe('确认框的视口与键盘边界', () => {
     const dialog = screen.getByRole('dialog')
     fireEvent.mouseDown(dialog)
     expect(cancel).not.toHaveBeenCalled()
-    fireEvent.mouseDown(dialog.parentElement as HTMLElement)
-    expect(cancel).toHaveBeenCalledOnce()
+    const overlay = document.querySelector('.dialog-backdrop')
+    expect(overlay).not.toBeNull()
+    await user.click(overlay as HTMLElement)
+    await waitFor(() => expect(cancel).toHaveBeenCalledOnce())
     expect(confirm).not.toHaveBeenCalled()
   })
 
@@ -81,13 +83,12 @@ describe('确认框的视口与键盘边界', () => {
     const cancel = vi.fn()
     const view = render(<DialogHarness busy onCancel={cancel} />)
     await user.click(screen.getByRole('button', { name: '打开确认' }))
-    await user.keyboard('{Escape}')
-    fireEvent.mouseDown(screen.getByRole('dialog').parentElement as HTMLElement)
-    await user.tab()
     expect(screen.getByRole('dialog')).toHaveFocus()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await user.click(document.querySelector('.dialog-backdrop') as HTMLElement)
     expect(cancel).not.toHaveBeenCalled()
     view.rerender(<DialogHarness onCancel={cancel} />)
-    await user.keyboard('{Escape}')
+    fireEvent.keyDown(document, { key: 'Escape' })
     expect(cancel).toHaveBeenCalledOnce()
   })
 

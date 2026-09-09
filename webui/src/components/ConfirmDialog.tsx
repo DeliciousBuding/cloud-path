@@ -4,16 +4,22 @@
 //   - 默认焦点落在「取消」上（危险操作不做「回车即执行」的顺手确认）；
 //   - Esc 与点遮罩都是取消，不是确认；
 //   - `requireAck` 给出必须勾选的确认句（不可逆操作 / 权限扩大），未勾选时确认键禁用；
-//   - busy 期间两个按钮都禁用，避免重复提交产生第二个 revision；
-//   - 390px：宽度用 w-full + max-w，内边距相对单位，不写死像素宽。
-import { useEffect, useId, useRef, useState } from 'react'
+//   - busy 期间两个按钮都禁用，避免重复提交产生第二个 revision。
+// 焦点陷阱、Esc、遮罩关闭和焦点恢复由 Radix Dialog 负责；业务只保留确认语义。
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import '@/i18n'
 import type { ReactNode } from 'react'
-import { createPortal } from 'react-dom'
 import { AlertTriangle, Info } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { Button, Checkbox } from './ui'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+} from './ui/dialog'
 
 export interface ConfirmDialogProps {
   open: boolean
@@ -39,82 +45,50 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const { t } = useTranslation()
   const cancelText = cancelLabel ?? t('actions.cancel')
-  const titleId = useId()
   const cancelRef = useRef<HTMLButtonElement>(null)
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const current = useRef({ busy, onCancel })
-  current.current = { busy, onCancel }
+  const contentRef = useRef<HTMLDivElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
   const [acked, setAcked] = useState(false)
 
-  // 每次打开都重置勾选：上一次的确认不得延续到下一次操作
-  useEffect(() => { if (open) setAcked(false) }, [open])
-
+  // 每次打开都重置勾选，并记录触发点；关闭后把焦点还给用户。
+  // Radix 只自动管理 Dialog.Trigger 的焦点，CloudPath 的调用方是受控 open，故这里显式收口。
   useEffect(() => {
-    if (!open) return
-    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    if (cancelRef.current && !cancelRef.current.disabled) cancelRef.current.focus()
-    else dialogRef.current?.focus()
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !current.current.busy) {
-        e.preventDefault()
-        current.current.onCancel()
-      }
-      if (e.key !== 'Tab' || !dialogRef.current) return
-      const focusable = [...dialogRef.current.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      )].filter((el) => !el.closest('[hidden], [inert], [aria-hidden="true"]')
-        && getComputedStyle(el).display !== 'none' && getComputedStyle(el).visibility !== 'hidden')
-      const first = focusable[0]
-      const last = focusable[focusable.length - 1]
-      const active = document.activeElement as HTMLElement | null
-      if (!first || !last) {
-        e.preventDefault()
-        dialogRef.current.focus()
-      } else if (e.shiftKey && (active === first || !active || !focusable.includes(active))) {
-        e.preventDefault()
-        last.focus()
-      } else if (!e.shiftKey && (active === last || !active || !focusable.includes(active))) {
-        e.preventDefault()
-        first.focus()
-      }
+    if (open) {
+      previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      setAcked(false)
+      return
     }
-    window.addEventListener('keydown', onKey)
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      document.body.style.overflow = previousOverflow
-      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true })
-    }
+    previousFocusRef.current?.focus({ preventScroll: true })
+    previousFocusRef.current = null
   }, [open])
-
-  if (!open) return null
 
   const blocked = busy || (Boolean(requireAck) && !acked)
   const Icon = tone === 'info' ? Info : AlertTriangle
   const iconCls = tone === 'danger' ? 'bg-bad/10 text-bad'
     : tone === 'warn' ? 'bg-warn/12 text-warn' : 'bg-accent/10 text-accent'
 
-  // Portal 避开页面动画 transform 的 fixed containing block，遮罩始终覆盖真实视口。
-  return createPortal(
-    <div
-      className="fixed inset-0 z-overlay flex items-end justify-center overflow-y-auto px-4 py-6 sm:items-center"
-      onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onCancel() }}
-    >
-      {/* 遮罩：颜色走 token 混色，不写死 rgba */}
-      <div className="dialog-backdrop pointer-events-none fixed inset-0" aria-hidden />
-      <div
-        ref={dialogRef} role="dialog" aria-modal="true" aria-busy={busy}
-        aria-labelledby={titleId} aria-describedby={titleId + '-body'} tabIndex={-1}
-        className="card dialog relative max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto p-6 fade-up"
+  return (
+    <Dialog open={open} onOpenChange={(next) => { if (!next && !busy) onCancel() }}>
+      <DialogContent
+        ref={contentRef}
+        showClose={false}
+        aria-busy={busy}
+        className="max-w-md"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          if (busy) contentRef.current?.focus()
+          else cancelRef.current?.focus()
+        }}
       >
         <div className="flex items-start gap-3.5">
           <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-pill', iconCls)}>
             <Icon aria-hidden="true" size={18} />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 id={titleId} className="text-lead font-semibold tracking-[-0.01em] break-words">{title}</h2>
-            <div id={titleId + '-body'} className="mt-1.5 text-body leading-relaxed break-words text-ink-2">{body}</div>
+            <DialogTitle className="break-words">{title}</DialogTitle>
+            <DialogDescription asChild>
+              <div className="mt-1.5 break-words">{body}</div>
+            </DialogDescription>
           </div>
         </div>
 
@@ -131,7 +105,7 @@ export function ConfirmDialog({
           </label>
         )}
 
-        <div className="mt-6 flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
+        <DialogFooter className="flex-col-reverse sm:flex-row">
           <Button ref={cancelRef} variant="ghost" disabled={busy} onClick={onCancel}>
             {cancelText}
           </Button>
@@ -143,9 +117,8 @@ export function ConfirmDialog({
           >
             {confirmLabel}
           </Button>
-        </div>
-      </div>
-    </div>,
-    document.body,
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
