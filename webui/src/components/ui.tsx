@@ -44,7 +44,7 @@ export function Panel({ title, right, className, children }: {
   title?: ReactNode; right?: ReactNode; className?: string; children: ReactNode
 }) {
   return (
-    <section className={cn('card p-4', className)}>
+    <section className={cn('card p-4 sm:p-5', className)}>
       {(title || right) && (
         <div className="mb-4 flex items-center justify-between gap-3">
           {title && <h2 className="text-[15px] font-semibold tracking-[-0.01em]">{title}</h2>}
@@ -60,13 +60,13 @@ export function PageHeader({ title, subtitle, actions }: {
   title: string; subtitle?: ReactNode; actions?: ReactNode
 }) {
   return (
-    <header className="mb-8 flex flex-wrap items-end justify-between gap-4 fade-up">
-      <div>
+    <header className="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3 sm:mb-8 sm:items-end">
+      <div className="min-w-0">
         {/* -0.025em 档负字距是拉丁刻度；中文标题字面全角，超过 -0.01em 会挤，故用 CJK 安全值 */}
-        <h1 className="text-[28px] font-semibold tracking-[-0.01em] leading-tight">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-ink-2">{subtitle}</p>}
+        <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.01em] sm:text-[28px]">{title}</h1>
+        {subtitle && <p className="mt-1.5 max-w-[62ch] text-sm text-ink-2">{subtitle}</p>}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </header>
   )
 }
@@ -76,11 +76,11 @@ export function StatTile({ icon, label, value, unit, sub }: {
 }) {
   return (
     // 390px：两列统计瓦片内宽仅约 8rem，长版本号等不可断字符串必须换行，否则撑出横向滚动
-    <div className="card min-w-0 p-4 fade-up">
+    <div className="card min-w-0 p-3.5 sm:p-4">
       <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-ink-2">
         {icon}<span className="truncate">{label}</span>
       </div>
-      <div className="metric num mt-1.5 text-[30px] font-semibold leading-none break-words">
+      <div className="metric num mt-1.5 break-words text-[26px] font-semibold leading-none sm:text-[30px]">
         {value}
         {unit && <span className="ml-1 text-base font-normal text-ink-3">{unit}</span>}
       </div>
@@ -90,12 +90,19 @@ export function StatTile({ icon, label, value, unit, sub }: {
   )
 }
 
-export function EmptyState({ icon, title, hint }: { icon?: ReactNode; title: string; hint?: string }) {
+export function EmptyState({ icon, title, hint, action, compact, plain }: {
+  icon?: ReactNode; title: string; hint?: string; action?: ReactNode; compact?: boolean; plain?: boolean
+}) {
   return (
-    <div className="card flex flex-col items-center justify-center px-6 py-16 text-center fade-up">
+    <div className={cn(
+      'flex flex-col items-center justify-center px-6 text-center',
+      !plain && 'card',
+      compact ? 'py-8' : 'py-12',
+    )}>
       <span aria-hidden="true" className="text-ink-3">{icon}</span>
       <p className="mt-3 text-[15px] font-semibold">{title}</p>
       {hint && <p className="mt-1 max-w-sm text-sm text-ink-2">{hint}</p>}
+      {action && <div className="mt-4">{action}</div>}
     </div>
   )
 }
@@ -104,22 +111,22 @@ export function EmptyState({ icon, title, hint }: { icon?: ReactNode; title: str
  * 错误态：说清「拿不到什么」+ 一键重试。
  * 不复述服务端技术细节，也不把错误渲染成空白（空白 = 用户以为没数据）。
  */
-export function ErrorState({ icon, title, hint, onRetry, retrying, compact }: {
+export function ErrorState({ icon, title, hint, onRetry, retrying, compact, plain, retryLabel = '重新加载' }: {
   icon?: ReactNode; title: string; hint?: ReactNode
-  onRetry?: () => void; retrying?: boolean; compact?: boolean
+  onRetry?: () => void; retrying?: boolean; compact?: boolean; plain?: boolean; retryLabel?: string
 }) {
   return (
     <div
       role="alert"
-      className={cn('card flex flex-col items-center justify-center px-6 text-center fade-up',
-        compact ? 'py-9' : 'py-14')}
+      className={cn('flex flex-col items-center justify-center px-6 text-center',
+        !plain && 'card', compact ? 'py-8' : 'py-12')}
     >
       <span aria-hidden="true" className="text-bad">{icon ?? <RefreshCw size={22} />}</span>
       <p className="mt-3 text-[15px] font-semibold">{title}</p>
       {hint && <p className="mt-1 max-w-md text-sm break-words text-ink-2">{hint}</p>}
       {onRetry && (
-        <button type="button" className="btn btn-ghost mt-5" onClick={onRetry} disabled={retrying}>
-          {retrying ? <Spinner size={13} /> : <RefreshCw size={13} />} 重试
+        <button type="button" className="btn btn-primary mt-5" onClick={onRetry} disabled={retrying}>
+          {retrying ? <Spinner size={13} /> : <RefreshCw size={13} />} {retryLabel}
         </button>
       )}
     </div>

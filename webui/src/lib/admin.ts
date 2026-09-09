@@ -9,9 +9,9 @@ export interface RoleOption { value: Role; label: string; hint: string }
 
 /** 角色选项，顺序即权限由低到高（docs/api.md §3.1） */
 export const ROLE_OPTIONS: RoleOption[] = [
-  { value: 'viewer', label: '只读 viewer', hint: '查看设备、状态、事件与命令历史' },
-  { value: 'operator', label: '操作员 operator', hint: '只读权限 + 下发设备命令' },
-  { value: 'admin', label: '管理员 admin', hint: '操作员权限 + 管理本租户用户与服务令牌' },
+  { value: 'viewer', label: '只读', hint: '可以查看设备状态和运行记录' },
+  { value: 'operator', label: '可以操作设备', hint: '可以查看并执行设备操作' },
+  { value: 'admin', label: '管理员', hint: '可以管理成员和访问令牌' },
 ]
 
 /** 新建用户的默认角色：最小权限，不预选 admin */
@@ -25,10 +25,10 @@ export interface ScopeOption { value: TokenScope; label: string; hint: string; d
 
 /** 令牌 scope 选项；danger=true 的范围在表单里必须给出显式风险说明 */
 export const SCOPE_OPTIONS: ScopeOption[] = [
-  { value: 'read', label: 'read', hint: '读取设备状态、事件与命令历史', danger: false },
-  { value: 'write', label: 'write', hint: '在只读之外下发设备命令', danger: false },
-  { value: 'admin', label: 'admin', hint: '可管理本租户用户与服务令牌，等同管理员权限', danger: true },
-  { value: 'edge', label: 'edge', hint: '允许边缘代理以本租户身份接入实时通道', danger: true },
+  { value: 'read', label: '查看', hint: '查看设备状态、运行记录和操作记录', danger: false },
+  { value: 'write', label: '操作设备', hint: '在查看之外执行设备操作', danger: false },
+  { value: 'admin', label: '管理', hint: '可以管理成员和访问令牌，权限最高', danger: true },
+  { value: 'edge', label: '网关接入', hint: '允许网关连接平台并同步设备状态', danger: true },
 ]
 
 /** 默认最小权限：只勾 read（服务端要求 scopes 非空），write/admin/edge 全部不预选 */
@@ -38,11 +38,11 @@ export interface ExpiryOption { value: string; label: string }
 
 /** 令牌有效期选项 */
 export const EXPIRY_OPTIONS: ExpiryOption[] = [
-  { value: '1', label: '1 天后过期' },
-  { value: '7', label: '7 天后过期' },
-  { value: '30', label: '30 天后过期' },
-  { value: '90', label: '90 天后过期' },
-  { value: 'never', label: '永不过期' },
+  { value: '1', label: '1 天后自动失效' },
+  { value: '7', label: '7 天后自动失效' },
+  { value: '30', label: '30 天后自动失效' },
+  { value: '90', label: '90 天后自动失效' },
+  { value: 'never', label: '不自动失效' },
 ]
 
 /** 默认 30 天而不是永不过期：把暴露窗口压到最小 */
@@ -66,12 +66,15 @@ export function expiryToUnix(value: string, now: number = Date.now()): number | 
 export function adminErrorMessage(e: unknown): string {
   if (e instanceof ApiError) {
     if (e.status === 401) return '登录已失效，请重新登录后再操作'
-    if (e.status === 403) return '权限不足：该操作需要管理员角色'
+    if (e.status === 403) return '当前账号没有管理权限。请联系管理员。'
     if (e.status === 429) {
       return e.retryAfter ? `操作过于频繁，请 ${e.retryAfter} 秒后重试` : '操作过于频繁，请稍后重试'
     }
     if (e.message) return e.message
-    return `请求失败（HTTP ${e.status}）`
+    return '操作暂时没有成功，请稍后重试。'
   }
-  return e instanceof Error && e.message ? e.message : '请求失败'
+  if (e instanceof Error && /无法连接|network|fetch/i.test(e.message)) {
+    return '暂时无法连接 CloudPath，请检查网络后重试。'
+  }
+  return e instanceof Error && e.message ? e.message : '操作暂时没有成功，请稍后重试。'
 }

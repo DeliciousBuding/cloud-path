@@ -42,7 +42,7 @@ describe('鉴权守卫', () => {
   it('me→401 时访问受保护路由被重定向到 /login，并断开实时通道', async () => {
     installFetch((url) => (url === '/api/auth/me' ? stubResponse(401, { error: '未登录' }) : stubResponse(404, {})))
     renderApp('/devices')
-    expect(await screen.findByRole('heading', { level: 1, name: '登录 Cloudpath' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: '登录 CloudPath' })).toBeInTheDocument()
     expect(disconnectLive).toHaveBeenCalled()
     expect(connectLive).not.toHaveBeenCalled()
   })
@@ -58,7 +58,7 @@ describe('鉴权守卫', () => {
     installFetch((url) => (url === '/api/auth/me' ? stubResponse(404, { error: 'no such endpoint' }) : stubResponse(404, {})))
     renderApp('/devices')
     expect(await screen.findByRole('heading', { level: 1, name: '设备' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: '登录 Cloudpath' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '登录 CloudPath' })).not.toBeInTheDocument()
     expect(connectLive).toHaveBeenCalled()
   })
 
@@ -70,13 +70,13 @@ describe('鉴权守卫', () => {
     installFetch((url) => (url === '/api/auth/me' ? gate : stubResponse(404, {})))
     renderApp('/devices')
 
-    expect(screen.queryByRole('heading', { name: '登录 Cloudpath' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '登录 CloudPath' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument()
     // 桌面侧栏与移动端顶栏各有一份同名导航，真实视口下 CSS 只暴露其一（jsdom 不吃 CSS）
     expect(screen.getAllByRole('navigation', { name: '主导航' })).toHaveLength(2)
 
     release(stubResponse(401, { error: '未登录' }))
-    expect(await screen.findByRole('heading', { level: 1, name: '登录 Cloudpath' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: '登录 CloudPath' })).toBeInTheDocument()
   })
 })
 
@@ -166,7 +166,9 @@ describe('渲染崩溃兜底', () => {
     const { render: r2 } = await import('@testing-library/react')
     r2(React.createElement(ErrorBoundary, null, React.createElement(Boom)))
     expect(screen.getByText('界面出现异常')).toBeInTheDocument()
-    expect(screen.getByText('组件炸了')).toBeInTheDocument()
+    expect(screen.getByText(/页面暂时没有加载出来/)).toBeInTheDocument()
+    expect(screen.queryByText('组件炸了')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /重新加载/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /尝试继续/ })).toBeInTheDocument()
     spy.mockRestore()
   })

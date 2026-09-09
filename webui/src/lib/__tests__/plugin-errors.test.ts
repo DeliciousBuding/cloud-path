@@ -130,7 +130,7 @@ describe('desired / observed 永远分别呈现', () => {
   it('has_observed=false → 显式「Edge 未上报」，且绝不因 desired.enabled 变成运行中', () => {
     const un = syncState(instance({ has_observed: false, observed: undefined }))
     expect(un.key).toBe('unreported')
-    expect(un.label).toMatch(/未上报/)
+    expect(un.label).toMatch(/状态待确认|未上报/)
     expect(un.tone).not.toBe('ok')
     expect(un.hint).toMatch(/不能据此判断|尚未回过实际状态/)
     // desired.enabled=true 不得泄漏成「运行中/健康」
@@ -188,9 +188,9 @@ describe('Edge 上报的运行态语义（规范大写名）', () => {
     expect(healthMeta('UNKNOWN').tone).toBe('idle')
   })
 
-  it('未知值原样呈现为中性，不猜含义、不当成正常', () => {
+  it('未知值在主路径用中性文案，不把机器串当成用户状态', () => {
     const s = stateMeta('WEIRD')
-    expect(s.label).toBe('WEIRD')
+    expect(s.label).toBe('状态待确认')
     expect(s.tone).toBe('idle')
     expect(healthMeta(undefined).label).toMatch(/未上报/)
   })

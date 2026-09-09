@@ -12,7 +12,7 @@ import { PermissionList } from '@/components/plugin/PluginFacts'
 import {
   usePluginCatalog, usePluginInstances,
 } from '@/hooks/usePlugins'
-import { indexCatalog, pluginDisplayName, shortDigest, trustMeta } from '@/lib/plugins'
+import { indexCatalog, instanceStatus, pluginDisplayName, shortDigest, trustMeta } from '@/lib/plugins'
 import type { TabItem } from '@/components/ui'
 import type { PluginInstanceView } from '@/lib/types'
 import { usePageTitle } from '@/hooks/usePageTitle'
@@ -22,6 +22,13 @@ type Tab = 'catalog' | 'instances'
 
 /** 单个分区最多渲染多少条：实例/插件可能很多，超出部分如实说明而不是静默截断 */
 const LIST_CAP = 200
+
+function StatusSummary({ label, count, tone }: { label: string; count: number; tone: 'ok' | 'warn' | 'idle' }) {
+  return <div className="card px-3.5 py-3">
+    <Badge tone={tone}>{label}</Badge>
+    <p className="num mt-2 text-[20px] font-semibold leading-none">{count}</p>
+  </div>
+}
 
 const KIND_LABEL: Record<string, string> = {
   application: '应用',
@@ -64,10 +71,19 @@ export default function Plugins() {
     () => [...new Set(instances.map((v) => v.edge_id))].sort((a, b) => a.localeCompare(b)),
     [instances],
   )
-  const visibleInstances = useMemo(
-    () => edgeFilter === 'all' ? instances : instances.filter((v) => v.edge_id === edgeFilter),
-    [edgeFilter, instances],
-  )
+  const statusCounts = useMemo(() => ({
+    normal: instances.filter((v) => instanceStatus(v).key === 'normal').length,
+    attention: instances.filter((v) => instanceStatus(v).key === 'attention').length,
+    unknown: instances.filter((v) => instanceStatus(v).key === 'unknown').length,
+    stopped: instances.filter((v) => instanceStatus(v).key === 'stopped').length,
+  }), [instances])
+  const visibleInstances = useMemo(() => {
+    const filtered = edgeFilter === 'all' ? instances : instances.filter((v) => v.edge_id === edgeFilter)
+    return [...filtered].sort((a, b) => {
+      const byPriority = instanceStatus(a).priority - instanceStatus(b).priority
+      return byPriority || (a.desired.instance_id || a.id).localeCompare(b.desired.instance_id || b.id)
+    })
+  }, [edgeFilter, instances])
 
   useEffect(() => {
     if (edgeFilter !== 'all' && !edgeOptions.includes(edgeFilter)) setEdgeFilter('all')
@@ -222,10 +238,23 @@ export default function Plugins() {
           ) : insLoading ? (
             <div className="grid gap-4"><RowSkeleton rows={3} /></div>
           ) : instances.length === 0 ? (
-            <EmptyState icon={<Layers size={24} />} title="还没有运行实例"
-              hint="添加项目后选择网关和版本。保存后，网关应用设置时这里会显示运行情况。" />
+            <div>
+              <EmptyState icon={<Layers size={24} />} title="还没有运行实例"
+                hint="先选择一个应用或设备驱动，再指定运行位置。保存后，这里会显示它是否正在运行。" />
+              {!readOnly && <div className="-mt-3 flex justify-center">
+                <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+                  <Plus size={13} /> 新建第一个实例
+                </button>
+              </div>}
+            </div>
           ) : (
             <div className="grid gap-4">
+              <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+                <StatusSummary label="运行正常" count={statusCounts.normal} tone="ok" />
+                <StatusSummary label="需要处理" count={statusCounts.attention} tone="warn" />
+                <StatusSummary label="状态待确认" count={statusCounts.unknown} tone="idle" />
+                <StatusSummary label="已停止" count={statusCounts.stopped} tone="idle" />
+              </div>
               <div className="flex min-w-0 flex-col gap-2 rounded-lg bg-surface-2 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <label htmlFor="instance-location" className="flex min-w-0 shrink-0 items-center gap-2 whitespace-nowrap text-[13px] font-medium text-ink-2">
                   <Server size={14} className="shrink-0" /> 运行位置
@@ -259,7 +288,7 @@ export default function Plugins() {
               )}
 
               <p className="text-[12px] leading-relaxed text-ink-3">
-                每行分开显示保存的设置和当前运行情况。保存为启用，不代表它已经运行。
+                需要处理的项目会排在前面。展开「技术详情」可以查看版本和状态原值。
               </p>
             </div>
           )}

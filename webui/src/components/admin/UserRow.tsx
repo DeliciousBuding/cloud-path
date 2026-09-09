@@ -15,7 +15,7 @@ const ROLE_FIELD_OPTIONS = ROLE_OPTIONS.map((r) => ({ value: r.value, label: r.l
 const ROLE_HINTS: Record<Role, string> = {
   viewer: '只能查看设备状态和记录。',
   operator: '可以查看并执行设备操作。',
-  admin: '可以管理用户和访问令牌。',
+  admin: '可以管理成员和访问令牌。',
 }
 
 type Mode = 'idle' | 'edit' | 'reset'
@@ -26,13 +26,12 @@ export function UserRow({ user: u }: { user: UserView }) {
   const [name, setName] = useState(u.name)
   const [role, setRole] = useState<Role>(u.role)
   const [disabled, setDisabled] = useState(Boolean(u.disabled))
-  const [nameErr, setNameErr] = useState('')
   const [password, setPassword] = useState('')
   const [passwordErr, setPasswordErr] = useState('')
   const [confirmed, setConfirmed] = useState(false)
 
   const openEdit = () => {
-    setName(u.name); setRole(u.role); setDisabled(Boolean(u.disabled)); setNameErr('')
+    setName(u.name); setRole(u.role); setDisabled(Boolean(u.disabled))
     setMode('edit')
   }
   const openReset = () => {
@@ -43,11 +42,9 @@ export function UserRow({ user: u }: { user: UserView }) {
   const saveEdit = (ev: FormEvent) => {
     ev.preventDefault()
     const n = name.trim()
-    setNameErr(n ? '' : '名称不能为空')
-    if (!n) return
     update.mutate(
-      { id: u.id, patch: { name: n, role, disabled } },
-      { onSuccess: () => { toast.ok('用户已更新', `${u.username} · ${roleLabel(role)}`); setMode('idle') } },
+      { id: u.id, patch: { role, disabled, ...(n ? { name: n } : {}) } },
+      { onSuccess: () => { toast.ok('成员已更新', `${u.username} · ${roleLabel(role)}`); setMode('idle') } },
     )
   }
 
@@ -66,47 +63,47 @@ export function UserRow({ user: u }: { user: UserView }) {
       <div className="flex min-w-0 items-start gap-2">
         {/* 用户名/显示名由管理员填写，长度不可控：必须各自截断 */}
         <div className="min-w-0 flex-1">
-          <p className="num truncate text-sm font-semibold" title={u.username}>{u.username}</p>
-          {/* 显示名与用户名相同（服务端回落）时不重复占一行 */}
+          <p className="truncate text-sm font-semibold" title={u.name || u.username}>{u.name || u.username}</p>
           {u.name && u.name !== u.username && (
-            <p className="mt-0.5 truncate text-xs text-ink-2" title={u.name}>{u.name}</p>
+            <p className="num mt-0.5 truncate font-mono text-xs text-ink-3" title={u.username}>{u.username}</p>
           )}
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
           <Badge tone={u.role === 'admin' ? 'accent' : u.role === 'operator' ? 'ok' : 'idle'}>
             {roleLabel(u.role)}
           </Badge>
-          {u.disabled && <Badge tone="bad">已禁用</Badge>}
+          {u.disabled && <Badge tone="bad">已停用</Badge>}
         </div>
       </div>
 
       <details className="mt-3 text-xs text-ink-2">
         <summary className="cursor-pointer">技术详情</summary>
         <dl className="mt-2 space-y-2">
-          <KeyValue k="账号标识" v={<span className="font-mono">{u.id}</span>} />
-          <KeyValue k="所属组织" v={u.tenant_slug} mono />
+          <KeyValue k="成员 ID" v={<span className="font-mono">{u.id}</span>} />
+          <KeyValue k="登录账号" v={u.username} mono />
+          <KeyValue k="组织标识" v={u.tenant_slug} mono />
         </dl>
       </details>
 
       {mode === 'idle' && (
         <div className="mt-3 flex flex-wrap gap-2 border-t border-hairline pt-3">
-          <Button variant="ghost" onClick={openEdit} aria-label={`编辑用户 ${u.username}`}>编辑</Button>
-          <Button variant="ghost" onClick={openReset} aria-label={`重置密码：${u.username}`}>重置密码</Button>
+          <Button variant="ghost" onClick={openEdit} aria-label={`编辑成员 ${u.username}`}>编辑</Button>
+          <Button variant="ghost" onClick={openReset} aria-label={`重置成员密码：${u.username}`}>重置密码</Button>
         </div>
       )}
 
       {mode === 'edit' && (
-        <form onSubmit={saveEdit} aria-label={`编辑用户 ${u.username}`}
+        <form onSubmit={saveEdit} aria-label={`编辑成员 ${u.username}`}
           className="mt-3 space-y-3 border-t border-hairline pt-3">
-          <TextField label="名称" value={name} error={nameErr} autoComplete="off"
-            onChange={(ev) => setName(ev.target.value)} />
+          <TextField label="显示名称" value={name} autoComplete="off"
+            hint="留空则继续使用当前显示名" onChange={(ev) => setName(ev.target.value)} />
           <SelectField label="角色" value={role} options={ROLE_FIELD_OPTIONS}
             hint={ROLE_HINTS[role]} onChange={(v) => setRole(v as Role)} />
-          <CheckRow label="禁用该账号" tone="danger" checked={disabled} onChange={setDisabled}
-            hint="禁用后该账号会立即退出。最后一个管理员账号不能被禁用或降级。" />
+          <CheckRow label="停用该成员" tone="danger" checked={disabled} onChange={setDisabled}
+            hint="停用后该成员会立即退出。最后一个管理员不能被停用或降级。" />
           {update.isError && <ErrorNote message={adminErrorMessage(update.error)} />}
           <div className="flex flex-wrap gap-2">
-            <Button type="submit" disabled={update.isPending} aria-label={`保存用户 ${u.username} 的修改`}>
+            <Button type="submit" disabled={update.isPending} aria-label={`保存成员 ${u.username} 的修改`}>
               {update.isPending ? '保存中…' : '保存修改'}
             </Button>
             <Button type="button" variant="ghost" onClick={() => setMode('idle')}
@@ -119,10 +116,10 @@ export function UserRow({ user: u }: { user: UserView }) {
         <form onSubmit={saveReset} aria-label={`重置 ${u.username} 的密码`}
           className="mt-3 space-y-3 border-t border-hairline pt-3">
           <p className="text-xs leading-relaxed text-warn break-words">
-            重置后该用户的全部会话会被撤销，必须用新密码重新登录。此操作不可撤销。
+            重置后该成员需要重新登录，当前登录状态会立即失效。此操作不可撤销。
           </p>
           <TextField label="新密码" type="password" value={password} error={passwordErr}
-            autoComplete="new-password" hint="新密码不会保存在这台设备的浏览器中"
+            autoComplete="new-password" hint="新密码不会保存在这台设备中"
             onChange={(ev) => setPassword(ev.target.value)} />
           <CheckRow label={`确认重置 ${u.username} 的密码`} tone="danger" checked={confirmed}
             onChange={setConfirmed} hint="勾选后「确认重置密码」才可提交" />

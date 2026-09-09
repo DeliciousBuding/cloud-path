@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Cpu, Inbox, Search, SearchX, WifiOff } from 'lucide-react'
+import { AlertTriangle, Cpu, Inbox, Search, SearchX, WifiOff } from 'lucide-react'
 import { EmptyState, ErrorState, PageHeader, Panel, Segmented } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { DeviceRow, DeviceRowHead } from '@/components/DeviceRow'
@@ -30,16 +30,30 @@ export default function Devices() {
   const shown = useMemo(() => {
     const byStatus = filter === 'online' ? list.filter((d) => d.online)
       : filter === 'offline' ? list.filter((d) => !d.online) : list
-    return byStatus.filter((d) => matches(d, q.trim().toLowerCase()))
+    return byStatus
+      .filter((d) => matches(d, q.trim().toLowerCase()))
+      .sort((a, b) => {
+        // 列表默认把需要处理的离线设备放在前面；同状态按最近上报倒序，避免每次轮询跳位。
+        if (a.online !== b.online) return a.online ? 1 : -1
+        const at = Math.max(a.updated_at ?? 0, a.last_seen ?? 0)
+        const bt = Math.max(b.updated_at ?? 0, b.last_seen ?? 0)
+        if (at !== bt) return bt - at
+        return a.id.localeCompare(b.id)
+      })
   }, [list, filter, q])
 
   const offline = list.length - online
+  const subtitle = loading ? '正在加载设备状态…'
+    : error ? '设备状态暂不可用'
+      : list.length === 0 ? '还没有设备接入'
+        : offline > 0 ? `${online} 台在线 · ${offline} 台离线需关注`
+          : `${online} 台在线 · 全部在线`
 
   return (
     <>
       <PageHeader
         title="设备"
-        subtitle={loading ? '正在加载设备…' : `共 ${list.length} 台 · ${online} 台在线 · ${offline} 台离线`}
+        subtitle={subtitle}
         actions={
           list.length > 0 ? (
             <Segmented
@@ -55,6 +69,18 @@ export default function Devices() {
           ) : undefined
         }
       />
+
+      {!loading && !error && offline > 0 && (
+        <div className="banner mb-5 rounded-lg fade-up" role="status">
+          <AlertTriangle size={13} className="shrink-0" />
+          <span className="min-w-0 break-words">
+            {offline} 台设备离线，先检查所属网关和网络；设备恢复上报后会自动回到在线。
+          </span>
+          <button type="button" className="link ml-auto shrink-0 text-[12px]" onClick={() => setFilter('offline')}>
+            只看离线
+          </button>
+        </div>
+      )}
 
       {list.length > 0 && (
         <div className="mb-4 flex items-center gap-2">

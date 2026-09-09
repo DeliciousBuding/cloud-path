@@ -18,8 +18,8 @@ beforeEach(() => {
 })
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
 const execute = () => screen.getByRole('button', { name: '执行「更新计数」' })
-const countInput = () => screen.getByRole('spinbutton', { name: /次数/ })
-async function ready() { return screen.findByRole('spinbutton', { name: /次数/ }) }
+const countInput = () => screen.getByRole('combobox', { name: /次数/ })
+async function ready() { return screen.findByRole('combobox', { name: /次数/ }) }
 
 // All interactions use the actual REST/query/auth/form paths, not mocked hook success.
 describe('应用操作的授权、生命周期与明确用户意图', () => {
@@ -32,7 +32,7 @@ describe('应用操作的授权、生命周期与明确用户意图', () => {
     expect(execute()).toBeDisabled()
     expect(actionRequests(http)).toHaveLength(0)
     expect(screen.getByRole('textbox', { name: '备注' })).toHaveValue('')
-    await user.type(countInput(), '2')
+    fireEvent.change(countInput(), { target: { value: '1' } })
     await user.click(execute())
     expect(await screen.findByText('操作已受理')).toBeVisible()
     expect(actionRequests(http)).toEqual([{ args_json: '{"count":2}', idempotency_key: expect.any(String) }])
@@ -52,7 +52,7 @@ describe('应用操作的授权、生命周期与明确用户意图', () => {
     expect(await screen.findByText('更新计数')).toBeVisible()
     expect(screen.getByText(/当前账号只能查看，不能执行操作/)).toBeVisible()
     expect(screen.queryByRole('button', { name: /执行|重试同一/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: /次数/ })).not.toBeInTheDocument()
     expect(actionRequests(http)).toHaveLength(0)
   })
 
@@ -121,16 +121,19 @@ describe('应用操作的授权、生命周期与明确用户意图', () => {
 describe('参数与不可信执行结果', () => {
   it('字段 required/range 校验阻止 POST，错误不会静默修正用户输入', async () => {
     const http = installFetch((url) => actionResponse(url))
+    const user = userEvent.setup()
     renderWithProviders(<ApplicationPlane instanceID="app-a" />)
     await ready()
-    for (const value of ['0', '9', '1.5']) {
-      fireEvent.change(countInput(), { target: { value } })
+    await user.click(screen.getByRole('button', { name: '更新计数 技术人员选项' }))
+    const input = screen.getByRole('textbox', { name: '更新计数 技术参数' })
+    for (const value of ['{"count":0}', '{"count":9}', '{"count":1.5}']) {
+      fireEvent.change(input, { target: { value } })
       expect(execute()).toBeDisabled()
       expect(screen.getByRole('alert')).toBeVisible()
       fireEvent.click(execute())
     }
     expect(actionRequests(http)).toHaveLength(0)
-    expect(countInput()).toHaveValue(1.5)
+    expect(input).toHaveValue('{"count":1.5}')
   })
 
   it('JSON 对象可超过 64 字节且保留多行原文；无效/非对象/超限参数不能提交', async () => {
@@ -138,8 +141,8 @@ describe('参数与不可信执行结果', () => {
     const user = userEvent.setup()
     renderWithProviders(<ApplicationPlane instanceID="app-a" />)
     await ready()
-    await user.click(screen.getByRole('button', { name: '更新计数 手动填写参数' }))
-    const input = screen.getByRole('textbox', { name: '更新计数 高级参数' })
+    await user.click(screen.getByRole('button', { name: '更新计数 技术人员选项' }))
+    const input = screen.getByRole('textbox', { name: '更新计数 技术参数' })
     for (const value of ['[]', 'null', '{bad', JSON.stringify({ count: 2, note: '字'.repeat(1500) })]) {
       fireEvent.change(input, { target: { value } })
       expect(execute()).toBeDisabled()
@@ -232,12 +235,12 @@ describe('参数与不可信执行结果', () => {
     const user = userEvent.setup()
     renderWithProviders(<Switcher />)
     await ready()
-    await user.type(countInput(), '3')
+    fireEvent.change(countInput(), { target: { value: '2' } })
     await user.click(screen.getByRole('button', { name: '切换应用' }))
     await ready()
-    expect(countInput()).toHaveValue(null)
+    expect(countInput()).toHaveValue('')
     expect(execute()).toBeDisabled()
-    await user.type(countInput(), '2')
+    fireEvent.change(countInput(), { target: { value: '1' } })
     await user.click(execute())
     await screen.findByText('操作已受理')
     expect(http.calls.filter((call) => call.method === 'POST')[0].url).toBe('/api/plugin-instances/app-b/jobs/update-count/run')

@@ -76,8 +76,9 @@ export default function DeviceDetail() {
       : requestedTab === 'diagnostics' ? 'diagnostics' : undefined
   const isAdvancedView = (value: string | null): value is AdvancedView =>
     value === 'state' || value === 'capabilities' || value === 'diagnostics'
+  const defaultTab: Tab = requestedTab == null && !legacyAdvanced ? 'controls' : 'overview'
   const tab: Tab = (['overview', 'controls', 'events', 'advanced'] as const)
-    .find((value) => value === requestedTab) ?? (legacyAdvanced ? 'advanced' : 'overview')
+    .find((value) => value === requestedTab) ?? (legacyAdvanced ? 'advanced' : defaultTab)
   const advancedView: AdvancedView = isAdvancedView(requestedView) ? requestedView : legacyAdvanced ?? 'diagnostics'
   const setTab = (value: Tab) => setSearchParams((previous) => {
     const next = new URLSearchParams(previous)
@@ -150,6 +151,26 @@ export default function DeviceDetail() {
     () => (descriptor?.entities ?? []).filter((e) => e.category === 'actuator'),
     [descriptor],
   )
+
+  /** 高级状态视图也遵守同一套展示词典；未知值原样保留，不猜设备语义。 */
+  const displayDescriptor = useMemo(() => {
+    if (!descriptor) return descriptor
+    return {
+      ...descriptor,
+      entities: descriptor.entities.map((entity) => ({
+        ...entity,
+        observations: entity.observations ? Object.fromEntries(
+          Object.entries(entity.observations).map(([key, observation]) => [
+            key,
+            {
+              ...observation,
+              value: typeof observation.value === 'string' ? displayStateValue(observation.value) : observation.value,
+            },
+          ]),
+        ) : entity.observations,
+      })),
+    }
+  }, [descriptor])
 
   const events = useMemo(
     () => mergeEvents(liveEvents.filter((e) => e.device_id === key), evHist?.events ?? []),
@@ -253,9 +274,9 @@ export default function DeviceDetail() {
   }
 
   const tabs: TabItem<Tab>[] = [
-    { value: 'overview', label: '概览', icon: <LayoutDashboard size={13} /> },
     { value: 'controls', label: '设备操作', icon: <Command size={13} /> },
-    { value: 'events', label: '记录', count: events.length, icon: <History size={13} /> },
+    { value: 'overview', label: '概览', icon: <LayoutDashboard size={13} /> },
+    { value: 'events', label: '操作记录', icon: <History size={13} /> },
     { value: 'advanced', label: '高级', icon: <Braces size={13} /> },
   ]
 
@@ -365,11 +386,11 @@ export default function DeviceDetail() {
                   onChange={setStateView}
                 />
               </div>
-              {stateView === 'rows' && (descriptor
-                ? <StateMatrix descriptor={descriptor} idx={capabilities} nowSec={nowSec} series={series} />
+              {stateView === 'rows' && (displayDescriptor
+                ? <StateMatrix descriptor={displayDescriptor} idx={capabilities} nowSec={nowSec} series={series} />
                 : <RawView raw={d.state} title="设备数据（通用视图）" />)}
-              {stateView === 'table' && (descriptor
-                ? <StateTable descriptor={descriptor} idx={capabilities} nowSec={nowSec} />
+              {stateView === 'table' && (displayDescriptor
+                ? <StateTable descriptor={displayDescriptor} idx={capabilities} nowSec={nowSec} />
                 : <RawView raw={d.state} title="设备数据（通用视图）" />)}
               {stateView === 'trend' && (
                 <div>
@@ -453,43 +474,47 @@ export default function DeviceDetail() {
                 </Panel>
               )}
             </div>
-            {/* 命令历史通栏置底：列表型内容不挤在半宽列里与命令区比高 */}
-            <CommandHistory deviceId={key} actions={commands.actions} />
           </div>
         </TabPanel>
       )}
 
       {tab === 'events' && (
         <TabPanel value={tab}>
-          <Panel
-            title={<span className="flex items-center gap-1.5"><History size={14} />事件时间线</span>}
-            right={<span className="num text-[12px] text-ink-3">{shownEvents.length === events.length ? `${events.length} 条` : `${shownEvents.length} / ${events.length} 条`}</span>}>
-            {eventKinds.length > 1 && (
-              <div className="mb-3 flex items-center gap-2">
-                <label htmlFor="ev-kind" className="shrink-0 text-[12px] text-ink-3">筛选</label>
-                <select id="ev-kind" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}
-                  className="input input-sm min-w-0 max-w-[18rem]">
-                  <option value="">全部事件</option>
-                  {eventKinds.map(([t, l]) => <option key={t} value={t}>{optionLabel(l, 40)}</option>)}
-                </select>
-              </div>
-            )}
-            {evLoading && events.length === 0
-              ? <RowSkeleton rows={5} />
-              : shownEvents.length === 0
-                ? <EmptyState icon={<History size={24} />} title="还没有事件"
-                  hint="该设备产生事件后会出现在这里；也可以去活动页看全部设备的记录。" />
-                : (
-                  <>
-                    <EventFeed events={shownEvents} showDevice={false} limit={30} dayGrouped />
-                    {shownEvents.length > 30 && (
-                      <Link to="/activity" className="link mt-3 flex items-center gap-0.5 border-t border-hairline pt-3 text-xs">
-                        仅显示最近 30 条（共 {shownEvents.length} 条）· 去活动页查完整历史 <ArrowRight size={12} />
-                      </Link>
-                    )}
-                  </>
+          <div className="space-y-5">
+            <CommandHistory deviceId={key} actions={commands.actions} />
+            <details className="card overflow-hidden">
+              <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-4 py-3 text-[13px] font-semibold">
+                <span className="flex items-center gap-1.5"><Activity size={14} />设备事件</span>
+                <span className="num text-[12px] font-normal text-ink-3">{events.length} 条</span>
+              </summary>
+              <div className="border-t border-hairline p-4">
+                {eventKinds.length > 1 && (
+                  <div className="mb-3 flex items-center gap-2">
+                    <label htmlFor="ev-kind" className="shrink-0 text-[12px] text-ink-3">筛选</label>
+                    <select id="ev-kind" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}
+                      className="input input-sm min-w-0 max-w-[18rem]">
+                      <option value="">全部事件</option>
+                      {eventKinds.map(([t, l]) => <option key={t} value={t}>{optionLabel(l, 40)}</option>)}
+                    </select>
+                  </div>
                 )}
-          </Panel>
+                {evLoading && events.length === 0
+                  ? <RowSkeleton rows={5} />
+                  : shownEvents.length === 0
+                    ? <p className="py-4 text-center text-sm text-ink-3">还没有事件</p>
+                    : (
+                      <>
+                        <EventFeed events={shownEvents} showDevice={false} limit={30} dayGrouped />
+                        {shownEvents.length > 30 && (
+                          <Link to="/activity" className="link mt-3 flex items-center gap-0.5 border-t border-hairline pt-3 text-xs">
+                            仅显示最近 30 条（共 {shownEvents.length} 条）· 去活动页查完整历史 <ArrowRight size={12} />
+                          </Link>
+                        )}
+                      </>
+                    )}
+              </div>
+            </details>
+          </div>
         </TabPanel>
       )}
 
@@ -617,4 +642,3 @@ function StateTable({ descriptor, idx, nowSec }: {
     </div>
   )
 }
-

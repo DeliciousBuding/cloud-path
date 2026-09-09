@@ -1,4 +1,4 @@
-// 单个令牌行：只展示 prefix 与元数据（服务端从不回明文），吊销走两步确认。
+// 单个令牌行：只展示可读名称与元数据（服务端从不回明文），吊销走两步确认。
 import { useState } from 'react'
 import { Badge, Button, KeyValue } from '@/components/ui'
 import type { Tone } from '@/components/ui'
@@ -10,10 +10,17 @@ import { toast } from '@/store/toast'
 import type { TokenView } from '@/lib/types'
 
 const SCOPE_LABELS: Record<string, string> = {
-  read: '查看',
-  write: '操作',
-  admin: '管理',
+  read: '查看设备与记录',
+  write: '执行设备操作',
+  admin: '管理成员与令牌',
   edge: '网关接入',
+}
+
+const SCOPE_TONES: Record<string, Tone> = {
+  read: 'idle',
+  write: 'ok',
+  admin: 'warn',
+  edge: 'warn',
 }
 
 export function TokenRow({ token: t }: { token: TokenView }) {
@@ -33,31 +40,42 @@ export function TokenRow({ token: t }: { token: TokenView }) {
   return (
     <li className="py-4 first:pt-0">
       <div className="flex min-w-0 items-start gap-2">
-        {/* 名称/前缀由管理员与服务端给定，长度不可控：必须各自截断 */}
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold" title={t.name}>{t.name || '（未命名）'}</p>
-          <p className="num mt-0.5 truncate font-mono text-xs text-ink-2" title={t.prefix}>{t.prefix}</p>
         </div>
         <span className="shrink-0"><Badge tone={tone}>{stateLabel}</Badge></span>
       </div>
 
-      {(t.scopes ?? []).length > 0 && (
-        <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1">
-          {(t.scopes ?? []).map((s) => (
-            <span key={s} title={s}
-              className={s === 'admin' || s === 'edge' ? 'text-[12px] text-warn' : 'text-[12px] text-ink-2'}>
-              {SCOPE_LABELS[s] ?? '其他权限'}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className="mt-3">
+        <p className="mb-1.5 text-[11px] font-medium text-ink-3">权限范围</p>
+        {(t.scopes ?? []).length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {(t.scopes ?? []).map((s) => (
+              <Badge key={s} tone={SCOPE_TONES[s] ?? 'idle'}>
+                {SCOPE_LABELS[s] ?? '其他权限'}
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[12px] text-ink-3">未设置权限范围</p>
+        )}
+      </div>
 
       <dl className="mt-3 space-y-2">
         <KeyValue k="创建时间" v={<span className="font-mono">{fmtDateTime(t.created_at)}</span>} />
         <KeyValue k="最近使用" v={t.last_used_at ? timeAgo(t.last_used_at) : '从未使用'} />
-        <KeyValue k="过期时间" v={t.expires_at ? <span className="font-mono">{fmtDateTime(t.expires_at)}</span> : '永不过期'} />
+        <KeyValue k="有效期" v={t.expires_at ? <span className="font-mono">{fmtDateTime(t.expires_at)}</span> : '不自动失效'} />
         {revoked && <KeyValue k="吊销于" v={<span className="font-mono">{fmtDateTime(t.revoked_at ?? 0)}</span>} />}
       </dl>
+
+      <details className="mt-3 text-xs text-ink-2">
+        <summary className="cursor-pointer">技术详情</summary>
+        <dl className="mt-2 space-y-2">
+          <KeyValue k="令牌 ID" v={<span className="font-mono">{t.id}</span>} />
+          <KeyValue k="识别前缀" v={t.prefix} mono />
+          <KeyValue k="权限代码" v={(t.scopes ?? []).join(', ') || '—'} mono />
+        </dl>
+      </details>
 
       {!revoked && !confirming && (
         <div className="mt-3 border-t border-hairline pt-3">

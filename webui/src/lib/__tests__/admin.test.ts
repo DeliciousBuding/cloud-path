@@ -28,7 +28,7 @@ describe('TestScopeDefaultsLeastPrivilege（常量层）', () => {
   it('新建用户默认角色是 viewer（最小权限），admin 必须显式选择', () => {
     expect(DEFAULT_ROLE).toBe('viewer')
     expect(ROLE_OPTIONS.map((o) => o.value)).toEqual(['viewer', 'operator', 'admin'])
-    expect(roleOption('admin')?.hint).toMatch(/服务令牌/)
+    expect(roleOption('admin')?.hint).toMatch(/成员和访问令牌/)
     expect(roleOption('nope')).toBeUndefined()
   })
 
@@ -54,7 +54,7 @@ describe('expiryToUnix', () => {
 describe('adminErrorMessage', () => {
   it('401/403 是本地可解释的语义，不直接把英文错误丢给用户', () => {
     expect(adminErrorMessage(new ApiError(401, 'authentication required'))).toBe('登录已失效，请重新登录后再操作')
-    expect(adminErrorMessage(new ApiError(403, 'permission denied'))).toBe('权限不足：该操作需要管理员角色')
+    expect(adminErrorMessage(new ApiError(403, 'permission denied'))).toBe('当前账号没有管理权限。请联系管理员。')
   })
 
   it('409 原样采用服务端人话（最后一个 admin 的规则由 server 判定，前端不复述）', () => {
@@ -62,9 +62,9 @@ describe('adminErrorMessage', () => {
     expect(adminErrorMessage(new ApiError(409, msg))).toBe(msg)
   })
 
-  it('400/404/500 同样透传服务端说明；空说明回落状态码', () => {
+  it('409 透传服务端说明；空说明回落为可重试的人话', () => {
     expect(adminErrorMessage(new ApiError(409, 'username 已存在'))).toBe('username 已存在')
-    expect(adminErrorMessage(new ApiError(500, ''))).toBe('请求失败（HTTP 500）')
+    expect(adminErrorMessage(new ApiError(500, ''))).toBe('操作暂时没有成功，请稍后重试。')
   })
 
   it('429 带上 Retry-After', () => {
@@ -74,7 +74,7 @@ describe('adminErrorMessage', () => {
 
   it('网络错误保持 lib/api.ts 的可读中文，不泄漏堆栈', () => {
     expect(adminErrorMessage(new Error('无法连接 server（服务未启动或网络不可达）')))
-      .toBe('无法连接 server（服务未启动或网络不可达）')
-    expect(adminErrorMessage('boom')).toBe('请求失败')
+      .toBe('暂时无法连接 CloudPath，请检查网络后重试。')
+    expect(adminErrorMessage('boom')).toBe('操作暂时没有成功，请稍后重试。')
   })
 })

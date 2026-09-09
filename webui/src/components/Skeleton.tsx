@@ -24,9 +24,9 @@ export function RowSkeleton({ rows = 5 }: { rows?: number }) {
 /** 统计卡骨架 */
 export function StatSkeleton() {
   return (
-    <div className="card p-5">
+    <div className="card p-3.5 sm:p-4">
       <Skeleton className="h-3 w-16" />
-      <Skeleton className="mt-3 h-8 w-20" />
+      <Skeleton className="mt-3 h-7 w-20" />
     </div>
   )
 }
@@ -36,13 +36,10 @@ export function PageSkeleton() {
     <div className="py-2">
       <Skeleton className="h-8 w-40" />
       <Skeleton className="mt-2 h-3.5 w-64" />
-      <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatSkeleton /><StatSkeleton /><StatSkeleton /><StatSkeleton />
-      </div>
-      <div className="mt-7 grid gap-4 lg:grid-cols-3">
-        <Skeleton className="h-52 rounded-[18px]" />
-        <Skeleton className="h-52 rounded-[18px]" />
-        <Skeleton className="h-52 rounded-[18px]" />
+      <Skeleton className="mt-7 h-44 rounded-[12px]" />
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <Skeleton className="h-56 rounded-[12px]" />
+        <Skeleton className="h-56 rounded-[12px]" />
       </div>
     </div>
   )

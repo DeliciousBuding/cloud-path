@@ -1,9 +1,9 @@
-import { useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router'
+import { useEffect, useRef, useState } from 'react'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, Cpu, Activity, LogOut, Network, Settings, Monitor, Puzzle, ShieldCheck, Sun, Moon,
-  UserRound, WifiOff,
+  ChevronDown, UserRound, WifiOff,
 } from 'lucide-react'
 import { Logo } from './Logo'
 import { StatusDot } from './ui'
@@ -21,13 +21,14 @@ import { logout, useAuth, useIsAdmin } from '@/store/auth'
  * Administration 排在 Settings 之前，且只对 admin 出现（docs/api.md §3.1）：
  * 入口本身就是敏感信息，非 admin 连链接都不给（Admin 页自身另有门禁与空态）。
  */
-const NAV = [
+const CORE_NAV = [
   { to: '/', label: '概览', icon: LayoutDashboard, end: true },
-  { to: '/edges', label: '网关', icon: Network, end: false },
   { to: '/devices', label: '设备', icon: Cpu, end: false },
-  { to: '/plugins', label: '应用与插件', icon: Puzzle, end: false },
+  { to: '/edges', label: '网关', icon: Network, end: false },
   { to: '/activity', label: '运行记录', icon: Activity, end: false },
 ]
+
+const APPS_NAV = [{ to: '/plugins', label: '应用与插件', icon: Puzzle, end: false }]
 
 const ADMIN_NAV = { to: '/admin', label: '管理', icon: ShieldCheck, end: false }
 
@@ -73,7 +74,7 @@ function ConnPill() {
   const status = useLive((s) => s.status)
   const text = status === 'open' ? '已连接' : status === 'connecting' ? '连接中' : '已断开'
   return (
-    <span className="flex items-center gap-1.5 text-[12px] text-ink-2" title={`实时连接：${text}`}>
+    <span className="flex items-center gap-1.5 text-[12px] text-ink-2" title={`数据连接：${text}`}>
       <StatusDot online={status === 'open'} />
       {text}
     </span>
@@ -82,10 +83,10 @@ function ConnPill() {
 
 function Brand() {
   return (
-    <NavLink to="/" className="flex items-center gap-2.5 px-1 text-accent" aria-label="Cloudpath 概览">
+    <NavLink to="/" className="flex items-center gap-2.5 px-1 text-accent" aria-label="CloudPath 概览">
       <Logo size={26} />
       <span className="leading-tight">
-        <span className="block text-[15px] font-semibold tracking-[-0.01em] text-ink">Cloudpath</span>
+        <span className="block text-[15px] font-semibold tracking-[-0.01em] text-ink">CloudPath</span>
         <span className="block text-[12px] text-ink-3">云径 · 设备接入平台</span>
       </span>
     </NavLink>
@@ -139,7 +140,7 @@ function SidebarFooter() {
         <ConnPill />
         <ThemeControl />
       </div>
-      {data && <p className="num font-mono text-[11px] text-ink-3">服务 {data.version}</p>}
+      {data && <p className="num font-mono text-[11px] text-ink-3">版本 {data.version}</p>}
     </div>
   )
 }
@@ -158,7 +159,7 @@ function OfflineBanner() {
     <div className="banner z-30 lg:sticky lg:top-0 lg:ml-60" role="status">
       <WifiOff size={13} className="shrink-0" />
       <span className="min-w-0 break-words">
-        {status === 'connecting' ? '正在恢复实时连接…' : '实时连接已断开，正在自动重连（页面数据仍会定时刷新）'}
+        {status === 'connecting' ? '正在恢复数据连接…' : '数据连接已断开，正在自动恢复（页面会继续刷新）'}
       </span>
       {failures >= 3 && (
         <span className="num ml-auto shrink-0">
@@ -170,9 +171,34 @@ function OfflineBanner() {
 }
 
 export default function Layout() {
-  const nav = useIsAdmin() ? [...NAV, ADMIN_NAV, ...TAIL_NAV] : [...NAV, ...TAIL_NAV]
-  const mobilePrimaryNav = nav.slice(0, 4)
-  const mobileMoreNav = nav.slice(4)
+  const location = useLocation()
+  const isAdmin = useIsAdmin()
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreRef = useRef<HTMLDivElement>(null)
+  const moreNav = isAdmin ? [...APPS_NAV, ADMIN_NAV, ...TAIL_NAV] : [...APPS_NAV, ...TAIL_NAV]
+  const nav = [...CORE_NAV, ...moreNav]
+  const moreActive = moreNav.some(({ to }) => location.pathname === to || location.pathname.startsWith(`${to}/`))
+
+  useEffect(() => {
+    setMoreOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
+    if (!moreOpen) return
+    const closeOutside = (event: MouseEvent) => {
+      if (!moreRef.current?.contains(event.target as Node)) setMoreOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMoreOpen(false)
+    }
+    document.addEventListener('mousedown', closeOutside)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('mousedown', closeOutside)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [moreOpen])
+
   return (
     <div className="min-h-screen">
       <a href="#main"
@@ -202,16 +228,29 @@ export default function Layout() {
           <Brand />
           <div className="flex items-center gap-2">
             <ConnPill />
-            <details className="relative">
-              <summary aria-label="更多导航与账号设置"
-                className="btn btn-ghost list-none cursor-pointer [&::-webkit-details-marker]:hidden">更多</summary>
-              <div className="absolute right-0 z-50 mt-2 w-64 rounded-xl border border-hairline bg-surface p-3 shadow-lg">
+            <div ref={moreRef} className="relative">
+              <button
+                type="button"
+                aria-label="更多导航与账号设置"
+                aria-expanded={moreOpen}
+                aria-controls="mobile-more-menu"
+                onClick={() => setMoreOpen((open) => !open)}
+                className={cn(
+                  'btn btn-ghost',
+                  (moreOpen || moreActive) && 'border-accent/30 bg-accent/8 text-accent',
+                )}
+              >
+                更多 <ChevronDown size={14} className={cn('transition-transform', moreOpen && 'rotate-180')} />
+              </button>
+              {moreOpen && <div id="mobile-more-menu" className="absolute right-0 z-50 mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-hairline bg-surface p-3 shadow-lift">
+                <p className="px-2 pb-1 text-[11px] font-medium text-ink-3">更多页面</p>
                 <AccountPill />
-                {mobileMoreNav.length > 0 && (
-                  <nav className="mt-3 border-t border-hairline pt-3" aria-label="更多导航">
+                {moreNav.length > 0 && (
+                  <nav className="mt-2 border-t border-hairline pt-3" aria-label="更多导航">
                     <div className="space-y-0.5">
-                      {mobileMoreNav.map(({ to, label, icon: Icon, end }) => (
-                        <NavLink key={to} to={to} end={end} title={label} className={({ isActive }) => navCls(isActive)}>
+                      {moreNav.map(({ to, label, icon: Icon, end }) => (
+                        <NavLink key={to} to={to} end={end} title={label} onClick={() => setMoreOpen(false)}
+                          className={({ isActive }) => navCls(isActive)}>
                           <Icon size={15} strokeWidth={1.9} />
                           {label}
                         </NavLink>
@@ -219,16 +258,19 @@ export default function Layout() {
                     </div>
                   </nav>
                 )}
-                <div className="mt-3 border-t border-hairline pt-3"><ThemeControl /></div>
-              </div>
-            </details>
+                <div className="mt-3 flex items-center justify-between border-t border-hairline pt-3">
+                  <span className="text-[12px] text-ink-2">外观</span>
+                  <ThemeControl />
+                </div>
+              </div>}
+            </div>
           </div>
         </div>
         <nav className="mt-3 grid grid-cols-4 gap-1" aria-label="主导航">
-          {mobilePrimaryNav.map(({ to, label, icon: Icon, end }) => (
+          {CORE_NAV.map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} title={label}
               className={({ isActive }) => cn(
-                'flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-1.5 text-[11px] font-medium transition-colors',
+                'flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-1.5 text-[11px] font-medium transition-colors',
                 isActive ? 'bg-accent/10 text-accent' : 'text-ink-2 hover:bg-ink-3/8 hover:text-ink',
               )}>
               <Icon size={15} strokeWidth={1.9} />

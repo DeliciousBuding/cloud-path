@@ -266,6 +266,16 @@ function containsCombinator(schema: unknown): boolean {
     || containsCombinator(schema.items) || containsCombinator(schema.additionalProperties)
 }
 
+/** 明确的小范围整数直接给选项，避免用户对着数字输入框猜合法值。
+ *  只做 UI 呈现推导，不改变 schema 校验或下发类型。 */
+function boundedIntegerChoices(prop: Schema): unknown[] | undefined {
+  if (prop.type !== 'integer' || !number(prop.minimum) || !number(prop.maximum)) return undefined
+  const min = prop.minimum
+  const max = prop.maximum
+  if (!Number.isInteger(min) || !Number.isInteger(max) || max < min || max - min > 9) return undefined
+  return Array.from({ length: max - min + 1 }, (_, index) => min + index)
+}
+
 /** 仅把能无损表示的平铺标量对象变成字段；嵌套、数组、组合、未知约束保留 JSON。 */
 export function commandFields(schema: Schema): CommandField[] | null {
   if (schema.type !== 'object' || !object(schema.properties) || containsCombinator(schema) || unsupportedSchemaKeywords(schema).length) return null
@@ -275,7 +285,9 @@ export function commandFields(schema: Schema): CommandField[] | null {
   const fields: CommandField[] = []
   for (const [key, prop] of entries) {
     if (!object(prop)) return null
-    const choices = Array.isArray(prop.enum) && prop.enum.length > 0 && prop.enum.every((v) => v === null || ['string', 'boolean', 'number'].includes(typeof v)) ? prop.enum : undefined
+    const declaredChoices = Array.isArray(prop.enum) && prop.enum.length > 0
+      && prop.enum.every((v) => v === null || ['string', 'boolean', 'number'].includes(typeof v)) ? prop.enum : undefined
+    const choices = declaredChoices ?? boundedIntegerChoices(prop)
     let type: CommandField['type'] = choices ? 'enum' : prop.type as CommandField['type']
     let itemType: CommandField['itemType']
     let nestedFields: CommandField[] | undefined

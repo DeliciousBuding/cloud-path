@@ -45,7 +45,7 @@ const asAdmin = () => useAuth.setState({ status: 'in', user: root })
 
 /** 打开创建表单并提交。不断言结果：成功看 dialog，失败看 alert，由调用方决定 */
 async function submitCreateToken(user: ReturnType<typeof userEvent.setup>, name = 'ci-deploy') {
-  await user.click(await screen.findByRole('button', { name: '新建访问令牌' }))
+  await user.click(await screen.findByRole('button', { name: '创建访问令牌' }))
   const form = screen.getByRole('form', { name: '新建访问令牌' })
   await user.type(within(form).getByLabelText('用途名称'), name)
   await user.click(within(form).getByRole('button', { name: '创建访问令牌' }))
@@ -72,12 +72,12 @@ describe('TestScopeDefaultsLeastPrivilege', () => {
     installFetch(tokenRoute())
     renderWithProviders(<Admin />)
 
-    await user.click(await screen.findByRole('button', { name: '新建访问令牌' }))
+    await user.click(await screen.findByRole('button', { name: '创建访问令牌' }))
     const group = within(screen.getByRole('form', { name: '新建访问令牌' }))
-      .getByRole('group', { name: '可以使用它做什么' })
+      .getByRole('group', { name: '这个令牌可以用来做什么' })
 
     expect(within(group).getByRole('checkbox', { name: '查看' })).toBeChecked()
-    for (const s of ['操作', '管理', '网关接入']) {
+    for (const s of ['操作设备', '管理', '网关接入']) {
       expect(within(group).getByRole('checkbox', { name: s })).not.toBeChecked()
     }
     // 危险范围的说明文案必须可见（不是藏在 title 里）
@@ -103,13 +103,13 @@ describe('TestScopeDefaultsLeastPrivilege', () => {
     expect(body.expires_at).toBeLessThan(before + 31 * 86_400)
   })
 
-  it('选「永不过期」→ expires_at 字段不出现在 body 里', async () => {
+  it('选「不自动失效」→ expires_at 字段不出现在 body 里', async () => {
     asAdmin()
     const user = userEvent.setup()
     const http = installFetch(tokenRoute())
     renderWithProviders(<Admin />)
 
-    await user.click(await screen.findByRole('button', { name: '新建访问令牌' }))
+    await user.click(await screen.findByRole('button', { name: '创建访问令牌' }))
     const form = screen.getByRole('form', { name: '新建访问令牌' })
     await user.type(within(form).getByLabelText('用途名称'), 'edge-a')
     await user.selectOptions(within(form).getByLabelText('有效期'), 'never')
@@ -127,7 +127,7 @@ describe('TestScopeDefaultsLeastPrivilege', () => {
     const http = installFetch(tokenRoute())
     renderWithProviders(<Admin />)
 
-    await user.click(await screen.findByRole('button', { name: '新建访问令牌' }))
+    await user.click(await screen.findByRole('button', { name: '创建访问令牌' }))
     const form = screen.getByRole('form', { name: '新建访问令牌' })
     await user.type(within(form).getByLabelText('用途名称'), 'ci-deploy')
     await user.click(within(form).getByRole('checkbox', { name: '查看' }))
@@ -367,7 +367,7 @@ describe('TestRevokeToken', () => {
     renderWithProviders(<Admin />)
 
     await submitCreateToken(user)
-    expect(await screen.findByRole('alert')).toHaveTextContent('权限不足：该操作需要管理员角色')
+    expect(await screen.findByRole('alert')).toHaveTextContent('当前账号没有管理权限。请联系管理员。')
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(document.body.innerHTML).not.toContain(SECRET)
   })
@@ -382,9 +382,9 @@ describe('令牌列表卫生', () => {
     const list = await screen.findByRole('list', { name: '访问令牌列表' })
     expect(within(list).getByText('ci-deploy')).toBeInTheDocument()
     expect(within(list).getByText(PREFIX)).toBeInTheDocument()
-    expect(within(list).getByText('查看')).toBeInTheDocument()
+    expect(within(list).getByText('查看设备与记录')).toBeInTheDocument()
     expect(within(list).getByText('从未使用')).toBeInTheDocument()
-    expect(within(list).getByText('永不过期')).toBeInTheDocument()
+    expect(within(list).getByText('不自动失效')).toBeInTheDocument()
     expect(list.textContent).not.toContain(SECRET)
   })
 })

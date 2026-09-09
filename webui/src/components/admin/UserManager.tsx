@@ -17,14 +17,14 @@ export function UserManager() {
 
   return (
     <Panel
-      title={<span className="flex items-center gap-1.5"><Users size={14} />用户</span>}
+      title={<span className="flex items-center gap-1.5"><Users size={14} />成员</span>}
       right={(
         <Button
           variant={creating ? 'ghost' : 'primary'}
           aria-expanded={creating}
           onClick={() => setCreating((v) => !v)}
         >
-          {!creating && <UserPlus size={14} />}{creating ? '收起表单' : '新建用户'}
+          {!creating && <UserPlus size={14} />}{creating ? '收起表单' : '添加成员'}
         </Button>
       )}
     >
@@ -35,15 +35,15 @@ export function UserManager() {
       ) : isPending ? (
         <RowSkeleton rows={3} />
       ) : users.length === 0 ? (
-        <p className="py-6 text-center text-sm text-ink-3">本组织还没有用户</p>
+        <p className="py-6 text-center text-sm text-ink-3">还没有成员。添加成员后，他们就可以按角色访问平台。</p>
       ) : (
-        <ul className="divide-y divide-hairline" aria-label="用户列表">
+        <ul className="divide-y divide-hairline" aria-label="成员列表">
           {users.map((u) => <UserRow key={u.id} user={u} />)}
         </ul>
       )}
 
       <p className="mt-4 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3 break-words">
-        这里只显示本组织成员。角色决定可以查看还是执行操作。
+        这里显示当前组织的成员。角色决定成员可以查看还是执行操作。
       </p>
     </Panel>
   )

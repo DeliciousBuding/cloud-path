@@ -33,7 +33,7 @@ const BASE: AuthErrorCopy = {
  */
 export const SESSION_NOT_ESTABLISHED = {
   /** POST /api/auth/login 2xx 之后 GET /api/auth/me 复核失败：凭据是对的，可以重试 */
-  login: '账号和密码是对的，但登录状态没有保存成功。请重试一次；如果仍然失败，请检查浏览器是否允许保存网站数据，或联系管理员检查服务配置。',
+  login: '账号和密码是对的，但登录状态没有保存成功。请重试一次；如果仍然失败，请允许此页面保存网站数据，或联系管理员协助。',
   /** POST /api/auth/setup 2xx 之后复核失败：账号已创建且不可逆，只能去登录页 */
   setup: '管理员账号已创建，但登录状态没有保存成功。请直接到登录页使用刚创建的账号登录。',
 } as const
@@ -43,7 +43,7 @@ export function loginErrorCopy(e: unknown): AuthErrorCopy {
   if (e instanceof ApiError) {
     switch (e.status) {
       case 401:
-        return { ...BASE, message: '用户名或密码错误', badCredentials: true }
+        return { ...BASE, message: '用户名或密码不正确，请检查后重试。', badCredentials: true }
       case 429:
         return {
           ...BASE,
@@ -53,14 +53,14 @@ export function loginErrorCopy(e: unknown): AuthErrorCopy {
             : '登录尝试过多，请稍后再试',
         }
       case 400:
-        return { ...BASE, message: '账号或密码格式不被接受（用户名 ≤64 字符，密码 ≤256 字符）' }
+        return { ...BASE, message: '登录信息格式不正确，请检查用户名和密码后重试。' }
       case 503:
-        return { ...BASE, message: '服务暂时无法保存登录信息，请稍后重试；持续失败请联系管理员。' }
+        return { ...BASE, message: '暂时无法完成登录，请稍后重试；持续失败请联系管理员。' }
       default:
-        return { ...BASE, message: `登录失败，请稍后重试（错误代码 ${e.status}）` }
+        return { ...BASE, message: '登录暂时没有成功，请稍后重试。' }
     }
   }
-  return { ...BASE, message: '无法连接服务（服务未启动或网络不可达）', unreachable: true }
+  return { ...BASE, message: '暂时无法连接 CloudPath。请检查网络后重试。', unreachable: true }
 }
 
 /**
@@ -75,7 +75,7 @@ export function setupErrorCopy(e: unknown): AuthErrorCopy {
       case 403:
         return {
           ...BASE, alreadySetup: true,
-          message: '无法从这里完成初始化：系统已经设置过，或首次设置只能在运行服务的电脑上操作。请联系管理员创建账号，然后到登录页登录。',
+          message: '现在无法完成初始化：系统可能已经设置过，或首次设置需要在允许的设备上操作。请联系管理员创建账号，然后到登录页登录。',
         }
       case 409:
         return {
@@ -86,17 +86,17 @@ export function setupErrorCopy(e: unknown): AuthErrorCopy {
       // 建号成功后 me→401 是「会话没落地」，属另一件事，由 SESSION_NOT_ESTABLISHED.setup
       // 说真话——旧实现在这里报「用户名或密码错误」，把已建号说成凭据错。
       case 400:
-        return { ...BASE, message: '账号或密码格式不被接受（用户名 ≤64 字符，密码 ≤256 字符）' }
+        return { ...BASE, message: '账号或密码格式不正确，请检查后重试。' }
       case 429:
         return {
           ...BASE, retryAfter: e.retryAfter,
           message: e.retryAfter ? `操作过于频繁，请 ${e.retryAfter} 秒后重试` : '操作过于频繁，请稍后再试',
         }
       case 503:
-        return { ...BASE, message: '服务暂时无法保存账号信息，请稍后重试。' }
+        return { ...BASE, message: '暂时无法保存账号信息，请稍后重试。' }
       default:
-        return { ...BASE, message: `初始化失败，请稍后重试（错误代码 ${e.status}）` }
+        return { ...BASE, message: '初始化暂时没有成功，请稍后重试。' }
     }
   }
-  return { ...BASE, message: '无法连接服务（服务未启动或网络不可达）', unreachable: true }
+  return { ...BASE, message: '暂时无法连接 CloudPath。请检查网络后重试。', unreachable: true }
 }

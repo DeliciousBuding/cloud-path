@@ -44,7 +44,7 @@ export function TokenManager() {
           aria-expanded={creating}
           onClick={() => setCreating((v) => !v)}
         >
-          {!creating && <Plus size={14} />}{creating ? '收起表单' : '新建访问令牌'}
+          {!creating && <Plus size={14} />}{creating ? '收起表单' : '创建访问令牌'}
         </Button>
       )}
     >
@@ -59,7 +59,7 @@ export function TokenManager() {
       ) : isPending ? (
         <RowSkeleton rows={2} />
       ) : tokens.length === 0 ? (
-        <p className="py-6 text-center text-sm text-ink-3">还没有访问令牌</p>
+        <p className="py-6 text-center text-sm text-ink-3">还没有访问令牌。创建后，自动化工具或网关可以使用它连接平台。</p>
       ) : (
         <ul className="divide-y divide-hairline" aria-label="访问令牌列表">
           {tokens.map((t) => <TokenRow key={t.id} token={t} />)}
@@ -67,7 +67,7 @@ export function TokenManager() {
       )}
 
       <div className="mt-4 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
-        <p>完整令牌只在创建时显示一次。如果遗失，请吊销后重新创建。</p>
+        <p>完整令牌只在创建时显示一次。请立即保存；如果遗失，请吊销后重新创建。</p>
         <details className="mt-1.5">
           <summary className="cursor-pointer">技术详情</summary>
           <p className="mt-1 break-words">列表只保留识别码和基本信息，不保存可再次显示的完整令牌。</p>

@@ -1,11 +1,7 @@
-// 插件实例的写操作面：启停 / reconcile / 删除，以及**权限扩大的显式确认**。
+// 插件实例的写操作面：启停 / 编辑 / 重新应用 / 删除，以及权限扩大的显式确认。
 //
-// 三条硬约束：
-//   ① 写完只失效查询，由服务端投影决定新事实 —— 绝不因为「按钮点了、请求 200」
-//      就把 desired.enabled 渲染成 observed 运行中；
-//   ② 错误按 PluginErr* 稳定码呈现（lib/plugins.ts pluginErrorCopy），不解析服务端文本；
-//   ③ 收到 plugin_permission_confirmation_required 时弹出权限清单要求显式确认，
-//      用户勾选后才带 confirm_permissions:true 重发同一份 payload。
+// 主路径只展示常用动作；重新应用只在状态需要处理时出现，删除收进详情页的「更多操作」。
+// 写完只失效查询，由服务端投影决定新事实 —— 绝不因为按钮点了、请求 200 就把保存的设置当作已运行。
 import { useState } from 'react'
 import { useAuth } from '@/store/auth'
 import { Pencil, Power, RefreshCw, Trash2 } from 'lucide-react'
@@ -17,12 +13,14 @@ import {
 } from '@/hooks/usePlugins'
 import type { PluginCatalogView, PluginInstanceUpdateRequest, PluginInstanceView } from '@/lib/types'
 
-export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
+export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant = 'detail' }: {
   v: PluginInstanceView
   /** 目录里的插件声明（用于权限扩大确认时列出将要授予的权限） */
   catalog?: PluginCatalogView
   onEdit?: () => void
   showEdit?: boolean
+  /** list 只保留高频动作；detail 才展示重新应用和删除 */
+  variant?: 'list' | 'detail'
 }) {
   const readOnly = useAuth((s) => s.status === 'in' && s.user?.role === 'viewer')
   const host = v.edge_id === 'server' ? '中心服务' : '网关'
@@ -67,11 +65,11 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
           {update.isPending ? '提交中…' : toggleLabel}
         </button>
 
-        {needsReapply && (
+        {variant === 'detail' && needsReapply && (
           <button
             type="button" className="btn btn-ghost" disabled={busy}
             onClick={() => setReconcileOpen(true)}
-            title={"让" + host + "重新应用最新设置"}
+            title={'让' + host + '重新应用最新设置'}
           >
             <RefreshCw size={13} className="shrink-0" />
             {reconcile.isPending ? '正在应用…' : '重新应用设置'}
@@ -83,14 +81,19 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
             <Pencil size={13} className="shrink-0" /> 编辑
           </button>
         )}
-
-        <button
-          type="button" className="btn btn-danger-ghost ml-auto" disabled={busy}
-          onClick={() => { setPurge(false); setDeleteOpen(true) }}
-        >
-          <Trash2 size={13} className="shrink-0" /> 删除
-        </button>
       </div>
+
+      {variant === 'detail' && (
+        <details className="mt-3 border-t border-hairline pt-3">
+          <summary className="cursor-pointer text-xs text-ink-2">更多操作</summary>
+          <button
+            type="button" className="btn btn-danger-ghost mt-2" disabled={busy}
+            onClick={() => { setPurge(false); setDeleteOpen(true) }}
+          >
+            <Trash2 size={13} className="shrink-0" /> 删除实例
+          </button>
+        </details>
+      )}
 
       {error ? <PluginErrorNote error={error} className="mt-3" /> : null}
 

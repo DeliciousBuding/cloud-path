@@ -50,33 +50,33 @@ const asAdmin = () => useAuth.setState({ status: 'in', user: root })
 beforeEach(() => { resetStores() })
 
 describe('TestAdminCanManageUsers', () => {
-  it('admin 看到本租户用户列表（含角色与租户，永不含密码哈希）', async () => {
+  it('admin 看到本租户成员列表（含角色与租户，永不含密码哈希）', async () => {
     asAdmin()
     installFetch(adminRoute())
     renderWithProviders(<Admin />)
 
-    const list = await screen.findByRole('list', { name: '用户列表' })
-    expect(within(list).getByText('root')).toBeInTheDocument()
-    expect(within(list).getByText('ops')).toBeInTheDocument()
+    const list = await screen.findByRole('list', { name: '成员列表' })
+    expect(within(list).getAllByText('root').length).toBeGreaterThan(0)
+    expect(within(list).getAllByText('ops').length).toBeGreaterThan(0)
     expect(within(list).getByText('管理员')).toBeInTheDocument()
     expect(within(list).getByText('操作员')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 1, name: '管理' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: '成员与访问权限' })).toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(/password_hash|\$2a\$|bcrypt/i)
   })
 
-  it('新建用户：角色默认最小权限 viewer，POST 只带 {username,role,password}', async () => {
+  it('添加成员：角色默认最小权限 viewer，POST 只带 {username,role,password}', async () => {
     asAdmin()
     const user = userEvent.setup()
     const http = installFetch(adminRoute())
     renderWithProviders(<Admin />)
 
-    await user.click(await screen.findByRole('button', { name: '新建用户' }))
-    const form = screen.getByRole('form', { name: '新建用户' })
+    await user.click(await screen.findByRole('button', { name: '添加成员' }))
+    const form = screen.getByRole('form', { name: '添加成员' })
     expect(within(form).getByLabelText('角色')).toHaveValue('viewer')
 
-    await user.type(within(form).getByLabelText('用户名'), 'newbie')
-    await user.type(within(form).getByLabelText('密码'), 'pw-12345')
-    await user.click(within(form).getByRole('button', { name: '创建用户' }))
+    await user.type(within(form).getByLabelText('登录账号'), 'newbie')
+    await user.type(within(form).getByLabelText('初始密码'), 'pw-12345')
+    await user.click(within(form).getByRole('button', { name: '添加成员' }))
 
     await waitFor(() => expect(http.to('/api/users').some((c) => c.method === 'POST')).toBe(true))
     const post = http.to('/api/users').find((c) => c.method === 'POST')
@@ -86,19 +86,19 @@ describe('TestAdminCanManageUsers', () => {
     expect(post?.body).not.toHaveProperty('name')
   })
 
-  it('新建用户：空用户名/空密码就地报错并标记 aria-invalid，不发请求', async () => {
+  it('添加成员：空用户名/空密码就地报错并标记 aria-invalid，不发请求', async () => {
     asAdmin()
     const user = userEvent.setup()
     const http = installFetch(adminRoute())
     renderWithProviders(<Admin />)
 
-    await user.click(await screen.findByRole('button', { name: '新建用户' }))
-    const form = screen.getByRole('form', { name: '新建用户' })
-    await user.click(within(form).getByRole('button', { name: '创建用户' }))
+    await user.click(await screen.findByRole('button', { name: '添加成员' }))
+    const form = screen.getByRole('form', { name: '添加成员' })
+    await user.click(within(form).getByRole('button', { name: '添加成员' }))
 
-    expect(within(form).getByLabelText('用户名')).toHaveAttribute('aria-invalid', 'true')
-    expect(within(form).getByLabelText('密码')).toHaveAttribute('aria-invalid', 'true')
-    expect(within(form).getByText('请输入用户名')).toBeInTheDocument()
+    expect(within(form).getByLabelText('登录账号')).toHaveAttribute('aria-invalid', 'true')
+    expect(within(form).getByLabelText('初始密码')).toHaveAttribute('aria-invalid', 'true')
+    expect(within(form).getByText('请输入登录账号')).toBeInTheDocument()
     expect(http.to('/api/users').filter((c) => c.method === 'POST')).toHaveLength(0)
   })
 
@@ -108,11 +108,11 @@ describe('TestAdminCanManageUsers', () => {
     const http = installFetch(adminRoute())
     renderWithProviders(<Admin />)
 
-    await user.click(await screen.findByRole('button', { name: '编辑用户 ops' }))
-    const form = screen.getByRole('form', { name: '编辑用户 ops' })
+    await user.click(await screen.findByRole('button', { name: '编辑成员 ops' }))
+    const form = screen.getByRole('form', { name: '编辑成员 ops' })
     await user.selectOptions(within(form).getByLabelText('角色'), 'admin')
-    await user.click(within(form).getByRole('checkbox', { name: '禁用该账号' }))
-    await user.click(within(form).getByRole('button', { name: '保存用户 ops 的修改' }))
+    await user.click(within(form).getByRole('checkbox', { name: '停用该成员' }))
+    await user.click(within(form).getByRole('button', { name: '保存成员 ops 的修改' }))
 
     await waitFor(() => expect(http.to('/api/users/2')).toHaveLength(1))
     expect(http.to('/api/users/2')[0]).toMatchObject({ method: 'PATCH' })
@@ -125,7 +125,7 @@ describe('TestAdminCanManageUsers', () => {
     const http = installFetch(adminRoute())
     renderWithProviders(<Admin />)
 
-    await user.click(await screen.findByRole('button', { name: '重置密码：ops' }))
+    await user.click(await screen.findByRole('button', { name: '重置成员密码：ops' }))
     const form = screen.getByRole('form', { name: '重置 ops 的密码' })
     const submit = within(form).getByRole('button', { name: '确认重置 ops 的密码' })
     expect(submit).toBeDisabled()
@@ -145,7 +145,7 @@ describe('TestAdminCanManageUsers', () => {
     const http = installFetch(adminRoute())
     renderWithProviders(<Admin />)
 
-    await user.click(await screen.findByRole('button', { name: '重置密码：ops' }))
+    await user.click(await screen.findByRole('button', { name: '重置成员密码：ops' }))
     const form = screen.getByRole('form', { name: '重置 ops 的密码' })
     await user.click(within(form).getByRole('checkbox', { name: '确认重置 ops 的密码' }))
     await user.click(within(form).getByRole('button', { name: '确认重置 ops 的密码' }))
@@ -160,12 +160,12 @@ describe('TestAdminCanManageUsers', () => {
     installFetch(adminRoute({ patchStatus: 403, patchBody: { error: 'permission denied' } }))
     renderWithProviders(<Admin />)
 
-    await user.click(await screen.findByRole('button', { name: '编辑用户 ops' }))
-    const form = screen.getByRole('form', { name: '编辑用户 ops' })
-    await user.click(within(form).getByRole('button', { name: '保存用户 ops 的修改' }))
+    await user.click(await screen.findByRole('button', { name: '编辑成员 ops' }))
+    const form = screen.getByRole('form', { name: '编辑成员 ops' })
+    await user.click(within(form).getByRole('button', { name: '保存成员 ops 的修改' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('权限不足：该操作需要管理员角色')
-    expect(screen.getByRole('form', { name: '编辑用户 ops' })).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent('当前账号没有管理权限。请联系管理员。')
+    expect(screen.getByRole('form', { name: '编辑成员 ops' })).toBeInTheDocument()
   })
 
   it('列表 401 → 全局同步为未登录，管理面立即收回（不留在页面上）', async () => {
@@ -175,7 +175,7 @@ describe('TestAdminCanManageUsers', () => {
 
     expect(await screen.findByText('需要管理员权限')).toBeInTheDocument()
     expect(useAuth.getState().status).toBe('out')
-    expect(screen.queryByRole('list', { name: '用户列表' })).toBeNull()
+    expect(screen.queryByRole('list', { name: '成员列表' })).toBeNull()
   })
 })
 
@@ -187,10 +187,10 @@ describe('TestLastAdminConflictShown', () => {
     const http = installFetch(adminRoute({ users: [root], patchStatus: 409, patchBody: { error: msg } }))
     renderWithProviders(<Admin />)
 
-    await user.click(await screen.findByRole('button', { name: '编辑用户 root' }))
-    const form = screen.getByRole('form', { name: '编辑用户 root' })
+    await user.click(await screen.findByRole('button', { name: '编辑成员 root' }))
+    const form = screen.getByRole('form', { name: '编辑成员 root' })
     await user.selectOptions(within(form).getByLabelText('角色'), 'viewer')
-    await user.click(within(form).getByRole('button', { name: '保存用户 root 的修改' }))
+    await user.click(within(form).getByRole('button', { name: '保存成员 root 的修改' }))
 
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent(msg)
@@ -198,7 +198,7 @@ describe('TestLastAdminConflictShown', () => {
     expect(http.to('/api/users/1')).toHaveLength(1)
     expect(http.to('/api/users/1')[0]?.body).toMatchObject({ role: 'viewer' })
     // 失败后表单仍在，用户可以直接改回来
-    expect(screen.getByRole('form', { name: '编辑用户 root' })).toBeInTheDocument()
+    expect(screen.getByRole('form', { name: '编辑成员 root' })).toBeInTheDocument()
   })
 
   it('禁用最后一个 admin 的 409 同样透传人话', async () => {
@@ -208,10 +208,10 @@ describe('TestLastAdminConflictShown', () => {
     installFetch(adminRoute({ users: [root], patchStatus: 409, patchBody: { error: msg } }))
     renderWithProviders(<Admin />)
 
-    await user.click(await screen.findByRole('button', { name: '编辑用户 root' }))
-    const form = screen.getByRole('form', { name: '编辑用户 root' })
-    await user.click(within(form).getByRole('checkbox', { name: '禁用该账号' }))
-    await user.click(within(form).getByRole('button', { name: '保存用户 root 的修改' }))
+    await user.click(await screen.findByRole('button', { name: '编辑成员 root' }))
+    const form = screen.getByRole('form', { name: '编辑成员 root' })
+    await user.click(within(form).getByRole('checkbox', { name: '停用该成员' }))
+    await user.click(within(form).getByRole('button', { name: '保存成员 root 的修改' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(msg)
   })
@@ -222,11 +222,11 @@ describe('TestLastAdminConflictShown', () => {
     installFetch(adminRoute({ createStatus: 409, createBody: { error: 'username 已存在' } }))
     renderWithProviders(<Admin />)
 
-    await user.click(await screen.findByRole('button', { name: '新建用户' }))
-    const form = screen.getByRole('form', { name: '新建用户' })
-    await user.type(within(form).getByLabelText('用户名'), 'ops')
-    await user.type(within(form).getByLabelText('密码'), 'pw-12345')
-    await user.click(within(form).getByRole('button', { name: '创建用户' }))
+    await user.click(await screen.findByRole('button', { name: '添加成员' }))
+    const form = screen.getByRole('form', { name: '添加成员' })
+    await user.type(within(form).getByLabelText('登录账号'), 'ops')
+    await user.type(within(form).getByLabelText('初始密码'), 'pw-12345')
+    await user.click(within(form).getByRole('button', { name: '添加成员' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('username 已存在')
   })
@@ -241,11 +241,11 @@ describe('TestNonAdminCannotSeeManagement', () => {
     renderWithProviders(<Admin />)
 
     expect(await screen.findByText('需要管理员权限')).toBeInTheDocument()
-    expect(screen.queryByRole('list', { name: '用户列表' })).toBeNull()
+    expect(screen.queryByRole('list', { name: '成员列表' })).toBeNull()
     expect(screen.queryByRole('list', { name: '访问令牌列表' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '新建用户' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '新建访问令牌' })).toBeNull()
-    expect(screen.queryByRole('button', { name: /编辑用户/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: '添加成员' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '创建访问令牌' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /编辑成员/ })).toBeNull()
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.queryByText('root')).toBeNull()
     expect(http.to('/api/users')).toHaveLength(0)
@@ -266,8 +266,8 @@ describe('TestNonAdminCannotSeeManagement', () => {
     useAuth.setState({ status: 'loading', user: null })
     installFetch(adminRoute())
     renderWithProviders(<Admin />)
-    expect(screen.queryByRole('list', { name: '用户列表' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '新建用户' })).toBeNull()
+    expect(screen.queryByRole('list', { name: '成员列表' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '添加成员' })).toBeNull()
   })
 
   it('侧栏「管理」入口只对 admin 出现（viewer 连链接都没有）', async () => {
@@ -280,9 +280,10 @@ describe('TestNonAdminCannotSeeManagement', () => {
         </Route>
       </Routes>,
     )
-    expect(screen.getByRole('heading', { level: 1, name: '管理' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: '成员与访问权限' })).toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: '更多导航与账号设置' }))
     expect(screen.queryByRole('link', { name: '管理' })).toBeNull()
-    // 其余入口照旧（桌面侧栏 + 移动端顶栏各一份）
+    // 其余入口照旧（桌面侧栏 + 移动端更多菜单各一份）
     expect(screen.getAllByRole('link', { name: '设置' })).toHaveLength(2)
   })
 
@@ -296,6 +297,7 @@ describe('TestNonAdminCannotSeeManagement', () => {
         </Route>
       </Routes>,
     )
+    await userEvent.setup().click(screen.getByRole('button', { name: '更多导航与账号设置' }))
     await waitFor(() => expect(screen.getAllByRole('link', { name: '管理' })).toHaveLength(2))
     expect(screen.getAllByRole('link', { name: '管理' })[0]).toHaveAttribute('href', '/admin')
   })

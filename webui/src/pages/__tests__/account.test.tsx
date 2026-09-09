@@ -53,6 +53,13 @@ beforeEach(() => {
   useLive.setState({ status: 'open' })
 })
 
+async function openDiagnostics() {
+  const user = userEvent.setup()
+  const summary = screen.getByText('高级诊断').closest('summary')
+  expect(summary).not.toBeNull()
+  await user.click(summary as HTMLElement)
+}
+
 describe('侧栏账号区', () => {
   it('已登录时显示姓名与角色，并给出可读的登出按钮', () => {
     route()
@@ -96,9 +103,11 @@ describe('Settings 账号与令牌面板', () => {
     route()
     useAuth.setState({ status: 'in', user: admin })
     renderWithProviders(<Settings />)
-    expect(await screen.findByText('ops-admin')).toBeInTheDocument()
-    expect(screen.getByText('管理员')).toBeInTheDocument()
+    expect(screen.getByText('查看当前账号、管理访问令牌和高级诊断。')).toBeInTheDocument()
+    expect((await screen.findAllByText('ops-admin')).length).toBeGreaterThan(0)
+    expect(screen.getAllByText('管理员').length).toBeGreaterThan(0)
     expect(screen.getByText('default')).toBeInTheDocument()
+    await openDiagnostics()
     // stats 是异步的，等它落地再断言鉴权标注
     expect(await screen.findByText('需要账号登录')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /退出登录/ })).toBeInTheDocument()
@@ -111,6 +120,7 @@ describe('Settings 账号与令牌面板', () => {
     route({ authMode: 'account' })
     useAuth.setState({ status: 'in', user: admin })
     renderWithProviders(<Settings />)
+    await openDiagnostics()
     expect(await screen.findByText('需要账号登录')).toBeInTheDocument()
     expect(screen.queryByText(/未启用/)).not.toBeInTheDocument()
     expect(screen.queryByText(/本机模式/)).not.toBeInTheDocument()
@@ -120,11 +130,13 @@ describe('Settings 账号与令牌面板', () => {
     route({ authMode: 'token' })
     useAuth.setState({ status: 'in', user: admin })
     const { unmount } = renderWithProviders(<Settings />)
+    await openDiagnostics()
     expect(await screen.findByText('使用访问令牌：可查看，修改需令牌或本机操作')).toBeInTheDocument()
     unmount()
 
     route({ authMode: 'open' })
     renderWithProviders(<Settings />)
+    await openDiagnostics()
     expect(await screen.findByText('无需登录：可查看，修改仅限本机')).toBeInTheDocument()
   })
 
@@ -132,6 +144,7 @@ describe('Settings 账号与令牌面板', () => {
     route({ authMode: 'future_mode' as AuthMode })
     useAuth.setState({ status: 'in', user: admin })
     renderWithProviders(<Settings />)
+    await openDiagnostics()
     expect(await screen.findByText('future_mode')).toBeInTheDocument()
   })
 
@@ -156,11 +169,39 @@ describe('Settings 账号与令牌面板', () => {
     route()
     useAuth.setState({ status: 'in', user: admin })
     renderWithProviders(<Settings />)
-    const panel = (await screen.findByText('访问令牌（可选）')).closest('section') as HTMLElement
+    const panel = (await screen.findByRole('heading', { name: '访问令牌' })).closest('section') as HTMLElement
     expect(within(panel).getByText(/不需要填写/)).toBeInTheDocument()
-    expect(within(panel).getByPlaceholderText('留空即使用当前登录状态')).toBeInTheDocument()
+    expect(within(panel).getByPlaceholderText('收到令牌或使用自动化工具时填写')).toBeInTheDocument()
     // 旧文案（把共享令牌说成强制）必须消失
     expect(panel.textContent).not.toContain('都必须携带同一令牌')
+  })
+
+  it('外观是普通用户可操作项，切换会保存偏好', async () => {
+    const user = userEvent.setup()
+    route()
+    useAuth.setState({ status: 'in', user: admin })
+    renderWithProviders(<Settings />)
+
+    const group = screen.getByRole('group', { name: '外观' })
+    await user.click(within(group).getByRole('button', { name: '深色' }))
+    expect(localStorage.getItem('cloudpath.theme')).toBe('dark')
+  })
+
+  it('高级诊断默认收起；读取失败时显示错误，不留假 0 或假加载', async () => {
+    installFetch((url) => {
+      if (url === '/healthz') return stubResponse(200, health)
+      if (url === '/api/stats') return stubResponse(500, { error: 'boom' })
+      if (url === '/api/adapters') return stubResponse(200, { adapters: [] })
+      return stubResponse(404, {})
+    })
+    useAuth.setState({ status: 'in', user: admin })
+    renderWithProviders(<Settings />)
+
+    expect(screen.queryByText('平台版本')).not.toBeInTheDocument()
+    await openDiagnostics()
+    expect(await screen.findByText('无法读取记录统计')).toBeInTheDocument()
+    expect(screen.queryByText('运行记录总数')).not.toBeInTheDocument()
+    expect(screen.queryByText('正在读取记录统计…')).not.toBeInTheDocument()
   })
 
   it('登出后回到登录页（Settings 里的登出与侧栏一致）', async () => {

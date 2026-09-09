@@ -8,8 +8,8 @@ export function CommandInput({ deviceId, action }: { deviceId: string; action: C
   return <SchemaActionInput
     action={{ ...action, inputPlaceholder: action.inputPlaceholder ?? '按设备要求填写参数' }}
     validate={(args) => commandArgsError(args, action.inputSchema, action.inputMaxLength)}
-    description="按设备要求填写参数。"
-    emptyHint="填写参数后即可执行。" validationSource="设备端"
+    description={action.hint ?? ''}
+    emptyHint="填写参数后即可执行。" validationSource="设备端" showTitle={false}
     renderSubmit={(args, error) => <CommandButton deviceId={deviceId} action={action} args={args}
       disabled={!!error} className="shrink-0" />} />
 }

@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { EventFeed } from '@/components/EventFeed'
+import { EventFeed, commandDisplayMeta, commandFailureInfo, eventDisplayLabel } from '@/components/EventFeed'
 import { renderWithProviders } from '@/test/render'
 import type { EventView } from '@/lib/types'
 
@@ -25,6 +25,25 @@ describe('EventFeed day 分组', () => {
     renderWithProviders(<EventFeed events={[ev(1, now), ev(2, now - 86_400)]} limit={10} />)
     expect(screen.queryByText('今天')).toBeNull()
     expect(screen.queryByText('昨天')).toBeNull()
+  })
+})
+
+describe('机器名中文优先展示名', () => {
+  it('事件优先用通用中文词典，原始机器名只留在 title', () => {
+    const machineName = 'Device Compartment Opened'
+    renderWithProviders(<EventFeed events={[{ ...ev(1, Math.floor(Date.now() / 1000)), type: machineName }]} limit={10} />)
+    expect(screen.getByText('设备舱门已打开')).toBeInTheDocument()
+    expect(screen.getByTitle(machineName)).toBeInTheDocument()
+    expect(screen.queryByText(machineName)).toBeNull()
+  })
+
+  it('覆盖用户可见的英文事件与命令机器名', () => {
+    expect(eventDisplayLabel('Pillbox Remind')).toBe('药盒提醒')
+    expect(eventDisplayLabel('Read Register')).toBe('读取寄存器')
+    expect(commandDisplayMeta('read-register').label).toBe('读取寄存器')
+    expect(commandFailureInfo('device busy')).toEqual({
+      message: '设备正忙', next: '等待设备空闲后重试',
+    })
   })
 })
 

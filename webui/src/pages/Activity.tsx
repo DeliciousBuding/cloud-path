@@ -1,17 +1,16 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Activity as ActivityIcon, FilterX, History, RefreshCw, Terminal } from 'lucide-react'
+import { Activity as ActivityIcon, FilterX, RefreshCw, Terminal, WifiOff } from 'lucide-react'
 import { Badge, EmptyState, ErrorState, Panel, PageHeader, Segmented, Spinner } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
-import { EventFeed } from '@/components/EventFeed'
-import { TrendChart } from '@/components/TrendChart'
+import { EventFeed, commandDisplayMeta, commandFailureInfo, eventDisplayLabel } from '@/components/EventFeed'
 import { api } from '@/lib/api'
 import { useLive } from '@/store/ws'
 import { useDevices } from '@/hooks/useDevices'
 import { useEdges } from '@/hooks/useEdges'
 import { useCapabilityIndex } from '@/hooks/useDescriptor'
-import { bucketEventDensity, cmdMeta, cmdStatusMeta, eventLabel, fmtDateTime, fmtDay, fmtHourMin, fmtTime, mergeEvents, optionLabel } from '@/lib/format'
+import { cmdStatusMeta, fmtDateTime, fmtDay, fmtTime, mergeEvents, optionLabel } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import type { CommandView } from '@/lib/types'
 import type { CapabilityIndex } from '@/lib/descriptor'
@@ -31,18 +30,6 @@ const STATUS_FILTERS = [
   { value: 'failed', label: '失败' },
   { value: 'timeout', label: '超时' },
 ]
-
-/** 与 CommandHistory 保持一致的失败原因转写；原始返回值只留在 title。 */
-function failureCopy(result?: string): string {
-  const text = result?.trim()
-  if (!text) return '操作失败，请稍后重试'
-  if (/timeout|timed out|超时/i.test(text)) return '设备响应超时，请重试'
-  if (/busy|queue full|忙/i.test(text)) return '设备正忙，请稍后重试'
-  if (/offline|离线/i.test(text)) return '设备离线，操作未完成'
-  if (/unsupported|not supported|invalid|参数无效/i.test(text)) return '设备不支持此操作，或参数无效'
-  if (/^[\u3400-\u9fff\s，。！？、；：（）\-—]+$/.test(text)) return text
-  return '设备返回失败，请稍后重试'
-}
 
 /** 下拉共用的样式（390px：min-w-0 + max-w-full，长设备名靠 option 自身截断） */
 // 原生 select/option 不吃 CSS 截断：select 自身限宽 + overflow-hidden，option 文本另在 optionLabel 里收敛
@@ -98,12 +85,6 @@ export default function Activity() {
     return edge && !device ? rows.filter((c) => c.device_id.startsWith(`${edge}/`)) : rows
   }, [cmdQuery.data, edge, device])
 
-  /** 事件密度（真实历史分布）：桶宽按跨度自动取人话单位；窗口起点如实标注，不承诺没覆盖的区间 */
-  const density = useMemo(
-    () => (tab === 'events' ? bucketEventDensity(events.map((e) => e.ts), Math.floor(Date.now() / 1000)) : null),
-    [events, tab],
-  )
-
   /** 设备 ID → 用户起的名字：命令行的目标列展示人话名，机器 ID 收进 title */
   const deviceNames = useMemo(() => new Map(
     devices.filter((d) => d.name).map((d) => [d.id, d.name as string]),
@@ -118,11 +99,19 @@ export default function Activity() {
 
   const active = evQuery.isFetching || cmdQuery.isFetching
   const query = tab === 'events' ? evQuery : cmdQuery
-  const anyFilter = Boolean(device || edge || types.size || status)
+  const eventFilter = Boolean(device || edge || types.size)
+  const commandFilter = Boolean(device || edge || status)
+  const anyFilter = tab === 'events' ? eventFilter : commandFilter
   const rows = Math.min(tab === 'events' ? events.length : commands.length, PAGE_LIMIT)
+  const failedCount = commands.filter((c) => c.status === 'failed' || c.status === 'timeout').length
   const atLimit = tab === 'events'
-    ? events.length >= PAGE_LIMIT
+    ? (evQuery.data?.events.length ?? 0) >= PAGE_LIMIT
     : (cmdQuery.data?.commands.length ?? 0) >= PAGE_LIMIT
+  const subtitle = query.isLoading ? '正在加载记录…'
+    : query.error ? '记录状态暂不可用'
+      : tab === 'events'
+        ? `设备主动上报的状态变化 · 最近 ${rows} 条`
+        : `下发操作及执行结果 · 最近 ${rows} 条${failedCount > 0 ? ` · ${failedCount} 条失败或超时` : ''}`
 
   const clearAll = () => { setDevice(''); setEdge(''); setTypes(new Set()); setStatus('') }
 
@@ -130,7 +119,7 @@ export default function Activity() {
     <>
       <PageHeader
         title="运行记录"
-        subtitle={query.isLoading ? '正在加载记录…' : `状态与操作记录 · 显示最近 ${rows} 条`}
+        subtitle={subtitle}
         actions={
           <button type="button" className="btn btn-ghost" onClick={() => { void query.refetch() }} title="立即刷新">
             {active ? <Spinner size={13} /> : <RefreshCw size={13} />} 刷新
@@ -152,7 +141,7 @@ export default function Activity() {
             />
             <label className="sr-only" htmlFor="act-device">按设备筛选</label>
             <select id="act-device" value={device} onChange={(e) => setDevice(e.target.value)} className={SELECT_CLS}>
-              <option value="">全部设备</option>
+              <option value="">设备：全部</option>
               {devices.map((d) => (
                 <option key={d.id} value={d.id}>
                   {optionLabel(d.name ? `${d.name}（${d.id}）` : d.id, 40)}
@@ -164,7 +153,7 @@ export default function Activity() {
             <select id="act-edge" value={edge} disabled={Boolean(device)}
               onChange={(e) => setEdge(e.target.value)} className={cn(SELECT_CLS, 'disabled:opacity-50')}
               title={device ? '已按具体设备筛选' : undefined}>
-              <option value="">全部网关</option>
+              <option value="">网关：全部</option>
               {edges.map((e) => (
                 <option key={e.edge_id} value={e.edge_id}>{optionLabel(e.edge_id, 40)}</option>
               ))}
@@ -174,7 +163,7 @@ export default function Activity() {
               <>
                 <label className="sr-only" htmlFor="act-status">按操作状态筛选</label>
                 <select id="act-status" value={status} onChange={(e) => setStatus(e.target.value)} className={SELECT_CLS}>
-                  {STATUS_FILTERS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  {STATUS_FILTERS.map((s) => <option key={s.value} value={s.value}>{s.value ? s.label : '状态：全部'}</option>)}
                 </select>
               </>
             )}
@@ -187,89 +176,84 @@ export default function Activity() {
           </div>
 
           {tab === 'events' && typeOptions.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 border-t border-hairline pt-3">
-              <span className="mr-0.5 text-[12px] text-ink-3">记录类型</span>
-              {typeOptions.slice(0, 24).map((t) => (
-                <button
-                  key={t} type="button" onClick={() => setTypes((prev) => {
-                    const next = new Set(prev)
-                    if (next.has(t)) next.delete(t)
-                    else next.add(t)
-                    return next
-                  })}
-                  aria-pressed={types.has(t)} title={t}
-                  className={cn('max-w-full truncate rounded-full px-3 py-1 text-[12px] font-medium transition-colors',
-                    types.has(t) ? 'bg-accent text-accent-ink' : 'bg-ink-3/10 text-ink-2 hover:bg-ink-3/16')}
-                >
-                  {eventLabel(t, index)}
-                </button>
-              ))}
-              {typeOptions.length > 24 && (
-                <span className="text-[12px] text-ink-3">另有 {typeOptions.length - 24} 种</span>
-              )}
-            </div>
+            <details className="border-t border-hairline pt-3">
+              <summary className="cursor-pointer select-none text-[12px] font-medium text-ink-2">
+                按事件类型筛选
+                {types.size > 0 && <span className="ml-1 text-accent">已选 {types.size} 项</span>}
+              </summary>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {typeOptions.slice(0, 24).map((t) => (
+                  <button
+                    key={t} type="button" onClick={() => setTypes((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(t)) next.delete(t)
+                      else next.add(t)
+                      return next
+                    })}
+                    aria-pressed={types.has(t)} title={t}
+                    className={cn('max-w-full truncate rounded-full px-3 py-1 text-[12px] font-medium transition-colors',
+                      types.has(t) ? 'bg-accent text-accent-ink' : 'bg-ink-3/10 text-ink-2 hover:bg-ink-3/16')}
+                  >
+                    {eventDisplayLabel(t, index)}
+                  </button>
+                ))}
+                {typeOptions.length > 24 && (
+                  <span className="text-[12px] text-ink-3">另有 {typeOptions.length - 24} 种</span>
+                )}
+              </div>
+            </details>
           )}
         </div>
       </Panel>
 
       {query.error ? (
         <ErrorState
-          icon={<FilterX size={20} />}
+          icon={<WifiOff size={20} />}
           title={tab === 'events' ? '状态记录加载失败' : '操作记录加载失败'}
           hint="暂时无法加载历史记录。实时连接收到的内容仍会显示；请稍后重试或联系管理员检查服务。"
           onRetry={() => { void query.refetch() }}
           retrying={query.isFetching}
         />
       ) : (
-        <Panel
-          title={
-            <span className="flex items-center gap-1.5">
-              {tab === 'events' ? <ActivityIcon size={14} /> : <History size={14} />}
-              {tab === 'events' ? '状态记录' : '操作记录'}
+        <Panel>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-hairline pb-3">
+            <span className="text-[12px] text-ink-3">
+              {tab === 'events' ? '设备上报事件 · 新到旧' : '下发操作及执行结果 · 新到旧'}
             </span>
-          }
-          right={query.isFetching ? <Spinner size={12} className="text-ink-3" /> : undefined}
-        >
+            <span className="flex items-center gap-2 text-[12px] text-ink-3">
+              {query.isFetching && <Spinner size={12} />}
+              <span className="num">当前 {rows} 条</span>
+            </span>
+          </div>
           {query.isLoading ? (
             <RowSkeleton rows={8} />
           ) : tab === 'events' ? (
             events.length === 0 ? (
-              <EmptyState icon={<ActivityIcon size={24} />} title="没有匹配的状态记录"
-                hint={anyFilter ? '试试清除筛选条件，或换一个设备 / 网关。' : '设备上报状态后会出现在这里。'} />
+              <EmptyState icon={<ActivityIcon size={24} />}
+                title={eventFilter ? '没有匹配的状态记录' : '还没有状态记录'}
+                hint={eventFilter ? '试试清除筛选条件，或换一个设备 / 网关 / 事件类型。' : '设备上报状态变化后会出现在这里。'} />
             ) : (
               <>
-                {density && (
-                  <div className="mb-4 border-b border-hairline pb-4">
-                    <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
-                      <span className="text-[12px] font-medium text-ink-3">状态记录密度 · 每{density.label}</span>
-                      <span className="num min-w-0 truncate text-[12px] text-ink-3"
-                        title={`窗口 ${fmtDateTime(density.points[0].t)} 至今 · 共 ${events.length} 条 · 峰值 ${density.peak} 条/${density.label}`}>
-                        共 {events.length} 条 · 峰值 {density.peak} 条/{density.label}
-                        <span className="hidden md:inline"> · 窗口起 {fmtDateTime(density.points[0].t)}</span>
-                      </span>
-                    </div>
-                    <TrendChart points={density.points} kind="bar" zeroBase hideY unit="条" height={88} xTick={fmtHourMin} />
-                  </div>
-                )}
                 {/* 长 ledger 本地滚动（Vercel: long ledgers may scroll locally）：
                     *  页面保持一屏可读，查找能力留在滚动容器内；组头 sticky 便于跨天定位 */}
                 <div tabIndex={0} role="region" aria-label="状态记录列表"
                   className="max-h-[34rem] overflow-y-auto overscroll-contain pr-1">
                   <EventFeed events={events} limit={PAGE_LIMIT} dayGrouped />
                 </div>
-                {atLimit && <LimitNote what="状态记录" />}
+                {atLimit && <LimitNote what="状态记录" hint="可按设备、网关或事件类型筛选查看" />}
               </>
             )
           ) : commands.length === 0 ? (
-            <EmptyState icon={<Terminal size={24} />} title="没有匹配的操作"
-              hint={anyFilter ? '试试清除筛选条件或换一个状态。' : '在设备详情页执行操作后，结果会显示在这里。'} />
+            <EmptyState icon={<Terminal size={24} />}
+              title={commandFilter ? '没有匹配的操作' : '还没有操作记录'}
+              hint={commandFilter ? '试试清除筛选条件，或换一个设备 / 网关 / 状态。' : '在设备详情页下发操作后，执行结果会显示在这里。'} />
           ) : (
             <>
               <div tabIndex={0} role="region" aria-label="操作记录列表"
                 className="max-h-[34rem] overflow-y-auto overscroll-contain pr-1">
                 <CommandRows rows={commands} names={deviceNames} index={index} />
               </div>
-              {atLimit && <LimitNote what="操作记录" />}
+              {atLimit && <LimitNote what="操作记录" hint="可按设备、网关或状态筛选查看" />}
             </>
           )}
         </Panel>
@@ -278,10 +262,10 @@ export default function Activity() {
   )
 }
 
-function LimitNote({ what }: { what: string }) {
+function LimitNote({ what, hint }: { what: string; hint: string }) {
   return (
     <p className="mt-3 border-t border-hairline pt-3 text-center text-[12px] text-ink-3">
-      仅显示最近 {PAGE_LIMIT} 条{what}（更早的记录仍在系统中，可按设备或状态筛选查看）
+      仅显示最近 {PAGE_LIMIT} 条{what}（更早的记录仍在系统中，{hint}）
     </p>
   )
 }
@@ -318,29 +302,34 @@ function CommandRow({ c, names, index }: {
   c: CommandView; names: Map<string, string>; index: CapabilityIndex
 }) {
   const st = cmdStatusMeta(c.status)
-  const meta = cmdMeta(c.cmd, undefined, index)
+  const meta = commandDisplayMeta(c.cmd, index)
   const [edgeId, devId] = c.device_id.split('/')
+  const failed = c.status === 'failed' || c.status === 'timeout'
+  const failure = commandFailureInfo(c.result)
+  const target = names.get(c.device_id) || devId
   return (
-    // 390px：徽标与时刻不收缩，命令名 / 失败原因 / 目标三段各自 truncate，整行不撑宽容器
-    <li className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
+    // 390px：首行只放状态 / 操作 / 时刻；失败原因与目标放到第二行，避免四段横向挤成一团。
+    <li className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-2.5 lg:grid-cols-[auto_minmax(10rem,auto)_minmax(0,1fr)_minmax(8rem,0.7fr)_auto]">
       <Badge tone={st.tone} className="shrink-0">{st.label}</Badge>
-      <span className="min-w-0 truncate text-xs font-medium"
-        title={`${meta.hint || meta.label}${c.args ? ` · 参数: ${c.args}` : ''}${c.result && st.tone === 'ok' ? ` · 结果: ${c.result}` : ''}`}>
+      <span className="min-w-0 truncate text-xs font-medium lg:col-start-2"
+        title={`${c.cmd}${meta.hint ? ` · ${meta.hint}` : ''}${c.args ? ` · 参数: ${c.args}` : ''}${c.result && st.tone === 'ok' ? ` · 结果: ${c.result}` : ''}`}>
         {meta.label}
       </span>
-      {c.result && st.tone !== 'ok' && (
-        <span className="min-w-0 max-w-full truncate text-[12px] text-bad" title={c.result}>
-          {failureCopy(c.result)}
-        </span>
-      )}
-      <Link
-        to={`/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`}
-        className="min-w-0 max-w-[10rem] truncate text-[12px] text-ink-3 transition-colors hover:text-accent"
-        title={`${c.device_id} · 查看设备`}
-      >
-        {names.get(c.device_id) || devId}
-      </Link>
-      <span className="num ml-auto shrink-0 text-[12px] text-ink-3"
+      <div className="col-span-3 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 lg:contents">
+        {failed && (
+          <span className="min-w-0 max-w-full break-words text-[12px] text-bad lg:col-start-3 lg:truncate" title={c.result}>
+            失败原因：{failure.message} · {failure.next}
+          </span>
+        )}
+        <Link
+          to={`/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`}
+          className="min-w-0 max-w-full truncate text-[12px] text-ink-3 transition-colors hover:text-accent lg:col-start-4"
+          title={`${c.device_id} · 查看设备`}
+        >
+          查看 {target}
+        </Link>
+      </div>
+      <span className="num col-start-3 row-start-1 shrink-0 text-[12px] text-ink-3 lg:col-start-5 lg:row-start-1"
         title={c.acked_at ? `完成时间 ${fmtDateTime(c.acked_at)}` : fmtDateTime(c.created_at)}>
         {fmtTime(c.created_at)}
       </span>

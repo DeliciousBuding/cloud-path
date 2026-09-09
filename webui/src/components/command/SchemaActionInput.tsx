@@ -10,6 +10,8 @@ interface SchemaActionInputProps {
   description: ReactNode
   emptyHint: string
   validationSource: string
+  /** 上层已经提供操作选择器时，用 sr-only 保留语义但不再重复标题。 */
+  showTitle?: boolean
   /** Empty object is an explicit no-arguments request, never schema defaults. */
   emptyArgs?: string
   disabled?: boolean
@@ -231,7 +233,7 @@ function fieldDraft(fields: CommandField[], args: string): Draft | null {
 }
 
 export function SchemaActionInput({ action, validate, description, emptyHint, validationSource,
-  emptyArgs = '', disabled, onEdit, renderSubmit }: SchemaActionInputProps) {
+  showTitle = true, emptyArgs = '', disabled, onEdit, renderSubmit }: SchemaActionInputProps) {
   const id = useId()
   const form = useMemo(() => action.inputSchema ? commandForm(action.inputSchema) : null, [action.inputSchema])
   const unsupported = useMemo(() => action.inputSchema ? unsupportedSchemaKeywords(action.inputSchema) : [], [action.inputSchema])
@@ -245,10 +247,10 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
   const error = json === null && !edited && !emptyArgs ? '请填写参数'
     : (json === null ? built.error : undefined) ?? validate(args)
   const backToFields = json !== null && activeFields.length > 0 ? fieldDraft(activeFields, json) : null
-  const descriptionId = id + '-hint'
+  const descriptionId = description ? id + '-hint' : undefined
   const errorId = id + '-error'
   const shownError = edited ? commandArgsErrorCopy(error) : undefined
-  const describedBy = descriptionId + (shownError ? ' ' + errorId : '')
+  const describedBy = [descriptionId, shownError ? errorId : undefined].filter(Boolean).join(' ') || undefined
   const setField = (key: string, value: string) => {
     onEdit?.()
     setValues((previous) => ({ ...previous, [key]: value }))
@@ -325,10 +327,11 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
 
   return (
     <fieldset className="min-w-0 border-t border-hairline pt-3" aria-describedby={describedBy} disabled={disabled}>
-      <legend className="mb-1.5 max-w-full break-words text-[13px] text-ink-2 [overflow-wrap:anywhere]">
+      <legend className={cn('max-w-full break-words text-[13px] text-ink-2 [overflow-wrap:anywhere]',
+        showTitle ? 'mb-1.5' : 'sr-only')}>
         {action.label}
       </legend>
-      <p id={descriptionId} className="mb-2 text-[12px] leading-relaxed text-ink-3">{description}</p>
+      {descriptionId && <p id={descriptionId} className="mb-2 text-[12px] leading-relaxed text-ink-3">{description}</p>}
 
       {form && json === null ? (
         <>
@@ -354,10 +357,10 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
       ) : (
         <div>
           <label htmlFor={id + '-args'} className="mb-1 block text-[12px] text-ink-2">
-            {action.inputSchema ? '高级参数' : '参数'}
+            {action.inputSchema ? '技术参数' : '参数'}
           </label>
           <textarea id={id + '-args'} rows={form ? 3 : 2} spellCheck={false}
-            aria-label={action.label + (action.inputSchema ? ' 高级参数' : ' 参数')}
+            aria-label={action.label + (action.inputSchema ? ' 技术参数' : ' 参数')}
             aria-invalid={shownError ? true : undefined} aria-describedby={describedBy}
             value={json ?? args} onChange={(e) => { onEdit?.(); setJSON(e.target.value); setEdited(true) }}
             placeholder={action.inputPlaceholder ?? (form ? '按设备要求填写参数' : '参数')}
@@ -374,9 +377,9 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
         </details>
       )}
       {form && json === null && activeFields.length > 0 && (
-        <button type="button" className="link mt-2 text-[12px]" aria-label={action.label + ' 手动填写参数'}
+        <button type="button" className="link mt-2 text-[12px] text-ink-3" aria-label={action.label + ' 技术人员选项'}
           onClick={() => { onEdit?.(); setJSON(args); setEdited(true) }}>
-          高级设置
+          技术人员选项
         </button>
       )}
       {form && json !== null && backToFields === null && <p className="mt-2 text-[12px] text-ink-3">当前参数无法自动转换为表单，请继续在高级参数中编辑。</p>}

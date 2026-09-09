@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -20,6 +21,9 @@ interface CommandButtonProps {
   action: CommandAction
   /** 保留受控参数原文；undefined 表示不带 args 下发。 */
   args?: string
+  /** 历史重试等场景可覆盖按钮可见文案，无障碍名称单独给出。 */
+  buttonLabel?: ReactNode
+  buttonAriaLabel?: string
   className?: string
   disabled?: boolean
 }
@@ -32,7 +36,7 @@ export function CommandButton(props: CommandButtonProps) {
 }
 
 /** POST → WS ACK → 历史刷新/超时；危险确认只取声明，不认识设备或具体命令名。 */
-function ScopedCommandButton({ deviceId, action, args, className, disabled, scope }: CommandButtonProps & { scope: string }) {
+function ScopedCommandButton({ deviceId, action, args, buttonLabel, buttonAriaLabel, className, disabled, scope }: CommandButtonProps & { scope: string }) {
   const acks = useLive((s) => s.acks)
   const qc = useQueryClient()
   const refreshHistory = useCallback(() => {
@@ -114,14 +118,14 @@ function ScopedCommandButton({ deviceId, action, args, className, disabled, scop
   return (
     <>
       <button type="button" onClick={onClick} disabled={busy || blocked} title={title}
-        aria-busy={busy} aria-label={label}
+        aria-busy={busy} aria-label={buttonAriaLabel ?? label}
         className={cn('btn min-w-0', {
           'btn-primary': action.variant === 'primary',
           'btn-ghost': !action.variant || action.variant === 'ghost',
           'bg-bad/10 text-bad hover:bg-bad/16': action.variant === 'danger',
         }, className)}>
         {busy && <Loader2 size={14} className="shrink-0 animate-spin" />}
-        <span className="truncate">{label}</span>
+        <span className="truncate">{busy ? '正在执行…' : (buttonLabel ?? label)}</span>
       </button>
       <ConfirmDialog open={confirming !== null && confirming.args === args && !blocked}
         tone={action.variant === 'danger' ? 'danger' : 'warn'} title={'确认执行「' + label + '」？'}

@@ -54,7 +54,7 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
   it('渲染用户名与密码两个字段，不再是单一「访问令牌」', () => {
     routeWith(() => stubResponse(404, {}))
     renderPage(<Login />, '/login')
-    expect(screen.getByRole('heading', { level: 1, name: '登录 Cloudpath' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: '登录 CloudPath' })).toBeInTheDocument()
     expect(screen.getByLabelText('用户名')).toBeInTheDocument()
     expect(screen.getByLabelText('密码')).toBeInTheDocument()
     expect(screen.queryByLabelText(/访问令牌/)).not.toBeInTheDocument()
@@ -63,7 +63,7 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
     expect(screen.getByLabelText('密码')).toHaveAttribute('autocomplete', 'current-password')
     expect(screen.getByLabelText('密码')).toHaveAttribute('type', 'password')
     expect(screen.getByRole('button', { name: '登录' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '首次部署？运行设置向导' })).toHaveAttribute('href', '/setup')
+    expect(screen.getByRole('link', { name: '第一次使用？完成初始化' })).toHaveAttribute('href', '/setup')
   })
 
   it('提交走 POST /api/auth/login，且**不**把 /healthz 当成功判据', async () => {
@@ -103,7 +103,7 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
     expect(useAuth.getState().user?.username).toBe('admin')
   })
 
-  it('反向验证：401 → 「用户名或密码错误」，不跳转、不写登录态、清空密码', async () => {
+  it('反向验证：401 → 提示检查用户名和密码，不跳转、不写登录态、清空密码', async () => {
     const user = userEvent.setup()
     routeWith((url) => (url === '/api/auth/login'
       ? stubResponse(401, { error: '用户名或密码错误' }) : stubResponse(404, {})))
@@ -113,7 +113,7 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
     await user.click(screen.getByRole('button', { name: '登录' }))
 
     const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('用户名或密码错误')
+    expect(alert).toHaveTextContent('用户名或密码不正确，请检查后重试')
     expect(screen.queryByRole('heading', { name: '首页占位' })).not.toBeInTheDocument()
     expect(useAuth.getState().status).not.toBe('in')
     expect(screen.getByLabelText('密码')).toHaveValue('')
@@ -129,7 +129,7 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
     await user.type(screen.getByLabelText('用户名'), 'attacker')
     await user.type(screen.getByLabelText('密码'), 'x')
     await user.click(screen.getByRole('button', { name: '登录' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('用户名或密码错误')
+    expect(await screen.findByRole('alert')).toHaveTextContent('用户名或密码不正确，请检查后重试')
     expect(screen.queryByRole('heading', { name: '首页占位' })).not.toBeInTheDocument()
   })
 
@@ -190,7 +190,7 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
     await user.type(screen.getByLabelText('用户名'), 'admin')
     await user.type(screen.getByLabelText('密码'), 'pw')
     await user.click(screen.getByRole('button', { name: '登录' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('无法连接服务')
+    expect(await screen.findByRole('alert')).toHaveTextContent('暂时无法连接 CloudPath')
   })
 
   it('本地必填校验：缺字段就地报错且不发请求', async () => {
@@ -218,7 +218,7 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
     const user = userEvent.setup()
     routeWith(() => stubResponse(404, {}))
     renderPage(<Login />, '/login')
-    const toggle = screen.getByRole('button', { name: /使用访问令牌登录/ })
+    const toggle = screen.getByRole('button', { name: /使用访问令牌（自动化工具）/ })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByLabelText('访问令牌')).not.toBeInTheDocument()
     await user.click(toggle)
@@ -232,7 +232,7 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
     routeWith((url) => (url === '/api/auth/me'
       ? stubResponse(401, { error: 'not authenticated' }) : stubResponse(200, health)))
     renderPage(<Login />, '/login')
-    await user.click(screen.getByRole('button', { name: /使用访问令牌登录/ }))
+    await user.click(screen.getByRole('button', { name: /使用访问令牌（自动化工具）/ }))
     await user.type(screen.getByLabelText('访问令牌'), 'literally-anything')
     await user.click(screen.getByRole('button', { name: '用访问令牌登录' }))
 
@@ -244,28 +244,28 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
 })
 
 describe('Setup：真实创建首个账号', () => {
-  it('第一步探测连通性；已登录时直接给「进入管理台」', async () => {
+  it('第一步探测连通性；已登录时直接给「进入 CloudPath」', async () => {
     routeWith((url) => (url === '/api/auth/me' ? stubResponse(200, { user: admin }) : stubResponse(404, {})))
     renderPage(<Setup />, '/setup')
-    expect(await screen.findByText(/服务已连接/)).toBeInTheDocument()
+    expect(await screen.findByText(/CloudPath 已就绪/)).toBeInTheDocument()
     expect(screen.getByText('你已经登录了，无需再初始化。')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /进入管理台/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /进入 CloudPath/ })).toBeInTheDocument()
   })
 
   it('探测失败 → 明确原因 + 重试；「下一步」在连通前禁用', async () => {
     const user = userEvent.setup()
     installFetch(() => { throw new TypeError('Failed to fetch') })
     renderPage(<Setup />, '/setup')
-    expect(await screen.findByText('无法连接服务')).toBeInTheDocument()
+    expect(await screen.findByText('暂时无法连接 CloudPath')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /下一步/ })).toBeDisabled()
 
     routeWith((url) => (url === '/api/auth/me' ? stubResponse(401, {}) : stubResponse(404, {})))
     await user.click(screen.getByRole('button', { name: /重试/ }))
-    expect(await screen.findByText(/服务已连接/)).toBeInTheDocument()
+    expect(await screen.findByText(/CloudPath 已就绪/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /下一步/ })).toBeEnabled()
   })
 
-  it('创建账号真的调 POST /api/auth/setup，成功后 me 复核并进入管理台', async () => {
+  it('创建账号真的调 POST /api/auth/setup，成功后 me 复核并进入 CloudPath', async () => {
     const user = userEvent.setup()
     const setupSpy = vi.spyOn(api, 'setup')
     // 贴近真实：初始化前未登录（me→401），setup 成功后会话才落地（me→200）
@@ -290,7 +290,7 @@ describe('Setup：真实创建首个账号', () => {
     expect(http.to('/api/auth/setup')[0]?.method).toBe('POST')
     expect(useAuth.getState().status).toBe('in')
 
-    await user.click(screen.getByRole('button', { name: '进入管理台' }))
+    await user.click(screen.getByRole('button', { name: '进入 CloudPath' }))
     expect(await screen.findByRole('heading', { name: '首页占位' })).toBeInTheDocument()
   })
 
@@ -322,7 +322,7 @@ describe('Setup：真实创建首个账号', () => {
     expect(screen.getByText(/token:/)).toBeInTheDocument()
     expect(screen.getByText(/重新启动网关/)).toBeInTheDocument()
     // 仍然报喜：这不是错误态，完成页的主结论没被警告盖掉
-    expect(screen.getByRole('button', { name: '进入管理台' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '进入 CloudPath' })).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
@@ -345,7 +345,7 @@ describe('Setup：真实创建首个账号', () => {
 
     expect(await screen.findByText('设置完成')).toBeInTheDocument()
     expect(screen.queryByText(/网关现在会被断开/)).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '进入管理台' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '进入 CloudPath' })).toBeInTheDocument()
   })
 
   it('setup 200 但 me 复核失败 → 说清账号已创建并导流登录页，绝不报「用户名或密码错误」', async () => {
@@ -446,7 +446,7 @@ describe('路由守卫：me 是登录态唯一事实源', () => {
       return stubResponse(404, {})
     })
     renderApp('/devices')
-    expect(await screen.findByRole('heading', { level: 1, name: '登录 Cloudpath' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: '登录 CloudPath' })).toBeInTheDocument()
     expect(useAuth.getState().status).toBe('out')
   })
 
@@ -466,7 +466,7 @@ describe('路由守卫：me 是登录态唯一事实源', () => {
       return stubResponse(404, {})
     })
     renderApp('/devices')
-    expect(await screen.findByRole('heading', { level: 1, name: '登录 Cloudpath' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: '登录 CloudPath' })).toBeInTheDocument()
     expect(useAuth.getState().status).toBe('out')
   })
 
@@ -501,7 +501,7 @@ describe('认证页主题切换（脱离侧栏时仍可达）', () => {
     expect(localStorage.getItem('cloudpath.theme')).toBe('system')
     expect(document.documentElement).not.toHaveClass('dark')
     // 颜色只走 token：卡片不写内联色值
-    const card = screen.getByRole('heading', { level: 1, name: '登录 Cloudpath' }).closest('.card, div')
+    const card = screen.getByRole('heading', { level: 1, name: '登录 CloudPath' }).closest('.card, div')
     expect(card?.getAttribute('style')).toBeNull()
   })
 })

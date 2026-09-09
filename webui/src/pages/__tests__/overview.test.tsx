@@ -55,23 +55,29 @@ function route(overview: OverviewView | null, status = 200, devices: unknown[] =
 beforeEach(() => { resetStores() })
 
 describe('概览：有数据', () => {
-  it('四个统计瓦片的数字全部来自服务端聚合（在线/总数成对呈现）', async () => {
+  it('首屏先给整体状态，再用一组紧凑指标补充事实', async () => {
     route(FULL)
     renderWithProviders(<Overview />)
+    expect(await screen.findByText('现在怎样')).toBeInTheDocument()
+    expect(await screen.findByText('有 4 项需要处理')).toBeInTheDocument()
     expect(await screen.findByText('在线设备')).toBeInTheDocument()
     expect(screen.getByText('在线网关')).toBeInTheDocument()
-    expect(screen.getByText('活跃插件')).toBeInTheDocument()
-    expect(screen.getByText('近24小时失败操作')).toBeInTheDocument()
-    // 2/3、1/2、1/2 成对呈现；失败操作只有计数
-    expect(screen.getByText('2').parentElement?.textContent).toMatch(/2\/3/)
+    expect(screen.getByText('应用正常')).toBeInTheDocument()
+    expect(screen.getByText('失败操作')).toBeInTheDocument()
+    expect(screen.getByText('2/3')).toBeInTheDocument()
+    expect(screen.getAllByText('1/2')).toHaveLength(2)
     expect(screen.getByText('需要关注')).toBeInTheDocument()
+    const text = document.body.textContent ?? ''
+    for (const word of ['Schema', 'Descriptor', 'Capability', 'Adapter', 'ACK', 'JSON', '契约', '回执', '收敛', '快照', 'server', 'cookie', 'SQLite', 'WebSocket']) {
+      expect(text).not.toContain(word)
+    }
   })
 
   it('需要关注栏只给聚合主行与去向：失败明细的单一证据家是活动页，概览不复述 ledger', async () => {
     route(FULL)
     const { container } = renderWithProviders(<Overview />)
-    expect(await screen.findByText('1 台设备离线')).toBeInTheDocument()
-    expect(screen.getByText('近24小时 1 条操作失败或超时')).toBeInTheDocument()
+    expect(await screen.findByText('部分设备离线')).toBeInTheDocument()
+    expect(screen.getByText('有操作未完成')).toBeInTheDocument()
     // 机器命令名/状态徽章/明细时间不在概览二次出现（同屏同一答案只留一处）
     expect(screen.queryByText('Relay On')).not.toBeInTheDocument()
     expect(screen.queryByText('失败')).not.toBeInTheDocument()
@@ -82,8 +88,8 @@ describe('概览：有数据', () => {
   it('边缘离线与插件未活跃各生成一条可执行的提醒（含去向链接）', async () => {
     route(FULL)
     const { container } = renderWithProviders(<Overview />)
-    expect(await screen.findByText('1 台网关离线')).toBeInTheDocument()
-    expect(screen.getByText('1 个插件实例未达到活跃')).toBeInTheDocument()
+    expect(await screen.findByText('网关连接中断')).toBeInTheDocument()
+    expect(screen.getByText('应用尚未就绪')).toBeInTheDocument()
     const links = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))
     expect(links).toContain('/edges')
     expect(links).toContain('/plugins')
@@ -96,7 +102,7 @@ describe('概览：有数据', () => {
       events: [{ id: -1, device_id: 'edge-a/dev-1', ts: 1_770_000_000, type: 'device.boot', payload: '{}' }],
     })
     renderWithProviders(<Overview />)
-    expect(await screen.findByText('近期运行记录')).toBeInTheDocument()
+    expect(await screen.findByText('最近运行记录')).toBeInTheDocument()
     // 平台生命周期事件走平台词汇层：device.boot → 设备启动
     expect(screen.getAllByText('设备启动').length).toBeGreaterThan(0)
   })
@@ -110,9 +116,9 @@ describe('概览：空态（禁止假数据）', () => {
     // 统计瓦片给出「等待接入」这类空态说明，而不是塞个看起来合理的数
     expect(screen.getByText('等待网关接入设备')).toBeInTheDocument()
     expect(screen.getByText('尚未有网关注册')).toBeInTheDocument()
-    expect(screen.getByText('还没有插件实例')).toBeInTheDocument()
+    expect(await screen.findByText('还没有应用')).toBeInTheDocument()
     // 无异常是明确说出来的，不是空白
-    expect(screen.getByText('暂无异常')).toBeInTheDocument()
+    expect(screen.getByText('当前没有需要处理的异常。')).toBeInTheDocument()
     // 设备舰队与事件各自给出空态说明（不得空白）
     expect(screen.getByText('还没有设备接入')).toBeInTheDocument()
     expect(screen.getByText('暂无运行记录')).toBeInTheDocument()
@@ -131,6 +137,19 @@ describe('概览：空态（禁止假数据）', () => {
 })
 
 describe('概览：加载与错误态（不得白屏）', () => {
+  it('healthz 缺少 uptime_s 时回落服务状态正常，不渲染 NaN', async () => {
+    installFetch((url) => {
+      if (url === '/healthz') return stubResponse(200, { ok: true, version: 'v0.1.0' })
+      if (url === '/api/overview') return stubResponse(200, { ...EMPTY, server_time: 0 })
+      if (url === '/api/devices') return stubResponse(200, { devices: [] })
+      if (url === '/api/edges') return stubResponse(200, { edges: [] })
+      return stubResponse(404, {})
+    })
+    renderWithProviders(<Overview />)
+    expect(await screen.findByText('服务状态正常')).toBeInTheDocument()
+    expect(document.body.textContent).not.toContain('NaN')
+  })
+
   it('首帧不把未加载数据渲染成统计值或空态', () => {
     route(FULL)
     renderWithProviders(<Overview />)
@@ -144,26 +163,25 @@ describe('概览：加载与错误态（不得白屏）', () => {
       port: 'COM3', online: true, state: {}, updated_at: 1, last_seen: 1,
     }])
     renderWithProviders(<Overview />)
-    expect(await screen.findByText(/汇总数据暂不可用，以上数据来自设备和网关列表/)).toBeInTheDocument()
+    expect(await screen.findByText(/部分状态暂不可用，当前显示设备和网关的最新结果/)).toBeInTheDocument()
     // 降级统计来自设备列表通道的真实字段
     expect(await screen.findByText('仍在上报的设备')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: '设备' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '设备状态' })).toBeInTheDocument()
 
     const before = stub.to('/api/overview').length
     await userEvent.click(screen.getByRole('button', { name: '重新加载' }))
     expect(stub.to('/api/overview').length).toBeGreaterThan(before)
   })
 
-  it('两条通道都失败（404）→ 各自可读错误态，接口失败不冒充「没有设备」', async () => {
+  it('两条通道都失败（404）→ 只给一个统一错误态，不重复三张大卡', async () => {
     installFetch((url) => (url === '/healthz' ? stubResponse(200, health) : stubResponse(404, {})))
     renderWithProviders(<Overview />)
-    // 概览与设备列表是两条独立通道，各自失败各自说 —— 因此这里有两个 role=alert
-    expect((await screen.findAllByRole('alert')).length).toBeGreaterThanOrEqual(2)
-    expect(screen.getByText('概览数据加载失败')).toBeInTheDocument()
-    expect(screen.getByText('设备状态加载失败')).toBeInTheDocument()
+    expect(await screen.findAllByRole('alert')).toHaveLength(1)
+    expect(screen.getByText('状态暂时不可用')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '重新加载' })).toBeInTheDocument()
     // 失败 ≠ 空：不许出现「还没有设备接入」这种假空态
     expect(screen.queryByText('还没有设备接入')).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: '设备' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '设备状态' })).not.toBeInTheDocument()
   })
 
   it('响应体畸形（字段全缺）→ 归一化成安全空值，不抛未捕获异常', () => {

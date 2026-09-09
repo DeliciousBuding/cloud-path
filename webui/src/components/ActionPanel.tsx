@@ -1,6 +1,6 @@
-// 设备操作：只展示设备当前支持的动作；参数表单一次只展开一个，JSON 只作为高级回落。
+// 设备操作：只展示设备当前支持的动作；参数操作先选功能，再填参数。
 import { useId, useState } from 'react'
-import { ChevronDown, Command, SlidersHorizontal } from 'lucide-react'
+import { Command, SlidersHorizontal } from 'lucide-react'
 import { Panel } from './ui'
 import { CommandButton } from './CommandButton'
 import { CommandInput } from './command/CommandInput'
@@ -45,24 +45,19 @@ function WritableActions({ deviceId, set }: { deviceId: string; set: CommandSet 
 
       {parameterized.length > 0 && (
         <div className={simple.length > 0 ? 'mt-4 border-t border-hairline pt-4' : ''}>
-          <p className="mb-2 text-[12px] font-medium text-ink-3">参数操作</p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {parameterized.map((a) => {
-              const active = selected?.cmd === a.cmd
-              return (
-                <button key={a.cmd} type="button" aria-pressed={active} aria-label={'选择操作：' + a.label}
-                  onClick={() => setSelectedCmd(a.cmd)}
-                  className={cn(
-                    'flex min-w-0 items-start gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors',
-                    active ? 'border-accent/60 bg-accent/8 text-ink' : 'border-hairline text-ink-2 hover:bg-ink-3/5',
-                  )}>
-                  <ChevronDown size={14} className={cn('mt-0.5 shrink-0 transition-transform', active && 'rotate-180')} />
-                  <span className="min-w-0 break-words text-[13px] font-medium">{a.label}</span>
-                </button>
-              )
-            })}
-          </div>
-          {selected && <div className="mt-3"><CommandInput key={selected.cmd} deviceId={deviceId} action={selected} /></div>}
+          <label htmlFor={id + '-parameter-action'} className="mb-1.5 block text-[12px] font-medium text-ink-3">
+            要设置的功能
+          </label>
+          <select
+            id={id + '-parameter-action'}
+            aria-label="选择参数操作"
+            value={selected?.cmd ?? ''}
+            onChange={(e) => setSelectedCmd(e.target.value)}
+            className="input input-sm min-w-0 max-w-md"
+          >
+            {parameterized.map((a) => <option key={a.cmd} value={a.cmd}>{a.label}</option>)}
+          </select>
+          {selected && <div className="mt-4"><CommandInput key={selected.cmd} deviceId={deviceId} action={selected} /></div>}
         </div>
       )}
 

@@ -22,7 +22,11 @@ import { usePageTitle } from '@/hooks/usePageTitle'
 
 type Phase = 'checking' | 'ok' | 'fail'
 
-const STEPS = ['连接服务', '创建管理员账号', '完成']
+const STEPS = [
+  { label: '连接 CloudPath', short: '连接服务' },
+  { label: '创建管理员账号', short: '创建账号' },
+  { label: '完成', short: '完成' },
+]
 
 /** 与服务端一致的上限（本地先拦一次，省一个来回；最终判定仍在服务端） */
 const MAX_USERNAME = 64
@@ -49,7 +53,7 @@ export default function Setup() {
       setHealth(h)
       setPhase('ok')
     } catch {
-      setProbeError('暂时无法连接服务。')
+      setProbeError('暂时无法连接 CloudPath。')
       setPhase('fail')
       return
     }
@@ -122,7 +126,7 @@ export default function Setup() {
 
   return (
     <AuthCard
-      title="设置 Cloudpath"
+      title="设置 CloudPath"
       subtitle="三步完成首次配置"
       footer={
         step === 2
@@ -130,10 +134,10 @@ export default function Setup() {
           : <Link to="/login" className="link">已有账号？直接登录</Link>
       }
     >
-      {/* 步骤指示器：移动端只留圆点，避免 390px 溢出 */}
+      {/* 步骤指示器：移动端用短标签，避免 390px 溢出 */}
       <ol className="mb-6 flex items-center" aria-label="设置进度">
-        {STEPS.map((label, i) => (
-          <li key={label} className={cn('flex items-center', i < STEPS.length - 1 && 'flex-1')}>
+        {STEPS.map((item, i) => (
+          <li key={item.label} className={cn('flex items-center', i < STEPS.length - 1 && 'flex-1')}>
             <span
               aria-current={i === step ? 'step' : undefined}
               className={cn(
@@ -146,10 +150,16 @@ export default function Setup() {
               {i < step ? <Check size={13} strokeWidth={2.5} /> : i + 1}
             </span>
             <span className={cn(
+              'ml-2 text-xs sm:hidden',
+              i === step ? 'font-medium text-ink' : 'text-ink-3',
+            )}>
+              {item.short}
+            </span>
+            <span className={cn(
               'ml-2 hidden text-xs sm:block',
               i === step ? 'font-medium text-ink' : 'text-ink-3',
             )}>
-              {label}
+              {item.label}
             </span>
             {i < STEPS.length - 1 && (
               <span className={cn('mx-2 h-px flex-1 sm:mx-3', i < step ? 'bg-accent/40' : 'bg-hairline')} />
@@ -162,13 +172,13 @@ export default function Setup() {
         <div className="space-y-4">
           {phase === 'checking' && (
             <p className="flex items-center gap-2 text-sm text-ink-2">
-              <Spinner /> 正在检测服务连接…
+              <Spinner /> 正在连接 CloudPath…
             </p>
           )}
           {phase === 'ok' && health && (
             <div className="rounded-lg bg-ok/10 p-4">
               <p className="flex items-center gap-2 text-sm font-medium text-ok">
-                <Check size={15} strokeWidth={2.5} /> 服务已连接
+                <Check size={15} strokeWidth={2.5} /> CloudPath 已就绪
               </p>
               <p className="mt-1 text-xs break-words text-ink-2">版本 <span className="font-mono">{health.version}</span></p>
               {alreadyIn && (
@@ -180,9 +190,9 @@ export default function Setup() {
           )}
           {phase === 'fail' && (
             <div className="rounded-lg bg-bad/10 p-4">
-              <p className="text-sm font-medium text-bad">无法连接服务</p>
+              <p className="text-sm font-medium text-bad">暂时无法连接 CloudPath</p>
               <p className="mt-1 break-words text-xs text-ink-2">{probeError}</p>
-              <p className="mt-1 text-xs text-ink-3">请确认服务已启动，并让本页面与服务使用同一地址。</p>
+              <p className="mt-1 text-xs text-ink-3">请确认 CloudPath 正在运行，然后重试。</p>
             </div>
           )}
           <div className="flex gap-2">
@@ -191,7 +201,7 @@ export default function Setup() {
             </Button>
             {alreadyIn ? (
               <Button lg onClick={() => navigate('/', { replace: true })} className="min-w-0 flex-1">
-                进入管理台 <ArrowRight size={14} />
+                进入 CloudPath <ArrowRight size={14} />
               </Button>
             ) : (
               <Button lg disabled={phase !== 'ok'} onClick={() => setStep(1)} className="min-w-0 flex-1">
@@ -208,8 +218,8 @@ export default function Setup() {
             <p className="flex items-start gap-2 text-[12px] leading-relaxed text-ink-2">
               <ShieldAlert size={14} className="mt-0.5 shrink-0 text-warn" />
               <span>
-                这里创建的是<span className="font-semibold text-ink">首个管理员账号</span>，创建成功后系统将只允许已登录的账号访问，其他账号需由管理员在
-                「管理 → 用户」中创建。首次设置只能在运行服务的电脑上操作，或携带一次性设置凭证。
+                这里创建的是<span className="font-semibold text-ink">首个管理员账号</span>。完成后，只有已登录的成员可以进入；其他成员由管理员在
+                「管理 → 成员与访问权限」中添加。如果你不是这台设备的直接使用者，请联系管理员协助。
               </span>
             </p>
           </div>
@@ -297,7 +307,7 @@ export default function Setup() {
             <p className="text-[15px] font-semibold">设置完成</p>
             <p className="mt-1 text-[13px] leading-relaxed break-words text-ink-2">
               管理员账号 <span className="font-mono font-medium text-ink">{createdUser || username}</span> 已创建，
-              并且你已经登录。系统现在只允许已登录的账号访问。
+              并且你已经登录。现在只有登录后的成员可以访问平台。
             </p>
           </div>
 
@@ -322,7 +332,7 @@ export default function Setup() {
                       查看网关恢复步骤（技术人员）
                     </summary>
                     <p className="mt-1.5">
-                      进管理台 → 「管理 → 访问令牌」新建一个勾选「网关」权限的令牌（明文只显示一次），
+                      进入「管理 → 访问令牌」创建一个勾选「网关接入」权限的令牌（完整内容只显示一次），
                       填进该网关配置的 <span className="num font-mono">token:</span> 字段，再重新启动网关。
                     </p>
                   </details>
@@ -331,7 +341,7 @@ export default function Setup() {
             </div>
           )}
           <Button lg className="w-full" onClick={() => navigate('/', { replace: true })}>
-            进入管理台
+            进入 CloudPath
           </Button>
         </div>
       )}

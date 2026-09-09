@@ -15,7 +15,7 @@ const ROLE_FIELD_OPTIONS = ROLE_OPTIONS.map((r) => ({ value: r.value, label: r.l
 const ROLE_HINTS: Record<Role, string> = {
   viewer: '只能查看设备状态和记录。',
   operator: '可以查看并执行设备操作。',
-  admin: '可以管理用户和访问令牌。',
+  admin: '可以管理成员和访问令牌。',
 }
 
 export function CreateUserForm({ onDone }: { onDone: () => void }) {
@@ -31,7 +31,7 @@ export function CreateUserForm({ onDone }: { onDone: () => void }) {
     ev.preventDefault()
     const u = username.trim()
     let bad = false
-    setUsernameErr(u ? '' : '请输入用户名')
+    setUsernameErr(u ? '' : '请输入登录账号')
     setPasswordErr(password ? '' : '请输入初始密码')
     if (!u || !password) bad = true
     if (bad) return
@@ -39,7 +39,7 @@ export function CreateUserForm({ onDone }: { onDone: () => void }) {
       { username: u, role, password, ...(name.trim() ? { name: name.trim() } : {}) },
       {
         onSuccess: (r) => {
-          toast.ok('用户已创建', `${r.user.username} · ${roleLabel(r.user.role)}`)
+          toast.ok('成员已添加', `${r.user.username} · ${roleLabel(r.user.role)}`)
           onDone()
         },
       },
@@ -47,21 +47,21 @@ export function CreateUserForm({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <form onSubmit={submit} aria-label="新建用户" className="mb-4 border-b border-hairline pb-4">
+    <form onSubmit={submit} aria-label="添加成员" className="mb-4 border-b border-hairline pb-4">
       <div className="grid gap-3 sm:grid-cols-2">
         <TextField
-          label="用户名" value={username} error={usernameErr} autoComplete="off"
-          hint="登录名，本组织内不能重复"
+          label="登录账号" value={username} error={usernameErr} autoComplete="off"
+          hint="成员登录时使用；本组织内不能重复"
           onChange={(ev) => setUsername(ev.target.value)}
         />
         <TextField
-          label="名称" value={name} autoComplete="off"
-          hint="显示名；留空则与用户名相同"
+          label="显示名称" value={name} autoComplete="off"
+          hint="留空则显示登录账号"
           onChange={(ev) => setName(ev.target.value)}
         />
         <TextField
-          label="密码" type="password" value={password} error={passwordErr} autoComplete="new-password"
-          hint="初始密码，创建后建议让用户自行修改"
+          label="初始密码" type="password" value={password} error={passwordErr} autoComplete="new-password"
+          hint="成员第一次登录时使用，之后建议尽快修改"
           onChange={(ev) => setPassword(ev.target.value)}
         />
         <SelectField
@@ -75,7 +75,7 @@ export function CreateUserForm({ onDone }: { onDone: () => void }) {
       )}
       <div className="mt-3 flex flex-wrap gap-2">
         <Button type="submit" disabled={create.isPending}>
-          {create.isPending ? '创建中…' : '创建用户'}
+          {create.isPending ? '添加中…' : '添加成员'}
         </Button>
         <Button type="button" variant="ghost" onClick={onDone}>取消</Button>
       </div>

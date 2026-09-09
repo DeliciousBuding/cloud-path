@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, Cpu, History, Network, Server } from 'lucide-react'
-import { BackLink, Badge, EmptyState, ErrorState, KeyValue, Panel, StatusDot } from '@/components/ui'
+import { BackLink, Badge, EmptyState, ErrorState, KeyValue, Panel } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { EventFeed } from '@/components/EventFeed'
 import { api } from '@/lib/api'
@@ -30,7 +30,7 @@ export default function EdgeDetail() {
   const f = facts.find((x) => x.edge.edge_id === id)
   usePageTitle(f ? `网关 ${f.edge.edge_id}` : '网关')
 
-  const { data: evHist, isLoading: evLoading } = useQuery({
+  const { data: evHist, isLoading: evLoading, error: evError, refetch: refetchEvents } = useQuery({
     queryKey: ['edge-events', id],
     // /api/events 只接受 device 参数：按节点取最近事件后在前端按设备键前缀归属
     queryFn: () => api.events({ limit: 300 }),
@@ -73,7 +73,6 @@ export default function EdgeDetail() {
       <BackLink to="/edges" label="网关" />
 
       <header className="mb-7 flex flex-wrap items-center gap-3">
-        <StatusDot online={e.online} />
         <h1 className="min-w-0 max-w-full truncate font-mono text-[24px] font-semibold" title={e.edge_id}>
           {e.edge_id}
         </h1>
@@ -102,7 +101,7 @@ export default function EdgeDetail() {
             <KeyValue k="最近更新"
               v={<span className="num font-mono">{f.lastReport ? fmtDateTime(f.lastReport) : '从未更新'}</span>} />
             <KeyValue k="接入设备" v={`${f.devices.length} 台 · ${f.onlineDevices} 台在线`} />
-            <KeyValue k="已发现设备" v={`${f.declared.length} 台`} />
+            {f.declared.length !== f.devices.length && <KeyValue k="已发现设备" v={`${f.declared.length} 台`} />}
           </dl>
           {f.declared.length !== f.devices.length && (
             <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
@@ -121,8 +120,10 @@ export default function EdgeDetail() {
               {f.devices.map((d) => {
                 const dev = d.id.split('/').pop() ?? d.id
                 return (
-                  <li key={d.id} className="flex min-w-0 items-center gap-3 py-2.5">
-                    <StatusDot online={d.online} />
+                  <li key={d.id} className="flex min-w-0 flex-col gap-2 py-3 sm:flex-row sm:items-center">
+                    <Badge tone={d.online ? 'ok' : 'idle'} className="w-fit shrink-0">
+                      {d.online ? '在线' : '离线'}
+                    </Badge>
                     <Link to={`/devices/${encodeURIComponent(e.edge_id)}/${encodeURIComponent(dev)}`}
                       className="min-w-0 flex-1 no-underline">
                       <span className="block truncate text-[13px] font-medium hover:text-accent" title={deviceLabel(d)}>
@@ -133,8 +134,9 @@ export default function EdgeDetail() {
                         {d.adapter || '未知设备类型'}{d.port ? ` · ${d.port}` : ''}
                       </span>
                     </Link>
-                    <span className="num shrink-0 font-mono text-[11px] text-ink-3"
+                    <span className="num shrink-0 font-mono text-[11px] text-ink-3 sm:text-right"
                       title={d.online ? '最近更新' : '最后在线'}>
+                      <span className="sm:hidden">最近上报 </span>
                       {(d.online ? d.updated_at : d.last_seen)
                         ? fmtDateTime(d.online ? d.updated_at : d.last_seen) : '—'}
                     </span>
@@ -146,20 +148,27 @@ export default function EdgeDetail() {
         </Panel>
 
         <Panel className="lg:col-span-3"
-          title={<span className="flex items-center gap-1.5"><History size={14} />该网关近期运行记录</span>}
+          title={<span className="flex items-center gap-1.5"><History size={14} />该网关近期状态事件</span>}
           right={<span className="num text-[12px] text-ink-3">{events.length} 条</span>}>
           {evLoading && events.length === 0 ? (
             <RowSkeleton rows={5} />
+          ) : evError && events.length === 0 ? (
+            <ErrorState compact icon={<History size={20} />} title="状态事件加载失败"
+              hint="暂时无法加载该网关的状态事件；设备状态仍以上方清单为准。请稍后重试。"
+              onRetry={() => { void refetchEvents() }} />
           ) : events.length === 0 ? (
-            <p className="py-8 text-center text-sm text-ink-3">该网关还没有运行记录。设备状态变化或操作结果会显示在这里。</p>
+            <p className="py-8 text-center text-sm text-ink-3">该网关还没有状态事件。设备上报状态变化后会显示在这里；操作结果请在运行记录页查看。</p>
           ) : (
             <>
               <EventFeed events={events} limit={20} dayGrouped />
-              {events.length > 20 && (
-                <Link to="/activity" className="link mt-3 flex items-center gap-0.5 border-t border-hairline pt-3 text-xs">
-                  另有 {events.length - 20} 条 · 去运行记录查看 <ArrowRight size={12} />
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3 text-xs">
+                <span className="text-ink-3">
+                  {events.length > 20 ? `另有 ${events.length - 20} 条` : '这里只展示状态事件'}
+                </span>
+                <Link to="/activity" className="link flex items-center gap-0.5">
+                  查看全部运行记录 <ArrowRight size={12} />
                 </Link>
-              )}
+              </div>
             </>
           )}
         </Panel>

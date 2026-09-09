@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { Network, PowerOff, WifiOff } from 'lucide-react'
-import { Badge, EmptyState, ErrorState, PageHeader, Panel, Segmented, StatusDot } from '@/components/ui'
+import { Badge, EmptyState, ErrorState, PageHeader, Panel, Segmented } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { useDevices } from '@/hooks/useDevices'
 import { useEdges } from '@/hooks/useEdges'
 import { usePageTitle } from '@/hooks/usePageTitle'
-import { deviceLabel, edgeFacts, filterEdgeFacts, sortEdgeFacts, type EdgeFacts, type EdgeFilter } from '@/lib/edges'
+import { edgeFacts, filterEdgeFacts, sortEdgeFacts, type EdgeFacts, type EdgeFilter } from '@/lib/edges'
 import { fmtDateTime } from '@/lib/format'
 
 /**
@@ -25,14 +25,17 @@ export default function Edges() {
   const facts = useMemo(() => sortEdgeFacts(edgeFacts(edges, devices)), [edges, devices])
   const shown = useMemo(() => filterEdgeFacts(facts, filter), [facts, filter])
   const offlineCount = facts.filter((f) => !f.edge.online).length
+  const subtitle = edgeLoading ? '正在加载网关状态…'
+    : error ? '网关状态暂不可用'
+      : edges.length === 0 ? '还没有网关注册'
+        : offlineCount > 0 ? `${online} 台在线 · ${offlineCount} 台离线需关注`
+          : `${online} 台在线 · 全部在线`
 
   return (
     <>
       <PageHeader
         title="网关"
-        subtitle={edgeLoading ? '正在加载…'
-          : edges.length === 0 ? '暂无网关'
-            : `${online} 台在线 · 共 ${edges.length} 台`}
+        subtitle={subtitle}
         actions={
           edges.length > 0 ? (
             <Segmented
@@ -56,6 +59,9 @@ export default function Edges() {
           <span className="min-w-0 break-words">
             {offlineCount} 个网关离线：这些网关上的设备暂停更新，已发送的操作排队等待重连；其他在线网关不受影响。
           </span>
+          <button type="button" className="link ml-auto shrink-0 text-[12px]" onClick={() => setFilter('offline')}>
+            只看离线
+          </button>
         </div>
       )}
 
@@ -88,14 +94,14 @@ export default function Edges() {
   )
 }
 
-const ROW_COLS = 'lg:grid-cols-[minmax(0,1.4fr)_4.5rem_5rem_minmax(0,1.7fr)_10.5rem_10.5rem]'
+const ROW_COLS = 'lg:grid-cols-[minmax(0,1.4fr)_4.5rem_5rem_minmax(0,1.2fr)_10.5rem_2rem]'
 
 /** 列表表头（仅桌面；窄屏每行自带列名） */
 function EdgeRowHead() {
   return (
     <li aria-hidden className={`hidden gap-x-4 px-4 pb-2 text-[11px] font-medium text-ink-3 lg:grid ${ROW_COLS}`}>
       <span>网关</span><span>状态</span><span>版本</span><span>设备</span>
-      <span className="text-right">连接于</span><span className="text-right">最近更新</span>
+      <span className="text-right">最近上报</span><span />
     </li>
   )
 }
@@ -106,7 +112,6 @@ function EdgeRow({ f }: { f: EdgeFacts }) {
     <li className={`grid gap-x-4 gap-y-1.5 border-b border-hairline px-4 py-2.5 last:border-b-0 ${ROW_COLS}`}>
       {/* 节点 ID 是运维标识：mono；点击进详情 */}
       <div className="flex min-w-0 items-center gap-2">
-        <StatusDot online={e.online} />
         <Link to={`/edges/${encodeURIComponent(e.edge_id)}`}
           className="min-w-0 truncate font-mono text-[13px] font-medium no-underline hover:text-accent"
           title={`${e.edge_id} · 查看详情`}>
@@ -126,44 +131,25 @@ function EdgeRow({ f }: { f: EdgeFacts }) {
         {f.devices.length === 0 ? (
           <span className="text-[12px] text-ink-3">还没有接入设备</span>
         ) : (
-          <>
-            <span className="num shrink-0 text-[12px] text-ink-2"
-              title={`${f.devices.length} 台 · ${f.onlineDevices} 台在线${e.online ? '' : '（暂停更新）'}`}>
-              {f.devices.length} 台 · {f.onlineDevices} 在线
-            </span>
-            {f.devices.slice(0, 2).map((d) => {
-              const dev = d.id.split('/').pop() ?? d.id
-              return (
-                <Link key={d.id}
-                  to={`/devices/${encodeURIComponent(e.edge_id)}/${encodeURIComponent(dev)}`}
-                  className={`badge max-w-[9rem] border transition-colors hover:bg-accent/10 hover:text-accent ${d.online ? 'border-hairline bg-ink-3/10 text-ink-2' : 'border-hairline bg-surface-2 text-ink-3'}`}
-                  title={`${deviceLabel(d)} · ${d.online ? '在线' : '离线'}`}>
-                  <StatusDot online={d.online} />
-                  <span className="min-w-0 truncate">{deviceLabel(d)}</span>
-                </Link>
-              )
-            })}
-            {f.devices.length > 2 && (
-              <Link to={`/edges/${encodeURIComponent(e.edge_id)}`}
-                aria-label={`查看其余 ${f.devices.length - 2} 台设备`}
-                title={`查看其余 ${f.devices.length - 2} 台设备`}
-                className="badge max-w-full bg-ink-3/10 text-ink-2 hover:text-accent">
-                +{f.devices.length - 2}
-              </Link>
+          <span className="num shrink-0 text-[12px] text-ink-2"
+            title={`${f.devices.length} 台设备 · ${f.onlineDevices} 台在线${e.online ? '' : '（网关离线，设备暂停更新）'}`}>
+            {f.devices.length} 台设备 · {f.onlineDevices} 在线
+            {f.devices.length > f.onlineDevices && (
+              <span className="text-warn"> · {f.devices.length - f.onlineDevices} 台离线</span>
             )}
-          </>
+          </span>
         )}
       </div>
       <div className="num min-w-0 truncate text-left font-mono text-[11px] text-ink-3 lg:text-right"
-        title={e.connected_at ? fmtDateTime(e.connected_at) : '未连接'}>
-        <span className="lg:hidden">{e.online ? '连接于 ' : '最后在线 '}</span>
-        {e.connected_at ? fmtDateTime(e.connected_at) : '—'}
-      </div>
-      <div className="num min-w-0 truncate text-left font-mono text-[11px] text-ink-3 lg:text-right"
         title={f.lastReport ? fmtDateTime(f.lastReport) : '从未更新'}>
-        <span className="lg:hidden">最近更新 </span>
+        <span className="lg:hidden">最近上报 </span>
         {f.lastReport ? fmtDateTime(f.lastReport) : '从未更新'}
       </div>
+      <Link to={`/edges/${encodeURIComponent(e.edge_id)}`}
+        className="link hidden justify-self-end text-[12px] lg:block"
+        aria-label={`查看网关 ${e.edge_id}`}>
+        查看
+      </Link>
     </li>
   )
 }

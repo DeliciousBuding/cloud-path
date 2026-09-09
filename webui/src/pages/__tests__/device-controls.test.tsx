@@ -24,7 +24,12 @@ function renderDetail(path = ROUTE) {
   )
 }
 
-interface Opts { adapters?: { name: string; commands: string[] }[]; descriptor?: unknown; capabilities?: unknown }
+interface Opts {
+  adapters?: { name: string; commands: string[] }[]
+  descriptor?: unknown
+  capabilities?: unknown
+  commands?: unknown[]
+}
 function route(o: Opts = {}) {
   return installFetch((url) => {
     if (url === '/api/adapters') {
@@ -38,6 +43,7 @@ function route(o: Opts = {}) {
     if (url === '/api/capabilities') {
       return o.capabilities ? stubResponse(200, o.capabilities) : stubResponse(404, {})
     }
+    if (url.startsWith('/api/commands')) return stubResponse(200, { commands: o.commands ?? [] })
     if (url.startsWith('/api/devices/edge-1/dev-9/commands')) {
       return stubResponse(200, { id: 1, device_id: KEY, cmd: 'x', args: '', status: 'sent', created_at: 0, acked_at: 0, result: '' })
     }
@@ -111,7 +117,7 @@ describe('有设备能力声明时以声明为准', () => {
     for (const declared of ['闭合', '断开', '恢复出厂']) {
       expect(within(panel).getByRole('button', { name: declared }), `声明动作 ${declared} 未渲染`).toBeInTheDocument()
     }
-    expect(within(panel).getByRole('button', { name: '选择操作：点动' })).toBeInTheDocument()
+    expect(within(panel).getByRole('combobox', { name: '选择参数操作' })).toHaveValue('pulse')
     // 白名单命令不再另立入口（声明优先）
     expect(screen.queryByRole('combobox', { name: '选择操作' })).not.toBeInTheDocument()
   })
@@ -138,7 +144,7 @@ describe('列表页的关键读数同样来自声明', () => {
       return stubResponse(404, {})
     })
     renderWithProviders(<Devices />)
-    expect(await screen.findByText('等待同步')).toBeInTheDocument()
+    expect(await screen.findByText('读数等待同步')).toBeInTheDocument()
   })
 
   it('有 Descriptor → 读数取声明主观测（实体名 + 值），不再铺能力芯片墙', async () => {
@@ -163,6 +169,13 @@ describe('列表页的关键读数同样来自声明', () => {
 
 
 describe('设备分区深链接', () => {
+  it('未指定分区时默认进入设备操作，让操作优先于概览', async () => {
+    route({ descriptor: makeDescriptor(), capabilities: catalogPayload })
+    renderDetail(ROUTE)
+    expect(await screen.findByRole('tab', { name: /设备操作/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('heading', { level: 2, name: '设备操作' })).toBeInTheDocument()
+  })
+
   it('controls 查询参数直接打开正确设备的控制区', async () => {
     route({ adapters: [{ name: 'demo', commands: ['identify'] }] })
     renderDetail(ROUTE + '?tab=controls')
@@ -174,6 +187,55 @@ describe('设备分区深链接', () => {
     route()
     renderDetail(ROUTE + '?tab=unknown')
     expect(await screen.findByRole('tab', { name: /概览/ })).toHaveAttribute('aria-selected', 'true')
+  })
+})
+
+describe('操作记录', () => {
+  it('失败给出人话原因与下一步，等待中的操作不会被误报为失败', async () => {
+    route({
+      descriptor: makeDescriptor(),
+      capabilities: catalogPayload,
+      commands: [
+        {
+          id: 51, device_id: KEY, cmd: 'pulse', args: '{"ms":100}', status: 'failed',
+          created_at: 1_780_000_000, acked_at: 1_780_000_001, result: 'ERR_BUSY queue full; raw=0x05',
+        },
+        {
+          id: 50, device_id: KEY, cmd: 'close', args: '', status: 'sent',
+          created_at: 1_780_000_100, acked_at: 0, result: '',
+        },
+      ],
+    })
+    renderDetail(ROUTE + '?tab=events')
+
+    expect(await screen.findByRole('heading', { level: 2, name: '操作记录' })).toBeInTheDocument()
+    expect(await screen.findByText('设备正忙')).toBeInTheDocument()
+    expect(screen.getByText(/等待设备空闲后重试/)).toBeInTheDocument()
+    expect(screen.getByText('已发送，正在等待设备确认，请勿重复操作。')).toBeInTheDocument()
+    expect(screen.queryByText('操作失败，请稍后重试')).not.toBeInTheDocument()
+
+    const failedDetails = screen.getAllByText('技术详情')[0].closest('details') as HTMLElement
+    expect(within(failedDetails).getByText('ERR_BUSY queue full; raw=0x05')).toBeInTheDocument()
+  })
+
+  it('失败记录可直接重试，并沿用原命令参数与权限边界', async () => {
+    const user = userEvent.setup()
+    const http = route({
+      descriptor: makeDescriptor(),
+      capabilities: catalogPayload,
+      commands: [{
+        id: 51, device_id: KEY, cmd: 'pulse', args: '{"ms":100}', status: 'failed',
+        created_at: 1_780_000_000, acked_at: 1_780_000_001, result: 'busy',
+      }],
+    })
+    renderDetail(ROUTE + '?tab=events')
+
+    await user.click(await screen.findByRole('button', { name: '重试点动' }))
+    expect([...http.calls].reverse().find((call) => call.method === 'POST')).toMatchObject({
+      url: '/api/devices/edge-1/dev-9/commands',
+      method: 'POST',
+      body: { cmd: 'pulse', args: '{"ms":100}' },
+    })
   })
 })
 

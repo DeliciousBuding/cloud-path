@@ -31,7 +31,7 @@ describe('列表页：失败态不冒充空态', () => {
     expect(await screen.findByRole('alert')).toBeInTheDocument()
     expect(screen.getByText('设备列表加载失败')).toBeInTheDocument()
     expect(screen.getByText(/这不表示没有设备已接入/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /重试/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /重新加载/ })).toBeInTheDocument()
     expect(screen.queryByText('还没有设备接入')).not.toBeInTheDocument()
   })
 

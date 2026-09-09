@@ -17,7 +17,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     // 生产环境无采集端；打到控制台便于本地排查
-    console.error('[cloudpath] render error', error, info.componentStack)
+    console.error('[CloudPath] render error', error, info.componentStack)
   }
 
   render() {
@@ -25,17 +25,14 @@ export class ErrorBoundary extends Component<Props, State> {
     if (!error) return this.props.children
     return (
       <div className="flex min-h-screen items-center justify-center px-6">
-        <div className="card w-full max-w-md p-8 text-center fade-up">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-bad/10 text-bad">
-            <AlertTriangle size={24} />
+        <div className="card w-full max-w-md p-8 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-bad/10 text-bad">
+            <AlertTriangle size={22} />
           </div>
           <h1 className="mt-5 text-[22px] font-semibold tracking-[-0.01em]">界面出现异常</h1>
           <p className="mt-1.5 text-sm text-ink-2">
-            页面显示时发生了异常。数据和服务通常仍在运行，请先重新加载；如果仍然失败，再尝试继续。
+            页面暂时没有加载出来。重新加载后再试一次；如果仍然失败，再尝试继续。
           </p>
-          <pre className="mt-4 max-h-32 overflow-auto rounded-lg bg-surface-2 p-3 text-left font-mono text-[11px] leading-relaxed text-ink-3">
-            {error.message || String(error)}
-          </pre>
           <div className="mt-5 flex justify-center gap-2">
             <button type="button" className="btn btn-primary" onClick={() => location.reload()}>
               <RefreshCw size={14} /> 重新加载

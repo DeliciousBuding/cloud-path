@@ -110,9 +110,9 @@ export default function Login() {
 
   return (
     <AuthCard
-      title="登录 Cloudpath"
+      title="登录 CloudPath"
       subtitle="通用设备接入与管理平台"
-      footer={<Link to="/setup" className="link">首次部署？运行设置向导</Link>}
+      footer={<Link to="/setup" className="link">第一次使用？完成初始化</Link>}
     >
       <form onSubmit={onSubmit} noValidate className="space-y-4">
         <TextField
@@ -176,7 +176,7 @@ export default function Login() {
           className="flex w-full items-center gap-1.5 text-xs font-medium text-ink-2 transition-colors hover:text-ink"
         >
           <KeyRound size={13} className="shrink-0" />
-          使用访问令牌登录（命令行或自动化工具）
+          使用访问令牌（自动化工具）
           <ChevronDown size={13} className={cn('ml-auto shrink-0 transition-transform', tokenOpen && 'rotate-180')} />
         </button>
 
@@ -190,7 +190,7 @@ export default function Login() {
               spellCheck={false}
               value={token}
               error={tokenError}
-              hint="访问令牌仅保存在本机浏览器，用于连接平台和自动化工具；明文不会再次显示"
+              hint="访问令牌只保存在这台设备，用于连接平台和自动化工具；完整内容不会再次显示。"
               disabled={tokenBusy}
               onChange={(e) => { setTokenInput(e.target.value); setTokenError('') }}
             />

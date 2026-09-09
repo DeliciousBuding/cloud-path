@@ -4,12 +4,14 @@ import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it } from 'vitest'
 import Layout from '@/components/Layout'
+import { useAuth } from '@/store/auth'
 import { toast } from '@/store/toast'
 import { useLive } from '@/store/ws'
 import { installFetch, stubResponse } from '@/test/http'
 import { renderWithProviders, resetStores } from '@/test/render'
 
 const health = { ok: true, version: 'v0.1.0', uptime_s: 60, devices_online: 0, devices_total: 0, edges_online: 0 }
+const admin = { id: 1, username: 'admin', name: '管理员', role: 'admin' as const, tenant_id: 1, tenant_slug: 'default' }
 
 function renderLayout() {
   return renderWithProviders(
@@ -23,6 +25,7 @@ function renderLayout() {
 
 beforeEach(() => {
   resetStores()
+  useAuth.setState({ status: 'in', user: admin })
   installFetch((url) => (url === '/healthz' ? stubResponse(200, health) : stubResponse(404, {})))
 })
 
@@ -40,18 +43,26 @@ describe('地标与键盘入口', () => {
 
   it('品牌区是可读名称的链接，导航项带 title', () => {
     renderLayout()
-    expect(screen.getAllByRole('link', { name: 'Cloudpath 概览' }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('link', { name: 'CloudPath 概览' }).length).toBeGreaterThan(0)
     const nav = screen.getAllByRole('navigation', { name: '主导航' })[0] as HTMLElement
     expect(within(nav).getByRole('link', { name: /设备/ })).toHaveAttribute('title', '设备')
   })
 
-  it('侧栏底部给出 server 版本（运维定位用）', async () => {
+  it('侧栏底部给出可读版本号', async () => {
     renderLayout()
-    expect(await screen.findByText('服务 v0.1.0')).toBeInTheDocument()
+    expect(await screen.findByText('版本 v0.1.0')).toBeInTheDocument()
   })
 })
 
 describe('任务导向导航', () => {
+  it('核心导航顺序稳定，设备先于网关，运行记录留在主入口', () => {
+    renderLayout()
+    const nav = screen.getAllByRole('navigation', { name: '主导航' })[0] as HTMLElement
+    expect(within(nav).getAllByRole('link').map((a) => a.textContent?.trim())).toEqual([
+      '概览', '设备', '网关', '运行记录', '应用与插件', '管理', '设置',
+    ])
+  })
+
   it('设备调试和应用实例各有单一入口，不再把通用观测叫药盒控制', () => {
     renderLayout()
     const nav = screen.getAllByRole('navigation', { name: '主导航' })[0] as HTMLElement
@@ -59,23 +70,48 @@ describe('任务导向导航', () => {
     expect(within(nav).getByRole('link', { name: '应用与插件' })).toHaveAttribute('href', '/plugins')
     expect(within(nav).queryByRole('link', { name: '药盒控制' })).not.toBeInTheDocument()
   })
+
+  it('移动端“更多”固定收纳应用、管理和设置，不随主导航切片漂移', async () => {
+    const user = userEvent.setup()
+    renderLayout()
+    await user.click(screen.getByLabelText('更多导航与账号设置'))
+    const more = screen.getByRole('navigation', { name: '更多导航' })
+    expect(within(more).getAllByRole('link').map((a) => a.textContent?.trim())).toEqual([
+      '应用与插件', '管理', '设置',
+    ])
+  })
+
+  it('移动端“更多”支持 Escape 和点击外部关闭', async () => {
+    const user = userEvent.setup()
+    renderLayout()
+    const trigger = screen.getByLabelText('更多导航与账号设置')
+
+    await user.click(trigger)
+    expect(screen.getByRole('navigation', { name: '更多导航' })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('navigation', { name: '更多导航' })).not.toBeInTheDocument()
+
+    await user.click(trigger)
+    await user.click(screen.getByRole('heading', { name: '页面内容' }))
+    expect(screen.queryByRole('navigation', { name: '更多导航' })).not.toBeInTheDocument()
+  })
 })
 
 describe('实时通道状态提示', () => {
   it('断开时给出系统级提示条并说明会自动重连', () => {
     renderLayout()
-    expect(screen.getByText(/实时连接已断开，正在自动重连/)).toBeInTheDocument()
+    expect(screen.getByText(/数据连接已断开，正在自动恢复/)).toBeInTheDocument()
     expect(screen.getAllByText('已断开').length).toBeGreaterThan(0)
   })
 
   it('连接中与已连接分别有可读文案，连上后提示条消失', () => {
     useLive.setState({ status: 'connecting' })
     renderLayout()
-    expect(screen.getByText(/正在.*实时连接/)).toBeInTheDocument()
+    expect(screen.getByText(/正在恢复数据连接/)).toBeInTheDocument()
 
     act(() => { useLive.setState({ status: 'open' }) })
-    expect(screen.queryByText(/正在.*实时连接/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/实时连接已断开/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/正在恢复数据连接/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/数据连接已断开/)).not.toBeInTheDocument()
     expect(screen.getAllByText('已连接').length).toBeGreaterThan(0)
   })
 })

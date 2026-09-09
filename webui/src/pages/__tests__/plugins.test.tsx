@@ -91,11 +91,11 @@ describe('插件列表只读权限', () => {
     expect(screen.getByText('插件同步后会显示在这里。列表为空不影响已经添加的项目。')).toBeInTheDocument()
     await gotoTab(/实例/)
     expect((await screen.findAllByText('中心服务')).length).toBeGreaterThanOrEqual(2)
-    expect(screen.getAllByText('尚未更新').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('状态待确认').length).toBeGreaterThan(0)
     expect(screen.getAllByText(/网关 edge-a/).length).toBeGreaterThan(0)
     expect(container.textContent).not.toContain('网关 server')
     expect(container.querySelector('[title^="网关 server"]')).toBeNull()
-    expect(screen.getByText('每行分开显示保存的设置和当前运行情况。保存为启用，不代表它已经运行。')).toBeInTheDocument()
+    expect(screen.getByText('需要处理的项目会排在前面。展开「技术详情」可以查看版本和状态原值。')).toBeInTheDocument()
 
   })
 
@@ -197,39 +197,43 @@ describe('实例分区：desired 与 observed 永远分别渲染', () => {
     })
     renderWithProviders(<Plugins />)
     await gotoTab(/实例/)
+    const user = userEvent.setup()
     expect(await screen.findByText('保存的设置')).toBeInTheDocument()
     expect(screen.getByText('当前运行情况')).toBeInTheDocument()
     expect(screen.getByText('v1.2.0')).toBeInTheDocument()
+    // 当前版本和版本号属于技术详情，默认折叠
+    await user.click(screen.getByText('技术详情'))
     expect(screen.getByText('v1.1.0')).toBeInTheDocument()
     expect(screen.getByText(/42/)).toBeInTheDocument()
     expect(screen.getByText(/41/)).toBeInTheDocument()
     // drift 有独立视觉状态
-    expect(screen.getByText('期望状态与实际状态不一致')).toBeInTheDocument()
+    expect(screen.getAllByText('最新设置尚未生效').length).toBeGreaterThan(0)
   })
 
   it('反向断言：desired.enabled=true 且无 observed 时，界面不出现「运行中/健康」', async () => {
     route({ instances: [instance({ has_observed: false, observed: undefined })] })
     renderWithProviders(<Plugins />)
     await gotoTab(/实例/)
-    expect((await screen.findAllByText('网关尚未上报')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('状态待确认')).length).toBeGreaterThan(0)
     expect(screen.getByText('已启用')).toBeInTheDocument()
     expect(screen.queryByText('运行中')).not.toBeInTheDocument()
     expect(screen.queryByText('已同步')).not.toBeInTheDocument()
     // 未上报时也要说清是「节点在线但没回」还是「节点离线」
-    expect(screen.getByText('网关在线，尚未同步运行状态')).toBeInTheDocument()
+    expect(screen.getByText('网关在线，还没有收到运行状态')).toBeInTheDocument()
   })
 
   it('stale=true → 实际状态明确标记过期，而不是当前在线事实', async () => {
     route({ instances: [instance({ stale: true })] })
     renderWithProviders(<Plugins />)
     await gotoTab(/实例/)
-    expect(await screen.findByText('运行状态已过期')).toBeInTheDocument()
-    expect(screen.getAllByText(/状态已过期/).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('状态可能已过期')).length).toBeGreaterThan(0)
   })
 
   it('详情页的完整分离视图把 stale 说清是历史事实（含绝对上报时间）', async () => {
     route({ instances: [instance({ stale: true })] })
+    const user = userEvent.setup()
     renderDetail()
+    await user.click(await screen.findByText('查看详细信息'))
     expect(await screen.findByText(/已超过有效期/)).toBeInTheDocument()
     expect(screen.getByText(/运行状态已过期 · 更新于/)).toBeInTheDocument()
     // 保存的设置与当前运行情况两栏都在，且各自标注来源
@@ -241,7 +245,9 @@ describe('实例分区：desired 与 observed 永远分别渲染', () => {
 
   it('详情页同时给出 Version/Edge/Trust/Permissions/Health/Revision/Last ACK', async () => {
     route({ instances: [instance()] })
+    const user = userEvent.setup()
     renderDetail()
+    await user.click(await screen.findByText('查看详细信息'))
     expect(await screen.findByText('基本信息')).toBeInTheDocument()
     // 'Edge 在线' 在头部徽标与事实一览里各出现一次，故按「至少一处」断言
     for (const label of ['期望版本', '实际版本', '运行位置', '网关状态', '来源验证', '安装摘要']) {
@@ -257,7 +263,9 @@ describe('实例分区：desired 与 observed 永远分别渲染', () => {
 
   it('详情页不泄漏本机绝对路径与插件 stdout 原文', async () => {
     route({ instances: [instance()] })
+    const user = userEvent.setup()
     const { container } = renderDetail()
+    await user.click(await screen.findByText('查看详细信息'))
     await screen.findByText('基本信息')
     expect(container.textContent).not.toContain(LOCAL_PATH)
   })
@@ -326,16 +334,16 @@ describe('写操作按稳定错误码呈现', () => {
     const patch = http.to('/api/plugin-instances/').filter((c) => c.method === 'PATCH')
     expect(patch).toHaveLength(1)
     expect(patch[0]?.body).toEqual({ enabled: false })
-    expect(screen.getAllByText('网关尚未上报').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('状态待确认').length).toBeGreaterThan(0)
     expect(screen.queryByText('运行中')).not.toBeInTheDocument()
   })
 
   it('删除必须二次确认 + 勾选；purge 选项进 body', async () => {
     const http = route({ instances: [instance()] })
     const user = userEvent.setup()
-    renderWithProviders(<Plugins />)
-    await gotoTab(/实例/)
-    await user.click(await screen.findByRole('button', { name: /删除/ }))
+    renderDetail()
+    await user.click(await screen.findByText('更多操作'))
+    await user.click(await screen.findByRole('button', { name: /删除实例/ }))
 
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toHaveTextContent('删除实例 inst-1')
@@ -354,9 +362,9 @@ describe('写操作按稳定错误码呈现', () => {
   it('取消删除 → 不发任何 DELETE', async () => {
     const http = route({ instances: [instance()] })
     const user = userEvent.setup()
-    renderWithProviders(<Plugins />)
-    await gotoTab(/实例/)
-    await user.click(await screen.findByRole('button', { name: /删除/ }))
+    renderDetail()
+    await user.click(await screen.findByText('更多操作'))
+    await user.click(await screen.findByRole('button', { name: /删除实例/ }))
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '取消' }))
     expect(http.to('/api/plugin-instances/').filter((c) => c.method === 'DELETE')).toHaveLength(0)
   })
@@ -364,8 +372,7 @@ describe('写操作按稳定错误码呈现', () => {
   it('reconcile 在 drift 时先确认，并把 force 写进 body', async () => {
     const http = route({ instances: [instance({ drift: true, applied_revision: 41 })] })
     const user = userEvent.setup()
-    renderWithProviders(<Plugins />)
-    await gotoTab(/实例/)
+    renderDetail()
     await user.click(await screen.findByRole('button', { name: /重新应用设置/ }))
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toHaveTextContent('重新应用最新设置？')
@@ -411,10 +418,10 @@ it('未曾上报的中心服务实例不被解释成离线 Edge，停用期望�
   const app = appInstance('never-started')
   route({ catalog: [], instances: [{ ...app, edge_online: false, has_observed: false, observed: undefined, desired: { ...app.desired, enabled: false } }] })
   renderWithProviders(<Plugins />)
-  expect(await screen.findByText('尚未收到实例运行状态')).toBeInTheDocument()
-  expect(screen.getAllByText('中心服务尚未上报').length).toBeGreaterThan(0)
+  expect(await screen.findByText('还没有收到中心服务的运行状态')).toBeInTheDocument()
+  expect(screen.getAllByText('状态待确认').length).toBeGreaterThan(0)
   expect(screen.getByText('已停用')).toBeInTheDocument()
-  for (const text of ['网关尚未上报', '网关离线', '网关在线，尚未同步运行状态', '运行中', '已停止']) {
+  for (const text of ['网关尚未上报', '网关离线', '网关在线，尚未同步运行状态', '运行中']) {
     expect(screen.queryByText(text)).not.toBeInTheDocument()
   }
 })

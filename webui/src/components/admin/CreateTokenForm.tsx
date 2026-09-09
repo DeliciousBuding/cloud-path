@@ -14,8 +14,8 @@ import type { CreatedToken, TokenScope } from '@/lib/types'
 
 const SCOPE_COPY: Record<TokenScope, { label: string; hint: string }> = {
   read: { label: '查看', hint: '查看设备状态、运行记录和操作记录。' },
-  write: { label: '操作', hint: '在查看之外，还可以执行设备操作。' },
-  admin: { label: '管理', hint: '可以管理用户和访问令牌，权限最高。' },
+  write: { label: '操作设备', hint: '在查看之外，还可以执行设备操作。' },
+  admin: { label: '管理', hint: '可以管理成员和访问令牌，权限最高。' },
   edge: { label: '网关接入', hint: '允许网关连接平台并同步设备状态。' },
 }
 
@@ -42,7 +42,7 @@ export function CreateTokenForm({ onCreated, onCancel }: {
     setNameErr(n ? '' : '请输入令牌名称')
     if (!n) return
     if (scopes.length === 0) {
-      setScopeErr('请至少选择一项权限')
+      setScopeErr('请至少选择一项权限范围')
       return
     }
     setScopeErr('')
@@ -67,7 +67,7 @@ export function CreateTokenForm({ onCreated, onCancel }: {
       />
 
       <fieldset className="mt-4">
-        <legend className="mb-2 text-[13px] font-medium text-ink-2">可以使用它做什么</legend>
+        <legend className="mb-2 text-[13px] font-medium text-ink-2">这个令牌可以用来做什么</legend>
         <div className="space-y-2.5">
           {SCOPE_OPTIONS.map((o) => (
             <CheckRow

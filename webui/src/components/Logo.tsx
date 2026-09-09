@@ -1,4 +1,4 @@
-// Cloudpath 标识：云 + 入云之径（单色线条，随 currentColor）
+// CloudPath 标识：云 + 入云之径（单色线条，随 currentColor）
 export function Logo({ size = 28 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden>

@@ -7,11 +7,12 @@ import { BackLink, Badge, EmptyState, ErrorState, Panel } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { ApplicationPlane } from '@/components/plugin/ApplicationPlane'
 import { InstanceSplit } from '@/components/plugin/InstanceRow'
+import { InstanceStatusSummary } from '@/components/plugin/DesiredObserved'
 import { InstanceControls } from '@/components/plugin/InstanceControls'
 import { InstanceForm } from '@/components/plugin/InstanceForm'
 import { ConfigTable, InstanceFacts, PermissionList, SecretRefList } from '@/components/plugin/PluginFacts'
 import { usePluginCatalog, usePluginInstance } from '@/hooks/usePlugins'
-import { pluginDisplayName, syncState } from '@/lib/plugins'
+import { instanceStatus, pluginDisplayName } from '@/lib/plugins'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useAuth } from '@/store/auth'
 
@@ -59,7 +60,7 @@ export default function PluginInstanceDetail() {
     )
   }
 
-  const s = syncState(instance)
+  const status = instanceStatus(instance)
   const serverHosted = instance.edge_id === 'server'
   const isApplication = serverHosted || catalog?.kind === 'application'
   const lifecycleKey = JSON.stringify([instance.desired.revision, instance.desired.enabled,
@@ -129,7 +130,7 @@ export default function PluginInstanceDetail() {
             {instance.edge_online ? '网关在线' : '网关离线'}
           </Badge>
         </>}
-        <span className="ml-auto shrink-0"><Badge tone={s.tone}>{s.label}</Badge></span>
+        <span className="ml-auto shrink-0"><Badge tone={status.tone}>{status.label}</Badge></span>
       </header>
 
       {editing && !readOnly ? (
@@ -139,6 +140,10 @@ export default function PluginInstanceDetail() {
         </Panel>
       ) : (
         <>
+          <Panel className="mb-5" title="当前状态">
+            <InstanceStatusSummary v={instance} />
+          </Panel>
+
           <Panel className="mb-5" title="操作">
             <InstanceControls v={instance} catalog={catalog} showEdit={false}
               onEdit={() => setEditing(true)} />
@@ -153,10 +158,10 @@ export default function PluginInstanceDetail() {
                 ? 'unknown' : instance.observed?.state ?? 'unknown'} />
           )}
 
-          {isApplication ? <details className="min-w-0">
-            <summary className="mb-4 cursor-pointer text-sm text-ink-2">详细信息</summary>
+          <details className="min-w-0">
+            <summary className="mb-4 cursor-pointer text-sm text-ink-2">查看详细信息</summary>
             {facts}
-          </details> : facts}
+          </details>
         </>
       )}
     </>

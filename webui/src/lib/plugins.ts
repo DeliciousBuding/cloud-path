@@ -162,7 +162,7 @@ export function syncState(v: PluginInstanceView): SyncState {
   if (!v.has_observed) {
     return {
       key: 'unreported',
-      label: host + '尚未上报',
+      label: '状态待确认',
       tone: 'idle',
       hint: serverHosted
         ? '还没有收到这个应用的运行状态。保存的启用设置不代表它正在运行，请查看应用数据。'
@@ -174,7 +174,7 @@ export function syncState(v: PluginInstanceView): SyncState {
   if (v.stale) {
     return {
       key: 'stale',
-      label: '运行状态已过期',
+      label: '状态可能已过期',
       tone: 'warn',
       hint: host + '收到的运行状态已超过有效期，当前显示的是上次状态，不代表现在的运行情况。',
     }
@@ -182,7 +182,7 @@ export function syncState(v: PluginInstanceView): SyncState {
   if (v.drift) {
     return {
       key: 'drift',
-      label: '期望状态与实际状态不一致',
+      label: '有差异',
       tone: 'warn',
       hint: `${host}还没有应用最新设置。可以重新同步一次。`,
     }
@@ -190,7 +190,7 @@ export function syncState(v: PluginInstanceView): SyncState {
   if (v.applied_revision < v.desired_revision) {
     return {
       key: 'pending',
-      label: '等待' + host + '应用设置',
+      label: '正在应用设置',
       tone: 'accent',
       hint: `最新设置已保存，正在等待${host}应用。`,
     }
@@ -216,6 +216,10 @@ const STATE_META: Record<string, { label: string; tone: Tone }> = {
   CRASHED: { label: '已崩溃', tone: 'bad' },
   BACKOFF: { label: '重启退避', tone: 'warn' },
   DISABLED: { label: '已禁用', tone: 'idle' },
+  degraded: { label: '运行异常', tone: 'warn' },
+  crashed: { label: '已中断', tone: 'bad' },
+  backoff: { label: '正在重试', tone: 'warn' },
+  disabled: { label: '已停用', tone: 'idle' },
   created: { label: '已创建', tone: 'idle' },
   starting: { label: '启动中', tone: 'accent' },
   running: { label: '运行中', tone: 'ok' },
@@ -235,17 +239,117 @@ export function hostDetailLabel(detail?: string): string | undefined {
 const HEALTH_META: Record<string, { label: string; tone: Tone }> = {
   HEALTHY: { label: '健康', tone: 'ok' },
   DEGRADED: { label: '降级', tone: 'warn' },
+  UNHEALTHY: { label: '异常', tone: 'bad' },
   UNKNOWN: { label: '未知', tone: 'idle' },
+  healthy: { label: '健康', tone: 'ok' },
+  degraded: { label: '降级', tone: 'warn' },
+  unhealthy: { label: '异常', tone: 'bad' },
+  unknown: { label: '未知', tone: 'idle' },
 }
 
 export function stateMeta(state: string | undefined): { label: string; tone: Tone } {
   if (!state) return { label: '未上报', tone: 'idle' }
-  return STATE_META[state] ?? { label: state, tone: 'idle' }
+  return STATE_META[state] ?? { label: '状态待确认', tone: 'idle' }
 }
 
 export function healthMeta(health: string | undefined): { label: string; tone: Tone } {
   if (!health) return { label: '未上报', tone: 'idle' }
-  return HEALTH_META[health] ?? { label: health, tone: 'idle' }
+  return HEALTH_META[health] ?? { label: '状态待确认', tone: 'idle' }
+}
+
+export function instanceLocationLabel(v: PluginInstanceView): string {
+  if (v.edge_id === 'server') return '中心服务'
+  return `网关 ${v.edge_id || '未知'}${v.edge_online ? '' : '（离线）'}`
+}
+
+export type InstanceStatusKey = 'normal' | 'attention' | 'unknown' | 'stopped'
+
+export interface InstanceStatus {
+  key: InstanceStatusKey
+  label: string
+  tone: Tone
+  summary: string
+  next?: string
+  needsAttention: boolean
+  /** 列表默认排序优先级：需要处理 > 状态待确认 > 已停止 > 运行正常 */
+  priority: number
+}
+
+/** 把实际运行事实说成普通用户能理解的一句话，并给出下一步；机器原值只留给技术详情。 */
+export function instanceStatus(v: PluginInstanceView): InstanceStatus {
+  const serverHosted = v.edge_id === 'server'
+  const host = serverHosted ? '中心服务' : '网关'
+  const state = stateMeta(v.observed?.state)
+  const health = healthMeta(v.observed?.health)
+
+  if (!v.has_observed) {
+    return {
+      key: 'unknown', label: '状态待确认', tone: 'idle',
+      summary: `还没有收到${host}的运行状态`,
+      next: serverHosted
+        ? '稍后刷新；如果一直没有状态，请查看运行记录。'
+        : v.edge_online
+          ? '稍后刷新；如果一直没有状态，请重新应用设置。'
+          : '先恢复网关连接，连接后会自动更新。',
+      needsAttention: false, priority: 1,
+    }
+  }
+
+  if (v.stale) {
+    return {
+      key: 'attention', label: '状态可能已过期', tone: 'warn',
+      summary: `上次状态：${state.label}`,
+      next: v.edge_id !== 'server' && !v.edge_online
+        ? '先恢复网关连接，等待最新状态；确认连接后再重新应用设置。'
+        : '等待最新状态；如果长时间没有更新，请重新应用设置。',
+      needsAttention: true, priority: 0,
+    }
+  }
+
+  if (v.drift || (!v.desired.enabled && state.tone === 'ok')) {
+    return {
+      key: 'attention', label: '最新设置尚未生效', tone: 'warn',
+      summary: !v.desired.enabled && state.tone === 'ok' ? '当前仍在运行' : `当前：${state.label}`,
+      next: '打开详情，确认设置后重新应用。',
+      needsAttention: true, priority: 0,
+    }
+  }
+
+  if (state.label === '已停止' || state.label === '已停用' || state.label === '已禁用') {
+    return {
+      key: 'stopped', label: '已停止', tone: 'idle',
+      summary: '当前没有运行',
+      next: v.desired.enabled ? '如果应该运行，请重新应用设置。' : undefined,
+      needsAttention: false, priority: 2,
+    }
+  }
+
+  const abnormal = state.tone === 'bad' || state.tone === 'warn'
+    || health.tone === 'bad' || health.tone === 'warn'
+  if (abnormal) {
+    const healthCopy = v.observed?.health && health.label !== '未上报' ? ` · 健康${health.label}` : ''
+    return {
+      key: 'attention', label: '需要处理', tone: state.tone === 'bad' || health.tone === 'bad' ? 'bad' : 'warn',
+      summary: `当前：${state.label}${healthCopy}`,
+      next: '查看运行记录或重新应用设置；如果持续异常，请联系管理员。',
+      needsAttention: true, priority: 0,
+    }
+  }
+
+  if (state.tone === 'ok') {
+    return {
+      key: 'normal', label: '运行正常', tone: 'ok',
+      summary: `当前：${state.label}`,
+      needsAttention: false, priority: 3,
+    }
+  }
+
+  return {
+    key: 'unknown', label: '状态待确认', tone: 'idle',
+    summary: `当前：${state.label}`,
+    next: '打开详情查看最近更新；如果状态一直没有变化，请重新应用设置。',
+    needsAttention: false, priority: 1,
+  }
 }
 
 /** 目录里的 observed_state 在 server 侧未观测时是小写 unknown（plugincatalog 约定） */

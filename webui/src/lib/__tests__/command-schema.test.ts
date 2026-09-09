@@ -278,6 +278,17 @@ describe('组合中的未知约束不冒充匹配或不匹配', () => {
 })
 
 describe('普通参数表单模型', () => {
+  it('小范围整数生成下拉候选，校验仍按原 schema 执行', () => {
+    const schema = {
+      type: 'object',
+      properties: { level: { type: 'integer', minimum: 1, maximum: 4, title: '档位' } },
+    }
+    const form = commandForm(schema)
+    expect(form?.fields[0]).toMatchObject({ key: 'level', type: 'enum', choices: [1, 2, 3, 4] })
+    expect(commandArgsError('{"level":3}', schema)).toBeUndefined()
+    expect(commandArgsError('{"level":5}', schema)).toContain('不能大于 4')
+  })
+
   it('平铺对象直接生成字段，数组字段生成可读输入', () => {
     const form = commandForm({
       type: 'object', required: ['digits'],

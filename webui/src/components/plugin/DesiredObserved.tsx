@@ -7,8 +7,11 @@
 //     并说明原因（Edge 离线 vs 在线但还没回过）——绝不让 desired.enabled 冒充「运行中」；
 //   - `stale` / `drift` 各有独立视觉状态，且都写在右栏或顶部同步条上。
 import type { ReactNode } from 'react'
-import { AlertTriangle, CloudOff, RadioTower, TimerReset } from 'lucide-react'
-import { healthMeta, hostDetailLabel, isolationLabel, stateMeta, syncState } from '@/lib/plugins'
+import { AlertTriangle, CloudOff, Power, RadioTower, TimerReset } from 'lucide-react'
+import { Badge } from '@/components/ui'
+import {
+  healthMeta, hostDetailLabel, instanceLocationLabel, instanceStatus, isolationLabel, stateMeta, syncState,
+} from '@/lib/plugins'
 import { fmtDateTime, timeAgo } from '@/lib/format'
 import type { PluginInstanceView } from '@/lib/types'
 
@@ -74,9 +77,46 @@ function UnreportedBlock({ v }: { v: PluginInstanceView }) {
   )
 }
 
+/** 详情页主路径摘要：只显示用户能判断和行动的状态、位置与下一步。 */
+export function InstanceStatusSummary({ v }: { v: PluginInstanceView }) {
+  const status = instanceStatus(v)
+  const state = stateMeta(v.observed?.state)
+  const health = healthMeta(v.observed?.health)
+  const Icon = status.key === 'normal' ? TimerReset : status.key === 'stopped' ? Power
+    : status.key === 'attention' ? AlertTriangle : CloudOff
+  const tone = status.tone === 'ok' ? 'text-ok bg-ok/10' : status.tone === 'bad' ? 'text-bad bg-bad/10'
+    : status.tone === 'warn' ? 'text-warn bg-warn/12' : 'text-ink-2 bg-ink-3/10'
+
+  return <div className="space-y-4">
+    <div className="flex min-w-0 items-start gap-3">
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${tone}`}>
+        <Icon size={16} />
+      </span>
+      <div className="min-w-0">
+        <Badge tone={status.tone}>{status.label}</Badge>
+        <p className="mt-2 break-words text-sm font-medium">{status.summary}</p>
+        {status.next && <p className="mt-1 break-words text-[12px] leading-relaxed text-ink-2">下一步：{status.next}</p>}
+      </div>
+    </div>
+    <dl className="grid gap-3 border-t border-hairline pt-4 sm:grid-cols-3">
+      <div className="min-w-0">
+        <dt className="text-[12px] text-ink-3">运行位置</dt>
+        <dd className="mt-1 break-words text-[13px] font-medium">{instanceLocationLabel(v)}</dd>
+      </div>
+      <div className="min-w-0">
+        <dt className="text-[12px] text-ink-3">当前状态</dt>
+        <dd className="mt-1 break-words text-[13px] font-medium">{v.has_observed ? state.label : '状态待确认'}</dd>
+      </div>
+      <div className="min-w-0">
+        <dt className="text-[12px] text-ink-3">健康情况</dt>
+        <dd className="mt-1 break-words text-[13px] font-medium">{v.has_observed ? health.label : '尚未收到'}</dd>
+      </div>
+    </dl>
+  </div>
+}
+
 /**
- * 期望状态 | 实际状态 双栏。两栏在 390px 下仍保持并排 —— 因为这个分区的价值就是「对照」，
- * 竖排堆叠会让用户看不出哪一栏是期望、哪一栏是实际。
+ * 期望状态 | 实际状态对照。移动端上下堆叠，桌面双栏并排，保留字段顺序与同步/差异信息。
  */
 export function DesiredObserved({ v }: { v: PluginInstanceView }) {
   const st = stateMeta(v.observed?.state)
@@ -85,7 +125,7 @@ export function DesiredObserved({ v }: { v: PluginInstanceView }) {
 
   return (
     <div className="space-y-2">
-    <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
+    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-4">
       <div className="min-w-0 rounded-lg bg-surface-2 p-3 sm:p-3.5">
         <ColumnHead note="网关会按它应用">保存的设置</ColumnHead>
         <dl className="m-0">
@@ -107,7 +147,7 @@ export function DesiredObserved({ v }: { v: PluginInstanceView }) {
             <dl className="m-0">
               <Row k="运行情况" v={st.label} tone={st.tone === 'idle' ? undefined : st.tone} />
               <Row k="版本" v={v.observed?.version || '未给出'} />
-              <Row k="运行情况" v={hl.label} tone={hl.tone === 'idle' ? undefined : hl.tone} />
+              <Row k="健康情况" v={hl.label} tone={hl.tone === 'idle' ? undefined : hl.tone} />
               <Row k="重启次数" v={`${v.observed?.restart_count ?? 0} 次`}
                 tone={(v.observed?.restart_count ?? 0) > 0 ? 'warn' : undefined} />
               <Row wrap k="更新时间" v={reportedAt ? fmtDateTime(reportedAt) : '—'} />
