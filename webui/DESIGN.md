@@ -14,15 +14,15 @@ entity_id、capability URI、property key、raw JSON 只进能力 Inspector 与�
 
 | 层 | 例子 | 归属 |
 |---|---|---|
-| 平台 UI 词 | 概览 / 网关 / 设备 / 实体 / 能力 / 状态 / 事件 / 操作 / 运行实例 | WebUI 自身（薄词典，暂不引 i18n 框架） |
+| 平台 UI 词 | 概览 / 网关 / 设备 / 状态 / 事件 / 操作 / 应用 | `webui/src/i18n/`（zh-CN / en-US，组件只通过 `t()` 读取） |
 | 声明展示元数据 | 温度 / 蜂鸣器 / 按下 | Descriptor / Capability declaration 的 title/description |
 | 机器身份 | `temperature`、`cloudpath.dev/capability/...` | 永远 canonical，不翻译 |
 
 展示名解析优先级（`webui/src/lib/descriptor.ts`）：
-声明 localized title → 平台通用词汇（PROPERTY_LABEL / GENERIC_NOUN / CMD_LABEL / EVENT_VERB 等）
-→ humanize → canonical machine name。
-locale 匹配规则：声明 title 含 CJK 时优先采用；纯英文 title 让位平台通用词汇，
-避免中文界面漏出英文机器术语（driver 声明提供中文标题才是根修，见 [how-to-build-driver.md](../docs/architecture/how-to-build-driver.md)）。
+声明 localized title → 平台本地化词典 → humanize → canonical machine name。
+locale 匹配规则：优先精确 locale 和语言基础 locale；中文界面不回落英文声明，英文界面也不回落中文声明，
+缺少当前语言声明时使用平台本地化词典，再保留机器名。插件应通过 `i18n` map 提供多语言标题，见
+[docs/architecture/i18n.md](../docs/architecture/i18n.md)。
 
 resolver 均为纯函数并有确定性单测（fallback 顺序、脏数据降级）；UI 不写设备特例。
 
