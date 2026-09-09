@@ -32,14 +32,14 @@ export interface DescriptorResult {
   error: unknown | null
   /** ApiError 的 HTTP 状态码，便于调用方区分错误态文案。 */
   errorStatus: number | null
-  /** 命令集：Capability actions / Descriptor commands 优先，回落适配器白名单 */
+  /** 操作集：Capability actions / Descriptor commands 优先，回落适配器白名单 */
   commands: CommandSet
 }
 
 interface Options {
   /** 已有的设备视图（用于嗅探内联 Descriptor） */
   device?: DeviceView | null
-  /** 适配器命令白名单（/api/adapters），Descriptor 缺席时的命令集回落 */
+  /** 适配器操作白名单（/api/adapters），Descriptor 缺席时的操作集回落 */
   adapterCommands?: string[]
   /** 关闭批量探测（详情页已单独探测时用不上） */
   skipBulk?: boolean
@@ -158,7 +158,7 @@ export type CapabilityIndexResult = CapabilityIndex & {
   errorStatus: number | null
 }
 
-/** 只要 Capability catalog（无设备上下文，例如事件/命令标签的通用推导） */
+/** 只要 Capability catalog（无设备上下文，例如事件/操作标签的通用推导） */
 export function useCapabilityIndex(): CapabilityIndexResult {
   const identity = useAuth(authIdentity)
   const { data, isLoading, error } = useQuery({

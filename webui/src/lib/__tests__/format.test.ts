@@ -30,11 +30,11 @@ describe('fmtDay（时间线 day 组头）', () => {
 describe('cmdMeta（命令展示名回落顺序）', () => {
   const idx = indexCapabilities(normalizeCapabilityDocs(catalogPayload))
 
-  it('设备命令集声明最优先（同一 cmd 在不同设备可以有不同标题）', () => {
+  it('设备操作集声明最优先（同一 cmd 在不同设备可以有不同标题）', () => {
     expect(cmdMeta('relay_on', [{ cmd: 'relay_on', label: '设备侧标题' }], idx).label).toBe('设备侧标题')
   })
 
-  it('没有命令集时吃 catalog 里的 action 声明，并带上说明作为 hint', () => {
+  it('没有操作集时吃 catalog 里的 action 声明，并带上说明作为 hint', () => {
     expect(cmdMeta('relay_on', undefined, idx)).toEqual({ label: '闭合', hint: '接通负载' })
   })
 

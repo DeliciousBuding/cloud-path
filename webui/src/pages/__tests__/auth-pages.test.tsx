@@ -7,11 +7,12 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactElement } from 'react'
 import App from '@/App'
 import Login from '@/pages/Login'
 import Setup from '@/pages/Setup'
+import { i18n } from '@/i18n'
 import { api, getToken, setToken } from '@/lib/api'
 import { installFetch, stubResponse } from '@/test/http'
 import { resetStores } from '@/test/render'
@@ -33,7 +34,7 @@ function renderPage(page: ReactElement, route: string) {
 }
 
 /** /healthz 永远 200：它是公开端点，可达与否**不得**影响登录结论。
- *  healthOverride 用来造「setup 前已有边缘接入」的现场——完成页要不要提示边缘会被断开，
+ *  healthOverride 用来造「setup 前已有网关接入」的现场——完成页要不要提示网关会被断开，
  *  取决于这份配置。 */
 type Router = (url: string) => ReturnType<typeof stubResponse>
 function routeWith(auth: Router, healthOverride: Partial<typeof health> = {}) {
@@ -49,6 +50,7 @@ vi.mock('@/store/ws', async (importOriginal) => {
 })
 
 beforeEach(() => { resetStores(); setToken('') })
+afterEach(async () => { await i18n.changeLanguage('zh-CN') })
 
 describe('Login：真实账号鉴权（D3 修复）', () => {
   it('渲染用户名与密码两个字段，不再是单一「访问令牌」', () => {
@@ -64,6 +66,17 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
     expect(screen.getByLabelText('密码')).toHaveAttribute('type', 'password')
     expect(screen.getByRole('button', { name: '登录' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '第一次使用？完成初始化' })).toHaveAttribute('href', '/setup')
+  })
+
+  it('en-US locale 渲染英文文案，默认中文不受影响', async () => {
+    await i18n.changeLanguage('en-US')
+    routeWith(() => stubResponse(404, {}))
+    renderPage(<Login />, '/login')
+    expect(screen.getByRole('heading', { level: 1, name: 'Sign in to CloudPath' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Username')).toBeInTheDocument()
+    expect(screen.getByLabelText('Password')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'First time here? Set up CloudPath' })).toHaveAttribute('href', '/setup')
   })
 
   it('提交走 POST /api/auth/login，且**不**把 /healthz 当成功判据', async () => {
@@ -325,10 +338,10 @@ describe('Setup：真实创建首个账号', () => {
     expect(await screen.findByRole('heading', { name: '首页占位' })).toBeInTheDocument()
   })
 
-  // 全鉴权会立刻掐断已接入的边缘（internal/server/ws.go 的 accountMode() 分支），
+  // 全鉴权会立刻掐断已接入的网关（internal/server/ws.go 的 accountMode() 分支），
   // 而 server 只留一条 WARN。向导此前只报喜不说这一步：操作员看到设备全离线，
   // 会以为自己刚把部署弄坏了，界面上也找不到恢复入口。
-  it('setup 前已有边缘接入 → 完成页给出 edge 令牌恢复步骤，而不是只报喜', async () => {
+  it('setup 前已有网关接入 → 完成页给出 edge 令牌恢复步骤，而不是只报喜', async () => {
     const user = userEvent.setup()
     let created = false
     routeWith((url) => {
@@ -358,7 +371,7 @@ describe('Setup：真实创建首个账号', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('全新安装（0 边缘 0 设备）→ 完成页不插这段与本实例无关的警告', async () => {
+  it('全新安装（0 网关 0 设备）→ 完成页不插这段与本实例无关的警告', async () => {
     const user = userEvent.setup()
     let created = false
     routeWith((url) => {

@@ -64,7 +64,7 @@ beforeEach(() => {
 
 async function openDiagnostics() {
   const user = userEvent.setup()
-  const summary = screen.getByText('高级诊断').closest('summary')
+  const summary = screen.getByText('故障排查').closest('summary')
   expect(summary).not.toBeNull()
   expect(summary).toHaveTextContent('展开查看')
   await user.click(summary as HTMLElement)
@@ -114,7 +114,7 @@ describe('Settings 账号与令牌面板', () => {
     route()
     useAuth.setState({ status: 'in', user: admin })
     renderWithProviders(<Settings />)
-    expect(screen.getByText('查看当前账号、外观和高级诊断。')).toBeInTheDocument()
+    expect(screen.getByText('查看当前账号、外观和故障排查。')).toBeInTheDocument()
     expect((await screen.findAllByText('ops-admin')).length).toBeGreaterThan(0)
     expect(screen.getAllByText('管理员').length).toBeGreaterThan(0)
     expect(screen.getByText('default')).toBeInTheDocument()
@@ -250,7 +250,7 @@ describe('Settings 账号与令牌面板', () => {
     expect(localStorage.getItem('cloudpath.theme')).toBe('dark')
   })
 
-  it('高级诊断默认收起；读取失败时显示错误，不留假 0 或假加载', async () => {
+  it('故障排查默认收起；读取失败时显示错误，不留假 0 或假加载', async () => {
     installFetch((url) => {
       if (url === '/healthz') return stubResponse(200, health)
       if (url === '/api/stats') return stubResponse(500, { error: 'boom' })
@@ -267,17 +267,17 @@ describe('Settings 账号与令牌面板', () => {
     expect(screen.queryByText('正在读取记录统计…')).not.toBeInTheDocument()
   })
 
-  it('普通成员的高级诊断不暴露适配器内部标识、命令码或记录格式版本', async () => {
+  it('普通成员的故障排查不暴露接入类型内部标识、命令码或记录版本', async () => {
     route({ adapters: [{ name: 'stcb-internal-adapter-id', commands: ['raw_internal_command'] }] })
     useAuth.setState({ status: 'in', user: viewer })
     renderWithProviders(<Settings />)
     await openDiagnostics()
 
-    expect(await screen.findByText('1 种接入方式')).toBeInTheDocument()
-    expect(screen.getByText(/已登记 1 种设备接入方式/)).toBeInTheDocument()
+    expect(await screen.findByText('1 种连接方式')).toBeInTheDocument()
+    expect(screen.getByText(/平台支持 1 种设备连接方式/)).toBeInTheDocument()
     expect(screen.queryByText('stcb-internal-adapter-id')).not.toBeInTheDocument()
     expect(screen.queryByText('raw_internal_command')).not.toBeInTheDocument()
-    expect(screen.queryByText(/记录格式版本/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/记录版本/)).not.toBeInTheDocument()
     expect(screen.queryByText('账号 ID')).not.toBeInTheDocument()
     expect(screen.queryByText('所属组织')).not.toBeInTheDocument()
   })

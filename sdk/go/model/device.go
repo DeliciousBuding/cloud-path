@@ -58,6 +58,7 @@ type Entity struct {
 	EntityID     string                 `json:"entity_id"`
 	UniqueKey    string                 `json:"unique_key"`
 	Name         string                 `json:"name,omitempty"`
+	I18n         I18n                   `json:"i18n,omitempty"`
 	Category     EntityCategory         `json:"category"`
 	Capabilities []string               `json:"capabilities"`
 	Observations map[string]Observation `json:"observations,omitempty"`

@@ -27,6 +27,7 @@ type CapabilityMetadata struct {
 	ID      string `json:"id"`
 	Version int    `json:"version"`
 	Title   string `json:"title,omitempty"`
+	I18n    I18n   `json:"i18n,omitempty"`
 }
 
 // CapabilitySpec 声明 Properties / Events / Actions 与 UI Hints。
@@ -75,6 +76,7 @@ type EventDecl struct {
 type ActionDecl struct {
 	Title       string         `json:"title,omitempty"`
 	Description string         `json:"description,omitempty"`
+	I18n        I18n           `json:"i18n,omitempty"`
 	InputSchema map[string]any `json:"inputSchema,omitempty"`
 	// Destructive 和 Confirmation 必须跨 Driver/Edge/Server 转发，不能在 UI 前丢失。
 	// 它们驱动操作确认，不替代服务端权限或设备侧校验。

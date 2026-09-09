@@ -50,9 +50,9 @@ const (
 
 	// 鉴权/RBAC 中间件在进入业务 handler 前拒绝请求时使用的稳定错误码。
 	// 与插件写面 §5.6 同形，前端可统一按 code 处理，不再猜测 error 文本。
-	apiErrAuthenticationRequired = "authentication_required"
-	apiErrPermissionDenied       = "permission_denied"
-	apiErrWriteForbidden         = "write_forbidden"
+	apiErrAuthenticationRequired = api.APIErrAuthenticationRequired
+	apiErrPermissionDenied       = api.APIErrPermissionDenied
+	apiErrWriteForbidden         = api.APIErrWriteForbidden
 )
 
 // Config 是服务配置。
@@ -1012,10 +1012,10 @@ func (s *Server) tokenOK(r *http.Request) bool {
 	return auth.TokenOK(r, s.cfg.Token)
 }
 
-// apiNotFound 是「端点不存在」的唯一形状，与 docs/api.md 的错误约定一致（{"error":"<msg>"}）。
+// apiNotFound 是「端点不存在」的唯一形状，与 docs/api.md 的稳定错误契约一致。
 // 兜底路由与 chi 子路由的 NotFound 共用它，避免同一个语义有两种响应体。
-func apiNotFound(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusNotFound, map[string]string{"error": "未知 API 端点"})
+func apiNotFound(w http.ResponseWriter, r *http.Request) {
+	writeAPIError(w, r, http.StatusNotFound, api.APIErrNotFound, "未知 API 端点")
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
@@ -1026,15 +1026,32 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	}
 }
 
-// writeAPIError 输出鉴权/RBAC 前置拒绝的稳定错误体。业务 handler 的既有
-// {"error":"..."} 兼容形状不在此 helper 内改写，避免把本次收口扩散成全 API 重写。
-func writeAPIError(w http.ResponseWriter, r *http.Request, status int, code, message string) {
-	writeJSON(w, status, map[string]any{
-		"error":      code,
-		"code":       code,
-		"message":    message,
-		"request_id": audit.RequestID(r.Context()),
+// writeAPIErrorResponse 输出唯一的稳定错误体。requestID 为空时生成临时 id，
+// 保证直接调用 handler 的测试与中间件链路都满足错误响应不变量。
+func writeAPIErrorResponse(w http.ResponseWriter, status int, code, message, requestID string, params map[string]any) {
+	if requestID == "" {
+		requestID = audit.NewRequestID()
+	}
+	writeJSON(w, status, api.ErrorResponse{
+		Error: code, Code: code, Message: message, RequestID: requestID, Params: params,
 	})
+}
+
+// writeAPIError 输出面向用户 API 的稳定错误体；params 只放机器可翻译参数，
+// 不放本地化文案、原始错误或敏感值。
+func writeAPIError(w http.ResponseWriter, r *http.Request, status int, code, message string, params ...map[string]any) {
+	var p map[string]any
+	if len(params) > 0 {
+		p = params[0]
+	}
+	writeAPIErrorResponse(w, status, code, message, audit.RequestID(r.Context()), p)
+}
+
+func deviceErrorParams(r *http.Request) map[string]any {
+	return map[string]any{
+		"edge_id":   chi.URLParam(r, "edgeID"),
+		"device_id": chi.URLParam(r, "deviceID"),
+	}
 }
 
 // queryInt 解析整型查询参数：缺省/非法/负数一律回退 def，超过 max（>0）则夹到 max。
@@ -1102,7 +1119,7 @@ func (s *Server) handleGetDevice(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.RUnlock()
 	if !ok || !allowed {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "device not found"})
+		writeAPIError(w, r, http.StatusNotFound, api.APIErrDeviceNotFound, "device not found", deviceErrorParams(r))
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -1139,7 +1156,7 @@ func (s *Server) handleDeviceDescriptor(w http.ResponseWriter, r *http.Request) 
 	}
 	s.mu.RUnlock()
 	if !ok || !found {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "device not found"})
+		writeAPIError(w, r, http.StatusNotFound, api.APIErrDeviceNotFound, "device not found", deviceErrorParams(r))
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"descriptor": d, "capabilities": s.capabilityCatalogForRequest(r)})
@@ -1179,7 +1196,8 @@ func (s *Server) handleListEvents(w http.ResponseWriter, r *http.Request) {
 		rows, err = s.cfg.Store.ListEvents(dev, since, limit)
 	}
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Warn("request failed", "err", err, "path", r.URL.Path)
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrInternal, "internal error")
 		return
 	}
 	out := make([]api.EventView, 0, len(rows))
@@ -1205,7 +1223,8 @@ func (s *Server) handleListCommands(w http.ResponseWriter, r *http.Request) {
 		rows, err = s.cfg.Store.ListCommands(dev, status, limit)
 	}
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Warn("request failed", "err", err, "path", r.URL.Path)
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrInternal, "internal error")
 		return
 	}
 	out := make([]api.CommandView, 0, len(rows))
@@ -1246,7 +1265,8 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 			st, err = s.cfg.Store.Stats()
 		}
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			slog.Warn("request failed", "err", err, "path", r.URL.Path)
+			writeAPIError(w, r, http.StatusInternalServerError, api.APIErrInternal, "internal error")
 			return
 		}
 		view.Devices, view.Events, view.Commands = st.Devices, st.Events, st.Commands
@@ -1295,14 +1315,14 @@ func (s *Server) handlePostCommand(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil || body.Cmd == "" {
 		reject("bad_request")
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "body 需为 {\"cmd\":\"...\",\"args\":\"...\"}"})
+		writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidRequest, "body must be a JSON object with cmd and args", map[string]any{"field": "body"})
 		return
 	}
 	body.Cmd = strings.TrimSpace(body.Cmd)
 	if len(body.Args) > maxCommandArgsLen || strings.ContainsAny(body.Args, "\r\n\x00") {
 		reject("invalid_args")
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": fmt.Sprintf("args 非法：长度需 <=%d 且不含换行/NUL", maxCommandArgsLen)})
+		writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidArgs, "args are invalid",
+			map[string]any{"field": "args", "max_bytes": maxCommandArgsLen})
 		return
 	}
 
@@ -1321,12 +1341,12 @@ func (s *Server) handlePostCommand(w http.ResponseWriter, r *http.Request) {
 	s.mu.RUnlock()
 	if !devOK || !tenantOK {
 		reject("device_not_found")
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "device not found"})
+		writeAPIError(w, r, http.StatusNotFound, api.APIErrDeviceNotFound, "device not found", deviceErrorParams(r))
 		return
 	}
 	if link == nil {
 		reject("edge_offline")
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "edge offline"})
+		writeAPIError(w, r, http.StatusConflict, api.APIErrEdgeOffline, "edge offline", deviceErrorParams(r))
 		return
 	}
 	// 命令白名单：以适配器注册表为准（server 与 edge 共享同一注册表）
@@ -1340,19 +1360,19 @@ func (s *Server) handlePostCommand(w http.ResponseWriter, r *http.Request) {
 		}
 		if !allowed {
 			reject("unsupported_command")
-			writeJSON(w, http.StatusBadRequest, map[string]string{
-				"error": fmt.Sprintf("adapter %q 不支持命令 %q", adapter, body.Cmd)})
+			writeAPIError(w, r, http.StatusBadRequest, api.APIErrUnsupportedCommand, "adapter does not support command",
+				map[string]any{"adapter": adapter, "command": body.Cmd})
 			return
 		}
 	}
 	if !s.allowCommand(key) {
 		reject("rate_limited")
-		writeJSON(w, http.StatusTooManyRequests, map[string]string{
-			"error": fmt.Sprintf("命令过于频繁（上限 %d 次/分钟/设备）", s.cfg.cmdRatePerMin())})
+		writeAPIError(w, r, http.StatusTooManyRequests, api.APIErrRateLimited, "command rate limit exceeded",
+			map[string]any{"scope": "device_command", "limit_per_min": s.cfg.cmdRatePerMin()})
 		return
 	}
 	if s.cfg.Store == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "store unavailable"})
+		writeAPIError(w, r, http.StatusServiceUnavailable, api.APIErrStoreUnavailable, "store unavailable")
 		return
 	}
 
@@ -1364,7 +1384,8 @@ func (s *Server) handlePostCommand(w http.ResponseWriter, r *http.Request) {
 		id, err = s.cfg.Store.CreateCommand(key, body.Cmd, body.Args)
 	}
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Warn("request failed", "err", err, "path", r.URL.Path)
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrInternal, "internal error")
 		return
 	}
 	data, _ := json.Marshal(api.CommandData{CommandID: id, Cmd: body.Cmd, Args: body.Args})
@@ -1387,7 +1408,8 @@ func (s *Server) handlePostCommand(w http.ResponseWriter, r *http.Request) {
 	// 先落 sent 再写 WS：Edge 可能在本函数返回前就回 ack，若反过来写库会把
 	// 已到达的 ok 覆盖回 sent。写失败再显式落 failed。
 	if err := markSent(); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Warn("request failed", "err", err, "path", r.URL.Path)
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrInternal, "internal error")
 		return
 	}
 	if deliveryErr := link.sendCommand(r.Context(), payload); deliveryErr != nil {
@@ -1399,7 +1421,8 @@ func (s *Server) handlePostCommand(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(deliveryErr, errEdgeLinkClosed) {
 			status = http.StatusConflict
 		}
-		writeJSON(w, status, map[string]string{"error": "edge send failed"})
+		writeAPIError(w, r, status, api.APIErrCommandDeliveryFailed, "edge send failed",
+			map[string]any{"edge_id": chi.URLParam(r, "edgeID"), "device_id": chi.URLParam(r, "deviceID")})
 		return
 	}
 	at, aid, an := auditActor(p)

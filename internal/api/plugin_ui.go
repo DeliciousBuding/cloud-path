@@ -12,17 +12,19 @@ type PluginUIData struct {
 
 // PluginUINavigationData is the stable Application navigation contribution.
 type PluginUINavigationData struct {
-	Title      string `json:"title"`
-	Icon       string `json:"icon,omitempty"`
-	Order      int    `json:"order,omitempty"`
-	Route      string `json:"route"`
-	Visibility string `json:"visibility,omitempty"`
+	Title      string            `json:"title"`
+	I18n       map[string]string `json:"i18n,omitempty"`
+	Icon       string            `json:"icon,omitempty"`
+	Order      int               `json:"order,omitempty"`
+	Route      string            `json:"route"`
+	Visibility string            `json:"visibility,omitempty"`
 }
 
 // PluginUIPageData is one Application page declaration.
 type PluginUIPageData struct {
 	ID       string                `json:"id"`
 	Title    string                `json:"title"`
+	I18n     map[string]string     `json:"i18n,omitempty"`
 	Sections []PluginUISectionData `json:"sections"`
 }
 

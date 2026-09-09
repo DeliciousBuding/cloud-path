@@ -15,7 +15,7 @@ describe('PluginUIBridge', () => {
   it('uses a versioned same-origin asset URL and never grants same-origin sandbox access', () => {
     renderWithProviders(<PluginUIBridge pluginId="example.app" version="v2.0.0" instance={instance}
       section={{ type: 'custom', entry: 'ui/index.html', scopes: ['records.read'] }} />)
-    const frame = screen.getByTitle('插件自定义界面')
+    const frame = screen.getByTitle('插件自定义页面')
     expect(frame).toHaveAttribute('src', '/api/plugin-ui/assets/example.app/v2.0.0/ui/index.html')
     expect(frame).toHaveAttribute('sandbox', 'allow-scripts')
     expect(frame.getAttribute('sandbox')).not.toContain('allow-same-origin')
@@ -25,17 +25,17 @@ describe('PluginUIBridge', () => {
   it('falls back to the desired instance version when catalog version is absent', () => {
     renderWithProviders(<PluginUIBridge pluginId="example.app" instance={instance}
       section={{ type: 'custom', entry: 'ui/index.html', scopes: [] }} />)
-    expect(screen.getByTitle('插件自定义界面')).toHaveAttribute('src', '/api/plugin-ui/assets/example.app/v1.0.0/ui/index.html')
+    expect(screen.getByTitle('插件自定义页面')).toHaveAttribute('src', '/api/plugin-ui/assets/example.app/v1.0.0/ui/index.html')
   })
 
   it('fails closed when the custom entry is missing or unsafe', () => {
     const { unmount } = renderWithProviders(<PluginUIBridge pluginId="example.app" version="v2.0.0" instance={instance}
       section={{ type: 'custom', scopes: ['records.read'] }} />)
-    expect(screen.getByRole('alert')).toHaveTextContent('自定义界面不可用')
+    expect(screen.getByRole('alert')).toHaveTextContent('自定义页面不可用')
     unmount()
     renderWithProviders(<PluginUIBridge pluginId="example.app" version="v2.0.0" instance={instance}
       section={{ type: 'custom', entry: '../evil.js', scopes: ['records.read'] }} />)
-    expect(screen.getByRole('alert')).toHaveTextContent('自定义界面不可用')
-    expect(screen.queryByTitle('插件自定义界面')).not.toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('自定义页面不可用')
+    expect(screen.queryByTitle('插件自定义页面')).not.toBeInTheDocument()
   })
 })

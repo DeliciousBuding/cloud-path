@@ -43,6 +43,18 @@ function text(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
+function normalizeI18n(value: unknown): Record<string, string> | undefined {
+  if (!record(value)) return undefined
+  const entries: [string, string][] = []
+  for (const [rawKey, rawText] of Object.entries(value)) {
+    if (typeof rawText !== 'string') continue
+    const key = rawKey.trim()
+    const label = rawText.trim()
+    if (key && label) entries.push([key, label])
+  }
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
+
 function finite(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
@@ -119,6 +131,7 @@ function normalizeNavigation(raw: unknown): PluginUINavigation | undefined {
   const visibility = text(raw.visibility)
   return {
     title: title.slice(0, 40),
+    i18n: normalizeI18n(raw.i18n),
     route,
     icon: text(raw.icon)?.slice(0, 40),
     order: order !== undefined && Number.isInteger(order) && order >= 0 && order <= 999 ? order : undefined,
@@ -135,7 +148,7 @@ function normalizePage(raw: unknown): PluginUIPage | null {
   const sections = raw.sections.slice(0, 32).map(normalizeSection)
     .filter((item): item is PluginUISection => item !== null)
   if (sections.length === 0) return null
-  return { id, title: title.slice(0, 80), sections }
+  return { id, title: title.slice(0, 80), i18n: normalizeI18n(raw.i18n), sections }
 }
 
 /** 宽容归一化 UI contribution；非法字段安全丢弃，未知结构不会进入渲染树。 */

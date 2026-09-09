@@ -4,6 +4,7 @@
 //   ① 按**状态码**给文案，不把服务端 message 当规则复述（401 一律「用户名或密码错误」，
 //      不泄漏「用户存在但密码错」这类区别，也不依赖服务端措辞）；
 //   ② 429 只在服务端真的给了 Retry-After 时才报秒数，绝不自己编一个倒计时。
+import { i18n } from '@/i18n'
 import { ApiError } from './api'
 
 export interface AuthErrorCopy {
@@ -23,6 +24,10 @@ const BASE: AuthErrorCopy = {
   message: '', badCredentials: false, alreadySetup: false, unreachable: false,
 }
 
+function tr(key: string, options?: Record<string, unknown>): string {
+  return i18n.t(key, { ns: 'auth', ...options })
+}
+
 /**
  * 「服务端已经认下这次认证，但会话没落地」的诚实文案。
  *
@@ -33,34 +38,34 @@ const BASE: AuthErrorCopy = {
  */
 export const SESSION_NOT_ESTABLISHED = {
   /** POST /api/auth/login 2xx 之后 GET /api/auth/me 复核失败：凭据是对的，可以重试 */
-  login: '账号和密码是对的，但登录状态没有保存成功。请重试一次；如果仍然失败，请允许此页面保存网站数据，或联系管理员协助。',
+  get login() { return tr('login.sessionNotEstablished') },
   /** POST /api/auth/setup 2xx 之后复核失败：账号已创建且不可逆，只能去登录页 */
-  setup: '管理员账号已创建，但登录状态没有保存成功。请直接到登录页使用刚创建的账号登录。',
-} as const
+  get setup() { return tr('setup.sessionNotEstablished') },
+}
 
 /** POST /api/auth/login 的错误语义 */
 export function loginErrorCopy(e: unknown): AuthErrorCopy {
   if (e instanceof ApiError) {
     switch (e.status) {
       case 401:
-        return { ...BASE, message: '用户名或密码不正确，请检查后重试。', badCredentials: true }
+        return { ...BASE, message: tr('login.errors.badCredentials'), badCredentials: true }
       case 429:
         return {
           ...BASE,
           retryAfter: e.retryAfter,
           message: e.retryAfter
-            ? `登录尝试过多，请 ${e.retryAfter} 秒后重试`
-            : '登录尝试过多，请稍后再试',
+            ? tr('login.errors.rateLimitedAfter', { seconds: e.retryAfter })
+            : tr('login.errors.rateLimited'),
         }
       case 400:
-        return { ...BASE, message: '登录信息格式不正确，请检查用户名和密码后重试。' }
+        return { ...BASE, message: tr('login.errors.badRequest') }
       case 503:
-        return { ...BASE, message: '暂时无法完成登录，请稍后重试；持续失败请联系管理员。' }
+        return { ...BASE, message: tr('login.errors.unavailable') }
       default:
-        return { ...BASE, message: '登录暂时没有成功，请稍后重试。' }
+        return { ...BASE, message: tr('login.errors.failed') }
     }
   }
-  return { ...BASE, message: '暂时无法连接 CloudPath。请检查网络后重试。', unreachable: true }
+  return { ...BASE, message: tr('login.errors.network'), unreachable: true }
 }
 
 /**
@@ -75,28 +80,30 @@ export function setupErrorCopy(e: unknown): AuthErrorCopy {
       case 403:
         return {
           ...BASE, alreadySetup: true,
-          message: '现在无法完成初始化：系统可能已经设置过，或首次设置需要在允许的设备上操作。请联系管理员创建账号，然后到登录页登录。',
+          message: tr('setup.errors.forbidden'),
         }
       case 409:
         return {
           ...BASE, alreadySetup: true,
-          message: '系统已经完成初始化，不能再创建首个账号。请直接到登录页登录；忘记密码请联系管理员重置。',
+          message: tr('setup.errors.alreadySetup'),
         }
       // 没有 401 分支：/api/auth/setup 是免认证端点，只会 403/409/400/503。
       // 建号成功后 me→401 是「会话没落地」，属另一件事，由 SESSION_NOT_ESTABLISHED.setup
       // 说真话——旧实现在这里报「用户名或密码错误」，把已建号说成凭据错。
       case 400:
-        return { ...BASE, message: '账号或密码格式不正确，请检查后重试。' }
+        return { ...BASE, message: tr('setup.errors.badRequest') }
       case 429:
         return {
           ...BASE, retryAfter: e.retryAfter,
-          message: e.retryAfter ? `操作过于频繁，请 ${e.retryAfter} 秒后重试` : '操作过于频繁，请稍后再试',
+          message: e.retryAfter
+            ? tr('setup.errors.rateLimitedAfter', { seconds: e.retryAfter })
+            : tr('setup.errors.rateLimited'),
         }
       case 503:
-        return { ...BASE, message: '暂时无法保存账号信息，请稍后重试。' }
+        return { ...BASE, message: tr('setup.errors.unavailable') }
       default:
-        return { ...BASE, message: '初始化暂时没有成功，请稍后重试。' }
+        return { ...BASE, message: tr('setup.errors.failed') }
     }
   }
-  return { ...BASE, message: '暂时无法连接 CloudPath。请检查网络后重试。', unreachable: true }
+  return { ...BASE, message: tr('setup.errors.network'), unreachable: true }
 }

@@ -1,5 +1,5 @@
 // lib/descriptor.ts 契约测试：归一化 / Capability 解析 / widget 推导 / 质量与状态语义 /
-// 命令集推导 / 摘要与通用回落。断言只看「声明 → 展示模型」的映射，不含任何设备语义。
+// 操作集推导 / 摘要与通用回落。断言只看「声明 → 展示模型」的映射，不含任何设备语义。
 import { describe, expect, it } from 'vitest'
 import {
   CATEGORY_LABEL, CATEGORY_ORDER, EMPTY_INDEX, QUALITY_LABEL,
@@ -260,7 +260,7 @@ describe('widget 推导（presentation 是 Hint，不是语义真相）', () => 
     }
   })
 
-  it('inferWidget：未知结构一律落表格 / JSON，不会白屏', () => {
+  it('inferWidget：未知结构一律落表格 / 结构化数据，不会白屏', () => {
     expect(inferWidget(1)).toBe('number')
     expect(inferWidget(true)).toBe('boolean')
     expect(inferWidget('2026-09-03T10:00:00Z')).toBe('timestamp')
@@ -283,7 +283,7 @@ describe('值格式化与语义色', () => {
     expect(formatValue(false)).toBe('否')
     expect(formatValue([1, 2, 3])).toBe('3 项')
     expect(formatValue({ label: 'ok' })).toBe('ok')
-    expect(formatValue({ nested: { a: 1 } })).toBe('JSON')
+    expect(formatValue({ nested: { a: 1 } })).toBe('结构化数据')
   })
 
   it('formatTimestamp：有效时间本地化，无效原样，非时间值走 formatValue', () => {
@@ -330,7 +330,7 @@ describe('值格式化与语义色', () => {
   })
 })
 
-describe('commandActions：命令集只来自声明', () => {
+describe('commandActions：操作集只来自声明', () => {
   const d = makeDescriptor()
 
   it('Capability actions → 命令、文案、变体、确认文案、来源 Entity', () => {
@@ -391,7 +391,7 @@ describe('commandActions：命令集只来自声明', () => {
     expect(set.actions[1]?.label).toBe('Query State')
   })
 
-  it('既无声明也无白名单 → 空命令集 source=none（UI 显示等待同步）', () => {
+  it('既无声明也无白名单 → 空操作集 source=none（UI 显示等待同步）', () => {
     expect(commandActions({ descriptor: null, index: idx })).toEqual({ actions: [], source: 'none' })
     expect(commandActions({ descriptor: makeDescriptor({ entities: [] }), index: EMPTY_INDEX }).source).toBe('none')
   })

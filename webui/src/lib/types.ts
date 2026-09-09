@@ -58,7 +58,7 @@ export interface HealthView {
   edges_online: number
 }
 
-/** 已注册的设备适配器与其命令白名单（Descriptor 缺席时的命令集回落事实源） */
+/** 已注册的设备适配器与其操作白名单（Descriptor 缺席时的操作集回落事实源） */
 export interface AdapterView {
   name: string
   commands: string[]
@@ -220,6 +220,9 @@ export type Json =
   | Json[]
   | { [k: string]: Json }
 
+/** 插件声明文本的 locale -> 文本映射；机器 ID / URI / property key 永不进入。 */
+export type I18nText = Record<string, string>
+
 /** Descriptor: device status 枚举 */
 export type DeviceStatus = 'online' | 'offline' | 'unavailable' | 'degraded'
 
@@ -251,6 +254,7 @@ export interface DescriptorEntity {
   /** Driver 范围内用户不可改的唯一键 */
   unique_key: string
   name?: string
+  i18n?: I18nText
   category: EntityCategory
   /** Capability 引用列表（字符串，允许带或不带 @version） */
   capabilities: string[]
@@ -287,10 +291,11 @@ export interface CapabilityEventDecl {
   [k: string]: unknown
 }
 
-/** Capability spec.actions.* —— 命令面板的事实源（前端不再维护命令白名单/文案表） */
+/** Capability spec.actions.* —— 操作面板的事实源（前端不再维护操作白名单/文案表） */
 export interface CapabilityActionDecl {
   title?: string
   description?: string
+  i18n?: I18nText
   inputSchema?: Record<string, unknown>
   /** 下发到 POST commands 的 cmd 字段（缺省用 action key） */
   command?: string
@@ -322,6 +327,7 @@ export interface CapabilityMetadata {
   id: string
   version: number
   title?: string
+  i18n?: I18nText
 }
 
 /** 一份 Capability 文档（catalog 下发或随 Descriptor 一并返回） */
@@ -418,6 +424,7 @@ export interface PluginUISection {
 
 export interface PluginUINavigation {
   title: string
+  i18n?: I18nText
   icon?: string
   order?: number
   route: string
@@ -427,6 +434,7 @@ export interface PluginUINavigation {
 export interface PluginUIPage {
   id: string
   title: string
+  i18n?: I18nText
   sections: PluginUISection[]
 }
 
@@ -445,6 +453,7 @@ export interface PluginUIContribution {
 export interface PluginDriverContributionData {
   id: string
   title?: string
+  i18n?: I18nText
   discovery?: string
   ui?: PluginUIContribution
 }
@@ -452,12 +461,14 @@ export interface PluginDriverContributionData {
 export interface PluginApplicationContributionData {
   id: string
   title?: string
+  i18n?: I18nText
   ui?: PluginUIContribution
 }
 
 export interface PluginConnectorContributionData {
   id: string
   title?: string
+  i18n?: I18nText
   direction?: string
   host?: string
 }
@@ -544,7 +555,7 @@ export interface PluginAckData {
 }
 
 /* ------------------------------------------------------------------ *
- * 插件实例管理：读面视图 + 写面请求/响应
+ * 运行实例管理：读面视图 + 写面请求/响应
  * ------------------------------------------------------------------ */
 
 /** 实例的**期望态**（Server 权威） */
@@ -573,7 +584,7 @@ export interface PluginInstanceObservedView {
 }
 
 /**
- * 单个插件实例。desired 与 observed **永远分别渲染**（control-plane-sync.md 不变量 5）：
+ * 单个运行实例。desired 与 observed **永远分别渲染**（control-plane-sync.md 不变量 5）：
  * `has_observed=false` → 必须显式呈现对应运行宿主未上报，不得把 desired.enabled 当成运行中；
  * `stale=true` / `drift=true` → 必须有清晰视觉状态。
  */
@@ -640,7 +651,7 @@ export interface PluginInstanceActionRequest {
 }
 
 /**
- * 插件实例写操作的**稳定错误码**（api.PluginErr*）。
+ * 运行实例写操作的**稳定错误码**（api.PluginErr*）。
  * 前端按码呈现文案，绝不解析错误文本 —— server 的 message 可能变，码不会。
  */
 export const PluginErr = {
@@ -651,6 +662,10 @@ export const PluginErr = {
   EdgeOffline: 'plugin_edge_offline',
   SecretForbidden: 'plugin_secret_forbidden',
   InvalidConfig: 'plugin_invalid_config',
+  StoreUnavailable: 'plugin_store_unavailable',
+  KindUnavailable: 'plugin_instance_kind_unavailable',
+  HostMismatch: 'plugin_instance_host_mismatch',
+  KindUnsupported: 'plugin_instance_kind_unsupported',
 } as const
 
 export type PluginErrCode = typeof PluginErr[keyof typeof PluginErr]
@@ -667,6 +682,7 @@ export const PLUGIN_ERR_CODES: readonly string[] = Object.values(PluginErr)
 export interface PluginCatalogDriverView {
   id: string
   title?: string
+  i18n?: I18nText
   descriptor?: string
   configSchema?: string
   discovery?: string

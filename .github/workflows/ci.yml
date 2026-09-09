@@ -78,6 +78,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -95,6 +97,12 @@ jobs:
       - name: Install frontend dependencies
         working-directory: webui
         run: pnpm install --frozen-lockfile
+
+      - name: i18n quality gate self-test
+        run: python scripts/check_i18n.py --self-test
+
+      - name: i18n quality gate
+        run: python scripts/check_i18n.py
 
       - name: Typecheck frontend
         working-directory: webui

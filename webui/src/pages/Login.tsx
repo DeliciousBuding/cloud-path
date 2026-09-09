@@ -11,10 +11,12 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { ChevronDown, Eye, EyeOff, KeyRound } from 'lucide-react'
+import '@/i18n'
 import { AuthCard, Button, Spinner, TextField } from '@/components/ui'
-import { api, getToken, setToken } from '@/lib/api'
-import { SESSION_NOT_ESTABLISHED, loginErrorCopy } from '@/lib/authErrors'
+import { ApiError, api, getToken, setToken } from '@/lib/api'
+import { loginErrorCopy } from '@/lib/authErrors'
 import { confirmSession, useAuth } from '@/store/auth'
 import { toast } from '@/store/toast'
 import { cn } from '@/lib/cn'
@@ -23,7 +25,8 @@ import { usePageTitle } from '@/hooks/usePageTitle'
 const UI_ROLES = new Set(['admin', 'operator', 'viewer'])
 
 export default function Login() {
-  usePageTitle('登录')
+  const { t } = useTranslation('auth')
+  usePageTitle(t('pageTitle.login'))
 
   const navigate = useNavigate()
 
@@ -45,18 +48,31 @@ export default function Login() {
   // 429 限流倒计时：只在服务端给了 Retry-After 时才启动，不自己编秒数
   useEffect(() => {
     if (cooldown <= 0) return
-    const t = setInterval(() => setCooldown((c) => (c > 0 ? c - 1 : 0)), 1000)
-    return () => clearInterval(t)
+    const timer = setInterval(() => setCooldown((c) => (c > 0 ? c - 1 : 0)), 1000)
+    return () => clearInterval(timer)
   }, [cooldown])
 
   const locked = busy || cooldown > 0
+
+  function loginErrorMessage(err: unknown, copy: ReturnType<typeof loginErrorCopy>): string {
+    if (!(err instanceof ApiError)) return t('login.errors.network')
+    switch (err.status) {
+      case 401: return t('login.errors.badCredentials')
+      case 429: return copy.retryAfter
+        ? t('login.errors.rateLimitedAfter', { seconds: copy.retryAfter })
+        : t('login.errors.rateLimited')
+      case 400: return t('login.errors.badRequest')
+      case 503: return t('login.errors.unavailable')
+      default: return t('login.errors.failed')
+    }
+  }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const u = username.trim()
     const next: { user?: string; pass?: string } = {}
-    if (!u) next.user = '请输入用户名'
-    if (!password) next.pass = '请输入密码'
+    if (!u) next.user = t('login.fields.username.required')
+    if (!password) next.pass = t('login.fields.password.required')
     setFieldError(next)
     if (next.user || next.pass) return
 
@@ -75,14 +91,14 @@ export default function Login() {
       setTokenInput('')
       setTokenError('')
       const user = await confirmSession(r?.user ?? null)
-      toast.ok('登录成功', user?.name || user?.username || undefined)
+      toast.ok(t('login.toast.success'), user?.name || user?.username || undefined)
       navigate('/', { replace: true })
     } catch (err) {
       if (accepted) {
-        setFormError(SESSION_NOT_ESTABLISHED.login)
+        setFormError(t('login.sessionNotEstablished'))
       } else {
         const copy = loginErrorCopy(err)
-        setFormError(copy.message)
+        setFormError(loginErrorMessage(err, copy))
         if (copy.retryAfter) setCooldown(copy.retryAfter)
         if (copy.badCredentials) {
           // 密码错就清空密码（浏览器密码管理器仍会保留），并把焦点交回用户名
@@ -96,7 +112,7 @@ export default function Login() {
   async function onTokenSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const v = token.trim()
-    if (!v) { setTokenError('请输入访问令牌'); return }
+    if (!v) { setTokenError(t('login.token.required')); return }
     setTokenBusy(true)
     setTokenError('')
     setToken(v)
@@ -110,36 +126,36 @@ export default function Login() {
         setToken('')
         setTokenInput('')
         useAuth.setState({ status: 'out', user: null })
-        setTokenError('这个访问令牌只能用于网关接入，不能登录平台。请使用具备查看、操作或管理权限的令牌。')
+        setTokenError(t('login.token.edgeOnly'))
         setTokenBusy(false)
         return
       }
       useAuth.setState({ status: 'in', user })
-      toast.ok('访问令牌已生效', user.name || user.username || undefined)
+      toast.ok(t('login.toast.tokenSuccess'), user.name || user.username || undefined)
       navigate('/', { replace: true })
     } catch (err) {
       setTokenInput('') // 同时清空输入框，避免无效令牌继续留在页面中
       setToken('') // 复核失败即回滚，不在本机留下无效凭据
       const copy = loginErrorCopy(err)
       setTokenError(copy.unreachable
-        ? copy.message
-        : '访问令牌被拒绝：无效、已吊销或权限不足。请联系管理员重新签发。')
+        ? t('login.errors.network')
+        : t('login.token.rejected'))
       setTokenBusy(false)
     }
   }
 
   return (
     <AuthCard
-      title="登录 CloudPath"
-      subtitle="通用设备接入与管理平台"
-      footer={<Link to="/setup" className="link">第一次使用？完成初始化</Link>}
+      title={t('login.title')}
+      subtitle={t('login.subtitle')}
+      footer={<Link to="/setup" className="link">{t('login.setupLink')}</Link>}
     >
       <form onSubmit={onSubmit} noValidate className="space-y-4">
         <TextField
-          label="用户名"
+          label={t('login.fields.username.label')}
           name="username"
           type="text"
-          placeholder="你的账号"
+          placeholder={t('login.fields.username.placeholder')}
           autoComplete="username"
           autoCapitalize="none"
           spellCheck={false}
@@ -150,10 +166,10 @@ export default function Login() {
           onChange={(e) => { setUsername(e.target.value); setFieldError((f) => ({ ...f, user: undefined })) }}
         />
         <TextField
-          label="密码"
+          label={t('login.fields.password.label')}
           name="password"
           type={reveal ? 'text' : 'password'}
-          placeholder="你的密码"
+          placeholder={t('login.fields.password.placeholder')}
           autoComplete="current-password"
           value={password}
           error={fieldError.pass}
@@ -163,8 +179,8 @@ export default function Login() {
             <button
               type="button"
               onClick={() => setReveal(!reveal)}
-              aria-label={reveal ? '隐藏密码' : '显示密码'}
-              title={reveal ? '隐藏密码' : '显示密码'}
+              aria-label={reveal ? t('login.fields.password.hide') : t('login.fields.password.show')}
+              title={reveal ? t('login.fields.password.hide') : t('login.fields.password.show')}
               aria-pressed={reveal}
               className="flex h-7 w-7 items-center justify-center rounded-pill text-ink-3 transition-colors hover:text-ink"
             >
@@ -182,7 +198,7 @@ export default function Login() {
 
         <Button type="submit" lg disabled={locked} className="w-full">
           {busy && <Spinner size={14} />}
-          {busy ? '登录中…' : cooldown > 0 ? `请 ${cooldown} 秒后重试` : '登录'}
+          {busy ? t('login.submitting') : cooldown > 0 ? t('login.retryAfter', { seconds: cooldown }) : t('login.submit')}
         </Button>
       </form>
 
@@ -196,31 +212,31 @@ export default function Login() {
           className="flex min-h-touch w-full items-center gap-1.5 text-meta font-medium text-ink-2 transition-colors hover:text-ink"
         >
           <KeyRound size={13} className="shrink-0" />
-          使用访问令牌（自动化工具）
+          {t('login.token.toggle')}
           <ChevronDown size={13} className={cn('ml-auto shrink-0 transition-transform', tokenOpen && 'rotate-180')} />
         </button>
 
         {tokenOpen && (
           <form id="token-signin" onSubmit={onTokenSubmit} noValidate className="mt-3.5 space-y-3 fade-up">
             <TextField
-              label="访问令牌"
+              label={t('login.token.label')}
               type="password"
-              placeholder="粘贴管理员签发的访问令牌"
+              placeholder={t('login.token.placeholder')}
               autoComplete="off"
               spellCheck={false}
               value={token}
               error={tokenError}
-              hint="访问令牌只保存在这台设备，用于连接平台和自动化工具；完整内容不会再次显示。"
+              hint={t('login.token.hint')}
               disabled={tokenBusy}
               onChange={(e) => { setTokenInput(e.target.value); setTokenError('') }}
             />
             <Button type="submit" variant="ghost" lg disabled={tokenBusy} className="w-full">
               {tokenBusy && <Spinner size={14} />}
-              {tokenBusy ? '校验中…' : '用访问令牌登录'}
+              {tokenBusy ? t('login.token.submitting') : t('login.token.submit')}
             </Button>
             {getToken() && (
               <p className="text-meta text-ink-3">
-                本机已保存一个访问令牌；提交新令牌会覆盖它。
+                {t('login.token.stored')}
               </p>
             )}
           </form>

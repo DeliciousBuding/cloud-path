@@ -1,4 +1,5 @@
 import { ApiError } from './api'
+import { i18n } from '@/i18n'
 import { schemaArgsError } from './command-schema'
 import type { AuthState } from '@/store/auth'
 import type { AppJobView } from './types'
@@ -19,35 +20,37 @@ export function manualAppJobs(jobs: AppJobView[] | undefined): AppJobView[] {
 }
 
 export function appJobSchema(json: string): { schema?: Record<string, unknown>; error?: string } {
-  if (typeof json !== 'string') return { error: '操作参数声明无效，暂不能执行。' }
+  if (typeof json !== 'string') return { error: i18n.t('plugin:actions.invalidSchema') }
   if (!json.trim()) return { schema: { type: 'object' } }
   try {
     const schema: unknown = JSON.parse(json)
     if (typeof schema === 'boolean') return { schema: { allOf: [schema] } }
     if (schema && typeof schema === 'object' && !Array.isArray(schema)) return { schema: schema as Record<string, unknown> }
   } catch { /* Invalid declarations must not become permissive forms. */ }
-  return { error: '操作参数声明无效，暂不能执行。' }
+  return { error: i18n.t('plugin:actions.invalidSchema') }
 }
 
 /** Applications accept JSON objects, not the 64-byte/single-line device command wire format. */
 export function appJobArgsError(args: string, schema: Record<string, unknown>): string | undefined {
   const bytes = new TextEncoder().encode(args).length
-  if (bytes > APP_ACTION_MAX_BYTES) return '参数 ' + bytes + ' UTF-8 字节，超过 ' + APP_ACTION_MAX_BYTES + ' 字节上限'
+  if (bytes > APP_ACTION_MAX_BYTES) return i18n.t('plugin:actions.argsTooLong', { bytes, limit: APP_ACTION_MAX_BYTES })
   return schemaArgsError(args, { type: 'object', allOf: [schema] })
 }
 
 export function appActionError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.status) {
-      case 400: return '参数未被接受，请核对输入与插件返回的说明。'
-      case 401: return '登录已失效，请重新登录后查看应用记录。'
-      case 403: return '没有执行权限，请核对账号角色与访问权限。'
-      case 404: return '应用操作或目标不存在，声明可能已变更。'
-      case 409: return '操作发生冲突，请先核对应用记录与当前状态。'
-      case 429: return error.retryAfter ? '操作过于频繁，请 ' + error.retryAfter + ' 秒后再试。' : '操作过于频繁，请稍后再试。'
-      case 503: return '执行结果待确认，请先查看应用记录。'
+      case 400: return i18n.t('plugin:actions.errors.badRequest')
+      case 401: return i18n.t('plugin:actions.errors.unauthorized')
+      case 403: return i18n.t('plugin:actions.errors.forbidden')
+      case 404: return i18n.t('plugin:actions.errors.notFound')
+      case 409: return i18n.t('plugin:actions.errors.conflict')
+      case 429: return error.retryAfter
+        ? i18n.t('plugin:actions.errors.rateLimitedAfter', { seconds: error.retryAfter })
+        : i18n.t('plugin:actions.errors.rateLimited')
+      case 503: return i18n.t('plugin:actions.errors.unavailable')
     }
   }
   return error instanceof Error && error.name === 'TimeoutError'
-    ? '请求超时，执行结果待确认。' : '未取得可信的执行结果，请先查看应用记录。'
+    ? i18n.t('plugin:actions.errors.timeout') : i18n.t('plugin:actions.errors.unknown')
 }

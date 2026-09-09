@@ -2,6 +2,8 @@
 // Segmented / KeyValue / Spinner / Button / TextField / ThemeToggle / AuthCard
 // 颜色一律走 index.css token（Tailwind 主题类或 .btn/.input/.card 基类），组件内禁止裸色值。
 import { useId, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import '@/i18n'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
 import { ArrowLeft, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
 import { Link } from 'react-router'
@@ -111,10 +113,12 @@ export function EmptyState({ icon, title, hint, action, compact, plain }: {
  * 错误态：说清「拿不到什么」+ 一键重试。
  * 不复述服务端技术细节，也不把错误渲染成空白（空白 = 用户以为没数据）。
  */
-export function ErrorState({ icon, title, hint, onRetry, retrying, compact, plain, retryLabel = '重新加载' }: {
+export function ErrorState({ icon, title, hint, onRetry, retrying, compact, plain, retryLabel }: {
   icon?: ReactNode; title: string; hint?: ReactNode
   onRetry?: () => void; retrying?: boolean; compact?: boolean; plain?: boolean; retryLabel?: string
 }) {
+  const { t } = useTranslation()
+  const retryText = retryLabel ?? t('ui.reload')
   return (
     <div
       role="alert"
@@ -126,22 +130,24 @@ export function ErrorState({ icon, title, hint, onRetry, retrying, compact, plai
       {hint && <p className="mt-1 max-w-md text-body break-words text-ink-2">{hint}</p>}
       {onRetry && (
         <button type="button" className="btn btn-primary mt-5" onClick={onRetry} disabled={retrying}>
-          {retrying ? <Spinner size={13} /> : <RefreshCw size={13} />} {retryLabel}
+          {retrying ? <Spinner size={13} /> : <RefreshCw size={13} />} {retryText}
         </button>
       )}
     </div>
   )
 }
 
-export function Segmented<T extends string>({ options, value, onChange, label = '视图切换' }: {
+export function Segmented<T extends string>({ options, value, onChange, label }: {
   options: { value: T; label: string; icon?: ReactNode }[]
   value: T
   onChange: (v: T) => void
   /** 分组可读名称（读屏用户需要知道这组按钮在切换什么） */
   label?: string
 }) {
+  const { t } = useTranslation()
+  const groupLabel = label ?? t('ui.viewSwitch')
   return (
-    <div className="inline-flex max-w-full rounded-pill bg-ink-3/10 p-0.5" role="group" aria-label={label}>
+    <div className="inline-flex max-w-full rounded-pill bg-ink-3/10 p-0.5" role="group" aria-label={groupLabel}>
       {options.map((o) => (
         <button
           key={o.value}
@@ -175,12 +181,14 @@ export interface TabItem<T extends string> {
   count?: number
 }
 
-export function TabBar<T extends string>({ items, value, onChange, label = '分页切换' }: {
+export function TabBar<T extends string>({ items, value, onChange, label }: {
   items: TabItem<T>[]
   value: T
   onChange: (v: T) => void
   label?: string
 }) {
+  const { t } = useTranslation()
+  const tablistLabel = label ?? t('ui.tabSwitch')
   const idx = Math.max(0, items.findIndex((i) => i.value === value))
 
   const move = (delta: number) => {
@@ -194,7 +202,7 @@ export function TabBar<T extends string>({ items, value, onChange, label = '分�
     // 390px：标签条在自身容器内横向滚动，不把溢出推给 body（与移动端主导航同一手法）
     <div className="-mx-1 overflow-x-auto px-1 pb-1">
       <div
-        role="tablist" aria-label={label}
+        role="tablist" aria-label={tablistLabel}
         className="flex min-w-max gap-5 border-b border-hairline"
         onKeyDown={(e) => {
           if (e.key === 'ArrowRight') { e.preventDefault(); move(1) }
@@ -334,19 +342,20 @@ export function TextField({ label, hint, error, className, suffix, ...rest }: {
  *  与侧栏 ThemeControl 同一三态语义（浅色 → 深色 → 跟随系统）循环，
  *  图标反映当前模式、文案预告下一模式——不让「跟随系统」在独立页被悄悄丢掉。 */
 export function ThemeToggle({ className }: { className?: string }) {
+  const { t } = useTranslation()
   const [mode, setMode] = useState<ThemeMode>(() => getTheme())
   const META: Record<ThemeMode, { icon: typeof Sun; label: string }> = {
-    light: { icon: Sun, label: '浅色外观' },
-    dark: { icon: Moon, label: '深色外观' },
-    system: { icon: Monitor, label: '跟随系统' },
+    light: { icon: Sun, label: t('theme.light') },
+    dark: { icon: Moon, label: t('theme.dark') },
+    system: { icon: Monitor, label: t('theme.system') },
   }
   const next: ThemeMode = mode === 'light' ? 'dark' : mode === 'dark' ? 'system' : 'light'
   const Cur = META[mode].icon
   return (
     <button
       type="button"
-      title={`当前：${META[mode].label} · 点击切换为${META[next].label}`}
-      aria-label={`切换为${META[next].label}`}
+      title={t('theme.switchTitle', { current: META[mode].label, next: META[next].label })}
+      aria-label={t('theme.switchTo', { label: META[next].label })}
       onClick={() => { setTheme(next); setMode(next) }}
       className={cn(
         'flex h-touch w-touch items-center justify-center rounded-pill border border-hairline sm:h-8 sm:w-8',

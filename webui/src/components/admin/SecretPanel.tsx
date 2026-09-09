@@ -3,14 +3,19 @@
 // 本组件刻意不做任何持久化：不写 localStorage/sessionStorage、不进 URL、不打 console、不进 toast 文本。
 import { useEffect, useId, useState } from 'react'
 import { Check, Copy, ShieldAlert } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Badge, KeyValue } from '@/components/ui'
 import { fmtDateTime } from '@/lib/format'
 import type { CreatedToken } from '@/lib/types'
 
 export function SecretPanel({ secret, onClose }: { secret: CreatedToken; onClose: () => void }) {
+  const { t } = useTranslation('admin')
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
   const id = useId()
+  const scopeLabel = (scope: string) => t(`secret.scopes.${scope}`, {
+    defaultValue: t('secret.scopes.other'),
+  })
 
   // Esc 关闭：模态语义的最低要求（焦点管理与真机行为见 README 的待验证项）
   useEffect(() => {
@@ -41,14 +46,14 @@ export function SecretPanel({ secret, onClose }: { secret: CreatedToken; onClose
     >
       <h3 id={`${id}-title`} className="flex items-center gap-1.5 text-lead font-semibold tracking-[-0.01em] text-bad">
         <ShieldAlert size={15} className="shrink-0" />
-        <span className="min-w-0 break-words">访问令牌已创建：完整内容只显示这一次</span>
+        <span className="min-w-0 break-words">{t('secret.title')}</span>
       </h3>
       <p id={`${id}-warn`} className="mt-2 text-meta leading-relaxed text-ink-2 break-words">
-        关闭后无法再次查看，也无法找回。请立刻复制并保存到安全位置；不要贴进聊天、代码仓库或截图。
+        {t('secret.warning')}
       </p>
 
       <label htmlFor={`${id}-secret`} className="mt-4 mb-1.5 block text-compact font-medium text-ink-2">
-        访问令牌
+        {t('secret.label')}
       </label>
       <div className="flex gap-2">
         {/* 只读输入框（不是文本节点）：可全选复制，也不会被当成正文重复朗读 */}
@@ -65,29 +70,29 @@ export function SecretPanel({ secret, onClose }: { secret: CreatedToken; onClose
           type="button"
           autoFocus
           onClick={() => void copy()}
-          aria-label="复制访问令牌"
+          aria-label={t('secret.copyAria')}
           className="btn btn-primary shrink-0"
         >
-          {copied ? <Check size={14} /> : <Copy size={14} />}{copied ? '已复制' : '复制'}
+          {copied ? <Check size={14} /> : <Copy size={14} />}{copied ? t('secret.copied') : t('secret.copy')}
         </button>
       </div>
       <p id={`${id}-status`} role="status" aria-live="polite" className="mt-2 text-meta leading-relaxed text-ink-3 break-words">
-        {copied ? '已复制到剪贴板' : copyFailed ? '复制失败，请手动选中上方内容复制' : '复制后请立即保存到安全位置'}
+        {copied ? t('secret.status.copied') : copyFailed ? t('secret.status.failed') : t('secret.status.idle')}
       </p>
 
       <dl className="mt-4 space-y-2 border-t border-hairline pt-4">
-        <KeyValue k="名称" v={secret.name || '—'} />
-        <KeyValue k="识别码" v={`${secret.prefix}…`} mono />
-        <KeyValue k="权限" v={(secret.scopes ?? []).map((s) => ({ read: '查看', write: '操作', admin: '管理', edge: '网关接入' }[s] ?? '其他权限')).join('、') || '—'} />
-        <KeyValue k="有效期" v={secret.expires_at ? fmtDateTime(secret.expires_at) : '永不过期'} />
+        <KeyValue k={t('secret.fields.name')} v={secret.name || t('secret.none')} />
+        <KeyValue k={t('secret.fields.prefix')} v={`${secret.prefix}…`} mono />
+        <KeyValue k={t('secret.fields.scopes')} v={(secret.scopes ?? []).map(scopeLabel).join(t('secret.scopeSeparator')) || t('secret.none')} />
+        <KeyValue k={t('secret.fields.expires')} v={secret.expires_at ? fmtDateTime(secret.expires_at) : t('secret.neverExpires')} />
       </dl>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <button type="button" className="btn btn-ghost" onClick={onClose} aria-label="我已保存，关闭访问令牌">
-          我已保存，关闭
+        <button type="button" className="btn btn-ghost" onClick={onClose} aria-label={t('secret.closeAria')}>
+          {t('secret.close')}
         </button>
-        <Badge tone="warn">关闭后不再显示</Badge>
-        <Badge tone="idle">请妥善保存</Badge>
+        <Badge tone="warn">{t('secret.badges.hidden')}</Badge>
+        <Badge tone="idle">{t('secret.badges.keep')}</Badge>
       </div>
     </section>
   )

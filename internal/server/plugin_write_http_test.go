@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -10,10 +11,11 @@ import (
 )
 
 type stableAPIErrorBody struct {
-	Error     string `json:"error"`
-	Code      string `json:"code"`
-	Message   string `json:"message"`
-	RequestID string `json:"request_id"`
+	Error     string         `json:"error"`
+	Code      string         `json:"code"`
+	Message   string         `json:"message"`
+	RequestID string         `json:"request_id"`
+	Params    map[string]any `json:"params,omitempty"`
 }
 
 func assertStableAPIError(t *testing.T, resp *http.Response, status int, code string) stableAPIErrorBody {
@@ -28,6 +30,9 @@ func assertStableAPIError(t *testing.T, resp *http.Response, status int, code st
 	}
 	if body.Error != code || body.Code != code || body.Message == "" || body.RequestID == "" {
 		t.Fatalf("stable error body = %+v, want error/code=%q with message and request_id", body, code)
+	}
+	if !api.IsKnownErrorCode(code) {
+		t.Fatalf("error code %q is not registered in api canonical registry", code)
 	}
 	if got := resp.Header.Get("X-Request-ID"); got != body.RequestID {
 		t.Fatalf("X-Request-ID = %q, body request_id = %q", got, body.RequestID)
@@ -160,4 +165,35 @@ func TestPluginWriteRequestIDRoundtrip(t *testing.T) {
 	if got := resp2.Header.Get("X-Request-ID"); got == "" || strings.HasPrefix(got, "xxxx") {
 		t.Fatalf("非法 request id 未被替换: %q", got)
 	}
+}
+
+func assertErrorParam(t *testing.T, body stableAPIErrorBody, key string, want any) {
+	t.Helper()
+	got, ok := body.Params[key]
+	if !ok || !reflect.DeepEqual(got, want) {
+		t.Fatalf("params[%q] = %#v (present=%v), want %#v; body=%+v", key, got, ok, want, body)
+	}
+}
+
+// TestStableAPIErrorParamsAndRegistry 锁定设备错误与未知端点的 canonical code/params。
+func TestStableAPIErrorParamsAndRegistry(t *testing.T) {
+	st, _, ts, _, a, _ := setupPluginSync(t)
+	tok := issueTenantToken(t, st, a, `["read"]`)
+
+	resp := pluginREST(t, ts, tok, http.MethodGet, "/api/devices/e1/missing", "")
+	body := assertStableAPIError(t, resp, http.StatusNotFound, api.APIErrDeviceNotFound)
+	assertErrorParam(t, body, "edge_id", "e1")
+	assertErrorParam(t, body, "device_id", "missing")
+
+	resp = pluginREST(t, ts, tok, http.MethodGet, "/api/not-a-real-endpoint", "")
+	assertStableAPIError(t, resp, http.StatusNotFound, api.APIErrNotFound)
+}
+
+// TestPluginInvalidConfigCarriesStableParams 锁定写面校验错误不把 message 当 UI 契约。
+func TestPluginInvalidConfigCarriesStableParams(t *testing.T) {
+	st, _, ts, _, a, _ := setupPluginSync(t)
+	tok := issueTenantToken(t, st, a, `["write"]`)
+	resp := pluginREST(t, ts, tok, http.MethodPost, "/api/plugin-instances", `{`)
+	body := assertStableAPIError(t, resp, http.StatusBadRequest, api.PluginErrInvalidConfig)
+	assertErrorParam(t, body, "field", "body")
 }

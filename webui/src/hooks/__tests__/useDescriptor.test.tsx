@@ -1,5 +1,5 @@
 // 数据层契约测试：Descriptor 的四条来源通道（ws / inline / rest / bulk）优先级、
-// Schema 端点 404 时的通用回落、以及命令集随声明出现/消失。
+// Schema 端点 404 时的通用回落、以及操作集随声明出现/消失。
 // 这一层是「后端未就绪也不白屏」的关键接缝，必须有可重复的回归保护。
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
@@ -38,7 +38,7 @@ describe('useDeviceDescriptor：来源优先级与回落', () => {
     expect(result.current.descriptor).toBeNull()
     expect(result.current.source).toBe('none')
     expect(result.current.capabilities).toBe(EMPTY_INDEX)
-    expect(result.current.commands).toEqual({ actions: [{ cmd: 'raw', label: '原始命令' }], source: 'adapter' })
+    expect(result.current.commands).toEqual({ actions: [{ cmd: 'raw', label: '操作' }], source: 'adapter' })
   })
 
   it('Schema 端点 502 → 真实错误态，不回落成“没有操作”', async () => {
@@ -68,7 +68,7 @@ describe('useDeviceDescriptor：来源优先级与回落', () => {
     expect(http.to('/api/descriptors')).toHaveLength(1)
   })
 
-  it('单设备 REST 命中 → source=rest，随行 capabilities 进索引，命令集来自 Capability actions', async () => {
+  it('单设备 REST 命中 → source=rest，随行 capabilities 进索引，操作集来自 Capability actions', async () => {
     installFetch((url) => {
       if (url === '/api/capabilities') return stubResponse(200, { capabilities: [capTemperature] })
       if (url.endsWith('/descriptor')) {

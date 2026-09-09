@@ -2,20 +2,23 @@ import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer,
   Tooltip, XAxis, YAxis,
 } from 'recharts'
+import { useTranslation } from 'react-i18next'
+import '@/i18n'
 import type { SeriesPoint } from '@/store/ws'
 
-const timeTick = (t: number): string => new Date(t * 1000).toLocaleTimeString('zh-CN', { hour12: false })
+const timeTick = (t: number, locale: string): string => new Date(t * 1000).toLocaleTimeString(locale, { hour12: false })
 
-function ChartTooltip({ active, payload, unit }: {
+function ChartTooltip({ active, payload, unit, timeFormatter }: {
   active?: boolean
   payload?: { value?: number; payload?: { t?: number } }[]
   unit?: string
+  timeFormatter: (t: number) => string
 }) {
   const p = payload?.[0]
   if (!active || !p || p.value === undefined) return null
   return (
     <div className="card num px-2 py-1 text-meta text-ink-2 shadow-lg">
-      {p.payload?.t !== undefined && <span className="text-ink-3">{timeTick(p.payload.t)} · </span>}
+      {p.payload?.t !== undefined && <span className="text-ink-3">{timeFormatter(p.payload.t)} · </span>}
       <span className="font-medium text-ink">{p.value}</span>
       {unit && <span className="text-ink-3"> {unit}</span>}
     </div>
@@ -35,7 +38,7 @@ function ChartTooltip({ active, payload, unit }: {
  *
  * 轴 / 网格 / Tooltip 以单元素变量内联为图表直接子元素：recharts 2.15 不展开 fragment 变量形式。
  */
-export function TrendChart({ points, unit, height = 112, kind = 'area', zeroBase = false, hideY = false, xTick = timeTick }: {
+export function TrendChart({ points, unit, height = 112, kind = 'area', zeroBase = false, hideY = false, xTick }: {
   points: SeriesPoint[]
   unit?: string
   height?: number
@@ -44,10 +47,13 @@ export function TrendChart({ points, unit, height = 112, kind = 'area', zeroBase
   hideY?: boolean
   xTick?: (t: number) => string
 }) {
+  const { t, i18n } = useTranslation()
+  const locale = i18n.resolvedLanguage ?? i18n.language
+  const tickFormatter = xTick ?? ((value: number) => timeTick(value, locale))
   if (points.length < 2) {
     return (
       <p className="py-8 text-center text-meta text-ink-3">
-        采样中：积累两个数据点后显示趋势{unit ? `（${unit}）` : ''}
+        {unit ? t('trend.samplingWithUnit', { unit }) : t('trend.sampling')}
       </p>
     )
   }
@@ -62,7 +68,7 @@ export function TrendChart({ points, unit, height = 112, kind = 'area', zeroBase
 
   const xAxis = (
     <XAxis
-      dataKey="t" tick={{ fontSize: 11, fill: 'var(--color-ink-3)', fontFamily: 'var(--font-mono)' }} tickFormatter={xTick}
+      dataKey="t" tick={{ fontSize: 11, fill: 'var(--color-ink-3)', fontFamily: 'var(--font-mono)' }} tickFormatter={tickFormatter}
       minTickGap={48} axisLine={false} tickLine={false} height={18}
     />
   )
@@ -74,7 +80,7 @@ export function TrendChart({ points, unit, height = 112, kind = 'area', zeroBase
     />
   )
   const grid = hideY ? null : <CartesianGrid stroke="var(--color-hairline)" strokeDasharray="2 4" vertical={false} />
-  const tip = <Tooltip content={<ChartTooltip unit={unit} />} isAnimationActive={false} />
+  const tip = <Tooltip content={<ChartTooltip unit={unit} timeFormatter={tickFormatter} />} isAnimationActive={false} />
   const zeroLine = !zeroBase && lo < 0 && hi > 0 ? <ReferenceLine y={0} stroke="var(--color-hairline)" /> : null
   const margin = { top: 6, right: 4, bottom: 0, left: hideY ? 0 : -14 }
 

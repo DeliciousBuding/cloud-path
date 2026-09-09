@@ -1,31 +1,32 @@
-# 设备协议契约
+# 设备协议
 
 最后更新：2026-09-09
 
 CloudPath 的公共设备模型是 **Device / Entity / Capability / Observation / Event / Command**。
+面向用户的中文名称与机器标识的映射见 [name-lexicon.md](architecture/name-lexicon.md)；协议字段和 ID 保持 canonical。
 设备线协议、串口帧、厂商字段和板级容错由对应 Driver Plugin 拥有；Core 只处理平台模型和
 版本化消息。具体设备的协议入口见文末参考表。
 
 ## 概念
 
-| 概念 | 含义 | 责任边界 |
-|---|---|---|
-| Device | 一台物理或虚拟设备 | Driver 发现并提供稳定 `device_id` / `external_id` |
-| Entity | Device 下可独立观察或控制的逻辑单元 | Driver 声明稳定 `entity_id`、名称和类别 |
-| Capability | Entity 能做什么的版本化声明 | Driver 声明 Properties、Events、Actions 与 UI hints |
-| Observation | 当前状态的类型化采样值 | 保留 `observed_at`、`received_at`、质量和 sequence；不从旧 `raw` 猜实体 |
-| Event | 不可覆盖的时间点事实 | Type 属于 Capability 或 Application 命名空间；设备级事件可省略 `entity_id` |
-| Command | 对声明动作的一次请求 | 命令白名单来自 Driver/Capability 的 action 声明；参数由 Core 做传输边界校验 |
+| 概念 | 界面用词 | 含义 | 责任边界 |
+|---|---|---|---|
+| Device | 设备 | 一台物理或虚拟设备 | Driver 发现并提供稳定 `device_id` / `external_id` |
+| Entity | 实体 | Device 下可独立观察或控制的逻辑单元 | Driver 声明稳定 `entity_id`、名称和类别 |
+| Capability | 能力 | Entity 能做什么的版本化声明 | Driver 声明 Properties、Events、Actions 与 UI hints |
+| Observation | 状态 | 当前状态的类型化采样值 | 保留 `observed_at`、`received_at`、质量和 sequence；不从旧 `raw` 猜实体 |
+| Event | 事件 | 不可覆盖的时间点事实 | Type 属于 Capability 或 Application 命名空间；设备级事件可省略 `entity_id` |
+| Command | 操作 | 对声明动作的一次请求 | 操作白名单来自 Driver/Capability 的 action 声明；参数由 Core 做传输边界校验 |
 
 约束：
 
 - **协议不枚举具体业务事件**：`Event.type` 对 Core 是不透明字符串。标准事件由 Capability
   或 Application 命名空间声明，旧适配器发送的标签继续兼容；Core 不维护
   `BOOT` / `REMIND` / `TAKEN` 等设备专用枚举。
-- **状态幂等**：读取状态的轮询不得改变设备状态。轮询命令名由适配器显式声明，Core 只按
+- **状态幂等**：读取状态的轮询不得改变设备状态。轮询操作名由适配器显式声明，Core 只按
   白名单下发。
-- **命令白名单**：只有 Driver 的 `ActionDescriptor` / 适配器 `SupportedCommands()` 声明过的动作
-  能被下发；Server 拒绝白名单外命令，前端命令面板消费同一份声明。
+- **操作白名单**：只有 Driver 的 `ActionDescriptor` / 适配器 `SupportedCommands()` 声明过的动作
+  能被下发；Server 拒绝白名单外操作，前端操作面板消费同一份声明。
 - **Raw 只作兼容和诊断**：`State.raw` 可以承载旧设备字段，但不是跨 Driver 的语义契约。
   主路径使用 Descriptor / Entity / Capability / Observation；未知字段原样保留，不得推断业务含义。
 - **时间与质量**：设备时钟不可信时，Driver/Edge 必须保留真实采样时间并标明质量；Core 不从
@@ -102,7 +103,7 @@ Edge 拒绝旧 revision。相同 revision + 相同 digest 是幂等重放；相�
 外部 Driver Plugin 的能力文档（Capability 标题、Property 单位/读写、Event 声明、Action
 `inputSchema`）只存在于 Edge 侧的插件进程里，而 `GET /api/capabilities` 与前端 Schema 驱动
 UI 都跑在 Server 侧。本消息就是这条通道；没有它，装了新 Driver 的设备在 WebUI 上只有裸
-观测值、没有命令面板。
+状态值、没有操作面板。
 
 - 载荷是 `sources[]`，每个元素为 `{source, capabilities[]}`；`source` 是声明者（外部 Driver 的
   driver id，或进程内适配器名）；
@@ -120,7 +121,7 @@ UI 都跑在 Server 侧。本消息就是这条通道；没有它，装了新 Dr
   对应 proto 字段号 4–7；字段号 1–3 及旧 JSON 形状保持不变。Edge 把这些字段原样转换为
   Capability Action，`input_schema_json` 转换为 `inputSchema`，再由 `capabilities` 消息传到 Server。
   旧 Driver 缺省这些字段时仍兼容，不由 Edge 补造标题或危险性。
-  破坏性标记触发交互确认，确认文案原样展示；二者不是命令权限或硬件安全校验的替代。
+  破坏性标记触发交互确认，确认文案原样展示；二者不是操作权限或硬件安全校验的替代。
 
 ## Reference: 设备侧协议归属
 

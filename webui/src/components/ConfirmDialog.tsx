@@ -7,6 +7,8 @@
 //   - busy 期间两个按钮都禁用，避免重复提交产生第二个 revision；
 //   - 390px：宽度用 w-full + max-w，内边距相对单位，不写死像素宽。
 import { useEffect, useId, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import '@/i18n'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, Info } from 'lucide-react'
@@ -32,9 +34,11 @@ export interface ConfirmDialogProps {
 }
 
 export function ConfirmDialog({
-  open, title, body, confirmLabel, cancelLabel = '取消', tone = 'danger',
+  open, title, body, confirmLabel, cancelLabel, tone = 'danger',
   busy = false, requireAck, extra, onConfirm, onCancel,
 }: ConfirmDialogProps) {
+  const { t } = useTranslation()
+  const cancelText = cancelLabel ?? t('actions.cancel')
   const titleId = useId()
   const cancelRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -131,7 +135,7 @@ export function ConfirmDialog({
           <button
             ref={cancelRef} type="button" className="btn btn-ghost" disabled={busy} onClick={onCancel}
           >
-            {cancelLabel}
+            {cancelText}
           </button>
           <button
             type="button"

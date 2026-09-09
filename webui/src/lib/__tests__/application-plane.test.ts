@@ -9,11 +9,11 @@ describe('通用应用展示，不猜业务或设备', () => {
     expect(recordFieldLabel('opaque_domain_flag')).toBe('opaque_domain_flag')
     expect(recordFieldLabel('应用说明')).toBe('应用说明')
   })
-  it('名称只取公开声明；重复的局部实体标识不能认成某一台设备', () => {
+  it('名称只取公开声明；重复的局部设备标识不能认成某一台设备', () => {
     expect(bindingLabels(appBinding, appPresentation)).toEqual({ entity: '入口信号', capability: '输入信号' })
     const other = { ...appPresentation.descriptors[0], device_id: 'node-b/device-b' }
     expect(bindingLabels(appBinding, { ...appPresentation, descriptors: [...appPresentation.descriptors, other] }).entity).toBeUndefined()
-    expect(bindingLabels(appBinding, null)).toEqual({ entity: undefined, capability: '应用所需能力' })
+    expect(bindingLabels(appBinding, null)).toEqual({ entity: undefined, capability: '应用所需功能' })
   })
   it.each([
     ['* * * * *', '每分钟'], ['*/5 * * * *', '每小时内每隔 5 分钟'],

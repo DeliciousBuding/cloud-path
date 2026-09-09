@@ -3,6 +3,7 @@
 // 明文由父组件（TokenManager）在 onCreated 里接管，本组件不落任何持久化通道。
 import { useState } from 'react'
 import type { FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button, TextField } from '@/components/ui'
 import { ErrorNote } from './ErrorNote'
 import { CheckRow, SelectField } from './fields'
@@ -12,17 +13,11 @@ import {
 } from '@/lib/admin'
 import type { CreatedToken, TokenScope } from '@/lib/types'
 
-const SCOPE_COPY: Record<TokenScope, { label: string; hint: string }> = {
-  read: { label: '查看', hint: '查看设备状态、运行记录和操作记录。' },
-  write: { label: '操作设备', hint: '在查看之外，还可以执行设备操作。' },
-  admin: { label: '管理', hint: '可以管理成员和访问令牌，权限最高。' },
-  edge: { label: '网关接入', hint: '允许网关连接平台并同步设备状态。' },
-}
-
 export function CreateTokenForm({ onCreated, onCancel }: {
   onCreated: (t: CreatedToken) => void
   onCancel: () => void
 }) {
+  const { t } = useTranslation('admin')
   const [name, setName] = useState('')
   const [scopes, setScopes] = useState<TokenScope[]>(DEFAULT_SCOPES)
   const [expiry, setExpiry] = useState(DEFAULT_EXPIRY)
@@ -30,6 +25,10 @@ export function CreateTokenForm({ onCreated, onCancel }: {
   const [nameErr, setNameErr] = useState('')
   const [scopeErr, setScopeErr] = useState('')
   const [formErr, setFormErr] = useState('')
+  const expiryOptions = EXPIRY_OPTIONS.map((o) => ({
+    value: o.value,
+    label: t(`createToken.expiry.options.${o.value}`),
+  }))
 
   const toggle = (s: TokenScope, on: boolean) => {
     setScopes((prev) => (on ? [...prev.filter((x) => x !== s), s] : prev.filter((x) => x !== s)))
@@ -39,10 +38,10 @@ export function CreateTokenForm({ onCreated, onCancel }: {
   const submit = async (ev: FormEvent) => {
     ev.preventDefault()
     const n = name.trim()
-    setNameErr(n ? '' : '请输入令牌名称')
+    setNameErr(n ? '' : t('createToken.name.required'))
     if (!n) return
     if (scopes.length === 0) {
-      setScopeErr('请至少选择一项权限范围')
+      setScopeErr(t('createToken.scopes.required'))
       return
     }
     setScopeErr('')
@@ -59,21 +58,21 @@ export function CreateTokenForm({ onCreated, onCancel }: {
   }
 
   return (
-    <form onSubmit={submit} aria-label="新建访问令牌" className="mb-4 border-b border-hairline pb-4">
+    <form onSubmit={submit} aria-label={t('createToken.formAria')} className="mb-4 border-b border-hairline pb-4">
       <TextField
-        label="用途名称" value={name} error={nameErr} autoComplete="off"
-        hint="例如「自动部署」「门店网关」；这里填名称，不是令牌内容"
+        label={t('createToken.name.label')} value={name} error={nameErr} autoComplete="off"
+        hint={t('createToken.name.hint')}
         onChange={(ev) => setName(ev.target.value)}
       />
 
       <fieldset className="mt-4">
-        <legend className="mb-2 text-compact font-medium text-ink-2">这个令牌可以用来做什么</legend>
+        <legend className="mb-2 text-compact font-medium text-ink-2">{t('createToken.scopes.legend')}</legend>
         <div className="space-y-2.5">
           {SCOPE_OPTIONS.map((o) => (
             <CheckRow
               key={o.value}
-              label={SCOPE_COPY[o.value].label}
-              hint={SCOPE_COPY[o.value].hint}
+              label={t(`createToken.scopes.options.${o.value}.label`)}
+              hint={t(`createToken.scopes.options.${o.value}.hint`)}
               tone={o.danger ? 'danger' : 'plain'}
               checked={scopes.includes(o.value)}
               onChange={(on) => toggle(o.value, on)}
@@ -85,8 +84,8 @@ export function CreateTokenForm({ onCreated, onCancel }: {
 
       <div className="mt-4">
         <SelectField
-          label="有效期" value={expiry} options={EXPIRY_OPTIONS}
-          hint="过期后会自动失效；也可以随时吊销。默认 30 天，更安全。"
+          label={t('createToken.expiry.label')} value={expiry} options={expiryOptions}
+          hint={t('createToken.expiry.hint')}
           onChange={setExpiry}
         />
       </div>
@@ -94,8 +93,8 @@ export function CreateTokenForm({ onCreated, onCancel }: {
       {formErr && <ErrorNote className="mt-3" message={formErr} />}
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button type="submit" disabled={busy}>{busy ? '创建中…' : '创建访问令牌'}</Button>
-        <Button type="button" variant="ghost" onClick={onCancel}>取消</Button>
+        <Button type="submit" disabled={busy}>{busy ? t('createToken.submitting') : t('createToken.submit')}</Button>
+        <Button type="button" variant="ghost" onClick={onCancel}>{t('actions.cancel')}</Button>
       </div>
     </form>
   )

@@ -9,12 +9,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
+import { Trans, useTranslation } from 'react-i18next'
 import {
   ArrowLeft, ArrowRight, Check, Eye, EyeOff, LogIn, PartyPopper, RefreshCw, ShieldAlert,
 } from 'lucide-react'
+import '@/i18n'
 import { AuthCard, Button, Spinner, TextField } from '@/components/ui'
-import { api } from '@/lib/api'
-import { SESSION_NOT_ESTABLISHED, setupErrorCopy } from '@/lib/authErrors'
+import { ApiError, api } from '@/lib/api'
+import { setupErrorCopy } from '@/lib/authErrors'
 import { confirmSession } from '@/store/auth'
 import { cn } from '@/lib/cn'
 import type { HealthView } from '@/lib/types'
@@ -23,9 +25,9 @@ import { usePageTitle } from '@/hooks/usePageTitle'
 type Phase = 'checking' | 'ok' | 'fail'
 
 const STEPS = [
-  { label: '连接 CloudPath', short: '连接服务' },
-  { label: '创建管理员账号', short: '创建账号' },
-  { label: '完成', short: '完成' },
+  { label: 'setup.steps.connect', short: 'setup.steps.connectShort' },
+  { label: 'setup.steps.createAdmin', short: 'setup.steps.createShort' },
+  { label: 'setup.steps.complete', short: 'setup.steps.completeShort' },
 ]
 
 /** 与服务端一致的上限（本地先拦一次，省一个来回；最终判定仍在服务端） */
@@ -33,7 +35,8 @@ const MAX_USERNAME = 64
 const MAX_PASSWORD = 256
 
 export default function Setup() {
-  usePageTitle('初始化')
+  const { t } = useTranslation('auth')
+  usePageTitle(t('pageTitle.setup'))
 
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
@@ -53,7 +56,7 @@ export default function Setup() {
       setHealth(h)
       setPhase('ok')
     } catch {
-      setProbeError('暂时无法连接 CloudPath。')
+      setProbeError(t('setup.probe.error'))
       setPhase('fail')
       return
     }
@@ -87,15 +90,29 @@ export default function Setup() {
    */
   const hasConnectedFleet = (health?.edges_online ?? 0) > 0 || (health?.devices_online ?? 0) > 0
 
+  function setupErrorMessage(err: unknown, copy: ReturnType<typeof setupErrorCopy>): string {
+    if (!(err instanceof ApiError)) return t('setup.errors.network')
+    switch (err.status) {
+      case 403: return t('setup.errors.forbidden')
+      case 409: return t('setup.errors.alreadySetup')
+      case 400: return t('setup.errors.badRequest')
+      case 429: return copy.retryAfter
+        ? t('setup.errors.rateLimitedAfter', { seconds: copy.retryAfter })
+        : t('setup.errors.rateLimited')
+      case 503: return t('setup.errors.unavailable')
+      default: return t('setup.errors.failed')
+    }
+  }
+
   async function onCreate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const u = username.trim()
     const next: typeof fieldError = {}
-    if (!u) next.user = '请输入用户名'
-    else if (u.length > MAX_USERNAME) next.user = `用户名不超过 ${MAX_USERNAME} 个字符`
-    if (!password) next.pass = '请输入密码'
-    else if (password.length > MAX_PASSWORD) next.pass = `密码不超过 ${MAX_PASSWORD} 个字符`
-    if (password !== confirm) next.confirm = '两次输入的密码不一致'
+    if (!u) next.user = t('setup.create.validation.usernameRequired')
+    else if (u.length > MAX_USERNAME) next.user = t('setup.create.validation.usernameTooLong', { max: MAX_USERNAME })
+    if (!password) next.pass = t('setup.create.validation.passwordRequired')
+    else if (password.length > MAX_PASSWORD) next.pass = t('setup.create.validation.passwordTooLong', { max: MAX_PASSWORD })
+    if (password !== confirm) next.confirm = t('setup.create.validation.passwordMismatch')
     setFieldError(next)
     if (next.user || next.pass || next.confirm) return
 
@@ -113,11 +130,11 @@ export default function Setup() {
       setStep(2)
     } catch (err) {
       if (created) {
-        setFormError(SESSION_NOT_ESTABLISHED.setup)
+        setFormError(t('setup.sessionNotEstablished'))
         setRedirectToLogin(true)
       } else {
         const copy = setupErrorCopy(err)
-        setFormError(copy.message)
+        setFormError(setupErrorMessage(err, copy))
         if (copy.alreadySetup) setRedirectToLogin(true)
       }
       setBusy(false)
@@ -126,18 +143,18 @@ export default function Setup() {
 
   return (
     <AuthCard
-      title="设置 CloudPath"
-      subtitle="三步完成首次配置"
+      title={t('setup.title')}
+      subtitle={t('setup.subtitle')}
       footer={
         step === 2
-          ? <Link to="/login" className="link">换个账号？去登录页</Link>
-          : <Link to="/login" className="link">已有账号？直接登录</Link>
+          ? <Link to="/login" className="link">{t('setup.footer.switchAccount')}</Link>
+          : <Link to="/login" className="link">{t('setup.footer.existingAccount')}</Link>
       }
     >
       {/* 步骤指示器：移动端用短标签，避免 390px 溢出 */}
-      <ol className="mb-6 flex items-center" aria-label="设置进度">
+      <ol className="mb-6 flex items-center" aria-label={t('setup.progressAria')}>
         {STEPS.map((item, i) => (
-          <li key={item.label} className={cn('flex items-center', i < STEPS.length - 1 && 'flex-1')}>
+          <li key={t(item.label)} className={cn('flex items-center', i < STEPS.length - 1 && 'flex-1')}>
             <span
               aria-current={i === step ? 'step' : undefined}
               className={cn(
@@ -153,7 +170,7 @@ export default function Setup() {
               'ml-2 text-meta sm:hidden',
               i === step ? 'font-medium text-ink' : 'text-ink-3',
             )}>
-              {item.short}
+              {t(item.short)}
             </span>
             <span className={cn(
               'ml-2 hidden text-meta sm:block',
@@ -172,40 +189,42 @@ export default function Setup() {
         <div className="space-y-4">
           {phase === 'checking' && (
             <p className="flex items-center gap-2 text-body text-ink-2">
-              <Spinner /> 正在连接 CloudPath…
+              <Spinner /> {t('setup.probe.checking')}
             </p>
           )}
           {phase === 'ok' && health && (
             <div className="rounded-tile bg-ok/10 p-4">
               <p className="flex items-center gap-2 text-body font-medium text-ok">
-                <Check size={15} strokeWidth={2.5} /> CloudPath 已就绪
+                <Check size={15} strokeWidth={2.5} /> {t('setup.probe.ready')}
               </p>
-              <p className="mt-1 text-meta break-words text-ink-2">版本 <span className="font-mono">{health.version}</span></p>
+              <p className="mt-1 text-meta break-words text-ink-2">
+                <Trans i18nKey="setup.probe.version" ns="auth" values={{ version: health.version }} components={{ version: <span className="font-mono" /> }} />
+              </p>
               {alreadyIn && (
                 <p className="mt-2 text-meta leading-relaxed text-ink-2">
-                  你已经登录了，无需再初始化。
+                  {t('setup.probe.alreadyIn')}
                 </p>
               )}
             </div>
           )}
           {phase === 'fail' && (
             <div className="rounded-tile bg-bad/10 p-4">
-              <p className="text-body font-medium text-bad">暂时无法连接 CloudPath</p>
+              <p className="text-body font-medium text-bad">{t('setup.probe.failedTitle')}</p>
               <p className="mt-1 break-words text-meta text-ink-2">{probeError}</p>
-              <p className="mt-1 text-meta text-ink-3">请确认 CloudPath 正在运行，然后重试。</p>
+              <p className="mt-1 text-meta text-ink-3">{t('setup.probe.failedHint')}</p>
             </div>
           )}
           <div className="flex gap-2">
             <Button variant="ghost" lg disabled={phase === 'checking'} onClick={() => void probe()} className="shrink-0">
-              <RefreshCw size={14} /> {phase === 'checking' ? '检测中…' : phase === 'ok' ? '重新检测' : '重试'}
+              <RefreshCw size={14} /> {phase === 'checking' ? t('setup.probe.checkingAction') : phase === 'ok' ? t('setup.probe.recheck') : t('setup.probe.retry')}
             </Button>
             {alreadyIn ? (
               <Button lg onClick={() => navigate('/', { replace: true })} className="min-w-0 flex-1">
-                进入 CloudPath <ArrowRight size={14} />
+                {t('setup.probe.enter')} <ArrowRight size={14} />
               </Button>
             ) : (
               <Button lg disabled={phase !== 'ok'} onClick={() => setStep(1)} className="min-w-0 flex-1">
-                下一步：创建账号 <ArrowRight size={14} />
+                {t('setup.probe.next')} <ArrowRight size={14} />
               </Button>
             )}
           </div>
@@ -218,15 +237,15 @@ export default function Setup() {
             <div role="alert" className="rounded-tile bg-warn/12 p-3.5 text-compact leading-relaxed break-words text-warn">
               {formError}
               <Link to="/login" className="link mt-2 flex items-center gap-1 text-compact">
-                <LogIn size={13} /> 去登录页
+                <LogIn size={13} /> {t('setup.create.goLogin')}
               </Link>
             </div>
             <div className="flex gap-2">
               <Button type="button" variant="ghost" lg onClick={() => { setRedirectToLogin(false); setFormError(''); setStep(0) }} className="shrink-0">
-                <ArrowLeft size={14} /> 上一步
+                <ArrowLeft size={14} /> {t('setup.create.back')}
               </Button>
               <Button type="button" lg className="min-w-0 flex-1" onClick={() => navigate('/login', { replace: true })}>
-                去登录页 <ArrowRight size={14} />
+                {t('setup.create.goLogin')} <ArrowRight size={14} />
               </Button>
             </div>
           </div>
@@ -236,21 +255,21 @@ export default function Setup() {
             <div className="flex items-start gap-2">
               <ShieldAlert size={14} className="mt-0.5 shrink-0 text-warn" />
               <div className="min-w-0 text-meta leading-relaxed text-ink-2">
-                <p>这里创建的是<span className="font-semibold text-ink">首个管理员账号</span>。完成后：</p>
+                <p><Trans i18nKey="setup.create.intro" ns="auth" components={{ strong: <span className="font-semibold text-ink" /> }} /></p>
                 <ul className="mt-2 list-disc space-y-1 pl-4">
-                  <li>只有已登录的成员可以进入平台。</li>
-                  <li>其他成员由管理员在「管理 → 成员与访问权限」中添加。</li>
+                  <li>{t('setup.create.onlyMembers')}</li>
+                  <li>{t('setup.create.addMembers')}</li>
                 </ul>
-                <p className="mt-2">如果你不是这台设备的直接使用者，请先联系管理员。</p>
+                <p className="mt-2">{t('setup.create.contactAdmin')}</p>
               </div>
             </div>
           </div>
 
           <TextField
-            label="用户名"
+            label={t('setup.create.username.label')}
             name="username"
             type="text"
-            placeholder="例如 admin"
+            placeholder={t('setup.create.username.placeholder')}
             autoComplete="username"
             autoCapitalize="none"
             spellCheck={false}
@@ -261,10 +280,10 @@ export default function Setup() {
             onChange={(e) => { setUsername(e.target.value); setFieldError((f) => ({ ...f, user: undefined })) }}
           />
           <TextField
-            label="密码"
+            label={t('setup.create.password.label')}
             name="password"
             type={reveal ? 'text' : 'password'}
-            placeholder="给这个账号设一个密码"
+            placeholder={t('setup.create.password.placeholder')}
             autoComplete="new-password"
             maxLength={MAX_PASSWORD}
             value={password}
@@ -275,8 +294,8 @@ export default function Setup() {
               <button
                 type="button"
                 onClick={() => setReveal(!reveal)}
-                aria-label={reveal ? '隐藏密码' : '显示密码'}
-                title={reveal ? '隐藏密码' : '显示密码'}
+                aria-label={reveal ? t('login.fields.password.hide') : t('login.fields.password.show')}
+                title={reveal ? t('login.fields.password.hide') : t('login.fields.password.show')}
                 aria-pressed={reveal}
                 className="flex h-7 w-7 items-center justify-center rounded-pill text-ink-3 transition-colors hover:text-ink"
               >
@@ -285,10 +304,10 @@ export default function Setup() {
             }
           />
           <TextField
-            label="确认密码"
+            label={t('setup.create.confirm.label')}
             name="confirm-password"
             type={reveal ? 'text' : 'password'}
-            placeholder="再输一次"
+            placeholder={t('setup.create.confirm.placeholder')}
             autoComplete="new-password"
             maxLength={MAX_PASSWORD}
             value={confirm}
@@ -305,11 +324,11 @@ export default function Setup() {
 
           <div className="flex gap-2">
             <Button type="button" variant="ghost" lg disabled={busy} onClick={() => { setRedirectToLogin(false); setFormError(''); setStep(0) }} className="shrink-0">
-              <ArrowLeft size={14} /> 上一步
+              <ArrowLeft size={14} /> {t('setup.create.back')}
             </Button>
             <Button type="submit" lg disabled={busy} className="min-w-0 flex-1">
               {busy && <Spinner size={14} />}
-              {busy ? '创建中…' : '创建账号并继续'}
+              {busy ? t('setup.create.submitting') : t('setup.create.submit')}
             </Button>
           </div>
         </form>
@@ -320,10 +339,9 @@ export default function Setup() {
         <div className="space-y-4 text-center">
           <span className="text-ok"><PartyPopper size={22} /></span>
           <div>
-            <p className="text-lead font-semibold">设置完成</p>
+            <p className="text-lead font-semibold">{t('setup.complete.title')}</p>
             <p className="mt-1 text-compact leading-relaxed break-words text-ink-2">
-              管理员账号 <span className="font-mono font-medium text-ink">{createdUser || username}</span> 已创建，
-              并且你已经登录。现在只有登录后的成员可以访问平台。
+              <Trans i18nKey="setup.complete.account" ns="auth" values={{ username: createdUser || username }} components={{ name: <span className="font-mono font-medium text-ink" /> }} />
             </p>
           </div>
 
@@ -341,15 +359,13 @@ export default function Setup() {
               <div className="flex items-start gap-2 text-meta leading-relaxed text-ink-2">
                 <ShieldAlert size={14} className="mt-0.5 shrink-0 text-warn" />
                 <div className="min-w-0">
-                  启用账号验证后，<span className="font-semibold text-ink">未配置有效网关令牌的已接入网关会被断开</span>。
-                  网关必须携带 <span className="font-semibold text-ink">「网关」范围的访问令牌</span>；已配置的共享网关不受影响。
+                  <Trans i18nKey="setup.complete.fleetWarning" ns="auth" components={{ strong: <span className="font-semibold text-ink" /> }} />
                   <details className="mt-2">
                     <summary className="cursor-pointer select-none font-medium text-ink-2">
-                      查看网关恢复步骤（技术人员）
+                      {t('setup.complete.fleetDetails')}
                     </summary>
                     <p className="mt-1.5">
-                      进入「管理 → 访问令牌」创建一个勾选「网关接入」权限的令牌（完整内容只显示一次），
-                      填进该网关配置的 <span className="num font-mono">token:</span> 字段，再重新启动网关。
+                      <Trans i18nKey="setup.complete.fleetRecovery" ns="auth" components={{ code: <span className="num font-mono" /> }} />
                     </p>
                   </details>
                 </div>
@@ -357,7 +373,7 @@ export default function Setup() {
             </div>
           )}
           <Button lg className="w-full" onClick={() => navigate('/', { replace: true })}>
-            进入 CloudPath
+            {t('setup.complete.enter')}
           </Button>
         </div>
       )}

@@ -5,12 +5,13 @@
 //   - 未知 Capability = 通用表格 / JSON 回落（docs/architecture/capability-model.md §9）
 // 颜色只走设计系统 token（ui.tsx TONE_CLS / index.css），390px 下不产生横向溢出。
 import { Activity, Boxes, SlidersHorizontal, Stethoscope, Zap, type LucideIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Badge, Panel, TONE_CLS, TONE_TEXT_CLS, type Tone } from './ui'
 import { cn } from '@/lib/cn'
 import { Sparkline } from './Sparkline'
 import type { SeriesPoint } from '@/store/ws'
 import {
-  CATEGORY_LABEL, CATEGORY_ORDER, EMPTY_INDEX, QUALITY_LABEL, capabilityLabel, commandLabel,
+  CATEGORY_ORDER, EMPTY_INDEX, capabilityLabel, commandLabel,
   entityTitle, formatTimestamp, formatValue, humanize, isScalar, observationsOf, parseCapabilityRef,
   pickDisplayField, propertyLabel, presentationOf, primaryObservation, qualityTone, rawRows,
   resolveCapability, statusMeta, toneFromHint, unitLabel, widgetFor,
@@ -34,22 +35,28 @@ const QUALITY_DOT: Record<ObservationQuality, string> = {
 
 /** 质量指示点：good 不打扰（不渲染），其余按语义色标注 */
 export function QualityDot({ q }: { q?: ObservationQuality }) {
+  const { t } = useTranslation('devices')
   if (!q || q === 'good') return null
+  const quality = t(`quality.${q}`)
   return (
     // role=img 才能让 aria-label 进入无障碍树（裸 span 的 label 会被忽略）
     <span role="img" className={cn('inline-block h-1.5 w-1.5 shrink-0 rounded-pill', QUALITY_DOT[q])}
-      title={`观测质量：${QUALITY_LABEL[q]}`} aria-label={`观测质量 ${QUALITY_LABEL[q]}`} />
+      title={t('quality.title', { quality })} aria-label={t('quality.aria', { quality })} />
   )
 }
 
 export function StatusBadge({ status }: { status?: DeviceStatus }) {
+  const { t } = useTranslation('devices')
   const meta = statusMeta(status)
-  return <Badge tone={meta.tone}>{meta.label}</Badge>
+  const key = status ?? 'unknown'
+  return <Badge tone={meta.tone}>{t(`status.${key}`)}</Badge>
 }
 
-export function JsonBlock({ value, className, maxHeight = 'max-h-56', label = '完整数据' }: {
+export function JsonBlock({ value, className, maxHeight = 'max-h-56', label }: {
   value: unknown; className?: string; maxHeight?: string; label?: string
 }) {
+  const { t } = useTranslation('devices')
+  const displayLabel = label ?? t('json.defaultLabel')
   let text: string
   try {
     text = JSON.stringify(value ?? null, null, 2)
@@ -59,10 +66,10 @@ export function JsonBlock({ value, className, maxHeight = 'max-h-56', label = '�
   return (
     // 可滚动区域必须键盘可达（WCAG 2.1.1）：tabIndex=0 + role=group + 可读名称
     <pre
-      tabIndex={0} role="group" aria-label={label}
+      tabIndex={0} role="group" aria-label={displayLabel}
       className={cn('num overflow-auto rounded-tile bg-surface-2 p-3 font-mono text-micro leading-relaxed text-ink-2',
         maxHeight, className)}
-      title="完整数据视图"
+      title={t('json.title')}
     >{text}</pre>
   )
 }
@@ -84,25 +91,27 @@ function columnsOf(rows: Record<string, unknown>[]): string[] {
 }
 
 /** 通用表格：数组型观测（对象数组或标量数组）都能渲染，列名来自数据本身 */
-export function GenericTable({ value, className, label = '数据表' }: {
+export function GenericTable({ value, className, label }: {
   value: unknown[]; className?: string; label?: string
 }) {
+  const { t } = useTranslation('devices')
+  const displayLabel = label ?? t('table.defaultLabel')
   const rows = value.map((v) => (v && typeof v === 'object' && !Array.isArray(v)
     ? (v as Record<string, unknown>)
     : { value: v }))
   const cols = columnsOf(rows)
-  if (!cols.length) return <p className="py-3 text-center text-meta text-ink-3">暂无内容</p>
+  if (!cols.length) return <p className="py-3 text-center text-meta text-ink-3">{t('table.empty')}</p>
   return (
     // 390px：表格只在自身容器内横向滚动（overflow-x-auto），不把横向溢出推给 body；
     // 容器可聚焦并带名称，键盘/读屏用户才能进入这块滚动区。
-    <div tabIndex={0} role="group" aria-label={label} className={cn('overflow-x-auto', className)}>
+    <div tabIndex={0} role="group" aria-label={displayLabel} className={cn('overflow-x-auto', className)}>
       <table className="w-full border-collapse text-left text-meta">
         <thead>
           <tr className="text-meta text-ink-3">
             <th className="px-1 pb-1.5 font-medium">#</th>
             {cols.map((c) => (
               <th key={c} className="whitespace-nowrap px-1 pb-1.5 font-medium">
-                {c === 'value' ? '值' : propertyLabel(c)}
+                {c === 'value' ? t('table.value') : propertyLabel(c)}
               </th>
             ))}
           </tr>
@@ -125,7 +134,8 @@ export function GenericTable({ value, className, label = '数据表' }: {
 }
 
 function ScalarChips({ value }: { value: unknown[] }) {
-  if (!value.length) return <p className="py-2 text-center text-meta text-ink-3">暂无内容</p>
+  const { t } = useTranslation('devices')
+  if (!value.length) return <p className="py-2 text-center text-meta text-ink-3">{t('table.empty')}</p>
   return (
     <div className="flex flex-wrap gap-1.5">
       {value.map((v, i) => (
@@ -183,6 +193,7 @@ export function ValueWidget({ obs, idx = EMPTY_INDEX, emphasis = false, classNam
   emphasis?: boolean
   className?: string
 }) {
+  const { t } = useTranslation('devices')
   const widget = widgetFor(obs, idx)
   const value = obs.value
 
@@ -190,7 +201,7 @@ export function ValueWidget({ obs, idx = EMPTY_INDEX, emphasis = false, classNam
 
   if ((widget === 'table' || widget === 'json') && !isScalar(value)) {
     if (Array.isArray(value)) {
-      return <GenericTable value={value} label={`${propertyLabel(obs.property, obs.capability, idx)} 数据表`} />
+      return <GenericTable value={value} label={t('json.dataTable', { label: propertyLabel(obs.property, obs.capability, idx) })} />
     }
     if (value && typeof value === 'object') {
       const entries = Object.entries(value as Record<string, unknown>)
@@ -207,12 +218,12 @@ export function ValueWidget({ obs, idx = EMPTY_INDEX, emphasis = false, classNam
           </dl>
         )
       }
-      return <JsonBlock value={value} maxHeight="max-h-40" label={`${propertyLabel(obs.property, obs.capability, idx)} 完整数据`} />
+      return <JsonBlock value={value} maxHeight="max-h-40" label={t('json.fullData', { label: propertyLabel(obs.property, obs.capability, idx) })} />
     }
   }
 
   if (widget === 'json') {
-    return <JsonBlock value={value} maxHeight="max-h-40" label={`${propertyLabel(obs.property, obs.capability, idx)} 完整数据`} />
+    return <JsonBlock value={value} maxHeight="max-h-40" label={t('json.fullData', { label: propertyLabel(obs.property, obs.capability, idx) })} />
   }
 
   if (widget === 'boolean' || widget === 'badge') {
@@ -248,7 +259,8 @@ export function ObservationTable({ observations, idx = EMPTY_INDEX }: {
   observations: Observation[]
   idx?: CapabilityIndex
 }) {
-  if (!observations.length) return <p className="py-3 text-center text-meta text-ink-3">还没有数据</p>
+  const { t } = useTranslation('devices')
+  if (!observations.length) return <p className="py-3 text-center text-meta text-ink-3">{t('observation.empty')}</p>
   return (
     <dl className="space-y-2.5">
       {observations.map((o) => {
@@ -260,7 +272,7 @@ export function ObservationTable({ observations, idx = EMPTY_INDEX }: {
               <span className="truncate" title={`${capabilityLabel(o.capability, idx)} · ${o.property}`}>
                 {propertyLabel(o.property, o.capability, idx)}
               </span>
-              {!known && <Badge tone="idle" className="shrink-0">暂无详情</Badge>}
+              {!known && <Badge tone="idle" className="shrink-0">{t('observation.unknown')}</Badge>}
             </dt>
             <dd className="min-w-0 shrink-0 text-right">
               <ValueWidget obs={o} idx={idx} />
@@ -300,6 +312,7 @@ export function StateRow({ entity, idx = EMPTY_INDEX, nowSec, series }: {
   /** 会话数值序列（deviceKey 下的 属性键 -> 点）；命中主观测键时行内嵌火花线 */
   series?: Record<string, SeriesPoint[]>
 }) {
+  const { t } = useTranslation('devices')
   const obs = observationsOf(entity)
   const primary = primaryObservation(entity, idx)
   const rest = obs.filter((o) => o !== primary)
@@ -322,7 +335,7 @@ export function StateRow({ entity, idx = EMPTY_INDEX, nowSec, series }: {
             {entityTitle(entity)}
           </span>
           <QualityDot q={q} />
-          {stale && <Badge tone="warn" className="shrink-0">已过期</Badge>}
+          {stale && <Badge tone="warn" className="shrink-0">{t('state.stale')}</Badge>}
         </span>
         {pts && pts.length >= 2 && (
           // Sparkline 自身是 w-full：宽度由外层固定槽给，避免与内部类冲突撑破行
@@ -335,7 +348,7 @@ export function StateRow({ entity, idx = EMPTY_INDEX, nowSec, series }: {
       {rest.length > 0 && (
         <details className="mt-1.5">
           <summary className="cursor-pointer select-none text-meta text-ink-3 transition-colors hover:text-ink-2">
-            其余 {rest.length} 项
+            {t('state.remaining', { count: rest.length })}
           </summary>
           <div className="mt-2">
             <ObservationTable observations={rest} idx={idx} />
@@ -362,17 +375,18 @@ export function StateMatrix({ descriptor, idx = EMPTY_INDEX, categories, nowSec,
   series?: Record<string, SeriesPoint[]>
   className?: string
 }) {
+  const { t } = useTranslation('devices')
   const groups = (categories ?? CATEGORY_ORDER)
     .map((category) => ({ category, entities: descriptor.entities.filter((e) => e.category === category) }))
     .filter((g) => g.entities.length > 0)
   if (!groups.length) {
-    return <p className="py-6 text-center text-body text-ink-3">设备信息中没有可显示的数据</p>
+    return <p className="py-6 text-center text-body text-ink-3">{t('state.empty')}</p>
   }
   return (
     <div className={cn('space-y-5', className)}>
       {groups.map(({ category, entities }) => (
         <section key={category}>
-          <h3 className="mb-1.5 px-0.5 text-meta font-medium text-ink-3">{CATEGORY_LABEL[category]}</h3>
+          <h3 className="mb-1.5 px-0.5 text-meta font-medium text-ink-3">{t(`category.${category}`)}</h3>
           {/* 紧凑瓦片矩阵：单标量不拉通栏行（标签↔值扫视距离是可读性成本）；
               列数随宽度递增，390 两列、桌面三列、宽屏四列 */}
           <ul className="m-0 grid list-none grid-cols-2 gap-2.5 p-0 md:grid-cols-3 xl:grid-cols-4">
@@ -396,11 +410,12 @@ export function ObsValue({ obs, idx = EMPTY_INDEX, tone = 'idle', size = 'tile',
   size?: 'tile' | 'row' | 'slot'
   className?: string
 }) {
+  const { t } = useTranslation('devices')
   const shell = size === 'row' ? 'w-24 shrink-0 text-right' : 'min-w-0 truncate'
   if (!obs) {
     return (
       <span className={cn(shell, 'text-meta text-ink-3', className)}>
-        {size === 'row' ? '暂无数据' : '等待数据'}
+        {size === 'row' ? t('state.unavailable') : t('state.waiting')}
       </span>
     )
   }
@@ -449,6 +464,7 @@ export function StateTile({ entity, idx = EMPTY_INDEX, nowSec, series }: {
   nowSec?: number
   series?: Record<string, SeriesPoint[]>
 }) {
+  const { t } = useTranslation('devices')
   const obs = observationsOf(entity)
   const primary = primaryObservation(entity, idx)
   const rest = obs.filter((o) => o !== primary)
@@ -470,7 +486,7 @@ export function StateTile({ entity, idx = EMPTY_INDEX, nowSec, series }: {
           {entityTitle(entity)}
         </span>
         <QualityDot q={q} />
-        {stale && <Badge tone="warn" className="shrink-0">已过期</Badge>}
+        {stale && <Badge tone="warn" className="shrink-0">{t('state.stale')}</Badge>}
       </div>
       <div className="mt-1.5 flex min-w-0 items-center justify-between gap-2">
         <ObsValue obs={primary} idx={idx} tone={tone} />
@@ -481,7 +497,7 @@ export function StateTile({ entity, idx = EMPTY_INDEX, nowSec, series }: {
       {rest.length > 0 && (
         <details className="mt-1.5">
           <summary className="cursor-pointer select-none text-meta text-ink-3 transition-colors hover:text-ink-2">
-            其余 {rest.length} 项
+            {t('state.remaining', { count: rest.length })}
           </summary>
           <div className="mt-2">
             <ObservationTable observations={rest} idx={idx} />
@@ -534,10 +550,11 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
   idx?: CapabilityIndex
   className?: string
 }) {
+  const { t } = useTranslation('devices')
   const set = new Set<string>()
   for (const e of descriptor.entities) for (const c of e.capabilities) if (c) set.add(c)
   const refs = [...set]
-  if (!refs.length) return <p className="py-6 text-center text-body text-ink-3">设备信息中没有可显示的功能</p>
+  if (!refs.length) return <p className="py-6 text-center text-body text-ink-3">{t('capability.empty')}</p>
   return (
     <ul className={cn('m-0 list-none divide-y divide-hairline p-0', className)}>
       {refs.map((ref) => {
@@ -552,24 +569,24 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
             <details className="py-2.5">
               <summary className="flex cursor-pointer select-none flex-wrap items-center gap-x-3 gap-y-1">
                 <span className="min-w-0 truncate text-compact font-medium">{capabilityLabel(ref, idx)}</span>
-                {!doc && <Badge tone="idle" className="shrink-0">暂无详情</Badge>}
+                {!doc && <Badge tone="idle" className="shrink-0">{t('capability.unknown')}</Badge>}
                 <span className="num min-w-0 select-all break-all font-mono text-micro text-ink-3 sm:truncate" title={ref}>{ref}</span>
                 <span className="num ml-auto shrink-0 text-meta text-ink-3">
-                  {props.length} 属性 · {actions.length} 动作 · {events.length} 事件
+                  {t('capability.counts', { properties: props.length, actions: actions.length, events: events.length })}
                 </span>
               </summary>
               <div className="mt-2.5 space-y-3 pl-0.5">
                 {props.length > 0 && (
                   <div tabIndex={0} role="region"
-                    aria-label={`${capabilityLabel(ref, idx)} 字段`} className="overflow-x-auto">
+                    aria-label={t('capability.fieldsAria', { name: capabilityLabel(ref, idx) })} className="overflow-x-auto">
                     <table className="w-full min-w-[34rem] border-collapse text-left text-meta">
                       <thead>
                         <tr className="text-meta text-ink-3">
-                          <th className="px-1 pb-1 font-medium">属性</th>
-                          <th className="px-1 pb-1 font-medium">字段标识</th>
-                          <th className="px-1 pb-1 font-medium">类型</th>
-                          <th className="px-1 pb-1 font-medium">单位</th>
-                          <th className="px-1 pb-1 font-medium">访问</th>
+                          <th className="px-1 pb-1 font-medium">{t('capability.property')}</th>
+                          <th className="px-1 pb-1 font-medium">{t('capability.fieldId')}</th>
+                          <th className="px-1 pb-1 font-medium">{t('capability.type')}</th>
+                          <th className="px-1 pb-1 font-medium">{t('capability.unit')}</th>
+                          <th className="px-1 pb-1 font-medium">{t('capability.access')}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-hairline">
@@ -610,11 +627,11 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
                 {doc && (
                   <details>
                     <summary
-                      title={`版本 ${parsed.version ?? doc.metadata?.version ?? '—'}`}
+                      title={t('capability.version', { version: parsed.version ?? doc.metadata?.version ?? '—' })}
                       className="flex min-h-touch cursor-pointer select-none items-center text-meta text-ink-3 transition-colors hover:text-ink-2">
-                      数据结构
+                      {t('capability.dataStructure')}
                     </summary>
-                    <JsonBlock className="mt-1.5" value={doc.spec} maxHeight="max-h-48" label={`${ref} 完整数据`} />
+                    <JsonBlock className="mt-1.5" value={doc.spec} maxHeight="max-h-48" label={t('capability.fullData', { ref })} />
                   </details>
                 )}
               </div>
@@ -631,15 +648,16 @@ export function EntityInventory({ descriptor, className }: {
   descriptor: DeviceDescriptor
   className?: string
 }) {
+  const { t } = useTranslation('devices')
   return (
-    <div tabIndex={0} role="region" aria-label="设备对象清单" className={cn('overflow-x-auto', className)}>
+    <div tabIndex={0} role="region" aria-label={t('entity.inventoryAria')} className={cn('overflow-x-auto', className)}>
       <table className="w-full min-w-[44rem] border-collapse text-left text-meta">
         <thead>
           <tr className="text-meta text-ink-3">
-            <th className="px-1 pb-1.5 font-medium">实体</th>
-            <th className="px-1 pb-1.5 font-medium">实体编号</th>
-            <th className="px-1 pb-1.5 font-medium">分类</th>
-            <th className="px-1 pb-1.5 font-medium">功能标识</th>
+            <th className="px-1 pb-1.5 font-medium">{t('entity.entity')}</th>
+            <th className="px-1 pb-1.5 font-medium">{t('entity.id')}</th>
+            <th className="px-1 pb-1.5 font-medium">{t('entity.category')}</th>
+            <th className="px-1 pb-1.5 font-medium">{t('entity.capabilityId')}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-hairline">
@@ -647,7 +665,7 @@ export function EntityInventory({ descriptor, className }: {
             <tr key={e.entity_id || e.unique_key}>
               <td className="whitespace-nowrap px-1 py-1.5">{entityTitle(e)}</td>
               <td className="num select-all whitespace-nowrap px-1 py-1.5 font-mono text-micro text-ink-3">{e.entity_id}</td>
-              <td className="px-1 py-1.5 text-ink-2">{CATEGORY_LABEL[e.category] ?? e.category}</td>
+              <td className="px-1 py-1.5 text-ink-2">{t(`category.${e.category}`)}</td>
               <td className="px-1 py-1.5">
                 <span className="flex min-w-0 flex-wrap gap-1">
                   {e.capabilities.length === 0
@@ -668,16 +686,18 @@ export function EntityInventory({ descriptor, className }: {
 }
 
 /** legacy raw（诊断面）→ 通用视图：标量成键值行，数组成表格/胶囊，对象成 JSON */
-export function RawView({ raw, title = '设备数据', className }: {
+export function RawView({ raw, title, className }: {
   raw: DeviceRaw | undefined
   title?: string
   className?: string
 }) {
+  const { t } = useTranslation('devices')
+  const displayTitle = title ?? t('raw.title')
   const rows = rawRows(raw)
   if (!rows.length) {
     return (
-      <Panel className={className} title={title}>
-        <p className="py-4 text-center text-body text-ink-3">等待设备同步…</p>
+      <Panel className={className} title={displayTitle}>
+        <p className="py-4 text-center text-body text-ink-3">{t('raw.waiting')}</p>
       </Panel>
     )
   }
@@ -687,7 +707,7 @@ export function RawView({ raw, title = '设备数据', className }: {
   const complex = rows.filter((r) => !scalarKeys.has(r.key))
 
   return (
-    <Panel className={className} title={title} right={<Badge tone="idle">{rows.length} 字段</Badge>}>
+    <Panel className={className} title={displayTitle} right={<Badge tone="idle">{t('raw.fields', { count: rows.length })}</Badge>}>
       {scalars.length > 0 && (
         <dl className="space-y-2.5">
           {scalars.map((r) => (
@@ -706,14 +726,14 @@ export function RawView({ raw, title = '设备数据', className }: {
           {Array.isArray(r.value)
             ? (r.value.every(isScalar)
               ? <ScalarChips value={r.value} />
-              : <GenericTable value={r.value} label={`${r.label} 数据表`} />)
-            : <JsonBlock value={r.value} maxHeight="max-h-40" label={`${r.label} 完整数据`} />}
+              : <GenericTable value={r.value} label={t('json.dataTable', { label: r.label })} />)
+            : <JsonBlock value={r.value} maxHeight="max-h-40" label={t('json.fullData', { label: r.label })} />}
         </div>
       ))}
       <p className="mt-3 flex items-center gap-1 border-t border-hairline pt-2 text-meta text-ink-3">
         <Boxes size={11} />
         <span className={cn('truncate', TONE_TEXT_CLS.idle)}>
-          该设备尚未同步功能信息，此处按已接收的数据显示
+          {t('raw.unsupported')}
         </span>
       </p>
     </Panel>

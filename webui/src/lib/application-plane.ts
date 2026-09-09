@@ -1,52 +1,24 @@
+import { i18n, currentLocale } from '@/i18n'
 import { capabilityLabel, indexCapabilities, normalizeCapabilityDocs, normalizeDescriptor, propertyLabel } from './descriptor'
 import type { AppBindingView } from './types'
 
 /** 跨应用通用的字段词汇；只解释含义明确的展示名，未知字段仍保留原值。 */
 const RECORD_FIELD_LABEL: Record<string, string> = {
-  id: '标识',
-  name: '名称',
-  title: '标题',
-  label: '名称',
-  subject: '主题',
-  description: '说明',
-  message: '消息',
-  created_at: '创建时间',
-  updated_at: '更新时间',
-  happened_at: '发生时间',
-  occurred_at: '发生时间',
-  checked_at: '检查时间',
-  started_at: '开始时间',
-  ended_at: '结束时间',
-  start_time: '开始时间',
-  end_time: '结束时间',
-  start: '开始时间',
-  end: '结束时间',
-  opened_at: '开启时间',
-  closed_at: '关闭时间',
-  compartment: '仓位',
-  location: '位置',
-  position: '位置',
-  reason: '原因',
-  result: '结果',
-  summary: '摘要',
-  severity: '严重程度',
-  bindings_valid: '绑定有效',
-  configured: '已配置',
-  armed: '布防状态',
-  alerting: '告警状态',
-  cooldown_until: '冷却截止时间',
-  error: '错误',
-  event: '事件',
-  action: '操作',
-  type: '类型',
-  healthy: '健康状态',
-  temperature_c: '温度 (℃)',
-  version: '版本',
+  id: 'id', name: 'name', title: 'title', label: 'label', subject: 'subject', description: 'description', message: 'message',
+  created_at: 'created_at', updated_at: 'updated_at', happened_at: 'happened_at', occurred_at: 'occurred_at',
+  checked_at: 'checked_at', started_at: 'started_at', ended_at: 'ended_at', start_time: 'start_time', end_time: 'end_time',
+  start: 'start', end: 'end', opened_at: 'opened_at', closed_at: 'closed_at', compartment: 'compartment',
+  slot: 'slot', location: 'location', position: 'position', reason: 'reason', result: 'result', summary: 'summary',
+  severity: 'severity', bindings_valid: 'bindings_valid', configured: 'configured', armed: 'armed', alerting: 'alerting',
+  cooldown_until: 'cooldown_until', error: 'error', event: 'event', action: 'action', type: 'type', healthy: 'healthy',
+  temperature_c: 'temperature_c', version: 'version', state: 'state', status: 'status',
 }
 
 /** 已知通用字段沿用公共词汇；无展示声明时保留字段名，不用序号掩盖含义。 */
 export function recordFieldLabel(key: string): string {
-  const label = RECORD_FIELD_LABEL[key] ?? propertyLabel(key)
+  const translationKey = RECORD_FIELD_LABEL[key]
+  if (translationKey) return i18n.t(`plugin:recordFields.${translationKey}`)
+  const label = propertyLabel(key)
   return /[\u3400-\u9fff]/.test(label) ? label : key
 }
 
@@ -71,7 +43,7 @@ export function recordEntries(value: object): [string, unknown][] {
 function recordScalar(value: unknown): string | undefined {
   if (typeof value === 'string') return value.trim() || undefined
   if (typeof value === 'number' && Number.isFinite(value)) return String(value)
-  if (typeof value === 'boolean') return value ? '是' : '否'
+  if (typeof value === 'boolean') return value ? i18n.t('plugin:record.yes') : i18n.t('plugin:record.no')
   return undefined
 }
 
@@ -121,7 +93,7 @@ export function applicationResultSummary(value: unknown): { text?: string; usedK
   const scalar = (item: unknown): string | undefined => {
     if (typeof item === 'string') return item.trim() || undefined
     if (typeof item === 'number' && Number.isFinite(item)) return String(item)
-    if (typeof item === 'boolean') return item ? '是' : '否'
+    if (typeof item === 'boolean') return item ? i18n.t('plugin:record.yes') : i18n.t('plugin:record.no')
     return undefined
   }
   const direct = scalar(value)
@@ -141,13 +113,13 @@ export function applicationResultSummary(value: unknown): { text?: string; usedK
     switch (raw.trim().toLowerCase()) {
       case 'ok':
       case 'succeeded':
-        return '成功'
+        return i18n.t('plugin:summary.success')
       case 'failed':
-        return '失败'
+        return i18n.t('plugin:summary.failure')
       case 'pending':
-        return '处理中'
+        return i18n.t('plugin:summary.pending')
       case 'sent':
-        return '已发送'
+        return i18n.t('plugin:summary.sent')
       default:
         return undefined
     }
@@ -155,16 +127,16 @@ export function applicationResultSummary(value: unknown): { text?: string; usedK
   for (const key of ['state', 'status']) {
     const text = scalar(record[key])
     const label = text ? statusText(text) : undefined
-    if (label) { add(key, label, '状态'); break }
+    if (label) { add(key, label, i18n.t('plugin:summary.status')); break }
   }
   const count = record.run_count
-  if (typeof count === 'number' && Number.isFinite(count)) add('run_count', String(count), '执行次数')
+  if (typeof count === 'number' && Number.isFinite(count)) add('run_count', String(count), i18n.t('plugin:summary.runCount'))
   for (const key of ['finished_at', 'ended_at', 'updated_at', 'created_at']) {
     const raw = record[key]
     const text = typeof raw === 'string' ? recordTimestamp(raw) : undefined
-    if (text) { add(key, text, '完成时间'); break }
+    if (text) { add(key, text, i18n.t('plugin:summary.finishedAt')); break }
   }
-  if (!parts.length && typeof record.ok === 'boolean') add('ok', record.ok ? '成功' : '失败')
+  if (!parts.length && typeof record.ok === 'boolean') add('ok', record.ok ? i18n.t('plugin:summary.success') : i18n.t('plugin:summary.failure'))
   return { text: parts.join(' · ') || undefined, usedKeys }
 }
 /** 应用运行态的唯一展示结论：观察态与实际运行态冲突时明确报冲突，不二选一。 */
@@ -194,7 +166,7 @@ export function recordTimestamp(value: string, timeZone?: string): string | unde
   const offset = /([+-])(\d{2}):(\d{2})$/.exec(value)
   const minutes = offset ? (Number(offset[2]) * 60 + Number(offset[3])) * (offset[1] === '+' ? 1 : -1) : 0
   if (new Date(timestamp + minutes * 60_000).toISOString().slice(0, 19) !== value.slice(0, 19)) return undefined
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat(currentLocale(), {
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
     hourCycle: 'h23', timeZone,
   }).format(new Date(timestamp))
@@ -209,44 +181,44 @@ export function bindingLabels(binding: AppBindingView, payload: unknown) {
   return {
     // entity_id 当前是设备内局部标识：多设备同名不能冒充一个确定的绑定设备。
     entity: matches.length === 1 ? matches[0].name : undefined,
-    capability: /[\u3400-\u9fff]/.test(capability) ? capability : '应用所需能力',
+    capability: /[\u3400-\u9fff]/.test(capability) ? capability : i18n.t('plugin:plane.requiredCapability'),
   }
 }
 
 /** 只解释无歧义的五字段时间规则；复杂表达式保留在技术详情。 */
 export function scheduleSummary(cron: string): string {
   const parts = cron.trim().split(/\s+/)
-  if (parts.length !== 5) return '自定义时间规则'
+  if (parts.length !== 5) return i18n.t('plugin:schedule.custom')
   const [minute, hour, day, month, weekday] = parts
-  if ([day, month, weekday].some((v) => v !== '*')) return '自定义时间规则'
-  if (minute === '*' && hour === '*') return '每分钟'
+  if ([day, month, weekday].some((v) => v !== '*')) return i18n.t('plugin:schedule.custom')
+  if (minute === '*' && hour === '*') return i18n.t('plugin:schedule.everyMinute')
   if (/^\*\/[1-9]\d?$/.test(minute) && hour === '*') {
     const step = Number(minute.slice(2))
-    if (step < 60) return '每小时内每隔 ' + step + ' 分钟'
+    if (step < 60) return i18n.t('plugin:schedule.everyMinutes', { step })
   }
   if (/^\d{1,2}$/.test(minute) && Number(minute) < 60) {
-    if (hour === '*') return '每小时第 ' + Number(minute) + ' 分钟'
+    if (hour === '*') return i18n.t('plugin:schedule.minuteOfHour', { minute: Number(minute) })
     if (/^\d{1,2}$/.test(hour) && Number(hour) < 24) {
-      return '每天 ' + hour.padStart(2, '0') + ':' + minute.padStart(2, '0')
+      return i18n.t('plugin:schedule.dailyAt', { time: hour.padStart(2, '0') + ':' + minute.padStart(2, '0') })
     }
   }
-  return '自定义时间规则'
+  return i18n.t('plugin:schedule.custom')
 }
 
 export function appTime(value?: number, timeZone?: string): string {
-  if (!value) return '尚无记录'
+  if (!value) return i18n.t('plugin:time.noRecord')
   try {
-    return new Intl.DateTimeFormat('zh-CN', {
+    return new Intl.DateTimeFormat(currentLocale(), {
       year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
       hourCycle: 'h23', timeZone,
     }).format(new Date(value * 1000))
-  } catch { return '时间信息不可用' }
+  } catch { return i18n.t('plugin:time.unavailable') }
 }
 
 export function scheduleZone(timeZone: string): string {
-  if (!timeZone) return '未提供时区'
+  if (!timeZone) return i18n.t('plugin:time.timezoneMissing')
   try {
-    return new Intl.DateTimeFormat('zh-CN', { timeZone, timeZoneName: 'longGeneric' })
-      .formatToParts(new Date()).find((p) => p.type === 'timeZoneName')?.value ?? '未提供时区'
-  } catch { return '时区信息不可用' }
+    return new Intl.DateTimeFormat(currentLocale(), { timeZone, timeZoneName: 'longGeneric' })
+      .formatToParts(new Date()).find((p) => p.type === 'timeZoneName')?.value ?? i18n.t('plugin:time.timezoneMissing')
+  } catch { return i18n.t('plugin:time.timezoneUnavailable') }
 }

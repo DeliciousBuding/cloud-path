@@ -91,7 +91,7 @@ export default function App() {
               <Route path="pillbox/:edgeId/:deviceId" element={<Pillbox />} />
               <Route path="apps/:appRoute" element={<ApplicationPage />} />
               <Route path="apps/:appRoute/:pageId" element={<ApplicationPage />} />
-              {/* 活动（事件 + 命令历史）；/events 是旧路径，保留重定向不断链 */}
+              {/* 活动（事件 + 操作历史）；/events 是旧路径，保留重定向不断链 */}
               <Route path="activity" element={<Activity />} />
               <Route path="events" element={<Navigate to="/activity" replace />} />
               <Route path="plugins" element={<Plugins />} />

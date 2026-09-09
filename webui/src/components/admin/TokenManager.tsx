@@ -8,6 +8,7 @@
 // 也刻意不写 localStorage/sessionStorage/URL/console/toast —— admin-tokens 测试对此做反向断言。
 import { useState } from 'react'
 import { KeyRound, Plus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button, Panel } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
@@ -21,6 +22,7 @@ import { toast } from '@/store/toast'
 import type { CreatedToken } from '@/lib/types'
 
 export function TokenManager() {
+  const { t } = useTranslation('admin')
   const qc = useQueryClient()
   const { data, isPending, isError, error, refetch } = useAdminTokens()
   const tokens = data?.tokens ?? []
@@ -32,19 +34,21 @@ export function TokenManager() {
     setCreating(false)
     void qc.invalidateQueries({ queryKey: ADMIN_TOKENS_KEY })
     // toast 只带名称：明文绝不进提示文本（提示会挂在 DOM 上好几秒，也会被截图）
-    toast.ok('访问令牌已创建', `${created.name || '（未命名）'} · 完整内容只显示一次`)
+    toast.ok(t('tokenManager.toast.createdTitle'), t('tokenManager.toast.createdMessage', {
+      name: created.name || t('tokenManager.unnamed'),
+    }))
   }
 
   return (
     <Panel
-      title={<span className="flex items-center gap-1.5"><KeyRound size={14} />访问令牌</span>}
+      title={<span className="flex items-center gap-1.5"><KeyRound size={14} />{t('tokenManager.title')}</span>}
       right={(
         <Button
           variant={creating ? 'ghost' : 'primary'}
           aria-expanded={creating}
           onClick={() => setCreating((v) => !v)}
         >
-          {!creating && <Plus size={14} />}{creating ? '收起表单' : '创建访问令牌'}
+          {!creating && <Plus size={14} />}{creating ? t('tokenManager.collapse') : t('tokenManager.create')}
         </Button>
       )}
     >
@@ -59,18 +63,18 @@ export function TokenManager() {
       ) : isPending ? (
         <RowSkeleton rows={2} />
       ) : tokens.length === 0 ? (
-        <p className="py-6 text-center text-body text-ink-3">还没有访问令牌。创建后，自动化工具或网关可以使用它连接平台。</p>
+        <p className="py-6 text-center text-body text-ink-3">{t('tokenManager.empty')}</p>
       ) : (
-        <ul className="divide-y divide-hairline" aria-label="访问令牌列表">
-          {tokens.map((t) => <TokenRow key={t.id} token={t} />)}
+        <ul className="divide-y divide-hairline" aria-label={t('tokenManager.listAria')}>
+          {tokens.map((tok) => <TokenRow key={tok.id} token={tok} />)}
         </ul>
       )}
 
       <div className="mt-4 border-t border-hairline pt-3 text-meta leading-relaxed text-ink-3">
-        <p>完整令牌只在创建时显示一次。请立即保存；如果遗失，请吊销后重新创建。</p>
+        <p>{t('tokenManager.hint')}</p>
         <details className="mt-1.5">
-          <summary className="flex min-h-touch cursor-pointer items-center">技术详情</summary>
-          <p className="mt-1 break-words">列表只保留识别码和基本信息，不保存可再次显示的完整令牌。</p>
+          <summary className="flex min-h-touch cursor-pointer items-center">{t('tokenManager.details')}</summary>
+          <p className="mt-1 break-words">{t('tokenManager.detailsHint')}</p>
         </details>
       </div>
     </Panel>

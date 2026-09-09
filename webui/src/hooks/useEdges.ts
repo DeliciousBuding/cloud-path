@@ -8,12 +8,12 @@ export interface EdgesResult {
   list: EdgeView[]
   online: number
   loading: boolean
-  /** REST 失败且没有任何数据：不得渲染成「没有边缘节点」的假空态 */
+  /** REST 失败且没有任何数据：不得渲染成「没有网关」的假空态 */
   error: unknown
   refetch: () => void
 }
 
-/** 边缘节点列表：WS snapshot 覆盖 REST 兜底；WS 断开后 REST 重新成为权威。 */
+/** 网关列表：WS snapshot 覆盖 REST 兜底；WS 断开后 REST 重新成为权威。 */
 export function useEdges(): EdgesResult {
   const identity = useAuth(authIdentity)
   const live = useLive((s) => s.edges)

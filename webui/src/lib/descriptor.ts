@@ -3,12 +3,14 @@
 // 语义说明：docs/architecture/capability-model.md（§3 presentation、§9 未知 Capability 回落）。
 //
 // 本文件的存在意义：设备语义（时钟/分格/提醒…）不写进组件，组件只问这里要
-// 「主值 / 胶囊 / 分组 / 命令集 / 渲染 widget」，全部由 Descriptor + Capability 声明推导。
+// 「主值 / 胶囊 / 分组 / 操作集 / 渲染 widget」，全部由 Descriptor + Capability 声明推导。
 import type { Tone } from '@/components/ui'
+import { currentLocale, i18n } from '@/i18n'
+import { resolveLocalizedText, type LocalizedText } from '@/i18n/pluginText'
 import type {
   CapabilityActionDecl, CapabilityDoc, CapabilityPresentation,
   DeviceDescriptor, DeviceRaw, DeviceStatus, DescriptorEntity, EntityCategory,
-  Observation, ObservationQuality,
+  I18nText, Observation, ObservationQuality,
 } from './types'
 
 /* ---------------- 基础字符串工具 ---------------- */
@@ -28,36 +30,28 @@ export function humanize(s: string): string {
   }).join(' ') || s
 }
 
-/** 平台级属性展示词典（声明驱动的回退层）：Capability 文档 spec.properties[].title 缺席时，
- *  把常见属性机器名收敛为中文；未知属性仍回落 humanize——不猜业务语义。
- *  机器 ID（property key）本身永不本地化，这里只是展示别名（docs/architecture/capability-model.md §9）。 */
-const PROPERTY_LABEL: Record<string, string> = {
-  raw: '原始值', value: '数值', state: '状态', time: '时间', direction: '方向',
-  mask: '掩码', mode: '模式', level: '设定值', enabled: '开关', count: '计数',
-  status: '状态', notes: '音符序列', frequency_hz: '频率 (Hz)', duration_ms: '时长 (ms)', gap_ms: '音符间隔 (ms)',
-  slot: '位置', taken_at: '取用时间', scheduled_at: '计划时间',
-  commands: '命令数', pings: 'Ping 计数', ticks: '心跳计数', uptime_s: '运行时长',
-  seconds: '秒数',
+function tr(key: string, options?: Record<string, unknown>): string {
+  return i18n.t(`descriptor.${key}`, { ns: 'devices', ...options })
 }
 
-/** 平台通用词汇表（展示回退第二层）：常见硬件名词的中文展示别名。
- *  只收跨设备通用的硬件/能力名词，不收业务语义；声明 title 永远优先，
- *  机器 ID 本身永不本地化（docs/architecture/capability-model.md §9）。 */
-const GENERIC_NOUN: Record<string, string> = {
-  clock: '时钟', temperature: '温度', humidity: '湿度', illuminance: '光照',
-  'analog-input': '模拟输入', navigation: '导航', hall: '霍尔', vibration: '振动',
-  key: '按键', buzzer: '蜂鸣器', led: 'LED 灯组', 'led-bank': 'LED 灯组',
-  display: '数码管', 'display-text': '数码管显示', motor: '电机',
-  diagnostics: '诊断', 'board-diagnostics': '板级诊断', relay: '继电器', switch: '开关',
-  counter: '计数器', uptime: '运行时长', setpoint: '设定值', toggle: '开关',
+function knownText(section: 'property' | 'noun' | 'command' | 'unit', name: string): string | undefined {
+  const value = i18n.t(`descriptor.${section}.${name}`, { ns: 'devices', defaultValue: '' })
+  return value || undefined
 }
 
-/** UI  locale 匹配：声明 title 只有含中文才视为「已本地化的展示名」；
- *  纯英文 title（通常只是机器名的标题化）让位给平台通用词汇层——
- *  这是 i18n 的 locale 选择，不是覆盖声明：声明者日后给出中文 title 即自动优先。 */
+/** UI locale 匹配：中文界面优先展示含中文的声明；英文界面优先展示英文声明，避免回落到中文。 */
 const CJK_RE = /[\u3400-\u9fff]/
-function localizedTitle(t: string | undefined): string | undefined {
-  return t && CJK_RE.test(t) ? t : undefined
+function localizedTitle(title: string | undefined): string | undefined {
+  if (!title) return undefined
+  const chinese = CJK_RE.test(title)
+  return currentLocale().startsWith('zh') ? (chinese ? title : undefined) : (chinese ? undefined : title)
+}
+
+function localizedText(value: LocalizedText, field: 'title' | 'name' | 'description'): string | undefined {
+  const text = resolveLocalizedText(value, field)
+  if (!text) return undefined
+  if (currentLocale().startsWith('zh')) return text
+  return CJK_RE.test(text) ? undefined : text
 }
 
 /** 属性展示名：文档声明 title > 平台词典 > humanize(机器名) */
@@ -65,21 +59,12 @@ export function propertyLabel(name: string, ref?: string, idx: CapabilityIndex =
   const doc = ref ? resolveCapability(ref, idx) : undefined
   const decl = doc?.spec?.properties?.[name] as { title?: string } | undefined
   const title = str(decl?.title)
-  return localizedTitle(title) ?? PROPERTY_LABEL[name] ?? title ?? humanize(name)
-}
-/** 平台级命令展示词典（声明缺席时的回退层）：机器 cmd → 中文；未知命令仍回落 humanize。
- *  命令白名单与文案的事实源始终是后端声明（Capability actions / Descriptor commands /
- *  适配器白名单），这里只做展示别名，不猜业务语义。 */
-const CMD_LABEL: Record<string, string> = {
-  buzzer: '蜂鸣器', led: 'LED 灯组', display: '数码管显示', motor: '电机',
-  sync: '对时', sensor: '读取传感器', state: '状态读取', diag: '板级诊断',
-  isp: '进入 ISP 下载', raw: '原始命令',
-  ping: '连通性探测', dump: '状态转储', noop: '空操作', set: '写入设定值',
+  return localizedTitle(title) ?? knownText('property', name) ?? title ?? humanize(name)
 }
 
-/** 命令展示名（无声明上下文时）：平台词典 > humanize(机器名) */
+/** 操作展示名（无声明上下文时）：平台词典 > humanize(机器名) */
 export function commandLabel(cmd: string): string {
-  return CMD_LABEL[cmd] ?? humanize(cmd)
+  return knownText('command', cmd) ?? humanize(cmd)
 }
 
 function str(v: unknown): string | undefined {
@@ -88,6 +73,16 @@ function str(v: unknown): string | undefined {
 
 function obj(v: unknown): Record<string, unknown> | null {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null
+}
+
+function normalizeI18n(v: unknown): I18nText | undefined {
+  const source = obj(v)
+  if (!source) return undefined
+  const out: I18nText = {}
+  for (const [locale, text] of Object.entries(source)) {
+    if (locale.trim() && typeof text === 'string' && text.trim()) out[locale] = text
+  }
+  return Object.keys(out).length ? out : undefined
 }
 
 /* ---------------- Capability 引用解析 ---------------- */
@@ -151,11 +146,15 @@ export function resolveCapability(ref: string | undefined, idx: CapabilityIndex)
 
 /** 展示名：Capability 文档 title 优先，其次 humanize(能力名)——机器 ID 永不本地化 */
 export function capabilityLabel(ref: string | undefined, idx: CapabilityIndex = EMPTY_INDEX): string {
-  if (!ref) return '未声明'
+  if (!ref) return tr('unspecified')
   const doc = resolveCapability(ref, idx)
   const parsed = parseCapabilityRef(ref)
+  if (doc?.metadata?.i18n && Object.keys(doc.metadata.i18n).length) {
+    const translated = localizedTitle(resolveLocalizedText(doc.metadata, 'title'))
+    if (translated) return translated
+  }
   const title = str(doc?.metadata?.title)
-  return localizedTitle(title) ?? GENERIC_NOUN[parsed.name] ?? title ?? humanize(parsed.name || ref)
+  return localizedTitle(title) ?? knownText('noun', parsed.name) ?? title ?? humanize(parsed.name || ref)
 }
 
 /* ---------------- 宽容归一化（后端形状可能演化，前端不炸） ---------------- */
@@ -200,6 +199,7 @@ function normalizeEntity(v: unknown): DescriptorEntity | null {
       ? categoryRaw : 'sensor'
   const e: DescriptorEntity = { entity_id: entityId, unique_key: uniqueKey, category, capabilities }
   const name = str(o.name); if (name) e.name = name
+  const i18n = normalizeI18n(o.i18n); if (i18n) e.i18n = i18n
   const obsSrc = obj(o.observations)
   if (obsSrc) {
     const observations: Record<string, Observation> = {}
@@ -249,6 +249,7 @@ function normalizeCapabilityDoc(v: unknown): CapabilityDoc | null {
       },
     }
     const title = str(meta.title); if (title) doc.metadata.title = title
+    const i18n = normalizeI18n(meta.i18n); if (i18n) doc.metadata.i18n = i18n
     if (spec) doc.spec = spec as CapabilityDoc['spec']
     if (str(o.apiVersion)) doc.apiVersion = str(o.apiVersion)
     if (str(o.kind)) doc.kind = str(o.kind)
@@ -261,6 +262,7 @@ function normalizeCapabilityDoc(v: unknown): CapabilityDoc | null {
     metadata: { id, version: typeof o.version === 'number' ? o.version : (parseCapabilityRef(id).version ?? 1) },
   }
   const title = str(o.title); if (title) doc.metadata.title = title
+  const i18n = normalizeI18n(o.i18n); if (i18n) doc.metadata.i18n = i18n
   const flatSpec: Record<string, unknown> = {}
   for (const k of ['properties', 'events', 'actions', 'presentation'] as const) {
     const sub = obj(o[k]); if (sub) flatSpec[k] = sub
@@ -336,7 +338,7 @@ export function readInlineDescriptor(input: unknown): DeviceDescriptor | null {
 /* ---------------- Entity / Observation 读取 ---------------- */
 
 export function entityTitle(e: DescriptorEntity): string {
-  return e.name || humanize(e.unique_key || e.entity_id)
+  return localizedTitle(resolveLocalizedText(e, 'name')) ?? humanize(e.unique_key || e.entity_id)
 }
 
 /** 观测列表：按 (capability, property) 稳定排序，去重同一 capability+property */
@@ -434,29 +436,30 @@ export function inferWidget(v: unknown): WidgetKind {
 
 /* ---------------- 值格式化 ---------------- */
 
-const numFmt = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 })
+function numberFormat(): Intl.NumberFormat {
+  return new Intl.NumberFormat(currentLocale(), { maximumFractionDigits: 2 })
+}
 
 /** 观测值 → 展示文本（单位单独渲染，不拼接；null/undefined → —） */
 export function formatValue(v: unknown): string {
   if (v === null || v === undefined || v === '') return '—'
-  if (typeof v === 'number') return Number.isFinite(v) ? numFmt.format(v) : '—'
-  if (typeof v === 'boolean') return v ? '是' : '否'
+  if (typeof v === 'number') return Number.isFinite(v) ? numberFormat().format(v) : '—'
+  if (typeof v === 'boolean') return tr(v ? 'value.yes' : 'value.no')
   if (typeof v === 'string') return v
-  if (Array.isArray(v)) return `${v.length} 项`
+  if (Array.isArray(v)) return tr('value.items', { count: v.length })
   const o = obj(v)
   if (o) {
     const picked = pickDisplayField(o)
     if (picked !== undefined) return String(picked)
   }
-  return 'JSON'
+  return tr('value.json')
 }
 
-/** 机器单位 → 人话中文单位：只转有明确口语的时频/温度符号，
+/** 机器单位 → 人话单位：只转有明确口语的时频/温度符号，
  *  科学单位（V/lux/%…）原样保留——翻成「勒克斯」反而啰嗦。展示层单一出口，诊断面 raw JSON 不受影响。 */
-const UNIT_LABEL: Record<string, string> = { s: '秒', ms: '毫秒', min: '分钟', h: '小时', Hz: '赫兹', Cel: '°C' }
 export function unitLabel(u?: string): string | undefined {
   if (!u) return undefined
-  return UNIT_LABEL[u] ?? u
+  return knownText('unit', u) ?? u
 }
 
 /** ISO 时间串 → 本地时刻（无效则原样） */
@@ -464,7 +467,10 @@ export function formatTimestamp(v: unknown): string {
   if (typeof v !== 'string' && typeof v !== 'number') return formatValue(v)
   const d = new Date(v)
   if (Number.isNaN(d.getTime())) return String(v)
-  return d.toLocaleString('zh-CN', { hour12: false })
+  return new Intl.DateTimeFormat(currentLocale(), {
+    year: 'numeric', month: 'numeric', day: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(d)
 }
 
 /** 数组/对象里的「显示字段」通用挑选：label/name/title/text/value 优先，否则第一个标量 */
@@ -491,16 +497,19 @@ export function qualityTone(q: ObservationQuality | undefined): Tone {
 }
 
 export const QUALITY_LABEL: Record<ObservationQuality, string> = {
-  good: '良好', uncertain: '不确定', bad: '异常', unavailable: '不可用',
+  get good() { return i18n.t('quality.good', { ns: 'devices' }) },
+  get uncertain() { return i18n.t('quality.uncertain', { ns: 'devices' }) },
+  get bad() { return i18n.t('quality.bad', { ns: 'devices' }) },
+  get unavailable() { return i18n.t('quality.unavailable', { ns: 'devices' }) },
 }
 
 export function statusMeta(s: DeviceStatus | undefined): { label: string; tone: Tone; online: boolean } {
   switch (s) {
-    case 'online': return { label: '在线', tone: 'ok', online: true }
-    case 'degraded': return { label: '降级', tone: 'warn', online: true }
-    case 'offline': return { label: '离线', tone: 'idle', online: false }
-    case 'unavailable': return { label: '不可用', tone: 'bad', online: false }
-    default: return { label: '未知', tone: 'idle', online: false }
+    case 'online': return { label: i18n.t('status.online', { ns: 'devices' }), tone: 'ok', online: true }
+    case 'degraded': return { label: i18n.t('status.degraded', { ns: 'devices' }), tone: 'warn', online: true }
+    case 'offline': return { label: i18n.t('status.offline', { ns: 'devices' }), tone: 'idle', online: false }
+    case 'unavailable': return { label: i18n.t('status.unavailable', { ns: 'devices' }), tone: 'bad', online: false }
+    default: return { label: i18n.t('status.unknown', { ns: 'devices' }), tone: 'idle', online: false }
   }
 }
 
@@ -514,7 +523,10 @@ export function deviceStatusMeta(online: boolean, descriptorStatus?: DeviceStatu
 export const CATEGORY_ORDER: EntityCategory[] = ['sensor', 'actuator', 'diagnostic', 'config']
 
 export const CATEGORY_LABEL: Record<EntityCategory, string> = {
-  sensor: '传感器', actuator: '执行器', diagnostic: '诊断', config: '配置',
+  get sensor() { return i18n.t('category.sensor', { ns: 'devices' }) },
+  get actuator() { return i18n.t('category.actuator', { ns: 'devices' }) },
+  get diagnostic() { return i18n.t('category.diagnostic', { ns: 'devices' }) },
+  get config() { return i18n.t('category.config', { ns: 'devices' }) },
 }
 
 /** presentation.tone 只有在是合法 Tone 时才采纳（UI Hint 不可信输入） */
@@ -522,11 +534,11 @@ export function toneFromHint(p: CapabilityPresentation | undefined): Tone | unde
   const t = typeof p?.tone === 'string' ? p.tone : undefined
   return t && (TONES as string[]).includes(t) ? (t as Tone) : undefined
 }
-/* ---------------- 命令集推导（前端不维护白名单，事实源=声明） ---------------- */
+/* ---------------- 操作集推导（前端不维护白名单，事实源=声明） ---------------- */
 
 export type CommandSource = 'descriptor' | 'adapter' | 'none'
 
-/** 一条可下发命令的展示模型（由 Capability actions / Descriptor commands / 适配器白名单推导） */
+/** 一条可下发操作的展示模型（由 Capability actions / Descriptor commands / 适配器白名单推导） */
 export interface CommandAction {
   /** POST /api/devices/{edge}/{dev}/commands 的 cmd 字段 */
   cmd: string
@@ -579,12 +591,12 @@ function confirmOf(decl: Record<string, unknown>, label: string): string | undef
   const c = decl.confirmation ?? decl.confirmText ?? decl.confirm
   if (typeof c === 'string' && c.length) return c
   if (c === true || decl.destructive === true) {
-    return `确认执行「${label}」？此操作会改变设备状态，请确认继续。`
+    return tr('confirm', { label })
   }
   return undefined
 }
 
-/** Descriptor 顶层/Entity 上宽容声明的命令集（schema 未强制，但允许扩展字段） */
+/** Descriptor 顶层/Entity 上宽容声明的操作集（schema 未强制，但允许扩展字段） */
 function declaredCommands(container: Record<string, unknown>): CommandAction[] {
   const out: CommandAction[] = []
   for (const field of ['commands', 'actions'] as const) {
@@ -599,9 +611,9 @@ function declaredCommands(container: Record<string, unknown>): CommandAction[] {
       if (!o) continue
       const cmd = str(o.command) ?? str(o.cmd) ?? str(o.id) ?? str(o.name) ?? str(o.action)
       if (!cmd) continue
-      const label = str(o.title) ?? str(o.label) ?? str(o.name) ?? commandLabel(cmd)
+      const label = localizedTitle(resolveLocalizedText(o as LocalizedText, 'title')) ?? str(o.label) ?? str(o.name) ?? commandLabel(cmd)
       const a: CommandAction = { cmd, label, variant: variantOf(o) }
-      const hint = str(o.description) ?? str(o.hint); if (hint) a.hint = hint
+      const hint = localizedText(o as LocalizedText, 'description') ?? str(o.hint); if (hint) a.hint = hint
       const confirmText = confirmOf(o, label); if (confirmText) a.confirmText = confirmText
       const schema = obj(o.inputSchema) ?? obj(o.input) ?? obj(o.args)
       if (schema) {
@@ -630,12 +642,12 @@ function actionsFromCapabilities(
       for (const [name, declRaw] of Object.entries(actions)) {
         const decl = (obj(declRaw) ?? {}) as Record<string, unknown>
         const cmd = str(decl.command) ?? str(decl.cmd) ?? name
-        const label = str(decl.title) ?? str(decl.label) ?? commandLabel(name)
+        const label = localizedTitle(resolveLocalizedText(decl as LocalizedText, 'title')) ?? str(decl.label) ?? commandLabel(name)
         const a: CommandAction = {
           cmd, label, variant: variantOf(decl),
           capability: ref, entityId: e.entity_id, entityLabel: entityTitle(e),
         }
-        const hint = str(decl.description) ?? str(decl.hint); if (hint) a.hint = hint
+        const hint = localizedText(decl as LocalizedText, 'description') ?? str(decl.hint); if (hint) a.hint = hint
         const confirmText = confirmOf(decl, label); if (confirmText) a.confirmText = confirmText
         const schema = obj(decl.inputSchema)
         if (schema && schemaNeedsInput(schema)) { a.needsInput = true; a.inputSchema = schema }
@@ -648,8 +660,8 @@ function actionsFromCapabilities(
 }
 
 /**
- * 命令集：Descriptor/Capability 声明优先，其次适配器白名单（/api/adapters，仍是后端事实源），
- * 最后为空。前端不再有任何命令文案/图标白名单表。
+ * 操作集：Descriptor/Capability 声明优先，其次适配器白名单（/api/adapters，仍是后端事实源），
+ * 最后为空。前端不再有任何操作文案/图标白名单表。
  */
 export function commandActions(input: {
   descriptor?: DeviceDescriptor | null
@@ -722,8 +734,8 @@ function obsToSummary(
   const text = widget === 'timestamp' ? formatTimestamp(o.value) : formatValue(o.value)
   const title = [
     capabilityLabel(o.capability, idx), o.property,
-    o.quality ? `质量 ${QUALITY_LABEL[o.quality]}` : '',
-    o.received_at ? `接收 ${formatTimestamp(o.received_at)}` : '',
+    o.quality ? tr('summary.quality', { quality: QUALITY_LABEL[o.quality] }) : '',
+    o.received_at ? tr('summary.received', { time: formatTimestamp(o.received_at) }) : '',
   ].filter(Boolean).join(' · ')
   return {
     label: label ?? entityTitle(e),
@@ -787,7 +799,7 @@ function rawKeyLabel(key: string): string {
   if (dot <= 0) return humanize(key)
   const ent = key.slice(0, dot)
   const prop = key.slice(dot + 1)
-  return `${GENERIC_NOUN[ent] ?? humanize(ent)} · ${PROPERTY_LABEL[prop] ?? GENERIC_NOUN[prop] ?? humanize(prop)}`
+  return `${knownText('noun', ent) ?? humanize(ent)} · ${knownText('property', prop) ?? knownText('noun', prop) ?? humanize(prop)}`
 }
 
 /** 详情页通用回落：raw 的每个键一行，widget 由值类型推导（未知结构 → 表格/JSON） */
@@ -821,8 +833,8 @@ export function eventDecl(type: string, idx: CapabilityIndex): {
       const tone = str(decl.tone)
       return {
         // 事件标题同样走 locale 匹配：英文 title 让位给上层中文组合名
-        title: localizedTitle(str(decl.title) ?? str(decl.label)),
-        description: str(decl.description),
+        title: localizedTitle(resolveLocalizedText(decl as LocalizedText, 'title')) ?? localizedTitle(str(decl.title) ?? str(decl.label)),
+        description: localizedText(decl as LocalizedText, 'description') ?? str(decl.description),
         tone: tone && (TONES as string[]).includes(tone) ? (tone as Tone) : undefined,
       }
     }
@@ -831,8 +843,8 @@ export function eventDecl(type: string, idx: CapabilityIndex): {
 }
 
 /**
- * 命令声明查找：扫描 catalog 里各 Capability 的 spec.actions（eventDecl 的命令侧对称件）。
- * 跨设备列表（活动页 / 概览）拿不到单设备命令集，只能按 cmd 在声明索引里找展示名；
+ * 操作声明查找：扫描 catalog 里各 Capability 的 spec.actions（eventDecl 的操作侧对称件）。
+ * 跨设备列表（活动页 / 概览）拿不到单设备操作集，只能按 cmd 在声明索引里找展示名；
  * 键对齐 commandActions：decl.command > decl.cmd > action key。未收录时返回 undefined，
  * 由上层回落平台词典 / humanize——机器 cmd 本身永不本地化。
  */
@@ -846,9 +858,14 @@ export function commandDecl(cmd: string, idx: CapabilityIndex): {
     for (const [name, declRaw] of Object.entries(actions)) {
       const decl = obj(declRaw) ?? {}
       if ((str(decl.command) ?? str(decl.cmd) ?? name) !== cmd) continue
-      // 与 propertyLabel / capabilityLabel 同一 locale 规则：英文 title 让位给平台词典
-      const title = localizedTitle(str(decl.title) ?? str(decl.label))
-      const description = str(decl.description) ?? str(decl.hint)
+      const hasI18n = Boolean(obj(decl.i18n) && Object.keys(obj(decl.i18n) ?? {}).length)
+      // 与 propertyLabel / capabilityLabel 同一 locale 规则：无 i18n 时英文 title 让位平台词典。
+      const title = hasI18n
+        ? localizedTitle(resolveLocalizedText(decl as LocalizedText, 'title'))
+        : localizedTitle(str(decl.title) ?? str(decl.label))
+      const description = hasI18n
+        ? localizedText(decl as LocalizedText, 'description')
+        : localizedText(decl as LocalizedText, 'description') ?? str(decl.description) ?? str(decl.hint)
       if (title || description) return { title, description }
     }
   }

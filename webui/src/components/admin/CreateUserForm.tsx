@@ -2,6 +2,7 @@
 // 角色默认最小权限（viewer），admin 需要显式选择；错误一律展示服务端人话，不做本地伪判。
 import { useState } from 'react'
 import type { FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button, TextField } from '@/components/ui'
 import { ErrorNote } from './ErrorNote'
 import { SelectField } from './fields'
@@ -11,14 +12,8 @@ import { roleLabel } from '@/lib/format'
 import { toast } from '@/store/toast'
 import type { Role } from '@/lib/types'
 
-const ROLE_FIELD_OPTIONS = ROLE_OPTIONS.map((r) => ({ value: r.value, label: r.label }))
-const ROLE_HINTS: Record<Role, string> = {
-  viewer: '只能查看设备状态和记录。',
-  operator: '可以查看并执行设备操作。',
-  admin: '可以管理成员和访问令牌。',
-}
-
 export function CreateUserForm({ onDone }: { onDone: () => void }) {
+  const { t } = useTranslation('admin')
   const create = useCreateUser()
   const [username, setUsername] = useState('')
   const [name, setName] = useState('')
@@ -26,20 +21,24 @@ export function CreateUserForm({ onDone }: { onDone: () => void }) {
   const [password, setPassword] = useState('')
   const [usernameErr, setUsernameErr] = useState('')
   const [passwordErr, setPasswordErr] = useState('')
+  const roleOptions = ROLE_OPTIONS.map((r) => ({ value: r.value, label: roleLabel(r.value) }))
 
   const submit = (ev: FormEvent) => {
     ev.preventDefault()
     const u = username.trim()
     let bad = false
-    setUsernameErr(u ? '' : '请输入登录账号')
-    setPasswordErr(password ? '' : '请输入初始密码')
+    setUsernameErr(u ? '' : t('createUser.username.required'))
+    setPasswordErr(password ? '' : t('createUser.password.required'))
     if (!u || !password) bad = true
     if (bad) return
     create.mutate(
       { username: u, role, password, ...(name.trim() ? { name: name.trim() } : {}) },
       {
         onSuccess: (r) => {
-          toast.ok('成员已添加', `${r.user.username} · ${roleLabel(r.user.role)}`)
+          toast.ok(t('createUser.toast.successTitle'), t('createUser.toast.successMessage', {
+            username: r.user.username,
+            role: roleLabel(r.user.role),
+          }))
           onDone()
         },
       },
@@ -47,26 +46,26 @@ export function CreateUserForm({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <form onSubmit={submit} aria-label="添加成员" className="mb-4 border-b border-hairline pb-4">
+    <form onSubmit={submit} aria-label={t('createUser.formAria')} className="mb-4 border-b border-hairline pb-4">
       <div className="grid gap-3 sm:grid-cols-2">
         <TextField
-          label="登录账号" value={username} error={usernameErr} autoComplete="off"
-          hint="成员登录时使用；本组织内不能重复"
+          label={t('createUser.username.label')} value={username} error={usernameErr} autoComplete="off"
+          hint={t('createUser.username.hint')}
           onChange={(ev) => setUsername(ev.target.value)}
         />
         <TextField
-          label="显示名称" value={name} autoComplete="off"
-          hint="留空则显示登录账号"
+          label={t('createUser.name.label')} value={name} autoComplete="off"
+          hint={t('createUser.name.hint')}
           onChange={(ev) => setName(ev.target.value)}
         />
         <TextField
-          label="初始密码" type="password" value={password} error={passwordErr} autoComplete="new-password"
-          hint="成员第一次登录时使用，之后建议尽快修改"
+          label={t('createUser.password.label')} type="password" value={password} error={passwordErr} autoComplete="new-password"
+          hint={t('createUser.password.hint')}
           onChange={(ev) => setPassword(ev.target.value)}
         />
         <SelectField
-          label="角色" value={role} options={ROLE_FIELD_OPTIONS}
-          hint={ROLE_HINTS[role]}
+          label={t('createUser.role.label')} value={role} options={roleOptions}
+          hint={t(`roleHints.${role}`)}
           onChange={(v) => setRole(v as Role)}
         />
       </div>
@@ -75,9 +74,9 @@ export function CreateUserForm({ onDone }: { onDone: () => void }) {
       )}
       <div className="mt-3 flex flex-wrap gap-2">
         <Button type="submit" disabled={create.isPending}>
-          {create.isPending ? '添加中…' : '添加成员'}
+          {create.isPending ? t('createUser.submitting') : t('createUser.submit')}
         </Button>
-        <Button type="button" variant="ghost" onClick={onDone}>取消</Button>
+        <Button type="button" variant="ghost" onClick={onDone}>{t('actions.cancel')}</Button>
       </div>
     </form>
   )

@@ -90,7 +90,7 @@ describe('路由回落', () => {
 })
 
 describe('Schema 端点缺席时的设备详情页', () => {
-  it('descriptor/capabilities 全 404 → 通用回落视图 + 命令集来自设备支持的操作', async () => {
+  it('descriptor/capabilities 全 404 → 通用回落视图 + 操作集来自设备支持的操作', async () => {
     installFetch((url) => {
       if (url === '/api/auth/me') return stubResponse(200, me)
       if (url === '/api/adapters') return stubResponse(200, { adapters: [{ name: 'demo', commands: ['raw', 'identify'] }] })
@@ -109,15 +109,15 @@ describe('Schema 端点缺席时的设备详情页', () => {
     // 高级 → 状态与趋势：通用回落视图，上报字段按类型渲染（标量成键值行，对象数组成表格，嵌套对象成 JSON）
     await user.click(screen.getByRole('tab', { name: /高级/ }))
     await user.click(screen.getByRole('button', { name: '状态与趋势' }))
-    expect(await screen.findByText('该设备尚未同步功能信息，此处按已接收的数据显示')).toBeInTheDocument()
-    expect(screen.getByText('设备数据（通用视图）')).toBeInTheDocument()
+    expect(await screen.findByText('该设备尚未同步能力信息，此处按已接收的数据显示')).toBeInTheDocument()
+    expect(screen.getByText('设备数据')).toBeInTheDocument()
     expect(screen.getByText('Mode')).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Slots 数据表' })).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Diag 完整数据' })).toBeInTheDocument()
 
-    // 控制分区：命令面板回落到后端白名单，而不是前端自己编一张命令表
+    // 控制分区：操作面板回落到后端白名单，而不是前端自己编一张命令表
     await user.click(screen.getByRole('tab', { name: /设备操作/ }))
-    expect(await screen.findByText('高级：手动输入参数')).toBeInTheDocument()
+    expect(await screen.findByText('更多操作：手动输入参数')).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: '选择操作' })).toBeInTheDocument()
 
     // 高级 → 设备功能：没有 Descriptor 就明说，不猜能力

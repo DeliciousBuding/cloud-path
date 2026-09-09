@@ -1,21 +1,27 @@
 // 展示格式化工具（纯函数，无副作用）。
 //
-// 设备语义不在这里：事件/命令的展示文案由后端声明驱动（Capability spec.events / spec.actions），
+// 设备语义不在这里：事件/操作的展示文案由后端声明驱动（Capability spec.events / spec.actions），
 // 未声明时回落 humanize(机器名)。机器 ID、Capability ID、事件类型永不本地化
 // （docs/architecture/capability-model.md §9）。
 import { ApiError } from './api'
+import { currentLocale, i18n } from '@/i18n'
 import type { Tone } from '@/components/ui'
 import { capabilityLabel, commandDecl, commandLabel, eventDecl, humanize } from './descriptor'
 import type { CapabilityIndex, CommandAction } from './descriptor'
 import type { EventView } from './types'
 
 export function fmtTime(ts: number): string {
-  return new Date(ts * 1000).toLocaleTimeString('zh-CN', { hour12: false })
+  return new Intl.DateTimeFormat(currentLocale(), {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(new Date(ts * 1000))
 }
 
 export function fmtDateTime(ts: number): string {
   if (!ts) return '—'
-  return new Date(ts * 1000).toLocaleString('zh-CN', { hour12: false })
+  return new Intl.DateTimeFormat(currentLocale(), {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(new Date(ts * 1000))
 }
 
 /**
@@ -28,30 +34,34 @@ export function fmtDay(ts: number): string {
   const dayMs = 86_400_000
   const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
   const diff = Math.round((startOf(now) - startOf(d)) / dayMs)
-  if (diff === 0) return '今天'
-  if (diff === 1) return '昨天'
+  if (diff === 0) return i18n.t('time.today', { ns: 'common' })
+  if (diff === 1) return i18n.t('time.yesterday', { ns: 'common' })
   const sameYear = d.getFullYear() === now.getFullYear()
-  return d.toLocaleDateString('zh-CN', sameYear
+  return new Intl.DateTimeFormat(currentLocale(), sameYear
     ? { month: 'long', day: 'numeric' }
-    : { year: 'numeric', month: 'long', day: 'numeric' })
+    : { year: 'numeric', month: 'long', day: 'numeric' }).format(d)
 }
 
 export function timeAgo(ts: number): string {
   if (!ts) return '—'
   const s = Math.max(0, Math.floor(Date.now() / 1000 - ts))
-  if (s < 5) return '刚刚'
-  if (s < 60) return `${s} 秒前`
-  if (s < 3600) return `${Math.floor(s / 60)} 分钟前`
-  if (s < 86400) return `${Math.floor(s / 3600)} 小时前`
-  return `${Math.floor(s / 86400)} 天前`
+  if (s < 5) return i18n.t('time.justNow', { ns: 'common' })
+  if (s < 60) return i18n.t('time.secondsAgo', { ns: 'common', count: s })
+  if (s < 3600) return i18n.t('time.minutesAgo', { ns: 'common', count: Math.floor(s / 60) })
+  if (s < 86400) return i18n.t('time.hoursAgo', { ns: 'common', count: Math.floor(s / 3600) })
+  return i18n.t('time.daysAgo', { ns: 'common', count: Math.floor(s / 86400) })
 }
 
 export function fmtUptime(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) return '—'
-  if (sec < 60) return `${sec} 秒`
-  if (sec < 3600) return `${Math.floor(sec / 60)} 分钟`
-  if (sec < 86400) return `${Math.floor(sec / 3600)} 小时 ${Math.floor((sec % 3600) / 60)} 分`
-  return `${Math.floor(sec / 86400)} 天 ${Math.floor((sec % 86400) / 3600)} 小时`
+  if (sec < 60) return i18n.t('time.seconds', { ns: 'common', count: sec })
+  if (sec < 3600) return i18n.t('time.minutes', { ns: 'common', count: Math.floor(sec / 60) })
+  if (sec < 86400) return i18n.t('time.hoursMinutes', {
+    ns: 'common', hours: Math.floor(sec / 3600), minutes: Math.floor((sec % 3600) / 60),
+  })
+  return i18n.t('time.daysHours', {
+    ns: 'common', days: Math.floor(sec / 86400), hours: Math.floor((sec % 86400) / 3600),
+  })
 }
 
 /** 事件载荷里后端给的展示标签（WS EventData.label / REST payload.label），没有则 undefined */
@@ -94,12 +104,17 @@ export function payloadHasMore(payload: string | undefined): boolean {
   return Object.keys(parsed as Record<string, unknown>).some((k) => k !== 'type')
 }
 
-/** 事件动词平台词典（声明缺席时的回退层）：机器动词 → 中文；未知动词回落 humanize，不猜业务语义 */
-const EVENT_VERB: Record<string, string> = {
-  press: '按下', pressed: '按下', release: '释放', released: '释放',
-  quake: '振动', changed: '状态变化', close: '靠近', away: '离开',
-  direction: '方向变化', tick: '滴答', opened: '打开', closed: '关闭',
-  taken: '已取药', remind: '提醒', missed: '错过',
+/** 事件动词平台词典（声明缺席时的回退层）：机器动词 → i18n key；未知动词回落 humanize，不猜业务语义 */
+const EVENT_VERB_KEYS: Record<string, string> = {
+  press: 'press', pressed: 'pressed', release: 'release', released: 'released',
+  quake: 'quake', changed: 'changed', close: 'close', away: 'away',
+  direction: 'direction', tick: 'tick', opened: 'opened', closed: 'closed',
+  taken: 'taken', remind: 'remind', missed: 'missed',
+}
+
+function eventVerbLabel(verb: string): string {
+  const key = EVENT_VERB_KEYS[verb]
+  return key ? i18n.t(`event.verbs.${key}`, { ns: 'activity' }) : humanize(verb)
 }
 
 /** 脏标签判定：历史脏数据（二进制串口碎片被写成事件类型）含控制符/替换符，原样展示即乱码 */
@@ -116,24 +131,31 @@ function composeEventLabel(type: string, index?: CapabilityIndex): string {
   if (!rest) return cap
   const dir = rest.match(/^(\d+):(.+)$/)
   const verb = dir ? dir[2] : rest
-  const verbLabel = EVENT_VERB[verb] ?? humanize(verb)
-  return dir ? `${cap} · 方向${dir[1]}${verbLabel}` : `${cap} · ${verbLabel}`
+  const verbLabel = eventVerbLabel(verb)
+  return dir
+    ? i18n.t('event.direction', { ns: 'activity', number: dir[1], verb: verbLabel })
+    : `${cap} · ${verbLabel}`
 }
 
 /** 平台级事件类型词汇（device.* 是平台生命周期事件，非设备语义） */
-const EVENT_TYPE_LABEL: Record<string, string> = {
-  'device.boot': '设备启动', 'device-booted': '设备启动',
-  'device.online': '设备上线', 'device-online': '设备上线',
-  'device.offline': '设备离线', 'device-offline': '设备离线',
-  'device.state': '状态上报', 'device-state': '状态上报',
-  'device.descriptor': '描述更新', 'device-descriptor': '描述更新',
+const EVENT_TYPE_KEYS: Record<string, string> = {
+  'device.boot': 'deviceBooted', 'device-booted': 'deviceBooted',
+  'device.online': 'deviceOnline', 'device-online': 'deviceOnline',
+  'device.offline': 'deviceOffline', 'device-offline': 'deviceOffline',
+  'device.state': 'deviceState', 'device-state': 'deviceState',
+  'device.descriptor': 'deviceDescriptor', 'device-descriptor': 'deviceDescriptor',
+}
+
+function eventTypeLabel(type: string): string | undefined {
+  const key = EVENT_TYPE_KEYS[type]
+  return key ? i18n.t(`event.labels.${key}`, { ns: 'activity' }) : undefined
 }
 
 /** 事件展示名：后端 label > 脏数据降级 > 平台事件词汇 > Capability 声明 title > 组合中文名 > humanize */
 export function eventLabel(type: string, index?: CapabilityIndex, label?: string): string {
   if (label && !isDirtyLabel(label)) return label
-  if (isDirtyLabel(type)) return '无效事件（历史脏数据）'
-  return EVENT_TYPE_LABEL[type]
+  if (isDirtyLabel(type)) return i18n.t('event.labels.invalid', { ns: 'activity' })
+  return eventTypeLabel(type)
     || (index ? eventDecl(type, index)?.title : undefined)
     || composeEventLabel(type, index)
 }
@@ -143,8 +165,8 @@ export function eventTone(type: string, index?: CapabilityIndex): Tone {
   return (index ? eventDecl(type, index)?.tone : undefined) ?? 'idle'
 }
 
-/** 命令展示名/提示，回落顺序：设备命令集声明 > catalog 里的 action 声明 > 平台词典 > humanize(cmd)。
- *  跨设备列表（活动页 / 概览）没有单设备命令集，传 idx 让它照样吃到声明标题。 */
+/** 操作展示名/提示，回落顺序：设备操作集声明 > catalog 里的 action 声明 > 平台词典 > humanize(cmd)。
+ *  跨设备列表（活动页 / 概览）没有单设备操作集，传 idx 让它照样吃到声明标题。 */
 export function cmdMeta(
   cmd: string, actions?: CommandAction[], idx?: CapabilityIndex,
 ): { label: string; hint: string } {
@@ -152,21 +174,22 @@ export function cmdMeta(
   if (a) return { label: a.label, hint: a.hint ?? '' }
   const decl = idx ? commandDecl(cmd, idx) : undefined
   if (decl?.title) return { label: decl.title, hint: decl.description ?? '' }
-  const friendly: Record<string, string> = {
-    tone: '播放音调',
-    tone_sequence: '播放音序',
-    isp: '进入下载模式',
+  const friendlyKey: Record<string, string> = {
+    tone: 'tone',
+    tone_sequence: 'toneSequence',
+    isp: 'isp',
   }
-  return { label: friendly[cmd] ?? commandLabel(cmd), hint: '' }
+  const key = friendlyKey[cmd]
+  return { label: key ? i18n.t(`event.commandLabels.${key}`, { ns: 'activity' }) : commandLabel(cmd), hint: '' }
 }
 
-/** 命令生命周期状态 → 徽标语义（平台级状态机，非设备语义） */
+/** 操作生命周期状态 → 徽标语义（平台级状态机，非设备语义） */
 export const CMD_STATUS_META: Record<string, { label: string; tone: Tone }> = {
-  pending: { label: '待发送', tone: 'idle' },
-  sent:    { label: '已下发', tone: 'accent' },
-  ok:      { label: '成功',   tone: 'ok' },
-  failed:  { label: '失败',   tone: 'bad' },
-  timeout: { label: '超时',   tone: 'warn' },
+  get pending() { return { label: i18n.t('command.status.pending', { ns: 'activity' }), tone: 'idle' as Tone } },
+  get sent() { return { label: i18n.t('command.status.sent', { ns: 'activity' }), tone: 'accent' as Tone } },
+  get ok() { return { label: i18n.t('command.status.ok', { ns: 'activity' }), tone: 'ok' as Tone } },
+  get failed() { return { label: i18n.t('command.status.failed', { ns: 'activity' }), tone: 'bad' as Tone } },
+  get timeout() { return { label: i18n.t('command.status.timeout', { ns: 'activity' }), tone: 'warn' as Tone } },
 }
 
 export function cmdStatusMeta(status: string) {
@@ -187,14 +210,8 @@ export function mergeEvents(live: EventView[], history: EventView[]): EventView[
 }
 
 /** 用户角色 → 中文标签（docs/api.md §2.1 role ∈ admin|operator|viewer；未知角色回落原名） */
-const ROLE_LABELS: Record<string, string> = {
-  admin: '管理员',
-  operator: '操作员',
-  viewer: '只读',
-}
-
 export function roleLabel(role: string): string {
-  return ROLE_LABELS[role] ?? role
+  return i18n.t(`roles.${role}`, { ns: 'common', defaultValue: role })
 }
 
 /**
@@ -202,15 +219,9 @@ export function roleLabel(role: string): string {
  * 不是「有没有配 legacy 令牌」：账号模式下必须显示为需登录，否则系统页会把一个
  * 已收紧的部署说成裸奔。未知形态回落原值，不猜语义——与 roleLabel 同一纪律。
  */
-const AUTH_MODE_LABELS: Record<string, string> = {
-  account: '需要账号登录',
-  token: '使用访问令牌：可查看，修改需令牌或本机操作',
-  open: '无需登录：可查看，修改仅限本机',
-}
-
 export function authModeLabel(mode?: string): string {
   if (!mode) return '—'
-  return AUTH_MODE_LABELS[mode] ?? mode
+  return i18n.t(`authModes.${mode}`, { ns: 'common', defaultValue: mode })
 }
 
 /**
@@ -231,41 +242,43 @@ export function argsMaxBytes(declared?: number): number {
 
 /** 保留原文，不静默剥离、截断或压缩 JSON；与服务端的换行/NUL 门禁一致。 */
 export function argsError(args: string, max = 64): string | undefined {
-  if (/[\r\n\0]/.test(args)) return '参数不能包含换行或控制字符'
+  if (/[\r\n\0]/.test(args)) return i18n.t('validation.argsControl', { ns: 'common' })
   const bytes = new TextEncoder().encode(args).length
   const limit = argsMaxBytes(max)
-  if (bytes > limit) return '参数 ' + bytes + ' 字节，超过 ' + limit + ' 字节上限'
+  if (bytes > limit) return i18n.t('validation.argsTooLong', { ns: 'common', bytes, limit })
   return undefined
 }
 
 /**
- * 命令下发失败 → 人话。按 HTTP 状态判定，语义对齐 docs/design.md 的 REST 错误约定
- * （400 参数/白名单、401 令牌、404 设备不存在、409 edge 离线、429 命令限流、
+ * 操作下发失败 → 人话。按 HTTP 状态判定，语义对齐 docs/design.md 的 REST 错误约定
+ * （400 参数/白名单、401 令牌、404 设备不存在、409 edge 离线、429 操作限流、
  * 503 存储不可用或 edge 队列满）；不把服务端 message 当规则复述。
  */
 export function commandErrorCopy(e: unknown): string {
   if (e instanceof ApiError) {
     switch (e.status) {
-      case 400: return '操作或参数不被接受：设备不支持，或参数过长、包含无效字符'
-      case 401: return '登录已失效，请重新登录后再执行操作'
-      case 403: return '当前账号没有执行操作的权限'
-      case 404: return '设备不存在，或不属于当前组织'
-      case 409: return '设备所在网关离线，操作暂时无法执行'
-      case 429: return e.retryAfter ? `操作过于频繁，请 ${e.retryAfter} 秒后重试` : '操作过于频繁，请稍后重试'
-      case 503: return '服务暂时不可用或网关忙碌，请稍后重试'
-      default: return `操作失败（HTTP ${e.status}）`
+      case 400: return i18n.t('command.badRequest', { ns: 'errors' })
+      case 401: return i18n.t('command.unauthorized', { ns: 'errors' })
+      case 403: return i18n.t('command.forbidden', { ns: 'errors' })
+      case 404: return i18n.t('command.notFound', { ns: 'errors' })
+      case 409: return i18n.t('command.offline', { ns: 'errors' })
+      case 429: return e.retryAfter
+        ? i18n.t('command.rateLimitedAfter', { ns: 'errors', seconds: e.retryAfter })
+        : i18n.t('command.rateLimited', { ns: 'errors' })
+      case 503: return i18n.t('command.unavailable', { ns: 'errors' })
+      default: return i18n.t('command.failed', { ns: 'errors', status: e.status })
     }
   }
-  return e instanceof Error && e.message ? e.message : '无法连接服务（服务未启动或网络不可达）'
+  return e instanceof Error && e.message ? e.message : i18n.t('network', { ns: 'errors' })
 }
 
 /** 桶宽候选（秒）：从数据跨度自动选，保证 ≤ want 个桶且桶宽是人话单位 */
 const DENSITY_STEPS = [60, 300, 900, 1800, 3600, 7200, 14400, 43200, 86400]
 
 function stepLabel(sec: number): string {
-  if (sec < 3600) return sec === 60 ? '分钟' : `${sec / 60} 分钟`
-  if (sec < 86400) return sec === 3600 ? '小时' : `${sec / 3600} 小时`
-  return sec === 86400 ? '天' : `${sec / 86400} 天`
+  if (sec < 3600) return sec === 60 ? i18n.t('time.minutesShortOne', { ns: 'common' }) : i18n.t('time.minutesShort', { ns: 'common', count: sec / 60 })
+  if (sec < 86400) return sec === 3600 ? i18n.t('time.hoursShortOne', { ns: 'common' }) : i18n.t('time.hoursShort', { ns: 'common', count: sec / 3600 })
+  return sec === 86400 ? i18n.t('time.daysShortOne', { ns: 'common' }) : i18n.t('time.daysShort', { ns: 'common', count: sec / 86400 })
 }
 
 /**

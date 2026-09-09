@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/auth"
 	"github.com/DeliciousBuding/cloud-path/internal/registry"
 )
@@ -72,17 +73,17 @@ func (s *Server) handlePluginUIAsset(w http.ResponseWriter, r *http.Request) {
 	version := strings.TrimSpace(chi.URLParam(r, "version"))
 	assetPath := chi.URLParam(r, "*")
 	if pluginID == "" || version == "" || strings.ContainsAny(pluginID, "/\\") || strings.ContainsAny(version, "/\\") {
-		writePluginUIAssetError(w, http.StatusNotFound)
+		writePluginUIAssetError(w, r, http.StatusNotFound)
 		return
 	}
 	clean, err := cleanPluginUIAssetPath(assetPath)
 	if err != nil {
-		writePluginUIAssetError(w, http.StatusForbidden)
+		writePluginUIAssetError(w, r, http.StatusForbidden)
 		return
 	}
 	mimeType, ok := pluginUIAssetTypes[strings.ToLower(path.Ext(clean))]
 	if !ok {
-		writePluginUIAssetError(w, http.StatusUnsupportedMediaType)
+		writePluginUIAssetError(w, r, http.StatusUnsupportedMediaType)
 		return
 	}
 
@@ -90,45 +91,45 @@ func (s *Server) handlePluginUIAsset(w http.ResponseWriter, r *http.Request) {
 	// API. A plugin that is not visible to the caller must look nonexistent.
 	view, found, err := s.pluginCatalog.Plugin(tenant, pluginID)
 	if err != nil || !found || view.Version != version {
-		writePluginUIAssetError(w, http.StatusNotFound)
+		writePluginUIAssetError(w, r, http.StatusNotFound)
 		return
 	}
 	root, manifest, err := s.localPluginUIRoot(pluginID, version)
 	if err != nil || !registry.HasCustomUI(manifest) {
-		writePluginUIAssetError(w, http.StatusNotFound)
+		writePluginUIAssetError(w, r, http.StatusNotFound)
 		return
 	}
 
 	uiRoot := filepath.Join(root, "ui")
 	resolvedPluginRoot, err := filepath.EvalSymlinks(root)
 	if err != nil {
-		writePluginUIAssetError(w, http.StatusNotFound)
+		writePluginUIAssetError(w, r, http.StatusNotFound)
 		return
 	}
 	resolvedRoot, err := filepath.EvalSymlinks(uiRoot)
 	if err != nil || !withinResolvedRoot(resolvedPluginRoot, resolvedRoot) {
-		writePluginUIAssetError(w, http.StatusNotFound)
+		writePluginUIAssetError(w, r, http.StatusNotFound)
 		return
 	}
 	rel := strings.TrimPrefix(clean, "ui/")
 	fullPath := filepath.Join(uiRoot, filepath.FromSlash(rel))
 	resolvedPath, err := filepath.EvalSymlinks(fullPath)
 	if err != nil || !withinResolvedRoot(resolvedRoot, resolvedPath) {
-		writePluginUIAssetError(w, http.StatusNotFound)
+		writePluginUIAssetError(w, r, http.StatusNotFound)
 		return
 	}
 	info, err := os.Stat(resolvedPath)
 	if err != nil || !info.Mode().IsRegular() || info.Size() > pluginUIAssetMaxBytes {
 		if err == nil && info != nil && info.Size() > pluginUIAssetMaxBytes {
-			writePluginUIAssetError(w, http.StatusRequestEntityTooLarge)
+			writePluginUIAssetError(w, r, http.StatusRequestEntityTooLarge)
 			return
 		}
-		writePluginUIAssetError(w, http.StatusNotFound)
+		writePluginUIAssetError(w, r, http.StatusNotFound)
 		return
 	}
 	file, err := os.Open(resolvedPath)
 	if err != nil {
-		writePluginUIAssetError(w, http.StatusNotFound)
+		writePluginUIAssetError(w, r, http.StatusNotFound)
 		return
 	}
 	defer file.Close()
@@ -139,18 +140,27 @@ func (s *Server) handlePluginUIAsset(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.CopyN(w, file, pluginUIAssetMaxBytes+1)
 }
 
-func writePluginUIAssetError(w http.ResponseWriter, status int) {
+func writePluginUIAssetError(w http.ResponseWriter, r *http.Request, status int) {
+	code := api.APIErrPluginUIAssetNotFound
 	message := "plugin UI asset not found"
-	if status == http.StatusForbidden {
+	params := map[string]any{
+		"plugin_id": chi.URLParam(r, "pluginID"),
+		"version":   chi.URLParam(r, "version"),
+		"asset":     chi.URLParam(r, "*"),
+	}
+	switch status {
+	case http.StatusForbidden:
+		code = api.APIErrPluginUIAssetForbidden
 		message = "plugin UI asset path is not allowed"
-	}
-	if status == http.StatusUnsupportedMediaType {
+	case http.StatusUnsupportedMediaType:
+		code = api.APIErrPluginUIAssetTypeNotAllowed
 		message = "plugin UI asset type is not allowed"
-	}
-	if status == http.StatusRequestEntityTooLarge {
+	case http.StatusRequestEntityTooLarge:
+		code = api.APIErrPluginUIAssetTooLarge
 		message = "plugin UI asset is too large"
+		params["max_bytes"] = pluginUIAssetMaxBytes
 	}
-	writeJSON(w, status, map[string]string{"error": message})
+	writeAPIError(w, r, status, code, message, params)
 }
 
 func cleanPluginUIAssetPath(raw string) (string, error) {

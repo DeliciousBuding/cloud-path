@@ -1,4 +1,4 @@
-// 插件实例的其余事实面：Version / Edge / Trust / Permissions / Health / Revision / Last ACK，
+// 运行实例的其余事实面：Version / 网关 / Trust / Permissions / Health / Revision / Last ACK，
 // 以及 secret handle、非敏感配置与错误码呈现。
 //
 // 安全边界（control-plane-sync.md 不变量 6、任务书 §6.5）：
@@ -6,6 +6,7 @@
 //   - 不呈现本机绝对路径（目录视图的 source 字段可能是路径，一律不渲染）；
 //   - 不呈现插件 stdout/stderr 原文（observed.detail 是 server 限长脱敏后的摘要）。
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { KeyRound, Lock, ShieldCheck, ShieldAlert } from 'lucide-react'
 import { Badge, KeyValue } from '@/components/ui'
 import {
@@ -17,6 +18,7 @@ import type { PluginCatalogView, PluginInstanceView, PluginPermissionsData } fro
 
 /** 错误码 → 设计过的提示块（按稳定码呈现，不复述服务端文本） */
 export function PluginErrorNote({ error, className }: { error: unknown; className?: string }) {
+  const { t } = useTranslation('plugin')
   const copy = pluginErrorCopy(error)
   const box = copy.tone === 'bad' ? 'bg-bad/10 text-bad'
     : copy.tone === 'warn' ? 'bg-warn/12 text-warn' : 'bg-ink-3/10 text-ink-2'
@@ -26,8 +28,8 @@ export function PluginErrorNote({ error, className }: { error: unknown; classNam
       <p className="mt-0.5 text-meta leading-relaxed break-words opacity-90">{copy.hint}</p>
       {copy.code && (
         <details className="mt-2 min-w-0">
-          <summary className="flex min-h-touch cursor-pointer items-center text-meta opacity-80">技术详情</summary>
-          <p className="num mt-1 break-all text-meta opacity-70">错误码 {copy.code}</p>
+          <summary className="flex min-h-touch cursor-pointer items-center text-meta opacity-80">{t('facts.technicalDetails')}</summary>
+          <p className="num mt-1 break-all text-meta opacity-70">{t('facts.errorCode')} {copy.code}</p>
         </details>
       )}
     </div>
@@ -39,9 +41,10 @@ export function PermissionList({ permissions, emptyHint }: {
   permissions: PluginPermissionsData | undefined
   emptyHint?: string
 }) {
+  const { t } = useTranslation('plugin')
   const groups = permissionGroups(permissions)
   if (groups.length === 0) {
-    return <p className="py-2 text-meta text-ink-3">{emptyHint ?? '该插件没有声明任何权限'}</p>
+    return <p className="py-2 text-meta text-ink-3">{emptyHint ?? t('facts.noPermissionsDeclared')}</p>
   }
   return (
     <div className="space-y-2.5">
@@ -73,17 +76,18 @@ export function PermissionList({ permissions, emptyHint }: {
 
 /** secret handle 清单：只有名字，并明确说明明文不在这里 */
 export function SecretRefList({ refs }: { refs: string[] | undefined }) {
+  const { t } = useTranslation('plugin')
   // 只取 handle 名；去重后排序，避免同一 handle 重复占位
   const entries = [...new Set((refs ?? []).map(secretHandleName))].sort()
   if (entries.length === 0) {
-    return <p className="py-1 text-meta text-ink-3">未引用任何密钥</p>
+    return <p className="py-1 text-meta text-ink-3">{t('facts.noSecrets')}</p>
   }
   return (
     <div>
       <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
         {entries.map((name) => (
           <li key={name} className="min-w-0 max-w-full">
-            <span className="badge max-w-full bg-ink-3/10 text-ink-2" title={`密钥引用：${name}`}>
+            <span className="badge max-w-full bg-ink-3/10 text-ink-2" title={t('facts.secretTitle', { name })}>
               <Lock size={10} className="shrink-0" />
               <span className="min-w-0 truncate break-all">{name}</span>
             </span>
@@ -91,7 +95,7 @@ export function SecretRefList({ refs }: { refs: string[] | undefined }) {
         ))}
       </ul>
       <p className="mt-1.5 text-meta leading-relaxed text-ink-3">
-        这里只显示密钥名称，不会显示密钥内容。
+        {t('facts.secretsHint')}
       </p>
     </div>
   )
@@ -99,8 +103,9 @@ export function SecretRefList({ refs }: { refs: string[] | undefined }) {
 
 /** 非敏感配置：secret:// 值自动折叠成 handle 名 */
 export function ConfigTable({ config }: { config: Record<string, string> | undefined }) {
+  const { t } = useTranslation('plugin')
   const rows = safeConfigEntries(config)
-  if (rows.length === 0) return <p className="py-1 text-meta text-ink-3">没有配置项</p>
+  if (rows.length === 0) return <p className="py-1 text-meta text-ink-3">{t('facts.noConfig')}</p>
   return (
     <dl className="m-0">
       {rows.map((r) => (
@@ -118,59 +123,60 @@ export function ConfigTable({ config }: { config: Record<string, string> | undef
 
 /** 基本信息与技术详情一览 */
 export function InstanceFacts({ v, catalog }: { v: PluginInstanceView; catalog?: PluginCatalogView }) {
+  const { t } = useTranslation('plugin')
   const trust = catalog ? trustMeta(undefined, catalog.verified) : null
   const rows: { k: string; node: ReactNode }[] = [
-    { k: '插件', node: <span className="min-w-0 truncate" title={pluginDisplayName(catalog)}>{pluginDisplayName(catalog)}</span> },
-    ...(v.edge_id === 'server' ? [{ k: '运行位置', node: '中心服务' }] : [
-      { k: '运行位置', node: <span className="num min-w-0 truncate font-mono" title={v.edge_id}>网关 {v.edge_id || '—'}</span> },
-      { k: '网关状态', node: v.edge_online ? '在线' : '离线' },
+    { k: t('facts.plugin'), node: <span className="min-w-0 truncate" title={pluginDisplayName(catalog)}>{pluginDisplayName(catalog)}</span> },
+    ...(v.edge_id === 'server' ? [{ k: t('facts.location'), node: t('host.server') }] : [
+      { k: t('facts.location'), node: <span className="num min-w-0 truncate font-mono" title={v.edge_id}>{t('location.edge', { id: v.edge_id || '—' })}</span> },
+      { k: t('facts.edgeStatus'), node: v.edge_online ? t('common.online') : t('common.offline') },
     ]),
-    { k: '期望版本', node: v.desired.version || '—' },
-    { k: '实际版本', node: v.has_observed ? (v.observed?.version || '未给出') : '未上报' },
+    { k: t('facts.expectedVersion'), node: v.desired.version || '—' },
+    { k: t('facts.actualVersion'), node: v.has_observed ? (v.observed?.version || t('desired.versionNotProvided')) : t('common.notReported') },
   ]
   return (
     <dl className="m-0 space-y-2.5">
       {rows.map((r) => <KeyValue key={r.k} k={r.k} v={r.node} />)}
       <div className="flex min-w-0 items-baseline justify-between gap-2 border-t border-hairline pt-2.5">
-        <dt className="shrink-0 text-compact text-ink-2">来源验证</dt>
+        <dt className="shrink-0 text-compact text-ink-2">{t('facts.sourceVerification')}</dt>
         <dd className="min-w-0 truncate text-right">
           {trust
             ? <Badge tone={trust.tone}>{trust.label}</Badge>
-            : <span className="text-meta text-ink-3">未提供</span>}
+            : <span className="text-meta text-ink-3">{t('common.notProvided')}</span>}
         </dd>
       </div>
       <details className="min-w-0 border-t border-hairline pt-2.5 text-meta text-ink-2">
-        <summary className="flex min-h-touch cursor-pointer items-center">技术详情</summary>
+        <summary className="flex min-h-touch cursor-pointer items-center">{t('facts.technicalDetails')}</summary>
         <div className="mt-2 space-y-1.5">
           <div className="flex min-w-0 items-baseline justify-between gap-2">
-            <dt className="shrink-0">实例 ID</dt>
+            <dt className="shrink-0">{t('facts.instanceId')}</dt>
             <dd className="num min-w-0 truncate text-right font-mono" title={v.id}>{v.id}</dd>
           </div>
           <div className="flex min-w-0 items-baseline justify-between gap-2">
-            <dt className="shrink-0">插件标识</dt>
+            <dt className="shrink-0">{t('facts.pluginId')}</dt>
             <dd className="num min-w-0 truncate text-right font-mono" title={v.desired.plugin_id}>{v.desired.plugin_id || '—'}</dd>
           </div>
           <div className="flex min-w-0 items-baseline justify-between gap-2">
-            <dt className="shrink-0">设置版本</dt>
+            <dt className="shrink-0">{t('facts.expectedVersion')}</dt>
             <dd className="num min-w-0 truncate text-right">{v.desired_revision}</dd>
           </div>
           <div className="flex min-w-0 items-baseline justify-between gap-2">
-            <dt className="shrink-0">运行状态版本</dt>
+            <dt className="shrink-0">{t('facts.actualVersion')}</dt>
             <dd className="num min-w-0 truncate text-right">{v.applied_revision}</dd>
           </div>
           <div className="flex min-w-0 items-baseline justify-between gap-2">
-            <dt className="shrink-0">最近更新</dt>
-            <dd className="num min-w-0 truncate text-right">{v.last_ack_at ? fmtDateTime(v.last_ack_at) : '尚未同步'}</dd>
+            <dt className="shrink-0">{t('facts.lastUpdated')}</dt>
+            <dd className="num min-w-0 truncate text-right">{v.last_ack_at ? fmtDateTime(v.last_ack_at) : t('facts.notSynced')}</dd>
           </div>
           {catalog && (
             <div className="flex min-w-0 items-baseline justify-between gap-2">
-              <dt className="shrink-0">安装摘要</dt>
+              <dt className="shrink-0">{t('facts.installDigest')}</dt>
               <dd className="num min-w-0 truncate text-right" title={catalog.digest}>{shortDigest(catalog.digest)}</dd>
             </div>
           )}
           {catalog?.compatibility && (
             <div className="flex min-w-0 items-baseline justify-between gap-2">
-              <dt className="shrink-0">兼容性</dt>
+              <dt className="shrink-0">{t('facts.compatibility')}</dt>
               <dd className="min-w-0 truncate text-right" title={catalog.compatibility}>{catalog.compatibility}</dd>
             </div>
           )}

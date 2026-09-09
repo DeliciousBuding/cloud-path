@@ -1,11 +1,14 @@
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { EventFeed, commandDisplayMeta, commandFailureInfo, eventDisplayLabel } from '@/components/EventFeed'
 import { renderWithProviders } from '@/test/render'
 import type { EventView } from '@/lib/types'
+import { i18n } from '@/i18n'
 
 const ev = (id: number, ts: number): EventView => ({ id, ts, type: 'device-booted', device_id: 'e/d', payload: '' })
+
+afterEach(() => { void i18n.changeLanguage('zh-CN') })
 
 describe('EventFeed day 分组', () => {
   const now = Math.floor(Date.now() / 1000)
@@ -33,11 +36,27 @@ describe('机器名中文优先展示名', () => {
     const machineName = 'Device Compartment Opened'
     renderWithProviders(<EventFeed events={[{ ...ev(1, Math.floor(Date.now() / 1000)), type: machineName }]} limit={10} />)
     expect(screen.getByText('设备舱门已打开')).toBeInTheDocument()
-    expect(screen.getByTitle(`原始类型：${machineName}`)).toBeInTheDocument()
+    expect(screen.getByTitle(`类型：${machineName}`)).toBeInTheDocument()
     expect(screen.queryByText(machineName)).toBeNull()
   })
 
-  it('覆盖用户可见的英文事件与命令机器名', () => {
+  it('英文 locale 下使用英文展示词典与详情入口', async () => {
+    await i18n.changeLanguage('en-US')
+    expect(eventDisplayLabel('Pillbox Remind')).toBe('Pillbox reminder')
+    expect(commandDisplayMeta('read-register').label).toBe('Read register')
+    expect(commandFailureInfo('device busy')).toEqual({
+      message: 'The device is busy', next: 'Wait for the device to become idle, then retry',
+    })
+    renderWithProviders(<EventFeed events={[{
+      ...ev(1, Math.floor(Date.now() / 1000)),
+      type: 'Device Compartment Opened',
+      payload: '{"value":1}',
+    }]} limit={10} />)
+    expect(screen.getByText('Device compartment opened')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'View event details' })).toBeInTheDocument()
+  })
+
+  it('覆盖用户可见的英文事件与操作机器名', () => {
     expect(eventDisplayLabel('Pillbox Remind')).toBe('药盒提醒')
     expect(eventDisplayLabel('stcb.sensor')).toBe('传感器状态')
     expect(eventDisplayLabel('Read Register')).toBe('读取寄存器')
@@ -48,7 +67,7 @@ describe('机器名中文优先展示名', () => {
   })
 
   it('未知事件与操作不把英文机器码当主标签，原码只进技术详情', () => {
-    expect(eventDisplayLabel('vendor-setpoint-changed')).toBe('未知状态记录')
+    expect(eventDisplayLabel('vendor-setpoint-changed')).toBe('未知事件')
     expect(commandDisplayMeta('vendor-setpoint-changed')).toEqual({ label: '未知操作', hint: '' })
 
     renderWithProviders(<EventFeed events={[{
@@ -56,7 +75,7 @@ describe('机器名中文优先展示名', () => {
       type: 'vendor-setpoint-changed',
       payload: '{"message":"network timeout"}',
     }]} limit={10} />)
-    expect(screen.getByText('未知状态记录')).toBeInTheDocument()
+    expect(screen.getByText('未知事件')).toBeInTheDocument()
     expect(screen.getByText('网络连接超时')).toBeInTheDocument()
     expect(screen.queryByText('vendor-setpoint-changed')).toBeNull()
     expect(screen.queryByText('network timeout')).toBeNull()
@@ -71,35 +90,35 @@ describe('EventFeed 原始载荷展开入口', () => {
   const withPayload = (payload: string, id = 1, type = 'device-booted'): EventView =>
     ({ id, ts: now, type, device_id: 'e/d', payload })
 
-  it('载荷只有 type → 不给「查看运行记录详情」按钮', () => {
+  it('载荷只有 type → 不给「查看事件详情」按钮', () => {
     renderWithProviders(<EventFeed events={[withPayload('{"type":"device-booted"}')]} limit={10} />)
-    expect(screen.queryByRole('button', { name: /运行记录详情/ })).toBeNull()
-    expect(screen.queryByRole('group', { name: '运行记录详情数据' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /事件详情/ })).toBeNull()
+    expect(screen.queryByRole('group', { name: '事件详情数据' })).toBeNull()
   })
 
   it('空载荷与空对象同样不给入口', () => {
     renderWithProviders(<EventFeed events={[withPayload(''), withPayload('{}', 2)]} limit={10} />)
-    expect(screen.queryByRole('button', { name: /运行记录详情/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /事件详情/ })).toBeNull()
   })
 
   it('载荷有 type 以外的键 → 给入口，点开是原始 JSON，再点收起', async () => {
     const user = userEvent.setup()
     const raw = '{"type":"setpoint-changed","value":42}'
     renderWithProviders(<EventFeed events={[withPayload(raw, 1, 'setpoint-changed')]} limit={10} />)
-    expect(screen.queryByRole('group', { name: '运行记录详情数据' })).toBeNull()
+    expect(screen.queryByRole('group', { name: '事件详情数据' })).toBeNull()
 
-    await user.click(screen.getByRole('button', { name: '查看运行记录详情' }))
-    expect(screen.getByRole('group', { name: '运行记录详情数据' }).textContent).toContain(raw)
+    await user.click(screen.getByRole('button', { name: '查看事件详情' }))
+    expect(screen.getByRole('group', { name: '事件详情数据' }).textContent).toContain(raw)
 
-    await user.click(screen.getByRole('button', { name: '收起运行记录详情' }))
-    expect(screen.queryByRole('group', { name: '运行记录详情数据' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: '收起事件详情' }))
+    expect(screen.queryByRole('group', { name: '事件详情数据' })).toBeNull()
   })
 
   it('载荷不是 JSON → 保留入口（脏串口碎片这类原文本身就是取证材料）', async () => {
     const user = userEvent.setup()
     renderWithProviders(<EventFeed events={[withPayload('RAW-SERIAL-GARBAGE')]} limit={10} />)
-    await user.click(screen.getByRole('button', { name: '查看运行记录详情' }))
-    expect(screen.getByRole('group', { name: '运行记录详情数据' }).textContent).toContain('RAW-SERIAL-GARBAGE')
+    await user.click(screen.getByRole('button', { name: '查看事件详情' }))
+    expect(screen.getByRole('group', { name: '事件详情数据' }).textContent).toContain('RAW-SERIAL-GARBAGE')
   })
 
   it('混合列表只给有增量的那一行入口（按行判定，不是全有或全无）', () => {
@@ -108,7 +127,7 @@ describe('EventFeed 原始载荷展开入口', () => {
       withPayload('{"type":"setpoint-changed","value":7}', 2, 'setpoint-changed'),
       withPayload('{"type":"probed"}', 3, 'probed'),
     ]} limit={10} />)
-    expect(screen.getAllByRole('button', { name: '查看运行记录详情' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: '查看事件详情' })).toHaveLength(1)
   })
 
   it('dayGrouped 长历史模式下同样按行判定', () => {
@@ -117,6 +136,6 @@ describe('EventFeed 原始载荷展开入口', () => {
       withPayload('{"type":"device-booted"}', 2),
       { ...withPayload('{"type":"remind","slot":1}', 3, 'remind'), ts: now - 86_400 },
     ]} />)
-    expect(screen.getAllByRole('button', { name: '查看运行记录详情' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: '查看事件详情' })).toHaveLength(1)
   })
 })

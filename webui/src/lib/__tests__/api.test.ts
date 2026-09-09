@@ -84,7 +84,7 @@ describe('Wave2 Schema 面：端点缺席时返回 null（通用回落）', () =
   })
 })
 
-describe('命令下发（冻结契约 POST /api/devices/{edge}/{dev}/commands）', () => {
+describe('操作下发（冻结契约 POST /api/devices/{edge}/{dev}/commands）', () => {
   it('body 为 {cmd,args}，args 缺省为空串', async () => {
     const http = installFetch(() => stubResponse(200, { id: 1, status: 'sent' }))
     await api.sendCommand('edge-1', 'dev-9', 'relay_on', '{"ms":200}')

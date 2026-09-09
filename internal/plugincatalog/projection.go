@@ -189,7 +189,7 @@ func driverViews(in []api.PluginDriverContributionData) []DriverContributionView
 	}
 	out := make([]DriverContributionView, 0, len(in))
 	for _, d := range in {
-		out = append(out, DriverContributionView{ID: d.ID, Title: d.Title, Discovery: d.Discovery, UI: clonePluginUI(d.UI)})
+		out = append(out, DriverContributionView{ID: d.ID, Title: d.Title, I18n: d.I18n, Discovery: d.Discovery, UI: clonePluginUI(d.UI)})
 	}
 	return out
 }
@@ -200,7 +200,7 @@ func applicationViews(in []api.PluginApplicationContributionData) []ApplicationC
 	}
 	out := make([]ApplicationContributionView, 0, len(in))
 	for _, a := range in {
-		out = append(out, ApplicationContributionView{ID: a.ID, Title: a.Title, UI: clonePluginUI(a.UI)})
+		out = append(out, ApplicationContributionView{ID: a.ID, Title: a.Title, I18n: a.I18n, UI: clonePluginUI(a.UI)})
 	}
 	return out
 }
@@ -211,13 +211,24 @@ func connectorViews(in []api.PluginConnectorContributionData) []ConnectorContrib
 	}
 	out := make([]ConnectorContributionView, 0, len(in))
 	for _, c := range in {
-		out = append(out, ConnectorContributionView{ID: c.ID, Title: c.Title, Direction: c.Direction, Host: c.Host})
+		out = append(out, ConnectorContributionView{ID: c.ID, Title: c.Title, I18n: c.I18n, Direction: c.Direction, Host: c.Host})
 	}
 	return out
 }
 
 // cloneConfig 复制配置 map，避免把内部缓存的引用透出到响应。
 func cloneConfig(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneI18n(in map[string]string) map[string]string {
 	if len(in) == 0 {
 		return nil
 	}
@@ -255,13 +266,14 @@ func clonePluginUI(in *api.PluginUIData) *api.PluginUIData {
 	out := &api.PluginUIData{APIVersion: in.APIVersion}
 	if in.Navigation != nil {
 		n := *in.Navigation
+		n.I18n = cloneI18n(n.I18n)
 		out.Navigation = &n
 	}
 	if len(in.Pages) > 0 {
 		out.Pages = make([]api.PluginUIPageData, 0, len(in.Pages))
 		for _, page := range in.Pages {
 			out.Pages = append(out.Pages, api.PluginUIPageData{
-				ID: page.ID, Title: page.Title, Sections: cloneUISections(page.Sections),
+				ID: page.ID, Title: page.Title, I18n: cloneI18n(page.I18n), Sections: cloneUISections(page.Sections),
 			})
 		}
 	}

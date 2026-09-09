@@ -1,4 +1,4 @@
-// 轻提示：命令回执/错误反馈。固定右下，毛玻璃卡片，自动消失。
+// 轻提示：操作回执/错误反馈。固定右下，毛玻璃卡片，自动消失。
 import { create } from 'zustand'
 
 export type ToastTone = 'ok' | 'bad' | 'info'

@@ -51,16 +51,16 @@ func (h *AppHost) InstanceJobDescriptors(tenantID int64, instanceID string) []ap
 func (s *Server) handleRunApplicationJob(w http.ResponseWriter, r *http.Request) {
 	instanceID, jobID := chi.URLParam(r, "id"), chi.URLParam(r, "job")
 	ctx, ctxErr := s.resolvePluginWriteContext(r)
-	fail := func(code string, httpStatus int, message string) {
-		s.writePluginErrorOnly(w, ctx, newPluginWriteError(code, httpStatus, "%s", message))
+	fail := func(code string, httpStatus int, message string, params map[string]any) {
+		s.writePluginErrorOnly(w, ctx, newPluginWriteErrorWithParams(code, httpStatus, params, "%s", message))
 		s.auditPluginWrite(r, ctx, "application.job.run", instanceID, audit.OutcomeFailure, code, audit.NewMetadata().String("job", jobID))
 	}
 	if ctxErr != nil {
-		fail(ctxErr.code, ctxErr.status, ctxErr.message)
+		fail(ctxErr.code, ctxErr.status, ctxErr.message, ctxErr.params)
 		return
 	}
 	if s.appHost == nil {
-		fail("application_unavailable", http.StatusServiceUnavailable, "application host is not enabled")
+		fail(api.APIErrApplicationUnavailable, http.StatusServiceUnavailable, "application host is not enabled", map[string]any{"instance_id": instanceID})
 		return
 	}
 	declared := false
@@ -71,23 +71,23 @@ func (s *Server) handleRunApplicationJob(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	if !declared {
-		fail("job_not_found", http.StatusNotFound, "running application has no such manual job")
+		fail(api.APIErrJobNotFound, http.StatusNotFound, "running application has no such manual job", map[string]any{"instance_id": instanceID, "job_id": jobID})
 		return
 	}
 	var body api.AppJobRunRequest
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, pluginWriteBodyLimit))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&body); err != nil {
-		fail("bad_request", http.StatusBadRequest, "expected args_json and idempotency_key")
+		fail(api.APIErrInvalidRequest, http.StatusBadRequest, "expected args_json and idempotency_key", map[string]any{"field": "body"})
 		return
 	}
 	if err := dec.Decode(&struct{}{}); err != io.EOF {
-		fail("bad_request", http.StatusBadRequest, "expected one JSON request object")
+		fail(api.APIErrInvalidRequest, http.StatusBadRequest, "expected one JSON request object", map[string]any{"field": "body"})
 		return
 	}
 	key := body.IdempotencyKey
 	if key == "" || len(key) > 128 || strings.TrimSpace(key) != key || strings.ContainsAny(key, "\r\n\x00\t") {
-		fail("invalid_idempotency_key", http.StatusBadRequest, "idempotency_key must be a nonempty single-line value of at most 128 bytes")
+		fail(api.APIErrInvalidIdempotencyKey, http.StatusBadRequest, "idempotency_key must be a nonempty single-line value of at most 128 bytes", map[string]any{"field": "idempotency_key", "max_bytes": 128})
 		return
 	}
 	if strings.TrimSpace(body.ArgsJSON) == "" {
@@ -95,11 +95,11 @@ func (s *Server) handleRunApplicationJob(w http.ResponseWriter, r *http.Request)
 	}
 	var args map[string]json.RawMessage
 	if len(body.ArgsJSON) > 4096 || json.Unmarshal([]byte(body.ArgsJSON), &args) != nil || args == nil {
-		fail("invalid_args", http.StatusBadRequest, "args_json must be a JSON object of at most 4096 bytes")
+		fail(api.APIErrInvalidArgs, http.StatusBadRequest, "args_json must be a JSON object of at most 4096 bytes", map[string]any{"field": "args_json", "max_bytes": 4096})
 		return
 	}
 	if !s.allowCommand("app-job:" + ctx.tenantSlug + ":" + instanceID) {
-		fail("rate_limited", http.StatusTooManyRequests, "too many application actions")
+		fail(api.APIErrRateLimited, http.StatusTooManyRequests, "too many application actions", map[string]any{"scope": "application_job", "instance_id": instanceID})
 		return
 	}
 	callCtx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
@@ -111,19 +111,19 @@ func (s *Server) handleRunApplicationJob(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		var rejection *status.Status
 		if errors.As(err, &rejection) && rejection != nil && !rejection.IsOK() {
-			fail(status.CodeString(rejection.Code), applicationStatusHTTP(rejection.Code), rejection.Message)
+			fail(api.APIErrApplicationRejected, applicationStatusHTTP(rejection.Code), rejection.Message, map[string]any{"plugin_status": status.CodeString(rejection.Code)})
 			return
 		}
-		fail("application_unavailable", http.StatusServiceUnavailable, "application action did not complete; reconcile its records before retrying with the same key")
+		fail(api.APIErrApplicationUnavailable, http.StatusServiceUnavailable, "application action did not complete; reconcile its records before retrying with the same key", map[string]any{"instance_id": instanceID})
 		return
 	}
 	if response == nil || response.Status == nil {
-		fail("invalid_plugin_response", http.StatusBadGateway, "application did not return an explicit status")
+		fail(api.APIErrInvalidPluginResponse, http.StatusBadGateway, "application did not return an explicit status", map[string]any{"instance_id": instanceID, "job_id": jobID})
 		return
 	}
 	if !response.Status.IsOK() {
 		httpStatus := applicationStatusHTTP(response.Status.Code)
-		fail(status.CodeString(response.Status.Code), httpStatus, response.Status.Message)
+		fail(api.APIErrApplicationRejected, httpStatus, response.Status.Message, map[string]any{"plugin_status": status.CodeString(response.Status.Code)})
 		return
 	}
 	s.auditPluginWrite(r, ctx, "application.job.run", instanceID, audit.OutcomeSuccess, "", audit.NewMetadata().String("job", jobID))

@@ -51,7 +51,7 @@ describe('Application section recordType isolation', () => {
       jobs={query({ instance_id: 'app-a', running: true, jobs: [], scheduled: [], job_descriptors: [] })}
       readOnly lifecycleKey="1"
     />)
-    expect(screen.getByTitle('插件自定义界面')).toHaveAttribute('src', '/api/plugin-ui/assets/example.app/v2.0.0/ui/index.html')
+    expect(screen.getByTitle('插件自定义页面')).toHaveAttribute('src', '/api/plugin-ui/assets/example.app/v2.0.0/ui/index.html')
   })
 
   it('actions only render manual-only jobs', () => {

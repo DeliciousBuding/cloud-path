@@ -10,6 +10,11 @@ package model
 
 import "fmt"
 
+// I18n 是插件声明文本的可选 locale -> 文本映射。键为 locale（如 zh-CN），
+// 值为展示文本；机器 ID、URI 和 property key 永远不进入本映射。
+// Action 同时需要 title/description 时，description 使用 "<locale>.description" 键。
+type I18n map[string]string
+
 // 冻结契约中的 schema 标识。
 const (
 	// DescriptorSchemaID 是 spec/descriptor.schema.json 的 $id。

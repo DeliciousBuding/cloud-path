@@ -1,8 +1,9 @@
-// 插件实例的创建 / 编辑表单。
+// 运行实例的创建 / 编辑表单。
 //
 // 创建路径先选「应用或驱动」，运行位置随类型确定：应用走中心服务，驱动选网关；
 // 连接器不出现在创建候选中。版本和运行方式用下拉选择，低频的配置与密钥收进高级参数。
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { KeyRound, Plus, X } from 'lucide-react'
 import { Button, Select, TextField } from '@/components/ui'
 import { PermissionList, PluginErrorNote } from './PluginFacts'
@@ -15,9 +16,10 @@ import type {
 } from '@/lib/types'
 
 const ISOLATIONS = [
-  { value: 'shared', label: '共享运行（多个项目共用运行资源）' },
-  { value: 'per-instance', label: '独立运行（每个项目单独运行）' },
-]
+  { value: 'shared', labelKey: 'form.isolationShared' },
+  { value: 'per-instance', labelKey: 'form.isolationIndependent' },
+] as const
+
 
 interface ConfigRow { key: string; value: string }
 
@@ -45,6 +47,7 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
   initialPluginId?: string
   onDone: () => void
 }) {
+  const { t } = useTranslation('plugin')
   const { list: edges } = useEdges()
   const d = instance?.desired
 
@@ -95,14 +98,14 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
   )
 
   const missing: string[] = []
-  if (mode === 'create' && !instanceId.trim()) missing.push('实例名称')
-  if (!effectivePluginId.trim()) missing.push('要运行的应用或驱动')
-  if (pluginKind === 'connector') missing.push('连接器不能创建运行实例')
-  if (pluginKind !== 'application' && pluginKind !== 'driver' && pluginKind !== 'connector') missing.push('插件类型')
-  if (mode === 'create' && pluginKind !== 'connector' && pluginKind !== 'unknown' && !effectiveEdge) missing.push('运行位置')
-  if (hostMismatch) missing.push('运行位置与插件类型不匹配')
-  if (!effectiveVersion.trim()) missing.push('版本')
-  if (perms > 0 && !permAcked) missing.push('权限确认')
+  if (mode === 'create' && !instanceId.trim()) missing.push(t('form.missingInstanceName'))
+  if (!effectivePluginId.trim()) missing.push(t('form.missingPlugin'))
+  if (pluginKind === 'connector') missing.push(t('form.missingConnector'))
+  if (pluginKind !== 'application' && pluginKind !== 'driver' && pluginKind !== 'connector') missing.push(t('form.missingPluginType'))
+  if (mode === 'create' && pluginKind !== 'connector' && pluginKind !== 'unknown' && !effectiveEdge) missing.push(t('form.missingLocation'))
+  if (hostMismatch) missing.push(t('form.missingHostMismatch'))
+  if (!effectiveVersion.trim()) missing.push(t('form.missingVersion'))
+  if (perms > 0 && !permAcked) missing.push(t('form.missingPermissions'))
 
   function buildConfig(): Record<string, string> | undefined {
     const out: Record<string, string> = {}
@@ -124,7 +127,7 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
     >
       <div className="rounded-tile bg-surface-2 p-3.5">
         <label htmlFor="pi-plugin" className="mb-1.5 block text-compact font-medium text-ink-2">
-          要运行什么
+          {t('form.whatToRun')}
         </label>
         {mode === 'edit' ? (
           <div id="pi-plugin" className="input flex min-w-0 items-center text-compact text-ink-2">
@@ -140,28 +143,28 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
               setVersion(next?.version ?? '')
               setEdgeId(nextKind === 'application' ? 'server' : '')
             }}>
-            <optgroup label="中心服务应用">
+            <optgroup label={t('form.appGroup')}>
               {createOptions.filter((p) => normalizePluginKind(p.kind) === 'application').map((p) => (
                 <option key={p.id} value={p.id}>
-                  {optionLabel(`${pluginDisplayName(p)}${p.version ? ` · ${p.version}` : ''}${p.verified ? '' : '（未验证）'}`, 40)}
+                  {optionLabel(`${pluginDisplayName(p)}${p.version ? ` · ${p.version}` : ''}${p.verified ? '' : t('form.unverified')}`, 40)}
                 </option>
               ))}
             </optgroup>
-            <optgroup label="网关驱动">
+            <optgroup label={t('form.driverGroup')}>
               {createOptions.filter((p) => normalizePluginKind(p.kind) === 'driver').map((p) => (
                 <option key={p.id} value={p.id}>
-                  {optionLabel(`${pluginDisplayName(p)}${p.version ? ` · ${p.version}` : ''}${p.verified ? '' : '（未验证）'}`, 40)}
+                  {optionLabel(`${pluginDisplayName(p)}${p.version ? ` · ${p.version}` : ''}${p.verified ? '' : t('form.unverified')}`, 40)}
                 </option>
               ))}
             </optgroup>
           </Select>
         ) : (
           <p className="rounded-tile bg-surface px-3.5 py-2.5 text-compact text-ink-2">
-            暂无可用于创建实例的应用或驱动。连接器用于连接服务，不会创建运行实例。
+            {t('form.noCandidates')}
           </p>
         )}
         <p className="mt-1.5 text-meta leading-relaxed text-ink-3">
-          {mode === 'edit' ? '创建后不能更换插件。' : '应用会自动运行在中心服务；驱动需要选择网关。连接器不会出现在这里。'}
+          {mode === 'edit' ? t('form.pluginFixed') : t('form.pluginHelp')}
         </p>
       </div>
 
@@ -169,133 +172,133 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
         {mode === 'create' ? (
           <>
             <div>
-              <label htmlFor="pi-edge" className="mb-1.5 block text-compact font-medium text-ink-2">运行位置</label>
+              <label htmlFor="pi-edge" className="mb-1.5 block text-compact font-medium text-ink-2">{t('form.location')}</label>
               {pluginKind === 'connector' ? (
                 <p className="rounded-tile bg-surface-2 px-3.5 py-2.5 text-compact text-ink-2">
-                  连接器只负责连接，不能创建运行实例。
+                  {t('form.connectorNoInstance')}
                 </p>
               ) : pluginKind === 'application' ? (
                 <Select id="pi-edge" className="overflow-hidden" compact value="server" disabled>
-                  <option value="server">中心服务</option>
+                  <option value="server">{t('host.server')}</option>
                 </Select>
               ) : pluginKind === 'driver' ? (
                 <Select id="pi-edge" className="overflow-hidden" compact value={effectiveEdge} onChange={(e) => setEdgeId(e.target.value)}>
-                  {edges.length === 0 && <option value="">（还没有可用网关）</option>}
+                  {edges.length === 0 && <option value="">{t('form.noEdge')}</option>}
                   {edges.map((edge) => (
                     <option key={edge.edge_id} value={edge.edge_id}>
-                      {optionLabel(`${edge.edge_id}${edge.online ? '' : '（离线）'}`, 40)}
+                      {optionLabel(`${edge.edge_id}${edge.online ? '' : t('form.edgeOffline')}`, 40)}
                     </option>
                   ))}
                 </Select>
               ) : (
                 <p className="rounded-tile bg-surface-2 px-3.5 py-2.5 text-compact text-ink-2">
-                  请先选择要运行的应用或驱动。
+                  {t('form.choosePlugin')}
                 </p>
               )}
               <p className="mt-1.5 text-meta text-ink-3">
                 {pluginKind === 'application'
-                  ? '应用由中心服务运行。'
+                  ? t('form.appLocationHint')
                   : pluginKind === 'driver'
-                    ? '驱动在网关运行；离线网关也可以先保存设置。'
-                    : '运行位置会随插件类型自动确定。'}
+                    ? t('form.driverLocationHint')
+                    : t('form.locationAutoHint')}
               </p>
             </div>
             <TextField
-              label="实例名称" value={instanceId} placeholder="例如 living-room"
+              label={t('form.instanceName')} value={instanceId} placeholder={t('form.instancePlaceholder')}
               autoComplete="off" spellCheck={false}
-              hint="同一条运行位置不能重名；建议使用英文和短横线，创建后不能修改。"
+              hint={t('form.instanceHint')}
               onChange={(e) => setInstanceId(e.target.value)}
             />
           </>
         ) : (
           <div className="sm:col-span-2">
             <p className="rounded-tile bg-surface-2 px-3.5 py-2.5 text-meta break-words text-ink-2">
-              运行位置：{instance?.edge_id === 'server' ? '中心服务' : `网关 ${instance?.edge_id || '—'}`} · 名称：{d?.instance_id || '—'}
+              {t('form.editMeta', { location: instance?.edge_id === 'server' ? t('host.server') : t('location.edge', { id: instance?.edge_id || '—' }), name: d?.instance_id || '—' })}
             </p>
             {hostMismatch && (
               <p role="alert" className="mt-2 rounded-tile bg-warn/12 px-3 py-2 text-meta leading-relaxed text-warn">
-                当前运行位置与插件类型不匹配。为避免保存明显错误的设置，请先删除后按正确类型重新创建。
+                {t('form.hostMismatch')}
               </p>
             )}
           </div>
         )}
 
         <div>
-          <label htmlFor="pi-version" className="mb-1.5 block text-compact font-medium text-ink-2">版本</label>
+          <label htmlFor="pi-version" className="mb-1.5 block text-compact font-medium text-ink-2">{t('form.version')}</label>
           {versionOptions.length > 0 ? (
             <Select id="pi-version" className="overflow-hidden" compact value={effectiveVersion}
               onChange={(e) => setVersion(e.target.value)}>
               {versionOptions.map((v) => <option key={v} value={v}>{v}</option>)}
             </Select>
           ) : (
-            <input id="pi-version" className="input text-compact" value={version} placeholder="例如 v1.2.0"
+            <input id="pi-version" className="input text-compact" value={version} placeholder={t('form.versionPlaceholder')}
               autoComplete="off" spellCheck={false} onChange={(e) => setVersion(e.target.value)} />
           )}
           <p className="mt-1.5 text-meta text-ink-3">
-            {selected?.version ? `当前可用版本：${selected.version}` : '暂未取得可用版本，请稍后重试。'}
+            {selected?.version ? t('form.currentVersion', { version: selected.version }) : t('form.versionUnavailable')}
           </p>
         </div>
 
         <div>
-          <label htmlFor="pi-iso" className="mb-1.5 block text-compact font-medium text-ink-2">运行方式</label>
+          <label htmlFor="pi-iso" className="mb-1.5 block text-compact font-medium text-ink-2">{t('form.isolation')}</label>
           <Select id="pi-iso" className="overflow-hidden" compact value={isolation} onChange={(e) => setIsolation(e.target.value as 'shared' | 'per-instance')}>
-            {ISOLATIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {ISOLATIONS.map((o) => <option key={o.value} value={o.value}>{t(o.labelKey)}</option>)}
           </Select>
-          <p className="mt-1.5 text-meta text-ink-3">不确定时保持共享运行即可。</p>
+          <p className="mt-1.5 text-meta text-ink-3">{t('form.isolationHint')}</p>
         </div>
 
         <div className="flex items-end pb-1">
           <label className="flex cursor-pointer items-center gap-2.5 text-compact">
             <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)}
               className="h-4 w-4 shrink-0 accent-accent" />
-            {mode === 'create' ? '保存后立即启用' : '保存后启用'}
+            {mode === 'create' ? t('form.enableOnCreate') : t('form.enableOnUpdate')}
           </label>
         </div>
       </div>
 
       {/* ---- 权限确认 ---- */}
       <div className="rounded-tile bg-surface-2 p-3.5">
-        <p className="mb-2 text-compact font-medium">该插件需要的权限</p>
+        <p className="mb-2 text-compact font-medium">{t('form.pluginPermissions')}</p>
         <PermissionList
           permissions={selected?.permissions}
-          emptyHint={selected ? '不需要额外权限' : '可用插件列表中没有这个插件，无法核对权限'}
+          emptyHint={selected ? t('form.noPermissions') : t('form.pluginMissing')}
         />
         {perms > 0 && (
           <label className="mt-3 flex cursor-pointer items-start gap-2.5 border-t border-hairline pt-3">
             <input type="checkbox" checked={permAcked} onChange={(e) => setPermAcked(e.target.checked)}
               className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
             <span className="min-w-0 text-meta leading-relaxed">
-              我已核对上述 {perms} 项权限，同意授予。提交时会确认这些权限。
+              {t('form.permissionsAck', { count: perms })}
             </span>
           </label>
         )}
       </div>
 
       <details className="rounded-tile border border-hairline p-3.5" open={mode === 'edit' && (rows.length > 0 || refsText.length > 0)}>
-        <summary className="cursor-pointer text-compact font-medium">高级参数（可选）</summary>
+        <summary className="cursor-pointer text-compact font-medium">{t('form.advanced')}</summary>
         <div className="mt-4 space-y-4">
           <div>
             <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-compact font-medium">应用参数</p>
+              <p className="text-compact font-medium">{t('form.pluginConfig')}</p>
               <Button type="button" variant="ghost" onClick={() => setRows((r) => [...r, { key: '', value: '' }])}>
-                <Plus size={13} /> 添加参数
+                <Plus size={13} /> {t('form.addParam')}
               </Button>
             </div>
             {rows.length === 0 ? (
-              <p className="text-meta text-ink-3">没有额外参数。需要密钥时请使用下面的密钥名称。</p>
+              <p className="text-meta text-ink-3">{t('form.noParams')}</p>
             ) : (
               <div className="space-y-2">
                 {rows.map((r, i) => (
                   <div key={i} className="flex min-w-0 gap-2">
-                    <label className="sr-only" htmlFor={`cfg-k-${i}`}>参数名称</label>
+                    <label className="sr-only" htmlFor={`cfg-k-${i}`}>{t('form.paramName')}</label>
                     <input id={`cfg-k-${i}`} className="input num min-w-0 flex-1 font-mono text-meta"
-                      placeholder="参数名称" value={r.key} autoComplete="off" spellCheck={false}
+                      placeholder="{t('form.paramName')}" value={r.key} autoComplete="off" spellCheck={false}
                       onChange={(e) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, key: e.target.value } : x)))} />
-                    <label className="sr-only" htmlFor={`cfg-v-${i}`}>参数值</label>
+                    <label className="sr-only" htmlFor={`cfg-v-${i}`}>{t('form.paramValue')}</label>
                     <input id={`cfg-v-${i}`} className="input num min-w-0 flex-1 font-mono text-meta"
-                      placeholder="参数值" value={r.value} autoComplete="off" spellCheck={false}
+                      placeholder="{t('form.paramValue')}" value={r.value} autoComplete="off" spellCheck={false}
                       onChange={(e) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))} />
-                    <button type="button" aria-label={`删除参数 ${r.key || i + 1}`}
+                    <button type="button" aria-label={t('form.deleteParam', { name: r.key || i + 1 })}
                       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-pill text-ink-3 transition-colors hover:text-bad"
                       onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))}>
                       <X size={14} />
@@ -308,20 +311,20 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
 
           <div>
             <label htmlFor="pi-refs" className="mb-1.5 flex items-center gap-1.5 text-compact font-medium">
-              <KeyRound size={13} className="shrink-0" /> 使用的密钥（可选）
+              <KeyRound size={13} className="shrink-0" /> {t('form.secretRefs')}
             </label>
             <textarea
               id="pi-refs" rows={3} value={refsText} autoComplete="off" spellCheck={false}
-              placeholder={'例如：提醒服务密钥\n自动化密钥'}
+              placeholder={t('form.secretPlaceholder')}
               onChange={(e) => setRefsText(e.target.value)}
               className="input num resize-y font-mono text-meta"
             />
             <p className="mt-1.5 text-meta leading-relaxed text-ink-3">
-              每行填一个密钥名称，不要填密钥内容。平台只会保存名称，不会显示密钥内容。
+              {t('form.secretHint')}
             </p>
             <details className="mt-1.5 text-meta text-ink-3">
-              <summary className="cursor-pointer">技术详情</summary>
-              <p className="mt-1.5 leading-relaxed">可填写 <span className="num">secret://</span> 前缀，也可以只填写名称；两种写法都会按名称保存。</p>
+              <summary className="cursor-pointer">{t('common.technicalDetails')}</summary>
+              <p className="mt-1.5 leading-relaxed">{t('form.secretPrefixHint')}</p>
             </details>
             {secretRefs.length > 0 && (
               <ul className="mt-2 flex list-none flex-wrap gap-1.5 p-0">
@@ -337,12 +340,12 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
       </details>
 
       {missing.length > 0 && (
-        <p className="text-meta text-ink-3">还需要处理：{missing.join('、')}</p>
+        <p className="text-meta text-ink-3">{t('form.missing', { items: missing.join('、') })}</p>
       )}
       {error ? <PluginErrorNote error={error} /> : null}
 
       <div className="flex flex-col-reverse gap-2.5 border-t border-hairline pt-4 sm:flex-row sm:justify-end">
-        <Button type="button" variant="ghost" onClick={onDone}>取消</Button>
+        <Button type="button" variant="ghost" onClick={onDone}>{t('form.cancel')}</Button>
         <SubmitButton
           mode={mode} disabled={missing.length > 0}
           onCreate={() => {
@@ -392,6 +395,7 @@ function SubmitButton({ mode, disabled, onCreate, onUpdate, onError, instanceId,
   instanceId: string
   onDone: () => void
 }) {
+  const { t } = useTranslation('plugin')
   const create = useCreateInstance()
   const update = useUpdateInstance()
   const busy = create.isPending || update.isPending
@@ -408,7 +412,7 @@ function SubmitButton({ mode, disabled, onCreate, onUpdate, onError, instanceId,
 
   return (
     <Button type="button" disabled={disabled || busy} onClick={() => void run()}>
-      {busy ? '提交中…' : mode === 'create' ? '创建并保存' : '保存修改'}
+      {busy ? t('form.submitting') : mode === 'create' ? t('form.create') : t('form.update')}
     </Button>
   )
 }

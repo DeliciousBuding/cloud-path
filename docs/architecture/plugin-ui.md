@@ -37,6 +37,9 @@ contributes:
         apiVersion: 1
         navigation:
           title: 药盒提醒
+          i18n:
+            zh-CN: 药盒提醒
+            en-US: Pillbox reminders
           icon: pill
           order: 30
           route: pillbox
@@ -44,6 +47,9 @@ contributes:
         pages:
           - id: home
             title: 药盒提醒
+            i18n:
+              zh-CN: 药盒提醒
+              en-US: Pillbox reminders
             sections:
               - type: status
               - type: metrics
@@ -81,6 +87,7 @@ Connector 暂不接受 `ui`；manifest 校验直接拒绝，避免把未实现�
 ### Application
 
 - `ui.navigation.route` 必须是稳定 slug：`^[a-z0-9][a-z0-9-]{0,62}$`。
+- `navigation.title` / `pages[].title` 可选 `i18n` map；旧 `title` 是默认值，机器 `route` / `id` 永不翻译。用户可见文案原则见 [i18n.md](i18n.md)。
 - Core 生成 `/apps/{route}`；后续页面为 `/apps/{route}/{pageID}`。
 - 旧的业务路径只做重定向，不进入新契约。
 - 导航项只在以下条件全部满足时出现：

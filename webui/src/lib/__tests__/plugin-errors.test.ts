@@ -5,20 +5,15 @@
 //   ③ desired 永不被当成 observed —— has_observed=false / stale / drift 各有独立状态。
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '@/lib/api'
+import { i18n } from '@/i18n'
 import {
-  healthMeta, permissionCount, permissionGroups, pluginErrorCopy, safeConfigEntries,
+  healthMeta, permissionCount, permissionGroups, pluginDisplayName, pluginErrorCopy, safeConfigEntries,
   hostDetailLabel, instanceStatus, secretHandleName, stateMeta, syncState, trustMeta,
 } from '@/lib/plugins'
 import { PluginErr } from '@/lib/types'
-import type { PluginInstanceView } from '@/lib/types'
+import type { PluginCatalogView, PluginInstanceView } from '@/lib/types'
 
-const RUNTIME_CODES = [
-  'plugin_instance_host_mismatch',
-  'plugin_instance_kind_unsupported',
-  'plugin_instance_kind_unavailable',
-] as const
-
-const ALL_CODES = [...Object.values(PluginErr), ...RUNTIME_CODES]
+const ALL_CODES = Object.values(PluginErr)
 
 function err(status: number, code?: string, message = 'x'): ApiError {
   return new ApiError(status, message, undefined, code)
@@ -40,9 +35,29 @@ function instance(over: Partial<PluginInstanceView> = {}): PluginInstanceView {
 }
 
 describe('稳定错误码 → 文案', () => {
-  it('10 个码全部有映射，且文案互不相同（不留「未知错误」黑洞）', () => {
-    expect(ALL_CODES).toHaveLength(10)
-    expect(Object.values(PluginErr)).toHaveLength(7)
+  it('切换语言只改变展示文案，稳定码与权限确认语义不变', async () => {
+    const previous = i18n.language
+    try {
+      await i18n.changeLanguage('en-US')
+      const en = pluginErrorCopy(err(400, PluginErr.Quota))
+      expect(en.code).toBe(PluginErr.Quota)
+      expect(en.title).toMatch(/limit/i)
+      expect(en.hint).toMatch(/not saved/i)
+      expect(en.needsPermissionConfirm).toBe(false)
+
+      await i18n.changeLanguage('zh-CN')
+      const zh = pluginErrorCopy(err(400, PluginErr.Quota))
+      expect(zh.code).toBe(PluginErr.Quota)
+      expect(zh.title).toMatch(/数量上限/)
+      expect(zh.needsPermissionConfirm).toBe(false)
+    } finally {
+      await i18n.changeLanguage(previous)
+    }
+  })
+
+  it('11 个码全部有映射，且文案互不相同（不留「未知错误」黑洞）', () => {
+    expect(ALL_CODES).toHaveLength(11)
+    expect(Object.values(PluginErr)).toHaveLength(11)
     const titles = new Set<string>()
     for (const code of ALL_CODES) {
       const copy = pluginErrorCopy(err(400, code))
@@ -64,23 +79,23 @@ describe('稳定错误码 → 文案', () => {
     expect(pluginErrorCopy(err(400, PluginErr.PermissionConfirm)).hint).toMatch(/确认/)
   })
 
-  it('运行位置不匹配时说明 Driver 走网关、Application 走中心服务，主文案不露机器码', () => {
+  it('运行位置不匹配时说明 Driver 走网关、Application 走平台服务，主文案不露机器码', () => {
     const copy = pluginErrorCopy(err(409, 'plugin_instance_host_mismatch'))
     expect(copy.code).toBe('plugin_instance_host_mismatch')
-    expect(copy.title).toMatch(/运行位置.*不匹配/)
-    expect(copy.hint).toMatch(/驱动程序.*网关/)
-    expect(copy.hint).toMatch(/应用插件.*中心服务/)
-    expect(copy.hint).toMatch(/选择.*运行位置/)
+    expect(copy.title).toMatch(/放错.*地方/)
+    expect(copy.hint).toMatch(/驱动.*网关/)
+    expect(copy.hint).toMatch(/应用.*平台服务/)
+    expect(copy.hint).toMatch(/选择.*位置/)
     expect(`${copy.title} ${copy.hint}`).not.toMatch(/plugin_instance_host_mismatch/)
     expect(copy.retryable).toBe(false)
   })
 
-  it('Connector 无运行时必须如实拒绝，不把换宿主说成解法', () => {
+  it('Connector 当前无法运行时必须如实拒绝，不把换运行位置说成解法', () => {
     const copy = pluginErrorCopy(err(409, 'plugin_instance_kind_unsupported'))
     expect(copy.code).toBe('plugin_instance_kind_unsupported')
     expect(copy.title).toMatch(/暂不支持/)
-    expect(copy.hint).toMatch(/连接器.*没有可用运行时/)
-    expect(copy.hint).toMatch(/选择网关或中心服务都不能/)
+    expect(copy.hint).toMatch(/连接器.*无法运行/)
+    expect(copy.hint).toMatch(/选择网关或平台服务都不能/)
     expect(`${copy.title} ${copy.hint}`).not.toMatch(/plugin_instance_kind_unsupported/)
     expect(copy.retryable).toBe(false)
   })
@@ -89,7 +104,7 @@ describe('稳定错误码 → 文案', () => {
     const copy = pluginErrorCopy(err(409, 'plugin_instance_kind_unavailable'))
     expect(copy.code).toBe('plugin_instance_kind_unavailable')
     expect(copy.title).toMatch(/无法确认插件类型/)
-    expect(copy.hint).toMatch(/插件已经安装到目标运行位置/)
+    expect(copy.hint).toMatch(/插件已经安装到目标位置/)
     expect(copy.hint).toMatch(/完成同步/)
     expect(copy.hint).toMatch(/刷新重试/)
     expect(`${copy.title} ${copy.hint}`).not.toMatch(/plugin_instance_kind_unavailable/)
@@ -108,12 +123,13 @@ describe('稳定错误码 → 文案', () => {
     expect(copy.hint).toMatch(/不显示明文|只显示名称/)
   })
 
-  it('服务端未给码时只报状态，不复述服务端 message 当业务规则', () => {
+  it('服务端未给码时只报可理解的失败，不复述服务端 message 或状态码', () => {
     const copy = pluginErrorCopy(err(409, undefined, '不能禁用最后一个 admin'))
     expect(copy.code).toBeUndefined()
     expect(copy.title).not.toMatch(/最后一个 admin/)
     expect(copy.hint).not.toMatch(/最后一个 admin/)
-    expect(copy.title).toMatch(/409/)
+    expect(copy.title).toMatch(/保存失败/)
+    expect(copy.title).not.toMatch(/409/)
   })
 
   it('401/403/429 有本地可解释语义；网络不可达不当成服务端拒绝', () => {
@@ -123,6 +139,29 @@ describe('稳定错误码 → 文案', () => {
     const net = pluginErrorCopy(new Error('无法连接 server'))
     expect(net.title).toMatch(/无法连接/)
     expect(net.hint).toMatch(/未提交/)
+  })
+})
+
+describe('插件声明文本本地化', () => {
+  it('优先使用 i18n map，缺省时回落到插件 title，机器 ID 永不翻译', async () => {
+    const catalog = {
+      id: 'io.github.acme.temperature', kind: 'application', version: 'v1', source: '', digest: '', verified: true,
+      protocol: 1, permissions: {},
+      contributes: { applications: [{ id: 'acme.temperature', title: '温度', i18n: { 'en-US': 'Temperature' } }] },
+    } as PluginCatalogView
+    const previous = i18n.language
+    try {
+      await i18n.changeLanguage('en-US')
+      expect(pluginDisplayName(catalog)).toBe('Temperature')
+      await i18n.changeLanguage('zh-CN')
+      // 只有 en-US 翻译时，按架构回退顺序仍优先使用可用的 i18n 值。
+      expect(pluginDisplayName(catalog)).toBe('Temperature')
+      const legacy = { ...catalog, contributes: { applications: [{ id: 'acme.legacy', title: '温度' }] } } as PluginCatalogView
+      expect(pluginDisplayName(legacy)).toBe('温度')
+      expect(pluginDisplayName({ ...catalog, contributes: {} })).toBe(catalog.id)
+    } finally {
+      await i18n.changeLanguage(previous)
+    }
   })
 })
 
@@ -192,7 +231,7 @@ describe('Edge 上报的运行态语义（规范大写名）', () => {
     expect(stateMeta('running').label).toBe('运行中')
     expect(stateMeta('stopping').label).toBe('停止中')
     expect(stateMeta('failed').tone).toBe('bad')
-    expect(hostDetailLabel('server-apphost')).toBe('中心服务')
+    expect(hostDetailLabel('server-apphost')).toBe('平台服务')
     expect(healthMeta('DEGRADED').tone).toBe('warn')
     expect(healthMeta('UNKNOWN').tone).toBe('idle')
   })

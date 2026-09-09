@@ -1,5 +1,5 @@
 // SchemaRenderer 组件测试：声明 → DOM 的映射，重点覆盖
-//   ① 未知 Capability 的通用回落（表格 / JSON，不白屏、不猜语义）
+//   ① 未知 Capability 的通用回落（表格 / 结构化数据，不白屏、不猜语义）
 //   ② presentation / properties 声明驱动的 widget 与量程
 //   ③ quality 状态提示的无障碍暴露
 import { render, screen, within } from '@testing-library/react'
@@ -25,15 +25,15 @@ function obs(capability: string, property: string, value: unknown, extra: Partia
 }
 
 describe('未知 Capability 回落', () => {
-  it('StateMatrix 默认视图不放暂无详情标注/URI/原始 JSON（human-first）', () => {
+  it('StateMatrix 默认视图不放暂无详情标注/URI/原始 结构化数据（human-first）', () => {
     const { container } = render(<StateMatrix descriptor={descriptor} idx={idx} />)
     expect(screen.queryByText('暂无详情 Capability · 通用视图')).toBeNull()
     expect(screen.queryByRole('group', { name: /完整数据/ })).toBeNull()
-    // 机器 ID 与载荷不进入默认视图：整块文本里不允许出现 URI 或 JSON 键
+    // 机器 ID 与载荷不进入默认视图：整块文本里不允许出现 URI 或 结构化数据 键
     const text = container.textContent ?? ''
     expect(text).not.toContain('cloudpath.dev')
     expect(text).not.toContain('"capability"')
-    // 展示名是人类可读层：实体名与属性名都在
+    // 展示名是人类可读层：设备名与属性名都在
     expect(screen.getByText('温度探针')).toBeInTheDocument()
   })
 
@@ -55,7 +55,7 @@ describe('未知 Capability 回落', () => {
 
   it('EntityInventory 的 ID 在窄屏可横向滚动、可复制且不截断', () => {
     render(<EntityInventory descriptor={descriptor} />)
-    const region = screen.getByRole('region', { name: '设备对象清单' })
+    const region = screen.getByRole('region', { name: '设备清单' })
     expect(region.querySelector('table')).toHaveClass('min-w-[44rem]')
     expect(screen.getByText(tempEntity.entity_id)).toHaveClass('select-all', 'whitespace-nowrap')
     expect(screen.getByText(tempEntity.entity_id)).not.toHaveClass('truncate')
@@ -76,7 +76,7 @@ describe('未知 Capability 回落', () => {
     expect(within(table).getByRole('cell', { name: 'row-a' })).toBeInTheDocument()
   })
 
-  it('嵌套对象 → JSON 回落；扁平对象 + table widget → 键值定义列表', () => {
+  it('嵌套对象 → 结构化数据 回落；扁平对象 + table widget → 键值定义列表', () => {
     const { unmount } = render(
       <ValueWidget obs={obs(UNKNOWN_CAP, 'mystery_blob', { nested: { a: [1, 2] } })} idx={idx} />,
     )
@@ -99,7 +99,7 @@ describe('未知 Capability 回落', () => {
 
   it('Descriptor 缺席时 RawView 用上报字段通用渲染（不要求后端先就绪）', () => {
     render(<RawView raw={makeDeviceView().state} />)
-    expect(screen.getByText('该设备尚未同步功能信息，此处按已接收的数据显示')).toBeInTheDocument()
+    expect(screen.getByText('该设备尚未同步能力信息，此处按已接收的数据显示')).toBeInTheDocument()
     expect(screen.getByText('Mode')).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Slots 数据表' })).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Diag 完整数据' })).toBeInTheDocument()

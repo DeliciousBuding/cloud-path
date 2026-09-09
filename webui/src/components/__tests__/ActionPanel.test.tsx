@@ -1,4 +1,4 @@
-// ActionPanel + CommandButton：命令集完全由声明驱动（前端无白名单/文案表）。
+// ActionPanel + CommandButton：操作集完全由声明驱动（前端无白名单/文案表）。
 // 覆盖 actions.inputSchema → 参数输入、危险动作确认、args 卫生、冻结下发路径、
 // 设备支持的操作回落的「带参数下发」入口，以及键盘可达性与无障碍名称。
 import { fireEvent, screen, within } from '@testing-library/react'
@@ -43,7 +43,7 @@ const simpleSchema = {
   },
 }
 
-describe('命令集来源与空态', () => {
+describe('操作集来源与空态', () => {
   it('无声明 → 明确空态文案 + 「无声明」徽标，不摆一排猜出来的按钮', () => {
     renderWithProviders(<ActionPanel deviceId={KEY} set={{ actions: [], source: 'none' }} />)
     expect(screen.getByText('这台设备暂时没有可执行的操作')).toBeInTheDocument()
@@ -57,7 +57,7 @@ describe('命令集来源与空态', () => {
     unmount()
     renderWithProviders(<ActionPanel deviceId={KEY} set={fromAdapter} />)
     expect(screen.queryByText('设备支持的操作')).not.toBeInTheDocument()
-    expect(screen.getByText('高级：手动输入参数')).toBeInTheDocument()
+    expect(screen.getByText('更多操作：手动输入参数')).toBeInTheDocument()
   })
 
   it('每个动作都是可读名称的按钮（名称来自声明 title）', () => {
@@ -83,7 +83,7 @@ describe('actions.inputSchema → 参数输入', () => {
     expect(screen.getByRole('spinbutton', { name: 'ms' })).toHaveValue(null)
     expect(screen.getByRole('textbox', { name: 'note' })).toHaveValue('')
     expect(screen.getByRole('textbox', { name: 'note' })).not.toHaveAttribute('maxlength')
-    expect(screen.queryByRole('textbox', { name: '点动 技术参数' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: '点动 参数内容' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '点动' })).toBeDisabled()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByText('填写参数后即可执行。')).toBeInTheDocument()
@@ -94,8 +94,8 @@ describe('actions.inputSchema → 参数输入', () => {
     const http = okPost()
     const user = userEvent.setup()
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
-    await user.click(screen.getByRole('button', { name: '点动 技术人员选项' }))
-    const input = screen.getByRole('textbox', { name: '点动 技术参数' })
+    await user.click(screen.getByRole('button', { name: '点动 高级参数' }))
+    const input = screen.getByRole('textbox', { name: '点动 参数内容' })
     fireEvent.change(input, { target: { value: '{' } })
     expect(input).toHaveValue('{')
     expect(input).toHaveAttribute('aria-invalid', 'true')
@@ -119,10 +119,10 @@ describe('actions.inputSchema → 参数输入', () => {
     const user = userEvent.setup()
     const http = okPost()
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
-    await user.click(screen.getByRole('button', { name: '点动 技术人员选项' }))
+    await user.click(screen.getByRole('button', { name: '点动 高级参数' }))
     const args = '{"note":"' + 'x'.repeat(51) + '"}  '
     expect(new TextEncoder().encode(args)).toHaveLength(64)
-    fireEvent.change(screen.getByRole('textbox', { name: '点动 技术参数' }), { target: { value: args } })
+    fireEvent.change(screen.getByRole('textbox', { name: '点动 参数内容' }), { target: { value: args } })
     await user.click(screen.getByRole('button', { name: '点动' }))
     expect(http.last()).toMatchObject({ url: '/api/devices/edge-1/dev-9/commands', method: 'POST', body: { cmd: 'pulse', args } })
   })
@@ -138,7 +138,7 @@ describe('actions.inputSchema → 参数输入', () => {
     const mode = screen.getByRole('combobox', { name: '模式' })
     expect(within(mode).getByRole('option', { name: '自动' })).toBeInTheDocument()
     expect(screen.getByRole('spinbutton', { name: '时长' })).toBeInTheDocument()
-    expect(screen.queryByRole('textbox', { name: '设置 技术参数' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: '设置 参数内容' })).not.toBeInTheDocument()
   })
 
   it('title/description/key 标签与合适控件，required/enum/布尔均不自动选值', async () => {
@@ -175,8 +175,8 @@ describe('actions.inputSchema → 参数输入', () => {
     const user = userEvent.setup()
     const http = okPost()
     renderWithProviders(<ActionPanel deviceId={KEY} set={schemaSet(simpleSchema)} />)
-    await user.click(screen.getByRole('button', { name: '设置 技术人员选项' }))
-    fireEvent.change(screen.getByRole('textbox', { name: '设置 技术参数' }), { target: { value: args } })
+    await user.click(screen.getByRole('button', { name: '设置 高级参数' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '设置 参数内容' }), { target: { value: args } })
     expect(screen.getByRole('alert')).toHaveTextContent(error)
     expect(screen.getByRole('button', { name: '设置' })).toBeDisabled()
     await user.click(screen.getByRole('button', { name: '设置' }))
@@ -185,8 +185,8 @@ describe('actions.inputSchema → 参数输入', () => {
 
   it('JSON 换行不静默压缩，保留输入并遵守后端拒绝规则', () => {
     renderWithProviders(<ActionPanel deviceId={KEY} set={schemaSet({ type: 'object', properties: { note: { type: 'string' } } })} />)
-    fireEvent.click(screen.getByRole('button', { name: '设置 技术人员选项' }))
-    const input = screen.getByRole('textbox', { name: '设置 技术参数' })
+    fireEvent.click(screen.getByRole('button', { name: '设置 高级参数' }))
+    const input = screen.getByRole('textbox', { name: '设置 参数内容' })
     const raw = '{\n"n":1}'
     fireEvent.change(input, { target: { value: raw } })
     expect(input).toHaveValue(raw)
@@ -206,11 +206,11 @@ describe('actions.inputSchema → 参数输入', () => {
     const http = okPost()
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     fireEvent.change(screen.getByRole('spinbutton', { name: 'ms' }), { target: { value: '100' } })
-    await user.click(screen.getByRole('button', { name: '点动 技术人员选项' }))
-    const input = screen.getByRole('textbox', { name: '点动 技术参数' })
+    await user.click(screen.getByRole('button', { name: '点动 高级参数' }))
+    const input = screen.getByRole('textbox', { name: '点动 参数内容' })
     expect(input).toHaveValue('{"ms":100}')
     fireEvent.change(input, { target: { value: '{"ms":200,"note":""}' } })
-    await user.click(screen.getByRole('button', { name: '点动 使用表单填写' }))
+    await user.click(screen.getByRole('button', { name: '点动 改用表单填写' }))
     expect(screen.getByRole('spinbutton', { name: 'ms' })).toHaveValue(200)
     await user.click(screen.getByRole('button', { name: '点动' }))
     expect(http.last()?.body).toEqual({ cmd: 'pulse', args: '{"ms":200,"note":""}' })
@@ -220,11 +220,11 @@ describe('actions.inputSchema → 参数输入', () => {
     const user = userEvent.setup()
     const http = okPost()
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
-    await user.click(screen.getByRole('button', { name: '点动 技术人员选项' }))
+    await user.click(screen.getByRole('button', { name: '点动 高级参数' }))
     const args = '{"ms":100,"extra":2}'
-    fireEvent.change(screen.getByRole('textbox', { name: '点动 技术参数' }), { target: { value: args } })
-    expect(screen.getByRole('button', { name: '点动 使用表单填写' })).toBeDisabled()
-    expect(screen.getByText(/当前参数无法自动转换为表单/)).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: '点动 参数内容' }), { target: { value: args } })
+    expect(screen.getByRole('button', { name: '点动 改用表单填写' })).toBeDisabled()
+    expect(screen.getByText(/这些参数无法自动填入表单/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '点动' }))
     expect(http.last()?.body).toEqual({ cmd: 'pulse', args })
   })
@@ -245,8 +245,8 @@ describe('actions.inputSchema → 参数输入', () => {
     const user = userEvent.setup()
     const http = okPost()
     renderWithProviders(<ActionPanel deviceId={KEY} set={schemaSet({ type: 'object', required: ['id'], oneOf: [{ $ref: '#/$defs/choice' }, { required: ['b'] }] })} />)
-    expect(screen.getByText(/未校验：\$ref/)).toBeInTheDocument()
-    const input = screen.getByRole('textbox', { name: '设置 技术参数' })
+    expect(screen.getByText(/这里无法检查：\$ref/)).toBeInTheDocument()
+    const input = screen.getByRole('textbox', { name: '设置 参数内容' })
     fireEvent.change(input, { target: { value: '{}' } })
     expect(screen.getByRole('alert')).toHaveTextContent('缺少必填参数 id')
     fireEvent.change(input, { target: { value: '{"id":1}' } })
@@ -288,7 +288,7 @@ describe('危险动作与确认结果', () => {
     expect(dialog).not.toHaveTextContent(KEY)
   })
 
-  it('二次确认可以取消或 Esc 关闭，两种路径都不下发命令', async () => {
+  it('二次确认可以取消或 Esc 关闭，两种路径都不下发操作', async () => {
     const user = userEvent.setup()
     const http = okPost()
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
@@ -362,7 +362,7 @@ describe('适配器无 schema 命令：高级手动参数入口', () => {
 
   it('有设备声明时不出现万能参数入口（避免绕过设备操作）', () => {
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
-    expect(screen.getByRole('combobox', { name: '选择参数操作' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: '选择要执行的操作' })).toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: '选择操作' })).not.toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: '操作参数' })).not.toBeInTheDocument()
     expect(screen.queryByText(/带参数下发/)).not.toBeInTheDocument()
@@ -370,7 +370,7 @@ describe('适配器无 schema 命令：高级手动参数入口', () => {
 })
 
 describe('键盘与焦点', () => {
-  it('Tab 依次到达参数输入框与命令按钮，Enter 即可下发', async () => {
+  it('Tab 依次到达参数输入框与操作按钮，Enter 即可下发', async () => {
     const user = userEvent.setup()
     const http = okPost()
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
@@ -392,13 +392,13 @@ describe('键盘与焦点', () => {
   })
 })
 
-describe('命令按钮说明（title/description）', () => {
+describe('操作按钮说明（title/description）', () => {
   it('有 description 的动作渲染可见说明；无说明的不加冗余题注', () => {
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     // close 的 description 来自后端声明 → 落到 hint，渲染为按钮下可见说明
     expect(screen.getByText('接通负载')).toBeInTheDocument()
     // open / factory_reset 未声明描述 → 按钮文案自足，不编造题注占位
-    expect(screen.queryByText(/下发命令「/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/下发操作「/)).not.toBeInTheDocument()
   })
 
   it('按钮不塞内部溯源信息，说明留在按钮下方', () => {
@@ -410,7 +410,7 @@ describe('命令按钮说明（title/description）', () => {
 
   it('参数类操作显示功能选择、字段和可读说明，不摊内部溯源', () => {
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
-    expect(screen.getByRole('combobox', { name: '选择参数操作' })).toHaveValue('pulse')
+    expect(screen.getByRole('combobox', { name: '选择要执行的操作' })).toHaveValue('pulse')
     expect(screen.getByRole('spinbutton', { name: 'ms' })).toBeInTheDocument()
     expect(screen.getByText('按毫秒脉冲')).toBeInTheDocument()
     expect(screen.queryByText('点动 · 按毫秒脉冲')).not.toBeInTheDocument()
@@ -439,7 +439,7 @@ it('LED 组合条件显示为设置方式，不会要求用户手写 JSON', asyn
   expect(screen.getByRole('radio', { name: 'mask' })).toBeChecked()
   expect(screen.getByRole('spinbutton', { name: 'mask' })).toBeInTheDocument()
   expect(screen.queryByRole('spinbutton', { name: 'pattern' })).not.toBeInTheDocument()
-  expect(screen.queryByRole('textbox', { name: '设置 技术参数' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('textbox', { name: '设置 参数内容' })).not.toBeInTheDocument()
   fireEvent.change(screen.getByRole('spinbutton', { name: 'mask' }), { target: { value: '0' } })
   expect(screen.getByRole('button', { name: '设置' })).toBeEnabled()
   await user.click(screen.getByRole('button', { name: '设置' }))

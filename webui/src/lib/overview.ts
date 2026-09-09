@@ -1,11 +1,12 @@
 // 概览页的数据整形（纯函数）。
 //
 // 两条硬约束：
-//   ① **禁止假数据**：所有计数、离线设备、失败命令、近期事件一律取自 GET /api/overview
+//   ① **禁止假数据**：所有计数、离线设备、失败操作、近期事件一律取自 GET /api/overview
 //      的服务端聚合结果；前端不自算、不塞占位数字、不写死 demo 卡片。
 //   ② **任何后端形态都不得白屏**：字段缺席/类型不对时归一化成安全空值，
 //      由页面渲染设计过的 Empty 态，而不是抛未捕获异常。
 import type { Tone } from '@/components/ui'
+import { i18n } from '@/i18n'
 import type { CommandView, DeviceView, EventView, OverviewView } from './types'
 
 function num(v: unknown): number {
@@ -51,24 +52,24 @@ export interface OverviewStat {
 export function overviewStats(o: OverviewView): OverviewStat[] {
   return [
     {
-      key: 'devices', label: '在线设备', online: o.devices_online, total: o.devices_total,
-      emptyHint: '等待网关接入设备', tone: o.devices_total === 0 ? 'idle'
+      key: 'devices', label: i18n.t('stats.devices', { ns: 'overview' }), online: o.devices_online, total: o.devices_total,
+      emptyHint: i18n.t('empty.devices', { ns: 'overview' }), tone: o.devices_total === 0 ? 'idle'
         : o.devices_online === 0 ? 'bad' : 'ok',
     },
     {
-      key: 'edges', label: '在线网关', online: o.edges_online, total: o.edges_total,
-      emptyHint: '尚未有网关注册', tone: o.edges_total === 0 ? 'idle'
+      key: 'edges', label: i18n.t('stats.edges', { ns: 'overview' }), online: o.edges_online, total: o.edges_total,
+      emptyHint: i18n.t('empty.edges', { ns: 'overview' }), tone: o.edges_total === 0 ? 'idle'
         : o.edges_online === 0 ? 'bad' : 'ok',
     },
     {
-      key: 'plugins', label: '活跃插件', online: o.plugins_active, total: o.plugins_desired,
-      emptyHint: '还没有插件实例', tone: o.plugins_desired === 0 ? 'idle'
+      key: 'plugins', label: i18n.t('stats.plugins', { ns: 'overview' }), online: o.plugins_active, total: o.plugins_desired,
+      emptyHint: i18n.t('empty.plugins', { ns: 'overview' }), tone: o.plugins_desired === 0 ? 'idle'
         : o.plugins_active === 0 ? 'warn' : 'ok',
     },
     // 固定近24小时的完整失败/超时计数，来自服务端；不以有界列表长度推算
     {
-      key: 'commands', label: '近24小时失败操作', online: o.commands_failed, total: -1,
-      emptyHint: '近24小时没有失败或超时的操作', tone: o.commands_failed === 0 ? 'ok' : 'bad',
+      key: 'commands', label: i18n.t('stats.commandsWindow', { ns: 'overview' }), online: o.commands_failed, total: -1,
+      emptyHint: i18n.t('empty.commandsWindow', { ns: 'overview' }), tone: o.commands_failed === 0 ? 'ok' : 'bad',
     },
   ]
 }
@@ -91,16 +92,16 @@ export function overviewAlerts(o: OverviewView): OverviewAlert[] {
   if (offlineEdges > 0) {
     out.push({
       id: 'edges-offline', tone: 'bad', count: offlineEdges, to: '/edges',
-      title: `${offlineEdges} 台网关离线`,
-      hint: '离线网关上的设备不会上报状态；已经发出的操作会等它重新连接后继续。其他在线网关不受影响。',
+      title: i18n.t('alertDetails.edgesOfflineTitle', { ns: 'overview', count: offlineEdges }),
+      hint: i18n.t('alertDetails.edgesOfflineHint', { ns: 'overview' }),
     })
   }
 
   if (o.offline_devices.length > 0) {
     out.push({
       id: 'devices-offline', tone: 'warn', count: o.offline_devices.length, to: '/devices',
-      title: `${o.offline_devices.length} 台设备离线`,
-      hint: '这些设备最近一次上报后未再更新，点开可看最后在线时间与历史事件。',
+      title: i18n.t('alertDetails.devicesOfflineTitle', { ns: 'overview', count: o.offline_devices.length }),
+      hint: i18n.t('alertDetails.devicesOfflineHint', { ns: 'overview' }),
     })
   }
 
@@ -108,8 +109,8 @@ export function overviewAlerts(o: OverviewView): OverviewAlert[] {
     const n = o.commands_failed
     out.push({
       id: 'commands-failed', tone: 'bad', count: n, to: '/activity',
-      title: `近24小时 ${n} 条操作失败或超时`,
-      hint: '查看失败或超时记录及处理结果，核对原因和发生时间；运行记录页保留全部历史。',
+      title: i18n.t('alertDetails.commandsFailedTitle', { ns: 'overview', count: n }),
+      hint: i18n.t('alertDetails.commandsFailedHint', { ns: 'overview' }),
     })
   }
 
@@ -117,8 +118,8 @@ export function overviewAlerts(o: OverviewView): OverviewAlert[] {
   if (pluginGap > 0) {
     out.push({
       id: 'plugins-gap', tone: 'warn', count: pluginGap, to: '/plugins',
-      title: `${pluginGap} 个插件实例未达到活跃`,
-      hint: '设置已经保存，但还没有收到正常运行状态。可能是网关暂时不可用、正在应用设置，或运行情况与保存的设置不一致。',
+      title: i18n.t('alertDetails.pluginsGapTitle', { ns: 'overview', count: pluginGap }),
+      hint: i18n.t('alertDetails.pluginsGapHint', { ns: 'overview' }),
     })
   }
 

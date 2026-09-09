@@ -41,15 +41,12 @@ const (
 	maxPluginVersionLen     = 64
 )
 
-// pluginErrStoreUnavailable 是 PluginStore 未接线时的稳定码（不在契约错误码表内，
-// 因为它表示部署缺陷而非用户错误；前端按 message 呈现即可）。
-const pluginErrStoreUnavailable = "plugin_store_unavailable"
-
-// 插件实例宿主校验的稳定错误码。前端按码呈现；服务端不依赖 STC-B 等具体设备语义。
+// 插件写面的稳定码复用 api canonical 注册表。
 const (
-	pluginErrKindUnavailable = "plugin_instance_kind_unavailable"
-	pluginErrHostMismatch    = "plugin_instance_host_mismatch"
-	pluginErrKindUnsupported = "plugin_instance_kind_unsupported"
+	pluginErrStoreUnavailable = api.PluginErrStoreUnavailable
+	pluginErrKindUnavailable  = api.PluginErrKindUnavailable
+	pluginErrHostMismatch     = api.PluginErrHostMismatch
+	pluginErrKindUnsupported  = api.PluginErrKindUnsupported
 )
 
 // credentialKeyWords 是「键名形似凭据」的判定词表：这些键的值必须是 secret://<name>
@@ -70,10 +67,15 @@ type pluginWriteError struct {
 	code    string
 	status  int
 	message string
+	params  map[string]any
 }
 
 func newPluginWriteError(code string, status int, format string, args ...any) *pluginWriteError {
 	return &pluginWriteError{code: code, status: status, message: fmt.Sprintf(format, args...)}
+}
+
+func newPluginWriteErrorWithParams(code string, status int, params map[string]any, format string, args ...any) *pluginWriteError {
+	return &pluginWriteError{code: code, status: status, message: fmt.Sprintf(format, args...), params: params}
 }
 
 // pluginWriteContext 是一次写请求的已鉴权上下文。
@@ -100,7 +102,7 @@ func (s *Server) resolvePluginWriteContext(r *http.Request) (pluginWriteContext,
 		return ctx, nil
 	}
 	if p.TenantID <= 0 || strings.TrimSpace(p.TenantSlug) == "" {
-		return ctx, &pluginWriteError{code: "authentication_required", status: http.StatusUnauthorized,
+		return ctx, &pluginWriteError{code: api.APIErrAuthenticationRequired, status: http.StatusUnauthorized,
 			message: "authentication required"}
 	}
 	ctx.principal = p
@@ -119,9 +121,7 @@ func (s *Server) writePluginError(w http.ResponseWriter, r *http.Request, ctx pl
 
 // writePluginErrorOnly 只输出响应不审计（配额拒绝已单独做节流审计时使用）。
 func (s *Server) writePluginErrorOnly(w http.ResponseWriter, ctx pluginWriteContext, e *pluginWriteError) {
-	writeJSON(w, e.status, map[string]any{
-		"error": e.code, "code": e.code, "message": e.message, "request_id": ctx.requestID,
-	})
+	writeAPIErrorResponse(w, e.status, e.code, e.message, ctx.requestID, e.params)
 }
 
 // actionForPath 把请求路径映射为审计动作（写审计的统一入口用）。
@@ -188,8 +188,8 @@ func (s *Server) handleCreatePluginInstance(w http.ResponseWriter, r *http.Reque
 	}
 	var req api.PluginInstanceCreateRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, pluginWriteBodyLimit)).Decode(&req); err != nil {
-		s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrInvalidConfig,
-			http.StatusBadRequest, "body 需为合法 JSON 的 PluginInstanceCreateRequest"))
+		s.writePluginError(w, r, ctx, newPluginWriteErrorWithParams(api.PluginErrInvalidConfig,
+			http.StatusBadRequest, map[string]any{"field": "body"}, "body must be a JSON PluginInstanceCreateRequest"))
 		return
 	}
 	edgeID := strings.TrimSpace(req.EdgeID)
@@ -201,23 +201,23 @@ func (s *Server) handleCreatePluginInstance(w http.ResponseWriter, r *http.Reque
 		target = pluginTargetID(r)
 	}
 	if !validEdgeID(edgeID) {
-		s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrInvalidConfig,
-			http.StatusBadRequest, "edge_id 非法"))
+		s.writePluginError(w, r, ctx, newPluginWriteErrorWithParams(api.PluginErrInvalidConfig,
+			http.StatusBadRequest, map[string]any{"field": "edge_id"}, "edge_id is invalid"))
 		return
 	}
 	if !validPluginSegment(instanceID, maxPluginInstanceIDLen) {
-		s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrInvalidConfig,
-			http.StatusBadRequest, "instance_id 非法（允许字母/数字/._-，长度 1..%d）", maxPluginInstanceIDLen))
+		s.writePluginError(w, r, ctx, newPluginWriteErrorWithParams(api.PluginErrInvalidConfig,
+			http.StatusBadRequest, map[string]any{"field": "instance_id", "max_len": maxPluginInstanceIDLen}, "instance_id is invalid"))
 		return
 	}
 	if !validPluginSegment(pluginID, maxPluginIDLen) {
-		s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrInvalidConfig,
-			http.StatusBadRequest, "plugin_id 非法"))
+		s.writePluginError(w, r, ctx, newPluginWriteErrorWithParams(api.PluginErrInvalidConfig,
+			http.StatusBadRequest, map[string]any{"field": "plugin_id", "max_len": maxPluginIDLen}, "plugin_id is invalid"))
 		return
 	}
 	if version == "" || len(version) > maxPluginVersionLen || strings.ContainsAny(version, "\r\n\x00") {
-		s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrInvalidConfig,
-			http.StatusBadRequest, "version 必填且长度 <=%d", maxPluginVersionLen))
+		s.writePluginError(w, r, ctx, newPluginWriteErrorWithParams(api.PluginErrInvalidConfig,
+			http.StatusBadRequest, map[string]any{"field": "version", "max_len": maxPluginVersionLen}, "version is invalid"))
 		return
 	}
 	isolation := strings.TrimSpace(req.Isolation)
@@ -225,9 +225,8 @@ func (s *Server) handleCreatePluginInstance(w http.ResponseWriter, r *http.Reque
 		isolation = plugincontrol.IsolationShared
 	}
 	if _, err := plugincontrol.ParseIsolation(isolation); err != nil {
-		s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrInvalidConfig,
-			http.StatusBadRequest, "isolation 只支持 %q 或 %q",
-			plugincontrol.IsolationShared, plugincontrol.IsolationPerInstance))
+		s.writePluginError(w, r, ctx, newPluginWriteErrorWithParams(api.PluginErrInvalidConfig,
+			http.StatusBadRequest, map[string]any{"field": "isolation", "allowed": []string{plugincontrol.IsolationShared, plugincontrol.IsolationPerInstance}}, "isolation is invalid"))
 		return
 	}
 	cfg, refs, werr := normalizePluginConfig(req.Config, req.SecretRefs, nil)
@@ -238,7 +237,7 @@ func (s *Server) handleCreatePluginInstance(w http.ResponseWriter, r *http.Reque
 	// 跨租户 edge 一律 fail-closed，并按「不存在」语义回应（不泄漏他人 edge 是否存在）。
 	if owner := s.edgeOwnerSlug(edgeID); owner != "" && owner != ctx.tenantSlug {
 		s.writePluginError(w, r, ctx, &pluginWriteError{code: api.PluginErrNotFound,
-			status: http.StatusNotFound, message: "plugin instance not found"})
+			status: http.StatusNotFound, message: "plugin instance not found", params: map[string]any{"instance_id": instanceID}})
 		return
 	}
 	enabled := true
@@ -260,8 +259,8 @@ func (s *Server) handleCreatePluginInstance(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if dupEdge, dup := p.findInstanceLocked(ctx.tenantID, instanceID); dup {
-		s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrConflict,
-			http.StatusConflict, "instance_id %q 已存在于本租户 edge %q", instanceID, dupEdge))
+		s.writePluginError(w, r, ctx, newPluginWriteErrorWithParams(api.PluginErrConflict,
+			http.StatusConflict, map[string]any{"instance_id": instanceID, "edge_id": dupEdge}, "instance_id already exists"))
 		return
 	}
 	if werr := s.validatePluginInstanceHost(ctx.tenantID, ctx.tenantSlug, edgeID, pluginID); werr != nil {
@@ -270,8 +269,8 @@ func (s *Server) handleCreatePluginInstance(w http.ResponseWriter, r *http.Reque
 	}
 	if reasons := createEscalationReasons(refs); len(reasons) > 0 &&
 		!req.ConfirmPermissions && !ctx.isAdmin {
-		s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrPermissionConfirm,
-			http.StatusForbidden, "需要显式确认权限扩大：%s", strings.Join(reasons, ",")))
+		s.writePluginError(w, r, ctx, newPluginWriteErrorWithParams(api.PluginErrPermissionConfirm,
+			http.StatusForbidden, map[string]any{"reasons": reasons}, "permission escalation requires explicit confirmation"))
 		return
 	}
 	if err := p.admitQuota(ctx.tenantID); err != nil {
@@ -320,8 +319,8 @@ func (s *Server) handleUpdatePluginInstance(w http.ResponseWriter, r *http.Reque
 	id := strings.TrimSpace(chi.URLParam(r, "id"))
 	var req api.PluginInstanceUpdateRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, pluginWriteBodyLimit)).Decode(&req); err != nil {
-		s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrInvalidConfig,
-			http.StatusBadRequest, "body 需为合法 JSON 的 PluginInstanceUpdateRequest"))
+		s.writePluginError(w, r, ctx, newPluginWriteErrorWithParams(api.PluginErrInvalidConfig,
+			http.StatusBadRequest, map[string]any{"field": "body"}, "body must be a JSON PluginInstanceUpdateRequest"))
 		return
 	}
 
@@ -336,7 +335,7 @@ func (s *Server) handleUpdatePluginInstance(w http.ResponseWriter, r *http.Reque
 	row, ok := p.getInstanceLocked(ctx.tenantID, id)
 	if !ok {
 		s.writePluginError(w, r, ctx, &pluginWriteError{code: api.PluginErrNotFound,
-			status: http.StatusNotFound, message: "plugin instance not found"})
+			status: http.StatusNotFound, message: "plugin instance not found", params: map[string]any{"instance_id": id}})
 		return
 	}
 	if werr := s.validatePluginInstanceHost(ctx.tenantID, ctx.tenantSlug, row.EdgeID, row.PluginID); werr != nil {
@@ -347,8 +346,8 @@ func (s *Server) handleUpdatePluginInstance(w http.ResponseWriter, r *http.Reque
 	if req.Version != nil {
 		v := strings.TrimSpace(*req.Version)
 		if v == "" || len(v) > maxPluginVersionLen || strings.ContainsAny(v, "\r\n\x00") {
-			s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrInvalidConfig,
-				http.StatusBadRequest, "version 非法"))
+			s.writePluginError(w, r, ctx, newPluginWriteErrorWithParams(api.PluginErrInvalidConfig,
+				http.StatusBadRequest, map[string]any{"field": "version", "max_len": maxPluginVersionLen}, "version is invalid"))
 			return
 		}
 		next.Version = v
@@ -360,9 +359,8 @@ func (s *Server) handleUpdatePluginInstance(w http.ResponseWriter, r *http.Reque
 	if req.Isolation != nil {
 		iso := strings.TrimSpace(*req.Isolation)
 		if _, err := plugincontrol.ParseIsolation(iso); err != nil || iso == "" {
-			s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrInvalidConfig,
-				http.StatusBadRequest, "isolation 只支持 %q 或 %q",
-				plugincontrol.IsolationShared, plugincontrol.IsolationPerInstance))
+			s.writePluginError(w, r, ctx, newPluginWriteErrorWithParams(api.PluginErrInvalidConfig,
+				http.StatusBadRequest, map[string]any{"field": "isolation", "allowed": []string{plugincontrol.IsolationShared, plugincontrol.IsolationPerInstance}}, "isolation is invalid"))
 			return
 		}
 		next.Isolation = iso
@@ -388,8 +386,8 @@ func (s *Server) handleUpdatePluginInstance(w http.ResponseWriter, r *http.Reque
 	reasons := updateEscalationReasons(beforeIsolation, next.Isolation,
 		decodeSecretRefs(row.SecretRefs), refs)
 	if len(reasons) > 0 && !req.ConfirmPermissions && !ctx.isAdmin {
-		s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrPermissionConfirm,
-			http.StatusForbidden, "需要显式确认权限扩大：%s", strings.Join(reasons, ",")))
+		s.writePluginError(w, r, ctx, newPluginWriteErrorWithParams(api.PluginErrPermissionConfirm,
+			http.StatusForbidden, map[string]any{"reasons": reasons}, "permission escalation requires explicit confirmation"))
 		return
 	}
 	next.UpdatedAt = time.Now().Unix()
@@ -451,12 +449,12 @@ func (s *Server) handleDeletePluginInstance(w http.ResponseWriter, r *http.Reque
 	row, ok := p.getInstanceLocked(ctx.tenantID, id)
 	if !ok {
 		s.writePluginError(w, r, ctx, &pluginWriteError{code: api.PluginErrNotFound,
-			status: http.StatusNotFound, message: "plugin instance not found"})
+			status: http.StatusNotFound, message: "plugin instance not found", params: map[string]any{"instance_id": id}})
 		return
 	}
 	if purge && !ctx.isAdmin {
-		s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrPermissionConfirm,
-			http.StatusForbidden, "purge 删除插件数据需要 admin 权限"))
+		s.writePluginError(w, r, ctx, newPluginWriteErrorWithParams(api.PluginErrPermissionConfirm,
+			http.StatusForbidden, map[string]any{"action": "purge", "required_role": "admin"}, "purge requires admin"))
 		return
 	}
 	rev, err := p.store.DeletePluginInstance(ctx.tenantID, row.EdgeID, id, purge)
@@ -496,8 +494,8 @@ func (s *Server) handleReconcilePluginInstance(w http.ResponseWriter, r *http.Re
 	var req api.PluginInstanceActionRequest
 	if r.Body != nil && r.ContentLength != 0 {
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, pluginWriteBodyLimit)).Decode(&req); err != nil {
-			s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrInvalidConfig,
-				http.StatusBadRequest, "body 需为合法 JSON 的 PluginInstanceActionRequest"))
+			s.writePluginError(w, r, ctx, newPluginWriteErrorWithParams(api.PluginErrInvalidConfig,
+				http.StatusBadRequest, map[string]any{"field": "body"}, "body must be a JSON PluginInstanceActionRequest"))
 			return
 		}
 	}
@@ -510,7 +508,7 @@ func (s *Server) handleReconcilePluginInstance(w http.ResponseWriter, r *http.Re
 	row, ok := p.getInstanceLocked(ctx.tenantID, id)
 	if !ok {
 		s.writePluginError(w, r, ctx, &pluginWriteError{code: api.PluginErrNotFound,
-			status: http.StatusNotFound, message: "plugin instance not found"})
+			status: http.StatusNotFound, message: "plugin instance not found", params: map[string]any{"instance_id": id}})
 		return
 	}
 	rev, err := p.store.PluginDesiredRevision(ctx.tenantID, row.EdgeID)
@@ -518,13 +516,13 @@ func (s *Server) handleReconcilePluginInstance(w http.ResponseWriter, r *http.Re
 		rev = row.Revision
 	}
 	if !s.edgeOnlineFor(ctx.tenantID, row.EdgeID) {
-		s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrEdgeOffline,
-			http.StatusConflict, "edge %q 离线，无法立即收敛（期望态已保存，重连后自动下发）", row.EdgeID))
+		s.writePluginError(w, r, ctx, newPluginWriteErrorWithParams(api.PluginErrEdgeOffline,
+			http.StatusConflict, map[string]any{"edge_id": row.EdgeID}, "edge is offline"))
 		return
 	}
 	if !s.pushPluginDesired(ctx.tenantID, row.EdgeID) {
-		s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrEdgeOffline,
-			http.StatusConflict, "edge %q 发送队列满，请稍后重试", row.EdgeID))
+		s.writePluginError(w, r, ctx, newPluginWriteErrorWithParams(api.PluginErrEdgeOffline,
+			http.StatusConflict, map[string]any{"edge_id": row.EdgeID, "reason": "send_queue_full"}, "edge send queue is full"))
 		return
 	}
 	s.auditPluginWrite(r, ctx, actionPluginReconcile, id, audit.OutcomeSuccess, "",
@@ -549,8 +547,8 @@ func (s *Server) rejectQuota(w http.ResponseWriter, r *http.Request, ctx pluginW
 	if errors.As(err, &qe) {
 		limit, usage = qe.Limit, qe.Usage
 	}
-	e := newPluginWriteError(api.PluginErrQuota, http.StatusTooManyRequests,
-		"插件实例配额已满（limit=%d usage=%d）", limit, usage)
+	e := newPluginWriteErrorWithParams(api.PluginErrQuota, http.StatusTooManyRequests,
+		map[string]any{"limit": limit, "usage": usage}, "plugin instance quota exceeded")
 	if !s.plugin.allowQuotaAudit(ctx.tenantID) {
 		s.writePluginErrorOnly(w, ctx, e)
 		return
@@ -570,18 +568,18 @@ func (s *Server) rejectQuota(w http.ResponseWriter, r *http.Request, ctx pluginW
 func mapStoreError(err error, id string) *pluginWriteError {
 	switch {
 	case errors.Is(err, storeport.ErrConflict):
-		return newPluginWriteError(api.PluginErrConflict, http.StatusConflict,
-			"plugin instance %q conflicts with an existing identity", id)
+		return newPluginWriteErrorWithParams(api.PluginErrConflict, http.StatusConflict,
+			map[string]any{"instance_id": id}, "plugin instance conflicts with an existing identity")
 	case errors.Is(err, storeport.ErrQuota):
 		return newPluginWriteError(api.PluginErrQuota, http.StatusTooManyRequests,
 			"plugin instance quota exceeded")
 	case errors.Is(err, storeport.ErrNotFound):
 		return &pluginWriteError{code: api.PluginErrNotFound, status: http.StatusNotFound,
-			message: "plugin instance not found"}
+			message: "plugin instance not found", params: map[string]any{"instance_id": id}}
 	case errors.Is(err, storeport.ErrTenantMismatch):
 		// 跨租户行 fail-closed，按不存在回应（不泄漏他人实例存在性）。
 		return &pluginWriteError{code: api.PluginErrNotFound, status: http.StatusNotFound,
-			message: "plugin instance not found"}
+			message: "plugin instance not found", params: map[string]any{"instance_id": id}}
 	default:
 		slog.Warn("plugin store write failed", "err", err, "instance", id)
 		return &pluginWriteError{code: pluginErrStoreUnavailable,
@@ -599,11 +597,11 @@ func (s *Server) validatePluginInstanceHost(tenantID int64, tenantSlug, edgeID, 
 	}
 	if err := plugincontrol.ValidateInstanceHost(kind, edgeID == AppHostEdgeID); err != nil {
 		if errors.Is(err, pluginhost.ErrConnectorUnsupported) {
-			return newPluginWriteError(pluginErrKindUnsupported, http.StatusConflict,
-				"插件 %q 的 kind 为 Connector，当前运行时未实现，不能创建或更新实例", pluginID)
+			return newPluginWriteErrorWithParams(pluginErrKindUnsupported, http.StatusConflict,
+				map[string]any{"plugin_id": pluginID, "kind": kind.String()}, "plugin kind is unsupported")
 		}
-		return newPluginWriteError(pluginErrHostMismatch, http.StatusConflict,
-			"插件 %q 的 kind %s 与目标宿主 %q 不匹配", pluginID, kind.String(), edgeID)
+		return newPluginWriteErrorWithParams(pluginErrHostMismatch, http.StatusConflict,
+			map[string]any{"plugin_id": pluginID, "kind": kind.String(), "edge_id": edgeID}, "plugin kind does not match host")
 	}
 	return nil
 }
@@ -613,14 +611,14 @@ func (s *Server) validatePluginInstanceHost(tenantID int64, tenantSlug, edgeID, 
 func (s *Server) resolvePluginInstanceKind(tenantID int64, tenantSlug, edgeID, pluginID string) (pluginhost.Kind, *pluginWriteError) {
 	if edgeID == AppHostEdgeID {
 		if s.appHost == nil || !s.appHost.cfg.Enabled {
-			return 0, newPluginWriteError(pluginErrKindUnavailable, http.StatusConflict,
-				"无法解析 Server 宿主上插件 %q 的 manifest kind（AppHost 未启用，fail-closed）", pluginID)
+			return 0, newPluginWriteErrorWithParams(pluginErrKindUnavailable, http.StatusConflict,
+				map[string]any{"plugin_id": pluginID, "edge_id": edgeID}, "plugin kind is unavailable")
 		}
 		kind, err := plugincontrol.InstalledPluginKind(s.appHost.cfg.PluginsDir, s.appHost.cfg.LockPath, pluginID)
 		if err != nil {
 			slog.Debug("plugin instance: server manifest kind unavailable", "plugin_id", pluginID)
-			return 0, newPluginWriteError(pluginErrKindUnavailable, http.StatusConflict,
-				"无法解析 Server 宿主上插件 %q 的 manifest kind（请先安装到 AppHost，fail-closed）", pluginID)
+			return 0, newPluginWriteErrorWithParams(pluginErrKindUnavailable, http.StatusConflict,
+				map[string]any{"plugin_id": pluginID, "edge_id": edgeID}, "plugin kind is unavailable")
 		}
 		return kind, nil
 	}
@@ -635,19 +633,19 @@ func (s *Server) resolvePluginInstanceKind(tenantID int64, tenantSlug, edgeID, p
 	}
 	ep := t.edges[edgeID]
 	if ep == nil {
-		return 0, newPluginWriteError(pluginErrKindUnavailable, http.StatusConflict,
-			"目标 Edge %q 尚未上报插件 %q 的安装信息，无法解析 manifest kind（fail-closed）", edgeID, pluginID)
+		return 0, newPluginWriteErrorWithParams(pluginErrKindUnavailable, http.StatusConflict,
+			map[string]any{"edge_id": edgeID, "plugin_id": pluginID}, "plugin kind is unavailable")
 	}
 	in, ok := ep.installations[pluginID]
 	if !ok {
-		return 0, newPluginWriteError(pluginErrKindUnavailable, http.StatusConflict,
-			"目标 Edge %q 尚未上报插件 %q 的安装信息，无法解析 manifest kind（fail-closed）", edgeID, pluginID)
+		return 0, newPluginWriteErrorWithParams(pluginErrKindUnavailable, http.StatusConflict,
+			map[string]any{"edge_id": edgeID, "plugin_id": pluginID}, "plugin kind is unavailable")
 	}
 	kind, err := pluginhost.ParseKind(in.Kind)
 	if err != nil {
 		slog.Debug("plugin instance: edge manifest kind unavailable", "plugin_id", pluginID, "edge", edgeID)
-		return 0, newPluginWriteError(pluginErrKindUnavailable, http.StatusConflict,
-			"目标 Edge %q 上报的插件 %q kind 非法，无法解析 manifest kind（fail-closed）", edgeID, pluginID)
+		return 0, newPluginWriteErrorWithParams(pluginErrKindUnavailable, http.StatusConflict,
+			map[string]any{"edge_id": edgeID, "plugin_id": pluginID}, "plugin kind is unavailable")
 	}
 	return kind, nil
 }
@@ -776,34 +774,34 @@ func validPluginSegment(s string, maxLen int) bool {
 //   - 显式 secret_refs 与配置里的 handle 合并去重（refs 为 nil 表示沿用既有值）。
 func normalizePluginConfig(cfg map[string]string, refs, prevRefs []string) (map[string]string, []string, *pluginWriteError) {
 	if len(cfg) > maxPluginConfigKeys {
-		return nil, nil, newPluginWriteError(api.PluginErrInvalidConfig, http.StatusBadRequest,
-			"config 键数量上限 %d", maxPluginConfigKeys)
+		return nil, nil, newPluginWriteErrorWithParams(api.PluginErrInvalidConfig, http.StatusBadRequest,
+			map[string]any{"field": "config", "max_keys": maxPluginConfigKeys}, "too many config keys")
 	}
 	out := make(map[string]string, len(cfg))
 	derived := make([]string, 0, len(cfg))
 	for k, v := range cfg {
 		kt := strings.TrimSpace(k)
 		if kt == "" || len(kt) > maxPluginConfigKeyLen || strings.ContainsAny(kt, "\r\n\x00\t") {
-			return nil, nil, newPluginWriteError(api.PluginErrInvalidConfig, http.StatusBadRequest,
-				"config 键非法（长度 1..%d，不含控制字符）", maxPluginConfigKeyLen)
+			return nil, nil, newPluginWriteErrorWithParams(api.PluginErrInvalidConfig, http.StatusBadRequest,
+				map[string]any{"field": "config", "max_key_len": maxPluginConfigKeyLen}, "config key is invalid")
 		}
 		if len(v) > maxPluginConfigValueLen || strings.ContainsAny(v, "\r\n\x00") {
-			return nil, nil, newPluginWriteError(api.PluginErrInvalidConfig, http.StatusBadRequest,
-				"config 值非法（长度 <=%d，不含换行/NUL）", maxPluginConfigValueLen)
+			return nil, nil, newPluginWriteErrorWithParams(api.PluginErrInvalidConfig, http.StatusBadRequest,
+				map[string]any{"field": "config", "max_value_len": maxPluginConfigValueLen}, "config value is invalid")
 		}
 		if strings.HasPrefix(v, secrethandle.Scheme) {
 			h, err := secrethandle.Parse(v)
 			if err != nil {
-				return nil, nil, newPluginWriteError(api.PluginErrInvalidConfig, http.StatusBadRequest,
-					"config 键 %q 的 secret handle 非法（期望 secret://<name>）", kt)
+				return nil, nil, newPluginWriteErrorWithParams(api.PluginErrInvalidConfig, http.StatusBadRequest,
+					map[string]any{"field": kt}, "secret handle is invalid")
 			}
 			derived = append(derived, h.Name())
 			out[kt] = h.String()
 			continue
 		}
 		if credentialLikeKey(kt) || urlCredentialPattern.MatchString(v) {
-			return nil, nil, newPluginWriteError(api.PluginErrSecretForbidden, http.StatusForbidden,
-				"config 键 %q 看起来是凭据：Server 只接受 secret://<name> handle，明文一律拒绝", kt)
+			return nil, nil, newPluginWriteErrorWithParams(api.PluginErrSecretForbidden, http.StatusForbidden,
+				map[string]any{"field": kt}, "plaintext credentials are forbidden")
 		}
 		out[kt] = v
 	}
@@ -817,8 +815,8 @@ func normalizePluginConfig(cfg map[string]string, refs, prevRefs []string) (map[
 	}
 	merged := mergeUnique(append(names, derived...))
 	if len(merged) > maxPluginSecretRefs {
-		return nil, nil, newPluginWriteError(api.PluginErrInvalidConfig, http.StatusBadRequest,
-			"secret_refs 数量上限 %d", maxPluginSecretRefs)
+		return nil, nil, newPluginWriteErrorWithParams(api.PluginErrInvalidConfig, http.StatusBadRequest,
+			map[string]any{"field": "secret_refs", "max_items": maxPluginSecretRefs}, "too many secret_refs")
 	}
 	return out, merged, nil
 }
@@ -836,8 +834,8 @@ func normalizeSecretNames(in []string) ([]string, *pluginWriteError) {
 		}
 		h, err := secrethandle.Parse(v)
 		if err != nil {
-			return nil, newPluginWriteError(api.PluginErrInvalidConfig, http.StatusBadRequest,
-				"secret_refs 含非法 handle 名")
+			return nil, newPluginWriteErrorWithParams(api.PluginErrInvalidConfig, http.StatusBadRequest,
+				map[string]any{"field": "secret_refs"}, "secret_refs contains an invalid handle")
 		}
 		out = append(out, h.Name())
 	}
@@ -898,8 +896,8 @@ func (s *Server) checkSecretDeclared(tenantID int64, edgeID, pluginID string, re
 	for _, name := range refs {
 		h, herr := secrethandle.Parse(secrethandle.Scheme + name)
 		if herr != nil || secrethandle.ValidateDeclared(h, declared) != nil {
-			return newPluginWriteError(api.PluginErrSecretForbidden, http.StatusForbidden,
-				"secret %q 未在插件 %q 的 permissions.secrets 中声明（fail-closed）", name, pluginID)
+			return newPluginWriteErrorWithParams(api.PluginErrSecretForbidden, http.StatusForbidden,
+				map[string]any{"secret_ref": name, "plugin_id": pluginID}, "secret is not declared by plugin")
 		}
 	}
 	return nil

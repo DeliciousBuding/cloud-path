@@ -7,6 +7,8 @@
 //     desired.enabled 渲染成 observed 运行中**（control-plane-sync.md 不变量 5）；
 //   - 错误交给调用方按 lib/plugins.ts 的 pluginErrorCopy 呈现（稳定码，不解析文本）。
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
+import '@/i18n'
 import { api } from '@/lib/api'
 import { normalizeCatalog, normalizeInstance, normalizeInstances } from '@/lib/plugins'
 import { toast } from '@/store/toast'
@@ -102,49 +104,53 @@ function useInvalidate() {
 }
 
 export function useCreateInstance() {
+  const { t } = useTranslation('plugin')
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (body: PluginInstanceCreateRequest) => api.createPluginInstance(body),
     // onSuccess 的第二个参数就是 mutationFn 收到的 variables，用它兜住响应缺 id 的情况
     onSuccess: (_r, body) => {
       invalidate(_r?.id || `${body.edge_id}/${body.instance_id}`)
-      toast.ok('设置已保存', '已保存你的设置；收到运行状态后，这里会显示实际结果。')
+      toast.ok(t('toast.createTitle'), t('toast.createDetail'))
     },
   })
 }
 
 export function useUpdateInstance() {
+  const { t } = useTranslation('plugin')
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: PluginInstanceUpdateRequest }) =>
       api.updatePluginInstance(id, body),
     onSuccess: (_r, vars) => {
       invalidate(vars.id)
-      toast.ok('设置已更新', '已保存你的修改；收到运行状态后，这里会显示实际结果。')
+      toast.ok(t('toast.updateTitle'), t('toast.updateDetail'))
     },
   })
 }
 
 export function useDeleteInstance() {
+  const { t } = useTranslation('plugin')
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body?: PluginInstanceDeleteRequest }) =>
       api.deletePluginInstance(id, body),
     onSuccess: (_r, vars) => {
       invalidate(vars.id)
-      toast.ok('实例已删除', '设置已移除；网关更新后会停止这个项目。')
+      toast.ok(t('toast.deleteTitle'), t('toast.deleteDetail'))
     },
   })
 }
 
 export function useReconcileInstance() {
+  const { t } = useTranslation('plugin')
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body?: PluginInstanceActionRequest }) =>
       api.reconcilePluginInstance(id, body),
     onSuccess: (_r, vars) => {
       invalidate(vars.id)
-      toast.ok('已请求重新应用', '最新设置已重新发送，正在等待运行状态更新。')
+      toast.ok(t('toast.reconcileTitle'), t('toast.reconcileDetail'))
     },
   })
 }

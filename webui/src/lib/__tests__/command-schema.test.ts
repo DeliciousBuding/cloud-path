@@ -6,7 +6,7 @@ const objectSchema = {
   properties: { level: { type: 'integer', minimum: 0, maximum: 10 }, enabled: { type: 'boolean' } },
 }
 
-describe('命令参数 JSON 与类型契约', () => {
+describe('操作参数 JSON 与类型契约', () => {
   it.each(['', ' ', '{', '{"level":1,}', '{level:1}', 'undefined', 'NaN', '1e999'])('拒绝缺失或不可解析的 JSON：%j', (args) => {
     expect(commandArgsError(args, {})).toBeDefined()
   })

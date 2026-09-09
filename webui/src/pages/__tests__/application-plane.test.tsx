@@ -24,12 +24,12 @@ function renderDetail(controlID: string) {
 }
 
 describe('应用数据读取和通用展示', () => {
-  it('首读有加载状态，三个真实端点按裸实例标识发 GET', async () => {
+  it('首读有加载状态，三个真实端点按裸运行项标识发 GET', async () => {
     let release!: () => void
     const ready = new Promise<void>((resolve) => { release = resolve })
     const http = installFetch(async (url) => { await ready; return appResponse(url) })
     renderWithProviders(<ApplicationPlane instanceID="app-a" />)
-    for (const name of ['应用记录加载中', '设备绑定加载中', '定时任务加载中']) {
+    for (const name of ['应用记录加载中', '关联设备加载中', '定时任务加载中']) {
       expect(screen.getByRole('status', { name })).toBeInTheDocument()
     }
     await act(async () => { release() })
@@ -40,7 +40,7 @@ describe('应用数据读取和通用展示', () => {
     expect(http.calls.every((call) => call.method === 'GET')).toBe(true)
   })
 
-  it('默认显示结构化值与公开名称，原始标识和 JSON 仅按需展开', async () => {
+  it('默认显示结构化值与公开名称，原始标识和 结构化数据 仅按需展开', async () => {
     installFetch((url) => appResponse(url))
     const user = userEvent.setup()
     const { container } = renderWithProviders(<ApplicationPlane instanceID="app-a" />)
@@ -57,10 +57,10 @@ describe('应用数据读取和通用展示', () => {
       expect(container.textContent).not.toContain(machine)
     }
     const record = screen.getByRole('heading', { name: '记录 1' }).closest('article')!
-    await user.click(within(record).getByRole('button', { name: '查看技术详情' }))
+    await user.click(within(record).getByRole('button', { name: '查看更多信息' }))
     expect(within(record).getByText('saved-1')).toBeVisible()
     expect(within(record).getByRole('group', { name: '记录原文' })).toHaveTextContent('custom_key')
-    await user.click(within(record).getByRole('button', { name: '收起技术详情' }))
+    await user.click(within(record).getByRole('button', { name: '收起更多信息' }))
     expect(container.querySelector('pre')).toBeNull()
   })
 
@@ -96,7 +96,7 @@ describe('应用数据读取和通用展示', () => {
   it('200 空列表与停止状态保持真实空态，不伪造运行绑定或任务', async () => {
     installFetch((url) => appResponse(url, { records: [], running: false, scheduled: [] }))
     renderWithProviders(<ApplicationPlane instanceID="app-a" />)
-    for (const text of ['暂无应用记录', '暂无设备绑定', '暂无定时任务', '应用未运行']) {
+    for (const text of ['暂无应用记录', '暂无关联设备', '暂无定时任务', '应用未运行']) {
       expect(await screen.findByText(text)).toBeVisible()
     }
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
@@ -144,7 +144,7 @@ describe('应用数据读取和通用展示', () => {
     expect(http.to('/records?').some((c) => c.url.includes('record_type=sample'))).toBe(true)
   })
 
-  it('任意 JSON 类型与损坏内容不会使页面崩溃，也不会执行应用文字', async () => {
+  it('任意 结构化数据 类型与损坏内容不会使页面崩溃，也不会执行应用文字', async () => {
     const malformed = { ...appRecord('bad'), data_json: '{broken' }
     installFetch((url) => appResponse(url, { records: [appRecord('text', '<script>not-executed</script>'),
       appRecord('array', [0, false, null]), appRecord('empty', {}), malformed] }))
@@ -157,7 +157,7 @@ describe('应用数据读取和通用展示', () => {
     expect(container.querySelector('pre')).toBeNull()
   })
 
-  it('切实例同时复位分类与分页，不能携带旧记录', async () => {
+  it('切运行项同时复位分类与分页，不能携带旧记录', async () => {
     const http = installFetch((url) => {
       const parsed = new URL(url, 'http://localhost')
       const second = url.includes('/app-b/')
@@ -167,7 +167,7 @@ describe('应用数据读取和通用展示', () => {
     })
     function Switcher() {
       const [id, setID] = useState('app-a')
-      return <><button onClick={() => setID('app-b')}>查看另一个实例</button><ApplicationPlane instanceID={id} /></>
+      return <><button onClick={() => setID('app-b')}>查看另一个运行项</button><ApplicationPlane instanceID={id} /></>
     }
     const user = userEvent.setup()
     renderWithProviders(<Switcher />)
@@ -178,7 +178,7 @@ describe('应用数据读取和通用展示', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: '下一页' })).toBeEnabled())
     await user.click(screen.getByRole('button', { name: '下一页' }))
     expect(await screen.findByText('甲的第二页')).toBeVisible()
-    await user.click(screen.getByRole('button', { name: '查看另一个实例' }))
+    await user.click(screen.getByRole('button', { name: '查看另一个运行项' }))
     expect(await screen.findByText('只属于乙')).toBeVisible()
     expect(screen.queryByText('甲的第二页')).not.toBeInTheDocument()
     expect(screen.getByText('第 1 页')).toBeVisible()
@@ -248,13 +248,13 @@ describe('应用数据读取和通用展示', () => {
   })
 })
 
-describe('插件实例详情的应用入口', () => {
+describe('运行项详情的应用入口', () => {
   it.each(['server/app-a', 'app-a'])('控制面键 %s 不影响应用裸标识，viewer 无任何写入口', async (controlID) => {
     const instance = appInstance('app-a', controlID)
     const http = installFetch((url) => appResponse(url, { instance }))
     const { container } = renderDetail(controlID)
     expect(await screen.findByText('已保存内容')).toBeVisible()
-    expect(screen.getByText(/当前账号只能查看，不能修改这个项目/)).toBeVisible()
+    expect(screen.getByText(/当前账号只能查看，不能修改这个应用或驱动/)).toBeVisible()
     expect(screen.queryByRole('button', { name: /停用|启用|删除|编辑|重新下发/ })).not.toBeInTheDocument()
     expect(screen.queryByText('网关离线')).not.toBeInTheDocument()
     expect(container.querySelector('a[href="/edges/server"]')).toBeNull()
@@ -264,8 +264,8 @@ describe('插件实例详情的应用入口', () => {
     expect(screen.getByText('{"example_input":"input-1"}')).not.toBeVisible()
     await userEvent.setup().click(screen.getByText('查看设置、权限与密钥'))
     expect(screen.getByText('共享运行')).toBeVisible()
-    expect(screen.getAllByText('运行位置').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('中心服务').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('在哪里运行').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('平台服务').length).toBeGreaterThan(0)
   })
 
   it.each([200, 503])('目录为空或不可用（%s）时，服务端宿主仍有应用读面', async (status) => {
@@ -308,14 +308,14 @@ describe('插件实例详情的应用入口', () => {
     expect(screen.getByText('设置已停用，不能执行操作。')).toBeVisible()
   })
 
-  it('观察态与实际运行态冲突时显示状态冲突，不把冲突二选一', async () => {
+  it('观察态与实际运行态冲突时显示状态不一致，不把冲突二选一', async () => {
     const base = appInstance('app-a', 'app-a')
     const instance = { ...base, observed: { ...base.observed!, state: 'stopped' } }
     installFetch((url) => url === '/api/plugins' ? stubResponse(200, { plugins: [] }) : appResponse(url, { instance, running: true }))
     renderDetail(instance.id)
-    expect(await screen.findByText('状态冲突')).toBeVisible()
-    expect(screen.getByText('运行状态来源不一致，暂时无法确认应用是否正在运行。')).toBeVisible()
-    expect(screen.getByText('运行状态来源不一致，暂不能执行操作。')).toBeVisible()
+    expect(await screen.findByText('状态不一致')).toBeVisible()
+    expect(screen.getByText('运行状态不一致，暂时无法确认应用是否正在运行。')).toBeVisible()
+    expect(screen.getByText('运行状态不一致，暂不能执行操作。')).toBeVisible()
     expect(screen.queryByText('应用运行中')).not.toBeInTheDocument()
   })
 

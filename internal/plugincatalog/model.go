@@ -42,6 +42,7 @@ type ContributesView struct {
 type DriverContributionView struct {
 	ID                string            `json:"id"`
 	Title             string            `json:"title,omitempty"`
+	I18n              map[string]string `json:"i18n,omitempty"`
 	Descriptor        string            `json:"descriptor,omitempty"`
 	ConfigSchema      string            `json:"configSchema,omitempty"`
 	Discovery         string            `json:"discovery,omitempty"`
@@ -54,13 +55,15 @@ type DriverContributionView struct {
 type ApplicationContributionView struct {
 	ID    string            `json:"id"`
 	Title string            `json:"title,omitempty"`
+	I18n  map[string]string `json:"i18n,omitempty"`
 	UI    *api.PluginUIData `json:"ui,omitempty"`
 }
 
 // ConnectorContributionView 是一个 Connector 贡献。
 type ConnectorContributionView struct {
-	ID        string `json:"id"`
-	Title     string `json:"title,omitempty"`
-	Direction string `json:"direction,omitempty"`
-	Host      string `json:"host,omitempty"`
+	ID        string            `json:"id"`
+	Title     string            `json:"title,omitempty"`
+	I18n      map[string]string `json:"i18n,omitempty"`
+	Direction string            `json:"direction,omitempty"`
+	Host      string            `json:"host,omitempty"`
 }

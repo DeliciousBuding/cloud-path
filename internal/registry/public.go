@@ -18,19 +18,19 @@ func (m *Manifest) PublicContributions() api.PluginContributionsData {
 	for i := range m.Contributes.Drivers {
 		d := m.Contributes.Drivers[i]
 		out.Drivers = append(out.Drivers, api.PluginDriverContributionData{
-			ID: d.ID, Title: d.Title, Discovery: d.Discovery, UI: publicPluginUI(d.UI),
+			ID: d.ID, Title: d.Title, I18n: d.I18n, Discovery: d.Discovery, UI: publicPluginUI(d.UI),
 		})
 	}
 	for i := range m.Contributes.Applications {
 		a := m.Contributes.Applications[i]
 		out.Applications = append(out.Applications, api.PluginApplicationContributionData{
-			ID: a.ID, Title: a.Title, UI: publicPluginUI(a.UI),
+			ID: a.ID, Title: a.Title, I18n: a.I18n, UI: publicPluginUI(a.UI),
 		})
 	}
 	for i := range m.Contributes.Connectors {
 		c := m.Contributes.Connectors[i]
 		out.Connectors = append(out.Connectors, api.PluginConnectorContributionData{
-			ID: c.ID, Title: c.Title, Direction: c.Direction, Host: c.Host,
+			ID: c.ID, Title: c.Title, I18n: c.I18n, Direction: c.Direction, Host: c.Host,
 		})
 	}
 	return out
@@ -43,7 +43,7 @@ func publicPluginUI(in *PluginUI) *api.PluginUIData {
 	out := &api.PluginUIData{APIVersion: in.APIVersion}
 	if in.Navigation != nil {
 		out.Navigation = &api.PluginUINavigationData{
-			Title: in.Navigation.Title, Icon: in.Navigation.Icon,
+			Title: in.Navigation.Title, I18n: in.Navigation.I18n, Icon: in.Navigation.Icon,
 			Order: in.Navigation.Order, Route: in.Navigation.Route,
 			Visibility: in.Navigation.Visibility,
 		}
@@ -52,7 +52,7 @@ func publicPluginUI(in *PluginUI) *api.PluginUIData {
 		out.Pages = make([]api.PluginUIPageData, 0, len(in.Pages))
 		for _, page := range in.Pages {
 			out.Pages = append(out.Pages, api.PluginUIPageData{
-				ID: page.ID, Title: page.Title, Sections: publicUISections(page.Sections),
+				ID: page.ID, Title: page.Title, I18n: page.I18n, Sections: publicUISections(page.Sections),
 			})
 		}
 	}

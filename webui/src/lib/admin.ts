@@ -2,16 +2,33 @@
 // 角色与 scope 的合法性事实源始终在后端（server 校验后回 4xx）；本文件只负责两件事：
 //   ① 把 HTTP 状态码说成人话（不复述、不猜测业务规则，例如「最后一个 admin」由 server 判定）
 //   ② 给表单一个最小权限默认值（admin 角色 / admin·edge scope 一律不预选）
+import { i18n } from '@/i18n'
 import { ApiError } from './api'
 import type { Role, TokenScope } from './types'
+
+function tr(key: string, ns: 'admin' | 'common' = 'admin', options?: Record<string, unknown>): string {
+  return i18n.t(key, { ns, ...options })
+}
 
 export interface RoleOption { value: Role; label: string; hint: string }
 
 /** 角色选项，顺序即权限由低到高（docs/api.md §3.1） */
 export const ROLE_OPTIONS: RoleOption[] = [
-  { value: 'viewer', label: '只读', hint: '可以查看设备状态和运行记录' },
-  { value: 'operator', label: '可以操作设备', hint: '可以查看并执行设备操作' },
-  { value: 'admin', label: '管理员', hint: '可以管理成员和访问令牌' },
+  {
+    value: 'viewer',
+    get label() { return tr('roles.viewer', 'common') },
+    get hint() { return tr('roleHints.viewer') },
+  },
+  {
+    value: 'operator',
+    get label() { return tr('roles.operator', 'common') },
+    get hint() { return tr('roleHints.operator') },
+  },
+  {
+    value: 'admin',
+    get label() { return tr('roles.admin', 'common') },
+    get hint() { return tr('roleHints.admin') },
+  },
 ]
 
 /** 新建用户的默认角色：最小权限，不预选 admin */
@@ -25,10 +42,26 @@ export interface ScopeOption { value: TokenScope; label: string; hint: string; d
 
 /** 令牌 scope 选项；danger=true 的范围在表单里必须给出显式风险说明 */
 export const SCOPE_OPTIONS: ScopeOption[] = [
-  { value: 'read', label: '查看', hint: '查看设备状态、运行记录和操作记录', danger: false },
-  { value: 'write', label: '操作设备', hint: '在查看之外执行设备操作', danger: false },
-  { value: 'admin', label: '管理', hint: '可以管理成员和访问令牌，权限最高', danger: true },
-  { value: 'edge', label: '网关接入', hint: '允许网关连接平台并同步设备状态', danger: true },
+  {
+    value: 'read', danger: false,
+    get label() { return tr('createToken.scopes.options.read.label') },
+    get hint() { return tr('createToken.scopes.options.read.hint') },
+  },
+  {
+    value: 'write', danger: false,
+    get label() { return tr('createToken.scopes.options.write.label') },
+    get hint() { return tr('createToken.scopes.options.write.hint') },
+  },
+  {
+    value: 'admin', danger: true,
+    get label() { return tr('createToken.scopes.options.admin.label') },
+    get hint() { return tr('createToken.scopes.options.admin.hint') },
+  },
+  {
+    value: 'edge', danger: true,
+    get label() { return tr('createToken.scopes.options.edge.label') },
+    get hint() { return tr('createToken.scopes.options.edge.hint') },
+  },
 ]
 
 /** 默认最小权限：只勾 read（服务端要求 scopes 非空），write/admin/edge 全部不预选 */
@@ -38,11 +71,11 @@ export interface ExpiryOption { value: string; label: string }
 
 /** 令牌有效期选项 */
 export const EXPIRY_OPTIONS: ExpiryOption[] = [
-  { value: '1', label: '1 天后自动失效' },
-  { value: '7', label: '7 天后自动失效' },
-  { value: '30', label: '30 天后自动失效' },
-  { value: '90', label: '90 天后自动失效' },
-  { value: 'never', label: '不自动失效' },
+  { value: '1', get label() { return tr('createToken.expiry.options.1') } },
+  { value: '7', get label() { return tr('createToken.expiry.options.7') } },
+  { value: '30', get label() { return tr('createToken.expiry.options.30') } },
+  { value: '90', get label() { return tr('createToken.expiry.options.90') } },
+  { value: 'never', get label() { return tr('createToken.expiry.options.never') } },
 ]
 
 /** 默认 30 天而不是永不过期：把暴露窗口压到最小 */
@@ -65,22 +98,24 @@ export function expiryToUnix(value: string, now: number = Date.now()): number | 
  */
 export function adminErrorMessage(e: unknown): string {
   if (e instanceof ApiError) {
-    if (e.status === 401) return '登录已失效，请重新登录后再操作'
-    if (e.status === 403) return '当前账号没有管理权限。请联系管理员。'
-    if (e.status === 404) return '记录不存在或已被删除，请刷新列表后重试。'
+    if (e.status === 401) return tr('errors.unauthorized')
+    if (e.status === 403) return tr('errors.forbidden')
+    if (e.status === 404) return tr('errors.notFound')
     if (e.status === 429) {
-      return e.retryAfter ? `操作过于频繁，请 ${e.retryAfter} 秒后重试` : '操作过于频繁，请稍后重试'
+      return e.retryAfter
+        ? tr('errors.rateLimitedAfter', 'admin', { seconds: e.retryAfter })
+        : tr('errors.rateLimited')
     }
-    if (e.status >= 500) return '服务暂时不可用，请稍后重试；如果持续失败，请联系管理员。'
+    if (e.status >= 500) return tr('errors.unavailable')
     if (e.status === 400) {
-      return /[\u3400-\u9fff]/.test(e.message) ? e.message : '提交内容不符合要求，请检查后重试。'
+      return /[\u3400-\u9fff]/.test(e.message) ? e.message : tr('errors.badRequest')
     }
     // 409 等业务规则由服务端判定；说明通常已是可直接展示的人话。
     if (e.message) return e.message
-    return '操作暂时没有成功，请稍后重试。'
+    return tr('errors.generic')
   }
-  if (e instanceof Error && /无法连接|network|fetch/i.test(e.message)) {
-    return '暂时无法连接 CloudPath，请检查网络后重试。'
+  if (e instanceof Error && /\u65e0\u6cd5\u8fde\u63a5|network|fetch/i.test(e.message)) {
+    return tr('errors.network')
   }
-  return e instanceof Error && e.message ? e.message : '操作暂时没有成功，请稍后重试。'
+  return e instanceof Error && e.message ? e.message : tr('errors.generic')
 }

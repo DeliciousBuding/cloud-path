@@ -22,18 +22,20 @@ type PluginUI struct {
 
 // UINavigation declares the stable business navigation entry for an Application.
 type UINavigation struct {
-	Title      string `yaml:"title" json:"title"`
-	Icon       string `yaml:"icon,omitempty" json:"icon,omitempty"`
-	Order      int    `yaml:"order,omitempty" json:"order,omitempty"`
-	Route      string `yaml:"route" json:"route"`
-	Visibility string `yaml:"visibility,omitempty" json:"visibility,omitempty"`
+	Title      string            `yaml:"title" json:"title"`
+	I18n       map[string]string `yaml:"i18n,omitempty" json:"i18n,omitempty"`
+	Icon       string            `yaml:"icon,omitempty" json:"icon,omitempty"`
+	Order      int               `yaml:"order,omitempty" json:"order,omitempty"`
+	Route      string            `yaml:"route" json:"route"`
+	Visibility string            `yaml:"visibility,omitempty" json:"visibility,omitempty"`
 }
 
 // UIPage is one declarative page under an Application route.
 type UIPage struct {
-	ID       string      `yaml:"id" json:"id"`
-	Title    string      `yaml:"title" json:"title"`
-	Sections []UISection `yaml:"sections" json:"sections"`
+	ID       string            `yaml:"id" json:"id"`
+	Title    string            `yaml:"title" json:"title"`
+	I18n     map[string]string `yaml:"i18n,omitempty" json:"i18n,omitempty"`
+	Sections []UISection       `yaml:"sections" json:"sections"`
 }
 
 // UIDevice extends a Driver's device detail page.
