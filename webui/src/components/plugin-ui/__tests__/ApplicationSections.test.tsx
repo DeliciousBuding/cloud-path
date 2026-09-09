@@ -69,6 +69,19 @@ describe('Application section recordType isolation', () => {
     expect(screen.queryByText('自动任务')).not.toBeInTheDocument()
   })
 
+  it('records use declared business fields and keep raw JSON in details', () => {
+    renderSection({
+      type: 'records', recordType: 'window', fields: [
+        { key: 'state', label: '状态', values: { opened: '待取药' } },
+        { key: 'compartment_name', label: '药格' },
+      ],
+    }, [record('window', 'window-1', { state: 'opened', compartment_name: '早药', entity_id: 'internal-entity' }, 1)])
+    expect(screen.getByText('待取药')).toBeInTheDocument()
+    expect(screen.getByText('早药')).toBeInTheDocument()
+    expect(screen.queryByText('internal-entity')).not.toBeInTheDocument()
+    expect(screen.getByText('查看更多信息')).toBeInTheDocument()
+  })
+
   it('metrics filters by recordType before taking the latest record', () => {
     renderSection({ type: 'metrics', recordType: 'sensor' }, [
       record('other', 'other-1', { temperature_c: 999 }, 3),

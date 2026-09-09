@@ -34,7 +34,7 @@ describe('稳定错误码 PluginErr* 镜像', () => {
 
 describe('WS MsgType 枚举镜像', () => {
   const goTypes = [...GO_SRC.matchAll(/Msg\w+\s+MsgType\s*=\s*"([^"]+)"/g)].map((m) => m[1])
-  const tsUnion = TS_SRC.match(/export type WsType =([\s\S]*?)\n\n/)?.[1] ?? ''
+  const tsUnion = TS_SRC.match(/export type WsType =([\s\S]*?)\r?\n\r?\n/)?.[1] ?? ''
 
   it('Go 侧解析出 16 个 WS 类型（解析器自检）', () => {
     expect(goTypes).toHaveLength(16)

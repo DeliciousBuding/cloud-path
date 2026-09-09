@@ -422,11 +422,21 @@ export interface PluginUIField {
   pattern?: string
   default?: unknown
   secret?: boolean
+  /** Optional display metadata for metrics and domain records. */
+  unit?: string
+  precision?: number
+  format?: 'text' | 'time' | 'number' | 'percent' | 'duration'
+  values?: Record<string, string>
+  primary?: boolean
+  hideWhenEmpty?: boolean
 }
 
 /** One allowlisted section in a plugin page or device extension. */
 export interface PluginUISection {
   type: PluginUISectionType
+  title?: string
+  description?: string
+  emptyText?: string
   source?: PluginUISource
   recordType?: string
   presentation?: PluginUIPresentation
@@ -450,6 +460,7 @@ export interface PluginUINavigation {
 export interface PluginUIPage {
   id: string
   title: string
+  description?: string
   i18n?: I18nText
   sections: PluginUISection[]
 }

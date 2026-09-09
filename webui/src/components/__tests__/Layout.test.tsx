@@ -62,7 +62,7 @@ describe('任务导向导航', () => {
     renderLayout()
     const nav = screen.getAllByRole('navigation', { name: '主导航' })[0] as HTMLElement
     expect(within(nav).getAllByRole('link').map((a) => a.textContent?.trim())).toEqual([
-      '概览', '设备', '网关', '运行记录', '应用与插件', '管理', '设置',
+      '概览', '设备', '网关', '运行记录', '应用中心', '管理', '设置',
     ])
   })
 
@@ -70,7 +70,7 @@ describe('任务导向导航', () => {
     renderLayout()
     const nav = screen.getAllByRole('navigation', { name: '主导航' })[0] as HTMLElement
     expect(within(nav).getByRole('link', { name: '设备' })).toHaveAttribute('href', '/devices')
-    expect(within(nav).getByRole('link', { name: '应用与插件' })).toHaveAttribute('href', '/plugins')
+    expect(within(nav).getByRole('link', { name: '应用中心' })).toHaveAttribute('href', '/plugins')
     expect(within(nav).queryByRole('link', { name: '药盒控制' })).not.toBeInTheDocument()
   })
 
@@ -80,7 +80,7 @@ describe('任务导向导航', () => {
     await user.click(screen.getByLabelText('更多导航与账号设置'))
     const more = screen.getByRole('navigation', { name: '更多导航' })
     expect(within(more).getAllByRole('link').map((a) => a.textContent?.trim())).toEqual([
-      '应用与插件', '管理', '设置',
+      '应用中心', '管理', '设置',
     ])
   })
 

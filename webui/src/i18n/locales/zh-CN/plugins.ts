@@ -1,8 +1,8 @@
 export default {
   page: {
-    title: '应用与插件', loading: '正在加载…', pluginCount: '{{count}} 个可用插件',
+    title: '应用中心', loading: '正在加载…', pluginCount: '{{count}} 个可用插件',
     instanceSummary: '{{total}} 个运行项 · {{normal}} 个运行正常 · {{attention}} 个需要处理',
-    createInstance: '新建运行项', tabInstances: '运行项', tabCatalog: '可用插件', tabAria: '应用与插件分区',
+    createInstance: '新建运行项', tabInstances: '正在运行', tabCatalog: '插件来源', tabAria: '应用中心分区',
     catalogLoadFailed: '无法加载可用插件',
     catalogLoadFailedHint: '暂时无法加载可用插件。已经添加的运行项不会受影响，请稍后重试。',
     noPlugins: '没有可用插件', noPluginsHint: '安装插件后会显示在这里。列表为空不会影响已经添加的运行项。',
@@ -27,7 +27,7 @@ export default {
     contributionDriver: '设备驱动', contributionApplication: '应用', contributionConnector: '连接器',
   },
   detail: {
-    title: '运行项 {{id}}', titleFallback: '运行项', back: '应用与插件',
+    title: '运行项 {{id}}', titleFallback: '运行项', back: '应用中心',
     loadFailed: '无法加载运行项', notFound: '运行项不存在',
     notFoundHint: '没有找到 {{id}}。它可能已被删除，或不属于当前组织。请返回列表刷新后再试。',
     savedAndObserved: '保存的设置与当前运行情况', basicInfo: '基本信息', permissions: '权限',
@@ -39,7 +39,7 @@ export default {
     editSettings: '编辑设置', currentStatus: '当前状态', actions: '操作', showDetails: '查看设置、权限与密钥',
   },
   application: {
-    openPlugins: '查看应用与插件', fallbackTitle: '应用', back: '应用与插件',
+    openPlugins: '查看应用中心', fallbackTitle: '应用', back: '应用中心',
     permissionDenied: '没有查看权限', loadFailed: '无法加载应用',
     permissionDeniedHint: '当前账号不能查看这个应用的页面或运行情况，请联系管理员确认访问权限。',
     loadFailedHint: '暂时无法读取应用页面或运行项，请重试。',
@@ -47,7 +47,7 @@ export default {
     notFound: '应用不存在', notFoundHint: '没有找到页面 {{route}}。它可能已被卸载，或不属于当前组织。',
     routeConflict: '应用页面地址冲突', routeConflictHint: '多个插件使用了同一个页面地址。为避免打开错误的应用，平台已暂时关闭这个页面。',
     unverified: '应用来源未验证', unverifiedHint: '这个插件的来源还没有验证，因此不能打开应用页面。',
-    noInstance: '尚未启用', noInstanceHint: '插件已经安装，但还没有为这个应用创建运行项。请先到应用与插件中创建。',
+    noInstance: '尚未启用', noInstanceHint: '插件已经安装，但还没有为这个应用创建运行项。请先到应用中心中创建。',
     disabled: '应用已停用', disabledHint: '这个应用的所有运行项都已停用。重新启用后，页面和操作会恢复。',
     noPage: '页面还没有设置', noPageHint: '插件提供了导航项，但没有可显示的页面。',
     backHome: '返回应用首页', pageNotFound: '页面不存在', pageNotFoundHint: '没有找到页面 {{pageId}}。',

@@ -3,8 +3,8 @@ import '@/i18n'
 import { emptyRecordValue, recordEntries, recordFieldLabel, recordTimestamp } from '@/lib/application-plane'
 
 /** 应用内容是数据，不是可执行展示代码；普通视图保留字段身份与结构。 */
-export function StructuredValue({ value, depth = 0, omitKeys = [] }: {
-  value: unknown; depth?: number; omitKeys?: readonly string[]
+export function StructuredValue({ value, depth = 0, omitKeys = [], maxPreview = 6 }: {
+  value: unknown; depth?: number; omitKeys?: readonly string[]; maxPreview?: number
 }) {
   const { t } = useTranslation('plugin')
   if (value === null || value === '') return <span className="text-ink-3">{t('record.empty')}</span>
@@ -19,7 +19,7 @@ export function StructuredValue({ value, depth = 0, omitKeys = [] }: {
   const entries = recordEntries(value).filter(([key]) => !omitKeys.includes(key))
   if (!entries.length) return <span className="text-ink-3">{omitKeys.length ? t('record.noMoreContent') : t('record.noContent')}</span>
   if (depth >= 2) return <span className="text-ink-3">{t('record.nested', { value: entries.length })}</span>
-  const preview = Array.isArray(value) ? entries.slice(0, 6) : entries.filter(([, item]) => !emptyRecordValue(item)).slice(0, 6)
+  const preview = Array.isArray(value) ? entries.slice(0, maxPreview) : entries.filter(([, item]) => !emptyRecordValue(item)).slice(0, maxPreview)
   const shown = new Set(preview.map(([key]) => key))
   const rest = entries.filter(([key]) => !shown.has(key))
   const field = ([key, item]: [string, unknown]) => <div key={key} className="min-w-0">

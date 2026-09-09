@@ -48,6 +48,8 @@ ui:
 
 ## 通用 section
 
+插件页面可以用 `description` 说明用途，用 section 的 `title` / `description` / `emptyText` 组织内容；`fields` 声明指标卡和记录主视图要展示的字段，可带 `label`、`unit`、`precision`、`format`、`values`、`hideWhenEmpty`。未声明字段不会占据主视图，原始数据只在“更多信息”中展开。
+
 `ApplicationSections.tsx` 只渲染白名单类型：
 
 | type | 行为 |
