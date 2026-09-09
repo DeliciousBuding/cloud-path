@@ -5,12 +5,13 @@
 //   - 关闭面板 → setSecret(null) → DOM 里再无任何明文
 //   - 组件卸载（切页/登出）→ state 随之消失
 // 刻意不走 useMutation：mutationCache 会保留结果对象，超出「组件内存」的范围。
-import { useDeferredValue, useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { createColumnHelper } from '@tanstack/react-table'
 import { KeyRound, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button, Panel } from '@/components/ui'
+import { RowSkeleton } from '@/components/Skeleton'
 import { Badge } from '@/components/ui'
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
 import { TableCell, TableRow } from '@/components/ui/table'
@@ -39,11 +40,26 @@ function scopeTone(scope: TokenScope): string {
   return scope === 'admin' || scope === 'edge' ? 'text-warn' : 'text-ink-2'
 }
 
+function useMobileTokenCards(): boolean {
+  const [mobile, setMobile] = useState(() => typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 767px)').matches)
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+    const query = window.matchMedia('(max-width: 767px)')
+    const update = () => setMobile(query.matches)
+    update()
+    query.addEventListener('change', update)
+    return () => query.removeEventListener('change', update)
+  }, [])
+  return mobile
+}
+
 export function TokenManager() {
   const { t } = useTranslation('admin')
   const qc = useQueryClient()
   const { data, isPending, isError, error, refetch } = useAdminTokens()
   const tokens = data?.tokens ?? []
+  const mobileCards = useMobileTokenCards()
   const [creating, setCreating] = useState(false)
   const [secret, setSecret] = useState<CreatedToken | null>(null)
   const [query, setQuery] = useState('')
@@ -231,21 +247,51 @@ export function TokenManager() {
             resultCount={filtered.length}
             onReset={resetFilters}
           />
-          <DataTable
-            table={table}
-            ariaLabel={t('tokenManager.listAria')}
-            empty={tokens.length === 0 ? t('tokenManager.empty') : t('tokenManager.noMatches')}
-            loading={isPending}
-            loadingRows={3}
-            minWidthClassName="min-w-[58rem]"
-            footer={filtered.some((token) => token.revoked_at) ? (
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={table.getVisibleLeafColumns().length} className="px-3 py-3 text-meta leading-relaxed text-ink-3">
-                  {t('tokenRow.revokedHint')}
-                </TableCell>
-              </TableRow>
-            ) : undefined}
-          />
+          {mobileCards && <div className="space-y-3">
+            {isPending ? <RowSkeleton rows={3} /> : filtered.length === 0
+              ? <p className="py-3 text-body text-ink-3">{tokens.length === 0 ? t('tokenManager.empty') : t('tokenManager.noMatches')}</p>
+              : filtered.map((token) => {
+                const state = tokenState(token)
+                const tone = state === 'valid' ? 'ok' : state === 'expired' ? 'warn' : 'bad'
+                return <article key={token.id} className="min-w-0 rounded-tile border border-hairline p-3.5">
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="break-words font-semibold">{token.name || t('tokenManager.unnamed')}</p>
+                      <p className="mt-1 break-all font-mono text-meta text-ink-3">{token.prefix}</p>
+                    </div>
+                    <Badge tone={tone}>{t(`tokenRow.states.${state}`)}</Badge>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-x-2 gap-y-1 text-meta">
+                    {(token.scopes ?? []).length > 0 ? (token.scopes ?? []).map((scope) => (
+                      <span key={scope} className={scopeTone(scope)}>{t(`tokenRow.scopes.${scope}`, { defaultValue: t('tokenRow.scopes.other') })}</span>
+                    )) : <span className="text-ink-3">{t('tokenRow.noScopes')}</span>}
+                  </div>
+                  <dl className="mt-3 grid grid-cols-2 gap-2 border-t border-hairline pt-3 text-meta">
+                    <div><dt className="text-ink-3">{t('tokenManager.columns.createdAt')}</dt><dd className="mt-0.5 num font-mono text-ink-2">{fmtDateTime(token.created_at)}</dd></div>
+                    <div><dt className="text-ink-3">{t('tokenManager.columns.lastUsed')}</dt><dd className="mt-0.5 text-ink-2">{token.last_used_at ? timeAgo(token.last_used_at) : t('tokenRow.neverUsed')}</dd></div>
+                    <div><dt className="text-ink-3">{t('tokenManager.columns.expires')}</dt><dd className="mt-0.5 num font-mono text-ink-2">{token.expires_at ? fmtDateTime(token.expires_at) : t('tokenRow.neverExpires')}</dd></div>
+                  </dl>
+                  <div className="mt-3 border-t border-hairline pt-3"><TokenActions token={token} /></div>
+                </article>
+              })}
+          </div>}
+          {!mobileCards && <div>
+            <DataTable
+              table={table}
+              ariaLabel={t('tokenManager.listAria')}
+              empty={tokens.length === 0 ? t('tokenManager.empty') : t('tokenManager.noMatches')}
+              loading={isPending}
+              loadingRows={3}
+              minWidthClassName="min-w-[58rem]"
+              footer={filtered.some((token) => token.revoked_at) ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={table.getVisibleLeafColumns().length} className="px-3 py-3 text-meta leading-relaxed text-ink-3">
+                    {t('tokenRow.revokedHint')}
+                  </TableCell>
+                </TableRow>
+              ) : undefined}
+            />
+          </div>}
         </>
       )}
 

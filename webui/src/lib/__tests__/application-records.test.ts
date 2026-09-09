@@ -33,6 +33,9 @@ describe('应用记录可读投影', () => {
     expect(recordHeadline({ opaque_domain_flag: true }, '记录 3')).toEqual({
       title: '记录 3', usedKeys: [],
     })
+    expect(recordHeadline({ state: 'triggered' }, '记录 4', { state: { triggered: '已触发' } })).toEqual({
+      title: '状态 已触发', usedKeys: ['state'],
+    })
   })
   it('有效带时区时间统一到指定时区，等价时刻得到一致显示', () => {
     expect(recordTimestamp('2026-09-05T22:30:03Z', 'Asia/Shanghai')).toBe('2026/09/06 06:30:03')

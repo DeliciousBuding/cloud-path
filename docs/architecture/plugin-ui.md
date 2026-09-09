@@ -122,12 +122,14 @@ Connector 暂不接受 `ui`；manifest 校验直接拒绝，避免把未实现�
 | `records` | 领域记录列表 | records |
 | `timeline` | 领域记录时间线 | records |
 | `table` | 通用表格 | records / bindings |
-| `schedule` | 计划/窗口展示 | records |
+| `schedule` | 计划/窗口展示 | jobs / records |
 | `chart` | 时序趋势 | records |
 | `markdown` | 受限 Markdown 说明，禁止 HTML | inline |
 | `custom` | 受控自定义页面，见 §7 | custom |
 
 `fields` 用于声明主视图真正要展示的字段。字段可以带 `label`、`unit`、`precision`、`format`（`text` / `time` / `number` / `percent` / `duration`）、`values`（机器值到用户文案的映射）和 `hideWhenEmpty`；未声明的字段不会进入指标卡或记录主视图，完整原始数据仍在“更多信息”中。
+
+配置表单字段类型为 `string` / `number` / `integer` / `boolean` / `select` / `textarea` / `array`。`array` 必须声明 `itemFields`（仅允许标量类型，可嵌套一层），并可声明 `minItems` / `maxItems`；数组内容由 Core 结构化编辑，禁止要求用户手写 JSON。`unit` 可以是字面单位，也可以指向记录中的字段路径（例如 `temperature.unit`），渲染器会优先解析路径。
 
 通用 section 示例：
 
@@ -150,7 +152,7 @@ sections:
 `form` section 读取插件声明的配置 schema。配置 schema 必须是：
 
 - 安装时校验过的 JSON Schema；
-- 只允许 JSON 基础类型、`enum`、`minimum/maximum`、`pattern`、`required`；
+- 只允许 JSON 基础类型、`enum`、`minimum/maximum`、`pattern`、`required`、`itemFields`、`minItems/maxItems`；
 - 不包含本地路径、secret、远程引用或 `$ref` 到网络；
 - 页面默认渲染表单，原始 JSON 只放“高级参数”。
 

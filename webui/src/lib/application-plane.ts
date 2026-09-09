@@ -48,7 +48,7 @@ function recordScalar(value: unknown): string | undefined {
 }
 
 /** 从通用内容生成可扫读标题；未知结构保留调用方给出的回退标题。 */
-export function recordHeadline(value: unknown, fallback: string): { title: string; usedKeys: string[] } {
+export function recordHeadline(value: unknown, fallback: string, valuesByKey?: Record<string, Record<string, string>>): { title: string; usedKeys: string[] } {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return { title: fallback, usedKeys: [] }
   const entries = recordEntries(value).filter(([, item]) => !emptyRecordValue(item))
   const used: string[] = []
@@ -61,7 +61,8 @@ export function recordHeadline(value: unknown, fallback: string): { title: strin
   const parts: string[] = []
   const add = (entry: [string, unknown] | undefined, display?: string) => {
     if (!entry) return
-    const value = display ?? recordScalar(entry[1])
+    const mapped = valuesByKey?.[entry[0]]?.[String(entry[1])]
+    const value = display ?? mapped ?? recordScalar(entry[1])
     if (!value) return
     parts.push(`${recordFieldLabel(entry[0])} ${value}`)
     used.push(entry[0])

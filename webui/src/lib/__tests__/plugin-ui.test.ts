@@ -67,6 +67,30 @@ describe('plugin UI normalization and asset URLs', () => {
     expect(ui?.pages?.[0]?.sections[1].fields).toEqual([{ key: 'name', required: true, type: undefined, label: undefined, description: undefined, placeholder: undefined, minimum: undefined, maximum: undefined, pattern: undefined, secret: undefined }])
   })
 
+
+  it('keeps every declared field and nested array item fields', () => {
+    const ui = normalizePluginUI({
+      apiVersion: 1,
+      navigation: { title: '示例', route: 'example' },
+      pages: [{ id: 'home', title: '首页', sections: [{
+        type: 'form', fields: [
+          { key: 'a', type: 'string' },
+          { key: 'b', type: 'string' },
+          { key: 'c', type: 'string' },
+          { key: 'rows', type: 'array', minItems: 1, maxItems: 3, itemFields: [
+            { key: 'id', type: 'string', required: true },
+            { key: 'start', type: 'string', pattern: '^\\d{2}:\\d{2}$' },
+          ] },
+        ],
+      }] }],
+    })
+    const fields = ui?.pages?.[0]?.sections[0].fields ?? []
+    expect(fields).toHaveLength(4)
+    expect(fields[3]).toMatchObject({ key: 'rows', type: 'array', minItems: 1, maxItems: 3 })
+    expect(fields[3]?.itemFields).toHaveLength(2)
+    expect(fields[3]?.itemFields?.[1]).toMatchObject({ key: 'start', pattern: '^\\d{2}:\\d{2}$' })
+  })
+
   it('preserves navigation/page i18n maps and drops invalid values', () => {
     const ui = normalizePluginUI({
       apiVersion: 1,
@@ -102,6 +126,7 @@ describe('application navigation and route resolution', () => {
       ...plugin().contributes.applications![0], ui: { ...plugin().contributes.applications![0].ui!, navigation: { title: '示例', route: 'example', visibility: 'always' } },
     }] } })
     expect(buildApplicationNavigation([always], [disabled], true)).toHaveLength(1)
+    expect(buildApplicationNavigation([always], [], true)).toHaveLength(1)
     const conflict = plugin({ id: 'example.other', contributes: { applications: [{ id: 'other', ui: { apiVersion: 1, navigation: { title: '其他', route: 'example' }, pages: [{ id: 'home', title: '其他', sections: [{ type: 'status' }] }] } }] } })
     expect(buildApplicationNavigation([plugin(), conflict], [instance(), instance('example.other')], true)).toHaveLength(0)
   })

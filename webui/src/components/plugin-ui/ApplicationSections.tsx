@@ -79,7 +79,13 @@ const recordColumn = createColumnHelper<typeof dataTableFeatures, AppDomainRecor
 type BindingRow = AppBindingsView['bindings'][number]
 const bindingColumn = createColumnHelper<typeof dataTableFeatures, BindingRow>()
 
+function fieldValueMaps(section: PluginUISection): Record<string, Record<string, string>> | undefined {
+  const entries = (section.fields ?? []).flatMap((field) => field.values ? [[field.key, field.values] as const] : [])
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
+
 function recordColumns(t: TFunction, section: PluginUISection) {
+  const valuesByKey = fieldValueMaps(section)
   return recordColumn.columns([
     recordColumn.display({
       id: 'record',
@@ -89,7 +95,7 @@ function recordColumns(t: TFunction, section: PluginUISection) {
       cell: ({ row }) => {
         const parsed = parseRecord(row.original)
         return parsed.readable
-          ? recordHeadline(parsed.value, t('plane.record', { number: row.index + 1 })).title
+          ? recordHeadline(parsed.value, t('plane.record', { number: row.index + 1 }), valuesByKey).title
           : t('plane.record', { number: row.index + 1 })
       },
     }),
@@ -108,7 +114,7 @@ function recordColumns(t: TFunction, section: PluginUISection) {
       cell: ({ row }) => {
         const parsed = parseRecord(row.original)
         const headline = parsed.readable
-          ? recordHeadline(parsed.value, t('plane.record', { number: row.index + 1 }))
+          ? recordHeadline(parsed.value, t('plane.record', { number: row.index + 1 }), valuesByKey)
           : { usedKeys: [] }
         return parsed.readable
           ? <RecordFields record={row.original} fields={section.fields} omitKeys={headline.usedKeys} />
@@ -158,7 +164,17 @@ function recordValue(source: Record<string, unknown>, key: string): unknown {
   return current
 }
 
-function formatFieldValue(field: PluginUIField, value: unknown, t: (key: string, options?: Record<string, unknown>) => string): string {
+function resolvedFieldUnit(field: PluginUIField, source?: Record<string, unknown>): string | undefined {
+  const raw = field.unit?.trim()
+  if (!raw) return undefined
+  const pathLike = raw.includes('.') || (source !== undefined && Object.prototype.hasOwnProperty.call(source, raw))
+  if (!pathLike) return raw
+  if (!source) return undefined
+  const value = recordValue(source, raw)
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function formatFieldValue(field: PluginUIField, value: unknown, t: (key: string, options?: Record<string, unknown>) => string, source?: Record<string, unknown>): string {
   if (value === undefined || value === null || value === '') return t('record.empty')
   if (field.values && Object.prototype.hasOwnProperty.call(field.values, String(value))) return field.values[String(value)]
   if (typeof value === 'boolean') return value ? t('record.yes') : t('record.no')
@@ -166,13 +182,14 @@ function formatFieldValue(field: PluginUIField, value: unknown, t: (key: string,
     if (typeof value === 'number' && Number.isFinite(value)) return appTime(value)
     if (typeof value === 'string') return recordTimestamp(value) ?? value
   }
+  const unit = resolvedFieldUnit(field, source)
   if (typeof value === 'number' && Number.isFinite(value)) {
     if (field.format === 'percent') return `${Number((value * 100).toFixed(field.precision ?? 0))}%`
     const numeric = field.precision !== undefined ? value.toFixed(field.precision) : Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)))
-    if (field.format === 'duration') return `${numeric}${field.unit || 's'}`
-    return field.unit ? `${numeric} ${field.unit}` : numeric
+    if (field.format === 'duration') return `${numeric}${unit || 's'}`
+    return unit ? `${numeric} ${unit}` : numeric
   }
-  return field.unit ? `${String(value)} ${field.unit}` : String(value)
+  return unit ? `${String(value)} ${unit}` : String(value)
 }
 
 function RecordFields({ record, fields, omitKeys = [] }: { record: AppDomainRecordView; fields?: PluginUIField[]; omitKeys?: readonly string[] }) {
@@ -187,7 +204,7 @@ function RecordFields({ record, fields, omitKeys = [] }: { record: AppDomainReco
     {shown.map(({ field, value }) => <div key={field.key} className="min-w-0">
       <dt className="text-meta text-ink-3">{field.label || recordFieldLabel(field.key)}</dt>
       <dd className="mt-1 min-w-0 break-words text-body leading-relaxed text-ink-2 [overflow-wrap:anywhere]">
-        {formatFieldValue(field, value, t)}
+        {formatFieldValue(field, value, t, parsed.value as Record<string, unknown>)}
       </dd>
     </div>)}
   </dl>
@@ -215,7 +232,7 @@ function RecordItem({ record, index, section }: {
   const { t } = useTranslation('plugin')
   const parsed = parseRecord(record)
   const headline = parsed.readable
-    ? recordHeadline(parsed.value, t('plane.record', { number: index + 1 }))
+    ? recordHeadline(parsed.value, t('plane.record', { number: index + 1 }), fieldValueMaps(section))
     : { title: t('plane.record', { number: index + 1 }), usedKeys: [] }
   return <article className="min-w-0 border-t border-hairline py-4 first:border-0 first:pt-0">
     <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
@@ -311,19 +328,20 @@ function metricEntries(section: PluginUISection, records: AppDomainRecordView[])
     .filter(([key, value]) => !TECHNICAL_METRIC_KEY.test(key) && (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string'))
     .slice(0, 4)
     .map(([key]): PluginUIField => ({ key, label: recordFieldLabel(key) }))
-  return fields.map((field) => ({ field, value: recordValue(source, field.key) }))
+  return fields.map((field) => ({ field, value: recordValue(source, field.key), source }))
     .filter(({ field, value }) => !field.hideWhenEmpty || (value !== undefined && value !== null && value !== ''))
 }
 
-function MetricsSection({ section, records }: { section: PluginUISection; records: AppDomainRecordView[] }) {
+function MetricsSection({ section, query }: { section: PluginUISection; query: SectionQuery<AppDomainRecordsView> }) {
   const { t } = useTranslation('plugin')
-  const entries = metricEntries(section, recordsForSection(records, section))
+  const entries = metricEntries(section, recordsForSection(query.data?.records, section))
   const title = sectionTitle(section, t('sections.metrics'))
-  if (entries.length === 0) return <Panel title={title}><SectionIntro text={section.description} /><p className="text-body text-ink-3">{section.emptyText || t('sections.noMetrics')}</p></Panel>
   return <Panel title={<span className="flex items-center gap-1.5"><BarChart3 size={14} />{title}</span>}>
     <SectionIntro text={section.description} />
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">{entries.map(({ field, value }) => <StatTile key={field.key}
-      label={field.label || recordFieldLabel(field.key)} value={formatFieldValue(field, value, t)} />)}</div>
+    <ReadContent title={title} query={query} empty={entries.length === 0} emptyText={section.emptyText || t('sections.noMetrics')}>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">{entries.map(({ field, value, source }) => <StatTile key={field.key}
+        label={field.label || recordFieldLabel(field.key)} value={formatFieldValue(field, value, t, source)} />)}</div>
+    </ReadContent>
   </Panel>
 }
 
@@ -395,10 +413,14 @@ export function ApplicationSection(props: ApplicationSectionProps) {
     case 'status':
       return <Panel title={sectionTitle(section, t('sections.status'))}><SectionIntro text={section.description} /><InstanceStatusSummary v={instance} /></Panel>
     case 'metrics':
-      return <MetricsSection section={section} records={rows} />
+      return <MetricsSection section={section} query={records} />
     case 'actions':
-      return <Panel title={sectionTitle(section, t('sections.actions'))}><SectionIntro text={section.description} /><ApplicationActions instanceID={instance.desired.instance_id} jobs={jobs.data}
-        running={running} desiredEnabled={instance.desired.enabled} lifecycleKey={lifecycleKey} /></Panel>
+      return <Panel title={sectionTitle(section, t('sections.actions'))}><SectionIntro text={section.description} />
+        <ReadContent title={sectionTitle(section, t('sections.actions'))} query={jobs} empty={false}>
+          <ApplicationActions instanceID={instance.desired.instance_id} jobs={jobs.data} emptyText={section.emptyText}
+            running={running} desiredEnabled={instance.desired.enabled} lifecycleKey={lifecycleKey} />
+        </ReadContent>
+      </Panel>
     case 'records':
     case 'timeline':
       return <RecordsSection query={records} section={section} />

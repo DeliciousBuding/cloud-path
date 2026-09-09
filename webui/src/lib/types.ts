@@ -408,7 +408,7 @@ export type PluginUISource =
 
 export type PluginUIPresentation = 'list' | 'timeline' | 'table' | 'cards'
 
-export type PluginUIFieldType = 'string' | 'number' | 'integer' | 'boolean' | 'select' | 'textarea'
+export type PluginUIFieldType = 'string' | 'number' | 'integer' | 'boolean' | 'select' | 'textarea' | 'array'
 
 /** Safe field declaration for a Core-rendered configuration form. */
 export interface PluginUIField {
@@ -431,6 +431,10 @@ export interface PluginUIField {
   values?: Record<string, string>
   primary?: boolean
   hideWhenEmpty?: boolean
+  /** Array editor: fields are relative to each item and use the same scalar types. */
+  itemFields?: PluginUIField[]
+  minItems?: number
+  maxItems?: number
 }
 
 /** One allowlisted section in a plugin page or device extension. */

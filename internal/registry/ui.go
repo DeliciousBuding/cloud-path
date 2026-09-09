@@ -77,7 +77,7 @@ var pluginUISectionSources = map[string]map[string]bool{
 	"records":     {"": true, "records": true, "events": true},
 	"timeline":    {"": true, "records": true, "events": true},
 	"table":       {"": true, "records": true, "bindings": true},
-	"schedule":    {"": true, "records": true},
+	"schedule":    {"": true, "records": true, "jobs": true},
 	"chart":       {"": true, "records": true},
 	"markdown":    {"": true},
 	"diagnostics": {"": true, "diagnostics": true, "device": true, "state": true},

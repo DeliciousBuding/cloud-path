@@ -31,6 +31,26 @@ function renderSection(section: PluginUISection, records: AppDomainRecordView[])
 }
 
 describe('Application section recordType isolation', () => {
+
+  it('resolves unit paths and maps state values in record headlines', () => {
+    renderSection({ type: 'metrics', recordType: 'sensor', fields: [
+      { key: 'temperature', label: '温度', unit: 'temperature_unit', precision: 1 },
+    ] }, [record('sensor', 'sensor-1', { temperature: 25, temperature_unit: '°C' }, 1)])
+    expect(screen.getByText('25.0 °C')).toBeInTheDocument()
+    expect(screen.queryByText('25.0 temperature_unit')).not.toBeInTheDocument()
+  })
+
+  it('uses a plugin-provided action empty state', () => {
+    renderWithProviders(<ApplicationSection
+      instance={instance} catalog={catalog} section={{ type: 'actions', source: 'manual-jobs', emptyText: '暂无手动操作。' }}
+      records={query({ instance_id: 'app-a', records: [], limit: 20, offset: 0 })}
+      bindings={query({ instance_id: 'app-a', running: true, bindings: [] })}
+      jobs={query({ instance_id: 'app-a', running: true, jobs: [], scheduled: [], job_descriptors: [] })}
+      readOnly={false} lifecycleKey="1"
+    />)
+    expect(screen.getByText('暂无手动操作。')).toBeInTheDocument()
+  })
+
   it('records/timeline only renders the declared recordType', () => {
     renderSection({ type: 'timeline', recordType: 'service_call' }, [
       record('press', 'press-1', { title: '按键事件' }, 3),

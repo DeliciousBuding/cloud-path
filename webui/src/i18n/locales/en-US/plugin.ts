@@ -357,13 +357,13 @@ export default {
   config: {
     invalidJson: 'The existing configuration cannot be read safely, so it cannot be edited here. Fix it under “Advanced settings” below.',
     required: 'This field is required.', invalidNumber: 'Enter a valid number.', invalidInteger: 'Enter an integer.',
-    minimum: 'Must be at least {{value}}.', maximum: 'Must be at most {{value}}.', invalidPattern: 'The format is invalid.',
+    minimum: 'Must be at least {{value}}.', maximum: 'Must be at most {{value}}.', minItems: 'Add at least {{value}} item(s).', maxItems: 'Add no more than {{value}} item(s).', invalidPattern: 'The format is invalid.',
     invalidPatternRule: 'The plugin provided an invalid format rule.', invalidOption: 'Choose a valid option.',
     unavailable: 'Settings form unavailable', unavailableHint: 'The plugin did not provide settings that can be displayed safely. The full configuration is available under More information below.',
     readOnly: 'This account can view settings but cannot modify them.', select: 'Select', secretPlaceholder: 'Enter the secret name, not the secret value',
     saving: 'Saving…', save: 'Save settings', advanced: 'Advanced settings (full configuration)',
     advancedHint: 'Use this only for troubleshooting; use the form above for normal settings.', secretHidden: 'Secret value hidden',
-    empty: 'No settings',
+    empty: 'No settings', addItem: 'Add item', removeItem: 'Remove item {{index}}', item: 'Item {{index}}', noItems: 'No items added yet.',
   },
   bridge: {
     invalidConfig: 'Invalid configuration format', invalidConfigItem: 'Invalid configuration item',
