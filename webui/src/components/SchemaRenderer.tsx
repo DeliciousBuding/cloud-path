@@ -537,7 +537,7 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
   const set = new Set<string>()
   for (const e of descriptor.entities) for (const c of e.capabilities) if (c) set.add(c)
   const refs = [...set]
-  if (!refs.length) return <p className="py-6 text-center text-sm text-ink-3">设备信息中没有可显示的功能</p>
+  if (!refs.length) return <p className="py-6 text-center text-sm text-ink-3">设备信息中没有可显示的能力</p>
   return (
     <ul className={cn('m-0 list-none divide-y divide-hairline p-0', className)}>
       {refs.map((ref) => {
@@ -632,14 +632,14 @@ export function EntityInventory({ descriptor, className }: {
   className?: string
 }) {
   return (
-    <div tabIndex={0} role="region" aria-label="设备对象清单" className={cn('overflow-x-auto', className)}>
+    <div tabIndex={0} role="region" aria-label="实体清单" className={cn('overflow-x-auto', className)}>
       <table className="w-full min-w-[44rem] border-collapse text-left text-xs">
         <thead>
           <tr className="text-[12px] text-ink-3">
             <th className="px-1 pb-1.5 font-medium">实体</th>
             <th className="px-1 pb-1.5 font-medium">实体编号</th>
             <th className="px-1 pb-1.5 font-medium">分类</th>
-            <th className="px-1 pb-1.5 font-medium">功能标识</th>
+            <th className="px-1 pb-1.5 font-medium">能力标识</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-hairline">
@@ -713,7 +713,7 @@ export function RawView({ raw, title = '设备数据', className }: {
       <p className="mt-3 flex items-center gap-1 border-t border-hairline pt-2 text-[12px] text-ink-3">
         <Boxes size={11} />
         <span className={cn('truncate', TONE_TEXT_CLS.idle)}>
-          该设备尚未同步功能信息，此处按已接收的数据显示
+          该设备尚未同步能力信息，此处按已接收的数据显示
         </span>
       </p>
     </Panel>

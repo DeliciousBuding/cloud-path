@@ -10,10 +10,10 @@ import { edgeFacts, filterEdgeFacts, sortEdgeFacts, type EdgeFacts, type EdgeFil
 import { fmtDateTime } from '@/lib/format'
 
 /**
- * 边缘节点列表：一眼看出「哪台电脑在线、哪台掉线」。
+ * 网关列表：一眼看出「哪台电脑在线、哪台掉线」。
  *
- * 关键行为：掉线的 Edge 依然完整渲染（版本、最后在线、所辖设备都在），
- * 只是语义色转灰并给出「不影响其他节点」的系统级说明 —— 一台掉线不牵连其他台的呈现。
+ * 关键行为：掉线的网关依然完整渲染（版本、最后在线、所辖设备都在），
+ * 只是语义色转灰并给出「不影响其他网关」的系统级说明 —— 一台掉线不牵连其他台的呈现。
  */
 export default function Edges() {
   usePageTitle('网关')
@@ -69,7 +69,7 @@ export default function Edges() {
             : '所有网关都在线。'} />
       ) : (
         <>
-        {/* 全宽行而非卡片网格：节点少时卡片会把内容困在窄轨里留下大片空白
+        {/* 全宽行而非卡片网格：网关少时卡片会把内容困在窄轨里留下大片空白
             （Vercel：不要 strand content in a narrow track）；与设备舰队行同一语言 */}
         <ul className="m-0 list-none p-0">
           <EdgeRowHead />
@@ -97,7 +97,7 @@ function EdgeRow({ f }: { f: EdgeFacts }) {
   const e = f.edge
   return (
     <li className={`grid gap-x-4 gap-y-1.5 border-b border-hairline px-4 py-2.5 last:border-b-0 ${ROW_COLS}`}>
-      {/* 节点 ID 是运维标识：mono；点击进详情 */}
+      {/* 网关 ID 是运维标识：mono；点击进详情 */}
       <div className="flex min-w-0 items-center gap-2">
         <Link to={`/edges/${encodeURIComponent(e.edge_id)}`}
           className="inline-flex min-h-11 min-w-0 items-center truncate font-mono text-[13px] font-medium no-underline hover:text-accent sm:min-h-0"

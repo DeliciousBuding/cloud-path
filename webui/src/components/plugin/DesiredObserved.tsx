@@ -1,10 +1,10 @@
-// 插件实例的 **期望态 | 实际态** 分离呈现（control-plane-sync.md 不变量 5）。
+// 运行实例的 **期望态 | 实际态** 分离呈现（control-plane-sync.md 不变量 5）。
 //
 // 这一块是整个插件面最重要的一处诚实性：
 //   - 左栏只放 Server 权威的 desired（enabled / version / revision / isolation / updated_at）；
-//   - 右栏只放 Edge 上报的 observed（state / version / applied / health / reported_at / restart）；
-//   - `has_observed=false` 时右栏不是空格子，而是一个明确的「Edge 未上报」块，
-//     并说明原因（Edge 离线 vs 在线但还没回过）——绝不让 desired.enabled 冒充「运行中」；
+//   - 右栏只放 网关上报的 observed（state / version / applied / health / reported_at / restart）；
+//   - `has_observed=false` 时右栏不是空格子，而是一个明确的「网关未上报」块，
+//     并说明原因（网关离线 vs 在线但还没回过）——绝不让 desired.enabled 冒充「运行中」；
 //   - `stale` / `drift` 各有独立视觉状态，且都写在右栏或顶部同步条上。
 import type { ReactNode } from 'react'
 import { AlertTriangle, CloudOff, Power, RadioTower, TimerReset } from 'lucide-react'

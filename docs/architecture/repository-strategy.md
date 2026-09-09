@@ -1,8 +1,9 @@
 # 仓库组合、命名与公开边界
 
-最后更新：2026-09-08
+最后更新：2026-09-09
 
-> 本文定义 CloudPath 的公开仓库组合、命名、插件开发/拆仓策略和公开边界。插件发现与信任链见
+> 本文定义 CloudPath 的公开仓库组合、命名、插件开发/拆仓策略和公开边界。用户侧中文名称见
+> [name-lexicon.md](name-lexicon.md)；插件发现与信任链见
 > [github-ecosystem.md](github-ecosystem.md)，插件运行时见 [plugin-system.md](plugin-system.md)。
 
 ## 1. 名称层级

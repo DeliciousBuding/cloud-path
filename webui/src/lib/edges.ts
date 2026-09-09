@@ -1,12 +1,12 @@
-// 边缘节点（Edge）的展示事实推导（纯函数）。
+// 网关（Edge）的展示事实推导（纯函数）。
 //
-// 一条硬要求：一台 Edge 掉线**不得影响**其他 Edge 的呈现 —— 所以这里对每台 Edge
-// 独立算事实，缺数据就是缺数据（0 / 0 时间戳），绝不借用别的 Edge 的值补齐。
+// 一条硬要求：一台网关 掉线**不得影响**其他网关 的呈现 —— 所以这里对每台网关
+// 独立算事实，缺数据就是缺数据（0 / 0 时间戳），绝不借用别的网关的值补齐。
 import type { DeviceView, EdgeView } from './types'
 
 export interface EdgeFacts {
   edge: EdgeView
-  /** 该 Edge 名下的设备（按设备键前缀归属，不用后端给的 devices 数组单独判断） */
+  /** 该网关 名下的设备（按设备键前缀归属，不用后端给的 devices 数组单独判断） */
   devices: DeviceView[]
   onlineDevices: number
   /** 最近一次上报时间（unix 秒）；0 = 从没上报过 */
@@ -21,7 +21,7 @@ export function edgeOfDevice(deviceKey: string): string {
   return i > 0 ? deviceKey.slice(0, i) : deviceKey
 }
 
-/** 把设备按 Edge 归组，并给出每台的在线数与最近上报时间 */
+/** 把设备按网关归组，并给出每台的在线数与最近上报时间 */
 export function edgeFacts(edges: EdgeView[], devices: DeviceView[]): EdgeFacts[] {
   const byEdge = new Map<string, DeviceView[]>()
   for (const d of devices) {

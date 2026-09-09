@@ -1,5 +1,5 @@
 // 实时层：单例 WebSocket + zustand。快照水合、状态合并、事件环形缓冲、
-// 数值观测历史（会话级，按属性名通用采样）、Descriptor 缓存、命令 ack、断线指数退避重连。
+// 数值观测历史（会话级，按属性名通用采样）、Descriptor 缓存、操作 ack、断线指数退避重连。
 //
 // 设备无关原则：这一层不认识任何具体字段名。数值型观测一律按属性名进 series；
 // Descriptor（若后端随 WS 下发）按设备键缓存，供 hooks/useDescriptor 与 SchemaRenderer 消费。

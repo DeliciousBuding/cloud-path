@@ -132,7 +132,7 @@ export function useDeleteInstance() {
       api.deletePluginInstance(id, body),
     onSuccess: (_r, vars) => {
       invalidate(vars.id)
-      toast.ok('实例已删除', '设置已移除；网关更新后会停止这个项目。')
+      toast.ok('实例已删除', '设置已移除；网关更新后会停止这个实例。')
     },
   })
 }

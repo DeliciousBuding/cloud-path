@@ -51,12 +51,12 @@ const ERR_COPY: Record<MappedPluginErrCode, Omit<PluginErrorCopy, 'code'>> = {
   },
   [PluginErr.Conflict]: {
     title: '无法保存：名称或版本冲突',
-    hint: '同一个网关里已经有同名项目，或版本与现有记录不一致。请换一个名称，或先更新已有项目。',
+    hint: '同一个网关里已经有同名实例，或版本与现有记录不一致。请换一个名称，或先更新已有实例。',
     tone: 'warn', needsPermissionConfirm: false, retryable: false,
   },
   [PluginErr.Quota]: {
     title: '已经达到数量上限',
-    hint: '当前组织可添加的项目数量已达上限，本次保存未生效。请先删除不用的项目，或联系管理员提高上限。',
+    hint: '当前组织可添加的实例数量已达上限，本次保存未生效。请先删除不用的实例，或联系管理员提高上限。',
     tone: 'warn', needsPermissionConfirm: false, retryable: false,
   },
   [PluginErr.PermissionConfirm]: {
@@ -81,7 +81,7 @@ const ERR_COPY: Record<MappedPluginErrCode, Omit<PluginErrorCopy, 'code'>> = {
   },
   [PLUGIN_RUNTIME_ERR_CODES.HostMismatch]: {
     title: '运行位置与插件类型不匹配',
-    hint: '驱动程序只能运行在网关，应用插件只能运行在中心服务。新建时请选择正确运行位置；已有实例若位置不对，请删除后在正确位置重新创建。',
+    hint: '驱动只能运行在网关，应用只能运行在中心服务。新建时请选择正确运行位置；已有实例若位置不对，请删除后在正确位置重新创建。',
     tone: 'warn', needsPermissionConfirm: false, retryable: false,
   },
   [PLUGIN_RUNTIME_ERR_CODES.KindUnsupported]: {
@@ -117,7 +117,7 @@ export function pluginErrorCopy(e: unknown): PluginErrorCopy {
     if (e.status === 403) {
       return {
         title: '权限不足',
-        hint: '当前账号不能修改这个项目，但仍可查看保存的设置和运行情况。',
+        hint: '当前账号不能修改这个实例，但仍可查看保存的设置和运行情况。',
         tone: 'warn', needsPermissionConfirm: false, retryable: false,
       }
     }
@@ -435,7 +435,7 @@ export function safeConfigEntries(
       return { key, value: isSecret ? secretHandleName(value) : String(value ?? ''), isSecret }
     })
 }
-/** 插件在界面上的名称：优先使用插件提供的功能标题，机器标识只留在技术详情。 */
+/** 插件在界面上的名称：优先使用插件提供的标题，机器标识只留在技术详情。 */
 export function pluginDisplayName(catalog?: PluginCatalogView): string {
   const contributions = [
     ...(catalog?.contributes?.drivers ?? []),

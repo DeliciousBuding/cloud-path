@@ -1,4 +1,4 @@
-// ActionPanel + CommandButton：命令集完全由声明驱动（前端无白名单/文案表）。
+// ActionPanel + CommandButton：操作集完全由声明驱动（前端无白名单/文案表）。
 // 覆盖 actions.inputSchema → 参数输入、危险动作确认、args 卫生、冻结下发路径、
 // 设备支持的操作回落的「带参数下发」入口，以及键盘可达性与无障碍名称。
 import { fireEvent, screen, within } from '@testing-library/react'
@@ -43,7 +43,7 @@ const simpleSchema = {
   },
 }
 
-describe('命令集来源与空态', () => {
+describe('操作集来源与空态', () => {
   it('无声明 → 明确空态文案 + 「无声明」徽标，不摆一排猜出来的按钮', () => {
     renderWithProviders(<ActionPanel deviceId={KEY} set={{ actions: [], source: 'none' }} />)
     expect(screen.getByText('这台设备暂时没有可执行的操作')).toBeInTheDocument()
@@ -288,7 +288,7 @@ describe('危险动作与确认结果', () => {
     expect(dialog).not.toHaveTextContent(KEY)
   })
 
-  it('二次确认可以取消或 Esc 关闭，两种路径都不下发命令', async () => {
+  it('二次确认可以取消或 Esc 关闭，两种路径都不下发操作', async () => {
     const user = userEvent.setup()
     const http = okPost()
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
@@ -370,7 +370,7 @@ describe('适配器无 schema 命令：高级手动参数入口', () => {
 })
 
 describe('键盘与焦点', () => {
-  it('Tab 依次到达参数输入框与命令按钮，Enter 即可下发', async () => {
+  it('Tab 依次到达参数输入框与操作按钮，Enter 即可下发', async () => {
     const user = userEvent.setup()
     const http = okPost()
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
@@ -392,13 +392,13 @@ describe('键盘与焦点', () => {
   })
 })
 
-describe('命令按钮说明（title/description）', () => {
+describe('操作按钮说明（title/description）', () => {
   it('有 description 的动作渲染可见说明；无说明的不加冗余题注', () => {
     renderWithProviders(<ActionPanel deviceId={KEY} set={declared} />)
     // close 的 description 来自后端声明 → 落到 hint，渲染为按钮下可见说明
     expect(screen.getByText('接通负载')).toBeInTheDocument()
     // open / factory_reset 未声明描述 → 按钮文案自足，不编造题注占位
-    expect(screen.queryByText(/下发命令「/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/下发操作「/)).not.toBeInTheDocument()
   })
 
   it('按钮不塞内部溯源信息，说明留在按钮下方', () => {

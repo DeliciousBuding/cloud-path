@@ -1,6 +1,6 @@
 import type { AuthState } from '@/store/auth'
 
-/** 显式 open 保留 legacy 命令入口；来源/回环限制仍由服务端 authWrite 裁决。 */
+/** 显式 open 保留 legacy 操作入口；来源/回环限制仍由服务端 authWrite 裁决。 */
 export function commandScope({ status, user }: AuthState, deviceId: string): string | null {
   if (status === 'open') return JSON.stringify(['open', deviceId])
   // id=0 是合法的兼容/服务身份，不得用 truthiness 拦截。

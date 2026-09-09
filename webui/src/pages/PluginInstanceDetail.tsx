@@ -17,7 +17,7 @@ import { usePageTitle } from '@/hooks/usePageTitle'
 import { useAuth } from '@/store/auth'
 
 /**
- * 插件实例详情：期望状态与实际状态**分离**呈现，外加 Version / Edge / Trust / Permissions /
+ * 运行实例详情：期望状态与实际状态**分离**呈现，外加 Version / 网关 / Trust / Permissions /
  * Health / Revision / Last ACK。写操作（启停 / reconcile / 编辑 / 删除）都在这一页可完成，
  * 390px 下同样可操作。
  */
@@ -96,7 +96,7 @@ export default function PluginInstanceDetail() {
         <SecretRefList refs={instance.desired.secret_refs} />
       </Panel>
 
-      <Panel title={<span className="flex items-center gap-1.5"><SlidersHorizontal size={14} />应用设置</span>}>
+      <Panel title={<span className="flex items-center gap-1.5"><SlidersHorizontal size={14} />插件设置</span>}>
         <ConfigTable config={instance.desired.config} />
         <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
           这里只显示设置内容；密钥只会显示名称，不会显示内容。
@@ -113,7 +113,7 @@ export default function PluginInstanceDetail() {
         <h1 className="metric num min-w-0 max-w-full break-all text-[24px] font-semibold sm:truncate" title={instance.id}>
           {instance.desired.instance_id || instance.id}
         </h1>
-        {/* 插件/节点 ID 是机器标识：mono 文本，不用胶囊（状态才配胶囊） */}
+        {/* 插件/网关 ID 是机器标识：mono 文本，不用胶囊（状态才配胶囊） */}
         <span className="flex min-w-0 items-center gap-1 text-[12px] text-ink-3"
           title={pluginDisplayName(catalog)}>
           <Puzzle size={11} className="shrink-0" />

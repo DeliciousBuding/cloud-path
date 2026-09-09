@@ -1,6 +1,6 @@
 // 「接口失败」与「真的没有数据」是两种完全不同的结论，必须分开呈现。
 // 把 500 渲染成「还没有设备接入」等于告诉用户集群是空的 —— 这也是一种假数据。
-// 另外覆盖命令下发失败的状态码 → 人话映射（语义对齐 docs/design.md 的 REST 错误约定）。
+// 另外覆盖操作下发失败的状态码 → 人话映射（语义对齐 docs/design.md 的 REST 错误约定）。
 import { fireEvent, screen } from '@testing-library/react'
 import { Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -120,7 +120,7 @@ describe('详情页：失败态不冒充「不存在」', () => {
   })
 })
 
-describe('命令下发失败 → 人话（docs/design.md REST 错误约定）', () => {
+describe('操作下发失败 → 人话（docs/design.md REST 错误约定）', () => {
   const cases: [number, RegExp][] = [
     [400, /白名单|参数/],
     [401, /登录已失效/],

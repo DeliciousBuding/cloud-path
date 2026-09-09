@@ -58,7 +58,7 @@ export interface HealthView {
   edges_online: number
 }
 
-/** 已注册的设备适配器与其命令白名单（Descriptor 缺席时的命令集回落事实源） */
+/** 已注册的设备适配器与其操作白名单（Descriptor 缺席时的操作集回落事实源） */
 export interface AdapterView {
   name: string
   commands: string[]
@@ -287,7 +287,7 @@ export interface CapabilityEventDecl {
   [k: string]: unknown
 }
 
-/** Capability spec.actions.* —— 命令面板的事实源（前端不再维护命令白名单/文案表） */
+/** Capability spec.actions.* —— 操作面板的事实源（前端不再维护操作白名单/文案表） */
 export interface CapabilityActionDecl {
   title?: string
   description?: string
@@ -544,7 +544,7 @@ export interface PluginAckData {
 }
 
 /* ------------------------------------------------------------------ *
- * 插件实例管理：读面视图 + 写面请求/响应
+ * 运行实例管理：读面视图 + 写面请求/响应
  * ------------------------------------------------------------------ */
 
 /** 实例的**期望态**（Server 权威） */
@@ -573,7 +573,7 @@ export interface PluginInstanceObservedView {
 }
 
 /**
- * 单个插件实例。desired 与 observed **永远分别渲染**（control-plane-sync.md 不变量 5）：
+ * 单个运行实例。desired 与 observed **永远分别渲染**（control-plane-sync.md 不变量 5）：
  * `has_observed=false` → 必须显式呈现对应运行宿主未上报，不得把 desired.enabled 当成运行中；
  * `stale=true` / `drift=true` → 必须有清晰视觉状态。
  */
@@ -640,7 +640,7 @@ export interface PluginInstanceActionRequest {
 }
 
 /**
- * 插件实例写操作的**稳定错误码**（api.PluginErr*）。
+ * 运行实例写操作的**稳定错误码**（api.PluginErr*）。
  * 前端按码呈现文案，绝不解析错误文本 —— server 的 message 可能变，码不会。
  */
 export const PluginErr = {

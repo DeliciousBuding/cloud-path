@@ -3,7 +3,7 @@
 // 语义说明：docs/architecture/capability-model.md（§3 presentation、§9 未知 Capability 回落）。
 //
 // 本文件的存在意义：设备语义（时钟/分格/提醒…）不写进组件，组件只问这里要
-// 「主值 / 胶囊 / 分组 / 命令集 / 渲染 widget」，全部由 Descriptor + Capability 声明推导。
+// 「主值 / 胶囊 / 分组 / 操作集 / 渲染 widget」，全部由 Descriptor + Capability 声明推导。
 import type { Tone } from '@/components/ui'
 import type {
   CapabilityActionDecl, CapabilityDoc, CapabilityPresentation,
@@ -36,7 +36,7 @@ const PROPERTY_LABEL: Record<string, string> = {
   mask: '掩码', mode: '模式', level: '设定值', enabled: '开关', count: '计数',
   status: '状态', notes: '音符序列', frequency_hz: '频率 (Hz)', duration_ms: '时长 (ms)', gap_ms: '音符间隔 (ms)',
   slot: '位置', taken_at: '取用时间', scheduled_at: '计划时间',
-  commands: '命令数', pings: 'Ping 计数', ticks: '心跳计数', uptime_s: '运行时长',
+  commands: '操作数', pings: 'Ping 计数', ticks: '心跳计数', uptime_s: '运行时长',
   seconds: '秒数',
 }
 
@@ -67,17 +67,17 @@ export function propertyLabel(name: string, ref?: string, idx: CapabilityIndex =
   const title = str(decl?.title)
   return localizedTitle(title) ?? PROPERTY_LABEL[name] ?? title ?? humanize(name)
 }
-/** 平台级命令展示词典（声明缺席时的回退层）：机器 cmd → 中文；未知命令仍回落 humanize。
- *  命令白名单与文案的事实源始终是后端声明（Capability actions / Descriptor commands /
+/** 平台级操作展示词典（声明缺席时的回退层）：机器 cmd → 中文；未知操作仍回落 humanize。
+ *  操作白名单与文案的事实源始终是后端声明（Capability actions / Descriptor commands /
  *  适配器白名单），这里只做展示别名，不猜业务语义。 */
 const CMD_LABEL: Record<string, string> = {
   buzzer: '蜂鸣器', led: 'LED 灯组', display: '数码管显示', motor: '电机',
   sync: '对时', sensor: '读取传感器', state: '状态读取', diag: '板级诊断',
-  isp: '进入 ISP 下载', raw: '原始命令',
+  isp: '进入 ISP 下载', raw: '原始操作',
   ping: '连通性探测', dump: '状态转储', noop: '空操作', set: '写入设定值',
 }
 
-/** 命令展示名（无声明上下文时）：平台词典 > humanize(机器名) */
+/** 操作展示名（无声明上下文时）：平台词典 > humanize(机器名) */
 export function commandLabel(cmd: string): string {
   return CMD_LABEL[cmd] ?? humanize(cmd)
 }
@@ -522,11 +522,11 @@ export function toneFromHint(p: CapabilityPresentation | undefined): Tone | unde
   const t = typeof p?.tone === 'string' ? p.tone : undefined
   return t && (TONES as string[]).includes(t) ? (t as Tone) : undefined
 }
-/* ---------------- 命令集推导（前端不维护白名单，事实源=声明） ---------------- */
+/* ---------------- 操作集推导（前端不维护白名单，事实源=声明） ---------------- */
 
 export type CommandSource = 'descriptor' | 'adapter' | 'none'
 
-/** 一条可下发命令的展示模型（由 Capability actions / Descriptor commands / 适配器白名单推导） */
+/** 一条可下发操作的展示模型（由 Capability actions / Descriptor commands / 适配器白名单推导） */
 export interface CommandAction {
   /** POST /api/devices/{edge}/{dev}/commands 的 cmd 字段 */
   cmd: string
@@ -584,7 +584,7 @@ function confirmOf(decl: Record<string, unknown>, label: string): string | undef
   return undefined
 }
 
-/** Descriptor 顶层/Entity 上宽容声明的命令集（schema 未强制，但允许扩展字段） */
+/** Descriptor 顶层/Entity 上宽容声明的操作集（schema 未强制，但允许扩展字段） */
 function declaredCommands(container: Record<string, unknown>): CommandAction[] {
   const out: CommandAction[] = []
   for (const field of ['commands', 'actions'] as const) {
@@ -648,8 +648,8 @@ function actionsFromCapabilities(
 }
 
 /**
- * 命令集：Descriptor/Capability 声明优先，其次适配器白名单（/api/adapters，仍是后端事实源），
- * 最后为空。前端不再有任何命令文案/图标白名单表。
+ * 操作集：Descriptor/Capability 声明优先，其次适配器白名单（/api/adapters，仍是后端事实源），
+ * 最后为空。前端不再有任何操作文案/图标白名单表。
  */
 export function commandActions(input: {
   descriptor?: DeviceDescriptor | null
@@ -831,8 +831,8 @@ export function eventDecl(type: string, idx: CapabilityIndex): {
 }
 
 /**
- * 命令声明查找：扫描 catalog 里各 Capability 的 spec.actions（eventDecl 的命令侧对称件）。
- * 跨设备列表（活动页 / 概览）拿不到单设备命令集，只能按 cmd 在声明索引里找展示名；
+ * 操作声明查找：扫描 catalog 里各 Capability 的 spec.actions（eventDecl 的操作侧对称件）。
+ * 跨设备列表（活动页 / 概览）拿不到单设备操作集，只能按 cmd 在声明索引里找展示名；
  * 键对齐 commandActions：decl.command > decl.cmd > action key。未收录时返回 undefined，
  * 由上层回落平台词典 / humanize——机器 cmd 本身永不本地化。
  */

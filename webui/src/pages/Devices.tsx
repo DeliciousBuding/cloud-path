@@ -16,7 +16,7 @@ function matches(d: DeviceView, q: string): boolean {
 }
 
 /**
- * 设备列表：Name / Edge / Capabilities / Online-Offline / Last Seen。
+ * 设备列表：Name / 网关 / Capabilities / Online-Offline / Last Seen。
  * 设备可能很多 —— 因此是紧凑列表（不是卡片栅格），并给出搜索与在线状态过滤，
  * 过滤后无结果与「一台都没有」是两种不同的空态。
  */

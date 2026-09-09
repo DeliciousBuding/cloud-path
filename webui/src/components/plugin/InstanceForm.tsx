@@ -1,4 +1,4 @@
-// 插件实例的创建 / 编辑表单。
+// 运行实例的创建 / 编辑表单。
 //
 // 创建路径先选「应用或驱动」，运行位置随类型确定：应用走中心服务，驱动选网关；
 // 连接器不出现在创建候选中。版本和运行方式用下拉选择，低频的配置与密钥收进高级参数。
@@ -15,8 +15,8 @@ import type {
 } from '@/lib/types'
 
 const ISOLATIONS = [
-  { value: 'shared', label: '共享运行（多个项目共用运行资源）' },
-  { value: 'per-instance', label: '独立运行（每个项目单独运行）' },
+  { value: 'shared', label: '共享运行（多个实例共用运行资源）' },
+  { value: 'per-instance', label: '独立运行（每个实例单独运行）' },
 ]
 
 // 原生 select/option 不吃 CSS 截断：限宽 + overflow-hidden，option 文本另做收敛
@@ -279,7 +279,7 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
         <div className="mt-4 space-y-4">
           <div>
             <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-[13px] font-medium">应用参数</p>
+              <p className="text-[13px] font-medium">插件参数</p>
               <Button type="button" variant="ghost" onClick={() => setRows((r) => [...r, { key: '', value: '' }])}>
                 <Plus size={13} /> 添加参数
               </Button>

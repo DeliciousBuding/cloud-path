@@ -182,7 +182,7 @@ export const api = {
     req<void>(`/api/tokens/${id}`, { method: 'DELETE' }, { allowEmpty: true }),
 
   // ---- Overview 聚合读面（GET /api/overview → api.OverviewView）----
-  /** 概览页唯一数据源：计数/离线设备/失败命令/近期事件全部由 server 聚合，前端不自算 */
+  /** 概览页唯一数据源：计数/离线设备/失败操作/近期事件全部由 server 聚合，前端不自算 */
   overview: () => req<OverviewView>('/api/overview'),
 
   // ---- 插件目录（GET /api/plugins）----
@@ -203,7 +203,7 @@ export const api = {
   runAppJob: (id: string, job: string, body: AppJobRunRequest, signal?: AbortSignal) =>
     req<AppJobRunView>(`/api/plugin-instances/${encodeURIComponent(id)}/jobs/${encodeURIComponent(job)}/run`,
       { method: 'POST', body: JSON.stringify(body), signal }),
-  // ---- 插件实例管理：v.id 是服务端返回的控制面键，保留原值（可能含节点前缀） ----
+  // ---- 运行实例管理：v.id 是服务端返回的控制面键，保留原值（可能含节点前缀） ----
   pluginInstances: () => req<PluginInstanceListResponse>('/api/plugin-instances'),
   pluginInstance: (id: string) =>
     req<PluginInstanceView>(`/api/plugin-instances/${encodeURIComponent(id)}`),

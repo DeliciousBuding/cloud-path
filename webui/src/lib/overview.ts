@@ -1,7 +1,7 @@
 // 概览页的数据整形（纯函数）。
 //
 // 两条硬约束：
-//   ① **禁止假数据**：所有计数、离线设备、失败命令、近期事件一律取自 GET /api/overview
+//   ① **禁止假数据**：所有计数、离线设备、失败操作、近期事件一律取自 GET /api/overview
 //      的服务端聚合结果；前端不自算、不塞占位数字、不写死 demo 卡片。
 //   ② **任何后端形态都不得白屏**：字段缺席/类型不对时归一化成安全空值，
 //      由页面渲染设计过的 Empty 态，而不是抛未捕获异常。
@@ -62,7 +62,7 @@ export function overviewStats(o: OverviewView): OverviewStat[] {
     },
     {
       key: 'plugins', label: '活跃插件', online: o.plugins_active, total: o.plugins_desired,
-      emptyHint: '还没有插件实例', tone: o.plugins_desired === 0 ? 'idle'
+      emptyHint: '还没有运行实例', tone: o.plugins_desired === 0 ? 'idle'
         : o.plugins_active === 0 ? 'warn' : 'ok',
     },
     // 固定近24小时的完整失败/超时计数，来自服务端；不以有界列表长度推算
@@ -117,7 +117,7 @@ export function overviewAlerts(o: OverviewView): OverviewAlert[] {
   if (pluginGap > 0) {
     out.push({
       id: 'plugins-gap', tone: 'warn', count: pluginGap, to: '/plugins',
-      title: `${pluginGap} 个插件实例未达到活跃`,
+      title: `${pluginGap} 个运行实例未达到活跃`,
       hint: '设置已经保存，但还没有收到正常运行状态。可能是网关暂时不可用、正在应用设置，或运行情况与保存的设置不一致。',
     })
   }

@@ -61,7 +61,7 @@ const denied: [string, AuthState][] = [
 ]
 
 describe('公共命令权限与 legacy 兼容边界', () => {
-  it.each(denied)('%s 不渲染表单、命令按钮或确认框（包括独立按钮）', (_name, state) => {
+  it.each(denied)('%s 不渲染表单、操作按钮或确认框（包括独立按钮）', (_name, state) => {
     auth(state)
     mount(<><ActionPanel deviceId={KEY} set={commands} /><CommandButton deviceId={KEY} action={simple} /></>)
     expect(screen.getByText('当前账号没有操作权限。')).toBeInTheDocument()
@@ -77,7 +77,7 @@ describe('公共命令权限与 legacy 兼容边界', () => {
     await clickRead()
     expect(send).toHaveBeenCalledWith('edge-1', 'dev-9', 'read', undefined)
   })
-  it.each(['面板', '独立按钮'])('显式 open 保留 legacy %s 命令入口', async (kind) => {
+  it.each(['面板', '独立按钮'])('显式 open 保留 legacy %s 操作入口', async (kind) => {
     auth({ status: 'open', user: null })
     mount(kind === '面板' ? <ActionPanel deviceId={KEY} set={commands} /> : <CommandButton deviceId={KEY} action={simple} />)
     await clickRead()

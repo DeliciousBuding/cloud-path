@@ -1,4 +1,4 @@
-// 设备控制面：命令集的唯一事实源是后端（Capability 声明 → Descriptor 扩展 →
+// 设备控制面：操作集的唯一事实源是后端（Capability 声明 → Descriptor 扩展 →
 // /api/adapters 白名单），前端**不得自建清单**。
 //
 // 测试只验证候选来自后端，以及空态和候选变化时的行为。
@@ -67,7 +67,7 @@ beforeEach(() => {
   useAuth.setState({ status: 'in', user: { id: 1, username: 'operator', name: '操作员', role: 'operator', tenant_id: 1, tenant_slug: 'default' } })
 })
 
-describe('命令集来自设备支持的操作', () => {
+describe('操作集来自设备支持的操作', () => {
   it('适配器提供的命令逐条渲染成按钮，并放在高级：手动输入参数入口', async () => {
     route({ adapters: [{ name: 'demo', commands: ['raw', 'identify', 'query_state'] }] })
     renderDetail()
@@ -76,7 +76,7 @@ describe('命令集来自设备支持的操作', () => {
     // 无 schema 的适配器命令走高级手动参数入口，候选来自白名单，不多不少
     const select = screen.getByRole('combobox', { name: '选择操作' })
     const options = within(select).getAllByRole('option').map((o) => o.textContent).filter((t) => t !== '选择操作')
-    expect(options).toEqual(['原始命令', 'Identify', 'Query State'])
+    expect(options).toEqual(['原始操作', 'Identify', 'Query State'])
   })
 
 
@@ -272,7 +272,7 @@ describe('操作记录', () => {
     expect(screen.queryByText('设备没有完成操作')).not.toBeInTheDocument()
   })
 
-  it('失败记录可直接重试，并沿用原命令参数与权限边界', async () => {
+  it('失败记录可直接重试，并沿用原操作参数与权限边界', async () => {
     const user = userEvent.setup()
     const http = route({
       descriptor: makeDescriptor(),

@@ -1,5 +1,5 @@
 // lib/descriptor.ts 契约测试：归一化 / Capability 解析 / widget 推导 / 质量与状态语义 /
-// 命令集推导 / 摘要与通用回落。断言只看「声明 → 展示模型」的映射，不含任何设备语义。
+// 操作集推导 / 摘要与通用回落。断言只看「声明 → 展示模型」的映射，不含任何设备语义。
 import { describe, expect, it } from 'vitest'
 import {
   CATEGORY_LABEL, CATEGORY_ORDER, EMPTY_INDEX, QUALITY_LABEL,
@@ -330,7 +330,7 @@ describe('值格式化与语义色', () => {
   })
 })
 
-describe('commandActions：命令集只来自声明', () => {
+describe('commandActions：操作集只来自声明', () => {
   const d = makeDescriptor()
 
   it('Capability actions → 命令、文案、变体、确认文案、来源 Entity', () => {
@@ -391,7 +391,7 @@ describe('commandActions：命令集只来自声明', () => {
     expect(set.actions[1]?.label).toBe('Query State')
   })
 
-  it('既无声明也无白名单 → 空命令集 source=none（UI 显示等待同步）', () => {
+  it('既无声明也无白名单 → 空操作集 source=none（UI 显示等待同步）', () => {
     expect(commandActions({ descriptor: null, index: idx })).toEqual({ actions: [], source: 'none' })
     expect(commandActions({ descriptor: makeDescriptor({ entities: [] }), index: EMPTY_INDEX }).source).toBe('none')
   })

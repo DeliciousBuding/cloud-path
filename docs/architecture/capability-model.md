@@ -3,6 +3,7 @@
 最后更新：2026-09-09
 
 > 本文定义 CloudPath 的设备无关模型。它是 Driver 与 Application 解耦的核心模型。
+> 用户侧中文名称与机器标识的映射见 [name-lexicon.md](name-lexicon.md)。
 
 ## 1. 为什么不能长期依赖 `State.Raw`
 

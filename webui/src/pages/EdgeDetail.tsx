@@ -15,8 +15,8 @@ import { useNow } from '@/hooks/useNow'
 import { usePageTitle } from '@/hooks/usePageTitle'
 
 /**
- * 边缘节点详情：这台主机的连接事实 + 它名下所有设备的当前状态 + 相关事件。
- * 该节点离线时页面依然完整可读（历史事实与设备清单都在），不因为离线就变空白。
+ * 网关详情：这台主机的连接事实 + 它名下所有设备的当前状态 + 相关事件。
+ * 该网关离线时页面依然完整可读（历史事实与设备清单都在），不因为离线就变空白。
  */
 export default function EdgeDetail() {
   const { edgeId = '' } = useParams()
@@ -32,7 +32,7 @@ export default function EdgeDetail() {
 
   const { data: evHist, isLoading: evLoading, error: evError, refetch: refetchEvents } = useQuery({
     queryKey: ['edge-events', id],
-    // /api/events 只接受 device 参数：按节点取最近事件后在前端按设备键前缀归属
+    // /api/events 只接受 device 参数：按网关取最近事件后在前端按设备键前缀归属
     queryFn: () => api.events({ limit: 300 }),
     refetchInterval: 8000,
   })
@@ -148,22 +148,22 @@ export default function EdgeDetail() {
         </Panel>
 
         <Panel className="lg:col-span-3"
-          title={<span className="flex items-center gap-1.5"><History size={14} />近期状态事件</span>}
+          title={<span className="flex items-center gap-1.5"><History size={14} />近期事件</span>}
           right={<span className="num text-[12px] text-ink-3">{events.length} 条</span>}>
           {evLoading && events.length === 0 ? (
             <RowSkeleton rows={5} />
           ) : evError && events.length === 0 ? (
-            <ErrorState compact icon={<History size={20} />} title="状态事件加载失败"
-              hint="暂时无法加载该网关的状态事件；设备状态仍以上方清单为准。请稍后重试。"
+            <ErrorState compact icon={<History size={20} />} title="事件加载失败"
+              hint="暂时无法加载该网关的事件；设备状态仍以上方清单为准。请稍后重试。"
               onRetry={() => { void refetchEvents() }} />
           ) : events.length === 0 ? (
-            <p className="py-8 text-center text-sm text-ink-3">该网关还没有状态事件。设备上报状态变化后会显示在这里；操作结果请在运行记录页查看。</p>
+            <p className="py-8 text-center text-sm text-ink-3">该网关还没有事件。设备上报事件后会显示在这里；操作结果请在运行记录页查看。</p>
           ) : (
             <>
               <EventFeed events={events} limit={20} dayGrouped />
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3 text-xs">
                 <span className="text-ink-3">
-                  {events.length > 20 ? `另有 ${events.length - 20} 条` : '这里只展示状态事件'}
+                  {events.length > 20 ? `另有 ${events.length - 20} 条` : '这里只展示事件'}
                 </span>
                 <Link to="/activity" className="link flex min-h-11 items-center gap-0.5">
                   查看全部运行记录 <ArrowRight size={12} />

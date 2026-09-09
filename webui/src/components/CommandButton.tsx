@@ -47,7 +47,7 @@ export function CommandButton(props: CommandButtonProps) {
   return <ScopedCommandButton key={JSON.stringify([scope, props.action])} {...props} scope={scope} />
 }
 
-/** POST → WS ACK → 历史刷新/超时；危险确认只取声明，不认识设备或具体命令名。 */
+/** POST → WS ACK → 历史刷新/超时；危险确认只取声明，不认识设备或具体操作名。 */
 function ScopedCommandButton({ deviceId, targetLabel, action, args, buttonLabel, buttonAriaLabel, className, disabled, scope }: CommandButtonProps & { scope: string }) {
   const acks = useLive((s) => s.acks)
   const qc = useQueryClient()

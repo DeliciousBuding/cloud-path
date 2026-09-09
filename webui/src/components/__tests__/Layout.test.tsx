@@ -63,7 +63,7 @@ describe('任务导向导航', () => {
     ])
   })
 
-  it('设备调试和应用实例各有单一入口，不再把通用观测叫药盒控制', () => {
+  it('设备调试和运行实例各有单一入口，不再把通用观测叫药盒控制', () => {
     renderLayout()
     const nav = screen.getAllByRole('navigation', { name: '主导航' })[0] as HTMLElement
     expect(within(nav).getByRole('link', { name: '设备' })).toHaveAttribute('href', '/devices')

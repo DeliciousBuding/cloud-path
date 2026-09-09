@@ -52,7 +52,7 @@ function WritableActions({ deviceId, targetLabel, set, disabled = false }: {
       {parameterized.length > 0 && (
         <div className={simple.length > 0 ? 'mt-3 border-t border-hairline pt-3 sm:mt-4 sm:pt-4' : ''}>
           <label htmlFor={id + '-parameter-action'} className="mb-1.5 block text-[12px] font-medium text-ink-3">
-            选择要设置的功能
+            选择操作
           </label>
           <select
             id={id + '-parameter-action'}
