@@ -2,6 +2,7 @@
 // 「最后一个 admin」这类规则由 server 判定，前端只把 409 的人话原样展示。
 import { useState } from 'react'
 import type { FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Badge, Button, KeyValue, TextField } from '@/components/ui'
 import { ErrorNote } from './ErrorNote'
 import { CheckRow, SelectField } from './fields'
@@ -11,16 +12,10 @@ import { roleLabel } from '@/lib/format'
 import { toast } from '@/store/toast'
 import type { Role, UserView } from '@/lib/types'
 
-const ROLE_FIELD_OPTIONS = ROLE_OPTIONS.map((r) => ({ value: r.value, label: r.label }))
-const ROLE_HINTS: Record<Role, string> = {
-  viewer: '只能查看设备状态和记录。',
-  operator: '可以查看并执行设备操作。',
-  admin: '可以管理成员和访问令牌。',
-}
-
 type Mode = 'idle' | 'edit' | 'reset'
 
 export function UserRow({ user: u }: { user: UserView }) {
+  const { t } = useTranslation('admin')
   const update = useUpdateUser()
   const [mode, setMode] = useState<Mode>('idle')
   const [name, setName] = useState(u.name)
@@ -29,6 +24,7 @@ export function UserRow({ user: u }: { user: UserView }) {
   const [password, setPassword] = useState('')
   const [passwordErr, setPasswordErr] = useState('')
   const [confirmed, setConfirmed] = useState(false)
+  const roleOptions = ROLE_OPTIONS.map((r) => ({ value: r.value, label: roleLabel(r.value) }))
 
   const openEdit = () => {
     setName(u.name); setRole(u.role); setDisabled(Boolean(u.disabled))
@@ -44,17 +40,26 @@ export function UserRow({ user: u }: { user: UserView }) {
     const n = name.trim()
     update.mutate(
       { id: u.id, patch: { role, disabled, ...(n ? { name: n } : {}) } },
-      { onSuccess: () => { toast.ok('成员已更新', `${u.username} · ${roleLabel(role)}`); setMode('idle') } },
+      { onSuccess: () => {
+        toast.ok(t('userRow.toast.updatedTitle'), t('userRow.toast.updatedMessage', {
+          username: u.username,
+          role: roleLabel(role),
+        }))
+        setMode('idle')
+      } },
     )
   }
 
   const saveReset = (ev: FormEvent) => {
     ev.preventDefault()
-    setPasswordErr(password ? '' : '请输入新密码')
+    setPasswordErr(password ? '' : t('userRow.reset.required'))
     if (!password) return
     update.mutate(
       { id: u.id, patch: { password } },
-      { onSuccess: () => { toast.ok('密码已重置', `${u.username} 的全部会话已撤销`); setMode('idle') } },
+      { onSuccess: () => {
+        toast.ok(t('userRow.toast.resetTitle'), t('userRow.toast.resetMessage', { username: u.username }))
+        setMode('idle')
+      } },
     )
   }
 
@@ -72,65 +77,73 @@ export function UserRow({ user: u }: { user: UserView }) {
           <Badge tone={u.role === 'admin' ? 'accent' : u.role === 'operator' ? 'ok' : 'idle'}>
             {roleLabel(u.role)}
           </Badge>
-          {u.disabled && <Badge tone="bad">已停用</Badge>}
+          {u.disabled && <Badge tone="bad">{t('userRow.disabled')}</Badge>}
         </div>
       </div>
 
       <details className="mt-3 text-xs text-ink-2">
-        <summary className="flex min-h-11 cursor-pointer items-center">技术详情</summary>
+        <summary className="flex min-h-11 cursor-pointer items-center">{t('userRow.details')}</summary>
         <dl className="mt-2 space-y-2">
-          <KeyValue k="成员 ID" v={<span className="font-mono">{u.id}</span>} />
-          <KeyValue k="登录账号" v={u.username} mono />
-          <KeyValue k="组织标识" v={u.tenant_slug} mono />
+          <KeyValue k={t('userRow.fields.id')} v={<span className="font-mono">{u.id}</span>} />
+          <KeyValue k={t('userRow.fields.username')} v={u.username} mono />
+          <KeyValue k={t('userRow.fields.tenant')} v={u.tenant_slug} mono />
         </dl>
       </details>
 
       {mode === 'idle' && (
         <div className="mt-3 flex flex-wrap gap-2 border-t border-hairline pt-3">
-          <Button variant="ghost" onClick={openEdit} aria-label={`编辑成员 ${u.username}`}>编辑</Button>
-          <Button variant="ghost" onClick={openReset} aria-label={`重置成员密码：${u.username}`}>重置密码</Button>
+          <Button variant="ghost" onClick={openEdit} aria-label={t('userRow.actions.editAria', { username: u.username })}>
+            {t('userRow.actions.edit')}
+          </Button>
+          <Button variant="ghost" onClick={openReset} aria-label={t('userRow.actions.resetAria', { username: u.username })}>
+            {t('userRow.actions.reset')}
+          </Button>
         </div>
       )}
 
       {mode === 'edit' && (
-        <form onSubmit={saveEdit} aria-label={`编辑成员 ${u.username}`}
+        <form onSubmit={saveEdit} aria-label={t('userRow.edit.formAria', { username: u.username })}
           className="mt-3 space-y-3 border-t border-hairline pt-3">
-          <TextField label="显示名称" value={name} autoComplete="off"
-            hint="留空则继续使用当前显示名" onChange={(ev) => setName(ev.target.value)} />
-          <SelectField label="角色" value={role} options={ROLE_FIELD_OPTIONS}
-            hint={ROLE_HINTS[role]} onChange={(v) => setRole(v as Role)} />
-          <CheckRow label="停用该成员" tone="danger" checked={disabled} onChange={setDisabled}
-            hint="停用后该成员会立即退出。最后一个管理员不能被停用或降级。" />
+          <TextField label={t('userRow.edit.displayName')} value={name} autoComplete="off"
+            hint={t('userRow.edit.displayNameHint')} onChange={(ev) => setName(ev.target.value)} />
+          <SelectField label={t('userRow.edit.role')} value={role} options={roleOptions}
+            hint={t(`roleHints.${role}`)} onChange={(v) => setRole(v as Role)} />
+          <CheckRow label={t('userRow.edit.disable')} tone="danger" checked={disabled} onChange={setDisabled}
+            hint={t('userRow.edit.disableHint')} />
           {update.isError && <ErrorNote message={adminErrorMessage(update.error)} />}
           <div className="flex flex-wrap gap-2">
-            <Button type="submit" disabled={update.isPending} aria-label={`保存成员 ${u.username} 的修改`}>
-              {update.isPending ? '保存中…' : '保存修改'}
+            <Button type="submit" disabled={update.isPending} aria-label={t('userRow.actions.saveAria', { username: u.username })}>
+              {update.isPending ? t('userRow.actions.saving') : t('userRow.actions.save')}
             </Button>
             <Button type="button" variant="ghost" onClick={() => setMode('idle')}
-              aria-label={`取消编辑 ${u.username}`}>取消</Button>
+              aria-label={t('userRow.actions.cancelEditAria', { username: u.username })}>
+              {t('actions.cancel')}
+            </Button>
           </div>
         </form>
       )}
 
       {mode === 'reset' && (
-        <form onSubmit={saveReset} aria-label={`重置 ${u.username} 的密码`}
+        <form onSubmit={saveReset} aria-label={t('userRow.reset.formAria', { username: u.username })}
           className="mt-3 space-y-3 border-t border-hairline pt-3">
           <p className="text-xs leading-relaxed text-warn break-words">
-            重置后该成员需要重新登录，当前登录状态会立即失效。此操作不可撤销。
+            {t('userRow.reset.warning')}
           </p>
-          <TextField label="新密码" type="password" value={password} error={passwordErr}
-            autoComplete="new-password" hint="新密码不会保存在这台设备中"
+          <TextField label={t('userRow.reset.newPassword')} type="password" value={password} error={passwordErr}
+            autoComplete="new-password" hint={t('userRow.reset.newPasswordHint')}
             onChange={(ev) => setPassword(ev.target.value)} />
-          <CheckRow label={`确认重置 ${u.username} 的密码`} tone="danger" checked={confirmed}
-            onChange={setConfirmed} hint="勾选后「确认重置密码」才可提交" />
+          <CheckRow label={t('userRow.reset.confirm', { username: u.username })} tone="danger" checked={confirmed}
+            onChange={setConfirmed} hint={t('userRow.reset.confirmHint')} />
           {update.isError && <ErrorNote message={adminErrorMessage(update.error)} />}
           <div className="flex flex-wrap gap-2">
             <button type="submit" disabled={!confirmed || update.isPending}
-              className="btn btn-danger" aria-label={`确认重置 ${u.username} 的密码`}>
-              {update.isPending ? '重置中…' : '确认重置密码'}
+              className="btn btn-danger" aria-label={t('userRow.reset.submitAria', { username: u.username })}>
+              {update.isPending ? t('userRow.reset.submitting') : t('userRow.reset.submit')}
             </button>
             <Button type="button" variant="ghost" onClick={() => setMode('idle')}
-              aria-label={`取消重置 ${u.username}`}>取消</Button>
+              aria-label={t('userRow.actions.cancelResetAria', { username: u.username })}>
+              {t('actions.cancel')}
+            </Button>
           </div>
         </form>
       )}

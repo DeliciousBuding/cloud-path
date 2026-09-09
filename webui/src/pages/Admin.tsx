@@ -3,6 +3,7 @@
 // 直接不渲染任何敏感列表与操作按钮 —— 不是 disabled，是根本不出现在 DOM 里；
 // 服务端另有 requireAdmin 门禁（401/403）兜底。
 import { ShieldAlert } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { EmptyState, PageHeader } from '@/components/ui'
 import { TokenManager } from '@/components/admin/TokenManager'
 import { UserManager } from '@/components/admin/UserManager'
@@ -10,18 +11,19 @@ import { useIsAdmin } from '@/store/auth'
 import { usePageTitle } from '@/hooks/usePageTitle'
 
 export default function Admin() {
-  usePageTitle('成员与访问权限')
+  const { t } = useTranslation('admin')
+  usePageTitle(t('page.title'))
 
   const admin = useIsAdmin()
 
   if (!admin) {
     return (
       <>
-        <PageHeader title="成员与访问权限" subtitle="成员、权限和访问令牌" />
+        <PageHeader title={t('page.title')} subtitle={t('page.subtitleDenied')} />
         <EmptyState
           icon={<ShieldAlert size={24} />}
-          title="需要管理员权限"
-          hint="只有管理员可以管理成员和访问令牌。如需权限，请联系管理员调整你的角色。"
+          title={t('page.deniedTitle')}
+          hint={t('page.deniedHint')}
         />
       </>
     )
@@ -29,7 +31,7 @@ export default function Admin() {
 
   return (
     <>
-      <PageHeader title="成员与访问权限" subtitle="管理成员、角色和访问令牌" />
+      <PageHeader title={t('page.title')} subtitle={t('page.subtitle')} />
       <div className="grid items-start gap-5 xl:grid-cols-2">
         <UserManager />
         <TokenManager />
