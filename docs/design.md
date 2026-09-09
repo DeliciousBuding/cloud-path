@@ -4,7 +4,7 @@
 设备侧协议见 [protocol.md](protocol.md)；架构状态分层见 [architecture.md](architecture.md)；
 面向使用者的说明见根 [README.md](../README.md)。
 
-> 状态：以当前 `main` 为实现基线，最新发布版本为 `v0.2.20`。外部 Driver Host、Registry、
+> 状态：以当前 `main` 为实现基线，最新发布版本为 `v0.2.21`。外部 Driver Host、Registry、
 > Application Runtime 与多租户隔离已实现；目标态与未实现项见 [architecture.md](architecture.md) §11。
 > 历史记录用于解释设计取舍，不代表当前缺口。
 
