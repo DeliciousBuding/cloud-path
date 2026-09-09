@@ -94,10 +94,10 @@ export function TokenRow({ token: t }: { token: TokenView }) {
           </p>
           {revoke.isError && <ErrorNote message={adminErrorMessage(revoke.error)} />}
           <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={revoke.isPending} onClick={doRevoke}
-              className="btn btn-danger" aria-label={translate('tokenRow.actions.confirmAria', { name: t.name })}>
+            <Button type="button" variant="danger" loading={revoke.isPending} onClick={doRevoke}
+              aria-label={translate('tokenRow.actions.confirmAria', { name: t.name })}>
               {revoke.isPending ? translate('tokenRow.actions.confirming') : translate('tokenRow.actions.confirm')}
-            </button>
+            </Button>
             <Button type="button" variant="ghost" onClick={() => setConfirming(false)}
               aria-label={translate('tokenRow.actions.cancelAria', { name: t.name })}>
               {translate('actions.cancel')}

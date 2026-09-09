@@ -3,7 +3,7 @@
 // 不会被长提示污染（TextField 在 components/ui.tsx 里已经是同一套做法）。
 import { useId } from 'react'
 import { cn } from '@/lib/cn'
-import { Select } from '@/components/ui'
+import { Checkbox, Select } from '@/components/ui'
 
 export interface FieldOption { value: string; label: string }
 
@@ -46,13 +46,12 @@ export function CheckRow({ label, hint, checked, onChange, tone = 'plain', class
   const desc = hint ? `${id}-desc` : undefined
   return (
     <div className={cn('flex items-start gap-2.5', className)}>
-      <input
+      <Checkbox
         id={id}
-        type="checkbox"
         checked={checked}
         aria-describedby={desc}
         onChange={(ev) => onChange(ev.target.checked)}
-        className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-accent)]"
+        className="mt-0.5"
       />
       <div className="min-w-0">
         <label

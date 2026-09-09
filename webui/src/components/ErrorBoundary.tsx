@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { i18n } from '@/i18n'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { Button } from '@/components/ui'
 
 interface Props { children: ReactNode }
 interface State { error: Error | null }
@@ -35,12 +36,12 @@ export class ErrorBoundary extends Component<Props, State> {
             {i18n.t('common:errorBoundary.description')}
           </p>
           <div className="mt-5 flex justify-center gap-2">
-            <button type="button" className="btn btn-primary" onClick={() => location.reload()}>
+            <Button onClick={() => location.reload()}>
               <RefreshCw size={14} /> {i18n.t('common:errorBoundary.reload')}
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={() => this.setState({ error: null })}>
+            </Button>
+            <Button variant="ghost" onClick={() => this.setState({ error: null })}>
               {i18n.t('common:errorBoundary.continue')}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

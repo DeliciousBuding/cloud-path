@@ -202,6 +202,10 @@ body {
 .btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
 .btn-ghost { background: transparent; color: var(--color-ink); border-color: var(--color-hairline); }
 .btn-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 6%, transparent); }
+.btn-quiet { padding: 0; border-color: transparent; background: transparent; color: var(--color-accent); }
+.btn-quiet:hover:not(:disabled) { text-decoration: underline; }
+.btn-bare { padding: 0; border-color: transparent; background: transparent; color: inherit; }
+.btn-bare:hover:not(:disabled) { color: var(--color-ink); }
 /* 危险操作（删除实例 / 不可逆操作）：只有在二次确认对话框里才用 */
 .btn-danger { background: var(--color-bad); color: var(--color-bad-ink); }
 .btn-danger:hover:not(:disabled) { filter: brightness(1.08); }
@@ -211,6 +215,17 @@ body {
   color: var(--color-bad);
 }
 .btn-danger-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--color-bad) 10%, transparent); }
+.btn-sm { padding: 4px 10px; font-size: var(--text-meta); }
+
+/* 图标按钮只保留图标；尺寸仍由 control token 管理，避免各页面写死 h/w。 */
+.btn-icon { width: var(--spacing-control); height: var(--spacing-control); padding: 0; }
+.btn-icon-sm { width: var(--spacing-control-sm); height: var(--spacing-control-sm); padding: 0; }
+
+/* 原生 checkbox/radio 只保留浏览器语义，色彩统一走 accent token。 */
+.checkbox, .radio {
+  width: 1rem; height: 1rem; flex-shrink: 0;
+  accent-color: var(--color-accent);
+}
 
 /* 模态对话框：抬到最高阴影层级 */
 .dialog { box-shadow: var(--shadow-lift); }
@@ -271,6 +286,7 @@ table td, table th { vertical-align: baseline; }
 @media (max-width: 639px) {
   .card { box-shadow: none; }
   .btn { min-height: var(--spacing-touch); }
+  .btn-icon, .btn-icon-sm { width: var(--spacing-touch); height: var(--spacing-touch); }
 }
 
 /* 标题断行平衡、散文避孤行：CJK 标题折两行时长短悬殊是廉价感来源 */
@@ -352,46 +368,41 @@ p { text-wrap: pretty; }
   box-shadow: var(--focus-halo-bad);
 }
 
-/* 原生 select 的展开菜单由浏览器绘制，普通 CSS 改不到圆角和主题。
- * Chromium/Edge 支持 appearance:base-select 时，用 picker 伪元素把弹出层纳入设计 token；
- * 不支持的浏览器保留原生箭头，并通过 color-scheme 至少跟随深浅主题。 */
-select:not([multiple]) { appearance: auto; }
-@supports (appearance: base-select) {
-  select:not([multiple]) { appearance: base-select; }
-  select:not([multiple]):open {
-    outline: none;
-    background: var(--color-surface);
-    border-color: var(--focus-ring-color);
-    box-shadow: var(--focus-halo);
-  }
-  select:not([multiple])::picker-icon { color: var(--color-ink-3); }
-  select:not([multiple])::picker(select) {
-    margin-top: 6px;
-    padding: 4px;
-    background: var(--color-surface);
-    color: var(--color-ink);
-    border: 1px solid var(--color-hairline);
-    border-radius: var(--radius-card);
-    box-shadow: var(--shadow-lift);
-    overflow: clip;
-  }
-  select:not([multiple]) option {
-    margin: 2px 0;
-    padding: 8px 10px;
-    border-radius: var(--radius-tile);
-    appearance: none;
-    background: var(--color-surface);
-    color: var(--color-ink);
-  }
-  select:not([multiple]) option:checked {
-    background: var(--color-accent);
-    color: var(--color-accent-ink);
-  }
-  select:not([multiple]) option:hover,
-  select:not([multiple]) option:focus {
-    background: color-mix(in srgb, var(--color-ink) 8%, var(--color-surface));
-  }
+/* 可主题化 Select：原生 select 只做隐藏语义层，弹层由 DOM 渲染。 */
+.select-wrap { position: relative; min-width: 0; }
+.select-wrap-pill { display: inline-block; max-width: 100%; vertical-align: middle; }
+.select-trigger {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; padding-right: 10px; text-align: left;
 }
+.select-pill.select-trigger { width: auto; }
+.select-wrap:focus-within .select-trigger {
+  outline: none;
+  background: var(--color-surface);
+  border-color: var(--focus-ring-color);
+  box-shadow: var(--focus-halo);
+}
+.select-trigger:disabled { opacity: var(--opacity-disabled); cursor: not-allowed; }
+.select-menu {
+  position: absolute; z-index: var(--z-overlay); top: calc(100% + 6px); left: 0;
+  min-width: 100%; width: max-content; max-width: min(28rem, calc(100vw - 2rem));
+  max-height: 16rem; overflow: auto; padding: 4px;
+  background: var(--color-surface); color: var(--color-ink);
+  border: 1px solid var(--color-hairline); border-radius: var(--radius-card);
+  box-shadow: var(--shadow-lift);
+}
+.select-list { margin: 0; padding: 0; list-style: none; }
+.select-group { padding: 6px 10px 3px; color: var(--color-ink-3); font-size: var(--text-meta); font-weight: 500; }
+.select-option {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; padding: 8px 10px; border-radius: var(--radius-tile);
+  color: var(--color-ink); cursor: pointer; font-size: var(--text-body);
+}
+.select-option[aria-selected="true"] { background: var(--color-accent); color: var(--color-accent-ink); }
+.select-option[data-active="true"]:not([aria-selected="true"]) {
+  background: color-mix(in srgb, var(--color-ink) 8%, var(--color-surface));
+}
+.select-option[aria-disabled="true"] { opacity: var(--opacity-disabled); cursor: not-allowed; }
 
 /* 大号按钮（认证页主操作） */
 .btn-lg { padding: 11px 20px; font-size: var(--text-lead); font-weight: 600; }

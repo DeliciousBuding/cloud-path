@@ -1,12 +1,13 @@
-// 基础 UI 原语（Apple 极简）：Badge / StatusDot / Panel / PageHeader / StatTile / EmptyState /
-// Segmented / KeyValue / Spinner / Button / TextField / ThemeToggle / AuthCard
-// 颜色一律走 index.css token（Tailwind 主题类或 .btn/.input/.card 基类），组件内禁止裸色值。
-import { useId, useState } from 'react'
+// 基础 UI 原语（Apple 极简）：布局/状态、导航、表单、动作和反馈。
+// 组件只消费 index.css 的语义 token（Tailwind 主题类或 .btn/.input/.card 基类），禁止裸色值。
+// 页面和领域组件不得直写 input/textarea/select；统一走这里的 primitive。
+import { Children, Fragment, isValidElement, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import '@/i18n'
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
-import { ArrowLeft, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
+import type { ChangeEvent, ComponentPropsWithRef, FocusEvent as ReactFocusEvent, InputHTMLAttributes, KeyboardEvent as ReactKeyboardEvent, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
+import { ArrowLeft, Check, ChevronDown, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
 import { Link } from 'react-router'
+import type { LinkProps } from 'react-router'
 import { cn } from '@/lib/cn'
 import { getTheme, setTheme } from '@/lib/theme'
 import type { ThemeMode } from '@/lib/theme'
@@ -129,9 +130,9 @@ export function ErrorState({ icon, title, hint, onRetry, retrying, compact, plai
       <p className="mt-3 text-lead font-semibold">{title}</p>
       {hint && <p className="mt-1 max-w-md text-body break-words text-ink-2">{hint}</p>}
       {onRetry && (
-        <button type="button" className="btn btn-primary mt-5" onClick={onRetry} disabled={retrying}>
-          {retrying ? <Spinner size={13} /> : <RefreshCw size={13} />} {retryText}
-        </button>
+        <Button className="mt-5" loading={retrying} onClick={onRetry}>
+          {!retrying && <RefreshCw size={13} />} {retryText}
+        </Button>
       )}
     </div>
   )
@@ -282,25 +283,371 @@ export function Spinner({ size = 14, className }: { size?: number; className?: s
 }
 
 
-/** 通用按钮：variant 映射 .btn-* 基类；尺寸 lg 用于认证页主操作 */
-export function Button({ variant = 'primary', lg, className, ...rest }: {
-  variant?: 'primary' | 'ghost'
+/** 通用按钮：variant/size 只映射设计系统基类，调用方不再自行拼 btn-*。 */
+export type ButtonVariant = 'primary' | 'ghost' | 'quiet' | 'bare' | 'danger' | 'danger-ghost'
+export type ButtonSize = 'sm' | 'md' | 'lg'
+
+const BUTTON_VARIANT_CLS: Record<ButtonVariant, string> = {
+  primary: 'btn-primary',
+  ghost: 'btn-ghost',
+  quiet: 'btn-quiet',
+  bare: 'btn-bare',
+  danger: 'btn-danger',
+  'danger-ghost': 'btn-danger-ghost',
+}
+
+export function Button({
+  variant = 'primary', size = 'md', lg, loading = false,
+  className, children, disabled, type = 'button', ...rest
+}: {
+  variant?: ButtonVariant
+  size?: ButtonSize
+  /** 兼容旧调用；新代码用 size="lg"。 */
   lg?: boolean
-} & ButtonHTMLAttributes<HTMLButtonElement>) {
+  loading?: boolean
+} & ComponentPropsWithRef<'button'>) {
+  const resolvedSize: ButtonSize = lg ? 'lg' : size
   return (
     <button
-      className={cn('btn', variant === 'primary' ? 'btn-primary' : 'btn-ghost', lg && 'btn-lg', className)}
+      type={type}
+      className={cn(
+        'btn', BUTTON_VARIANT_CLS[variant],
+        resolvedSize === 'sm' && 'btn-sm',
+        resolvedSize === 'lg' && 'btn-lg',
+        className,
+      )}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      {...rest}
+    >
+      {loading && <Spinner size={13} />}
+      {children}
+    </button>
+  )
+}
+
+/** 图标按钮：可读名称必填，视觉只保留图标，触控目标仍由 token 管理。 */
+export function IconButton({
+  label, variant = 'bare', size = 'md', className, children, type = 'button', ...rest
+}: {
+  label: string
+  variant?: ButtonVariant
+  size?: 'sm' | 'md'
+} & Omit<ComponentPropsWithRef<'button'>, 'aria-label'>) {
+  return (
+    <Button
+      type={type}
+      variant={variant}
+      aria-label={label}
+      className={cn('btn-icon', size === 'sm' && 'btn-icon-sm', className)}
+      {...rest}
+    >
+      {children}
+    </Button>
+  )
+}
+
+/** 链接按钮：保留 Link 的导航语义，视觉复用 Button 的 variant/size。 */
+export function ButtonLink({
+  variant = 'primary', size = 'md', className, children, ...rest
+}: {
+  variant?: ButtonVariant
+  size?: ButtonSize
+} & LinkProps) {
+  return (
+    <Link
+      className={cn(
+        'btn', BUTTON_VARIANT_CLS[variant],
+        size === 'sm' && 'btn-sm',
+        size === 'lg' && 'btn-lg',
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </Link>
+  )
+}
+
+/** 单行文本输入：只负责 .input 语义类和尺寸，标签/提示由 TextField 或领域组件负责。 */
+export function Input({
+  compact, error, className, ...rest
+}: { compact?: boolean; error?: boolean } & InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      className={cn('input', compact && 'input-sm', error && 'input-error', className)}
       {...rest}
     />
   )
 }
 
-/** 原生 select 原语：默认走 .select，pill 只用于筛选器，compact 只用于紧凑表单。 */
-export function Select({ pill, compact, className, ...rest }: {
+/** 多行文本输入：与 Input 共用 token、边框、聚焦环和错误态。 */
+export function Textarea({ compact, error, className, ...rest }: {
+  compact?: boolean
+  error?: boolean
+} & TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return <textarea className={cn('input', compact && 'input-sm', error && 'input-error', className)} {...rest} />
+}
+
+/** 复选框：视觉走 .checkbox，业务标签由调用方用 label 关联。 */
+export function Checkbox({ className, ...rest }: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>) {
+  return <input type="checkbox" className={cn('checkbox', className)} {...rest} />
+}
+
+/** 单选框：视觉走 .radio，业务标签由调用方用 label 关联。 */
+export function Radio({ className, ...rest }: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>) {
+  return <input type="radio" className={cn('radio', className)} {...rest} />
+}
+
+type SelectOptionItem = {
+  value: string
+  label: ReactNode
+  text: string
+  disabled: boolean
+  group?: string
+}
+
+function optionText(label: ReactNode): string {
+  return typeof label === 'string' || typeof label === 'number' ? String(label) : ''
+}
+
+function optionsFromChildren(children: ReactNode): SelectOptionItem[] {
+  const options: SelectOptionItem[] = []
+  const appendOption = (child: React.ReactElement, group?: string) => {
+    if (child.type !== 'option') return
+    const props = child.props as {
+      value?: string | number
+      label?: string
+      disabled?: boolean
+      children?: ReactNode
+    }
+    const value = props.value === undefined ? String(props.children ?? '') : String(props.value)
+    const label = props.label ?? props.children ?? value
+    options.push({ value, label, text: optionText(label), disabled: Boolean(props.disabled), group })
+  }
+  Children.forEach(children, (child) => {
+    if (!isValidElement(child)) return
+    if (child.type === 'optgroup') {
+      const props = child.props as { label?: ReactNode; children?: ReactNode }
+      const group = optionText(props.label)
+      Children.forEach(props.children, (nested) => {
+        if (isValidElement(nested)) appendOption(nested, group || undefined)
+      })
+      return
+    }
+    appendOption(child)
+  })
+  return options
+}
+
+/**
+ * 可主题化下拉框。
+ *
+ * 视觉交互由 DOM 中的 combobox + listbox 承担，因此弹层也能完整使用设计 token；
+ * 视觉隐藏的原生 select 保留表单语义、读屏兼容和现有测试 API，但不负责弹层绘制。
+ */
+export function Select({
+  pill, compact, className, children, value, defaultValue, onChange,
+  disabled, id, name, required, onBlur, ...rest
+}: {
   pill?: boolean
   compact?: boolean
-} & SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={cn('select', pill && 'select-pill', compact && 'select-sm', className)} {...rest} />
+  children?: ReactNode
+} & Omit<SelectHTMLAttributes<HTMLSelectElement>, 'children'>) {
+  const options = useMemo(() => optionsFromChildren(children), [children])
+  const controlled = value !== undefined
+  const initialValue = controlled ? value : defaultValue
+  const [internalValue, setInternalValue] = useState(() => {
+    if (initialValue !== undefined && initialValue !== null) return String(initialValue)
+    return options[0]?.value ?? ''
+  })
+  const currentValue = controlled ? String(value) : internalValue
+  const selectedIndex = options.findIndex((option) => option.value === currentValue)
+  const selected = selectedIndex >= 0 ? options[selectedIndex] : options[0]
+  const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const selectRef = useRef<HTMLSelectElement>(null)
+  const listboxId = useId()
+  const optionId = (index: number) => `${listboxId}-option-${index}`
+
+  useEffect(() => {
+    if (!controlled && options.length > 0 && !options.some((option) => option.value === internalValue)) {
+      setInternalValue(options[0].value)
+    }
+  }, [controlled, internalValue, options])
+
+  useEffect(() => {
+    if (!open) return
+    const next = selectedIndex >= 0 ? selectedIndex : options.findIndex((option) => !option.disabled)
+    setActiveIndex(next >= 0 ? next : 0)
+  }, [open, options, selectedIndex])
+
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (event: globalThis.PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false)
+        selectRef.current?.focus()
+      }
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  function emitChange(nextValue: string) {
+    if (!controlled) setInternalValue(nextValue)
+    const target = selectRef.current
+    if (!target) return
+    target.value = nextValue
+    onChange?.({ target, currentTarget: target } as ChangeEvent<HTMLSelectElement>)
+  }
+
+  function choose(option: SelectOptionItem) {
+    if (option.disabled) return
+    emitChange(option.value)
+    setOpen(false)
+    selectRef.current?.focus()
+  }
+
+  function firstEnabledIndex(): number {
+    return options.findIndex((option) => !option.disabled)
+  }
+
+  function lastEnabledIndex(): number {
+    for (let index = options.length - 1; index >= 0; index -= 1) {
+      if (!options[index].disabled) return index
+    }
+    return -1
+  }
+
+  function moveActive(delta: 1 | -1) {
+    if (options.length === 0) return
+    let next = activeIndex
+    for (let step = 0; step < options.length; step += 1) {
+      next = (next + delta + options.length) % options.length
+      if (!options[next].disabled) {
+        setActiveIndex(next)
+        return
+      }
+    }
+  }
+
+  function handleKeyDown(event: ReactKeyboardEvent<HTMLSelectElement>) {
+    if (disabled) return
+    if (event.key === 'Tab') {
+      setOpen(false)
+      return
+    }
+    if (event.key === 'Escape') {
+      if (open) event.preventDefault()
+      setOpen(false)
+      return
+    }
+    if (!open && ['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) {
+      event.preventDefault()
+      setOpen(true)
+      return
+    }
+    if (!open) return
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      moveActive(1)
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      moveActive(-1)
+    } else if (event.key === 'Home') {
+      event.preventDefault()
+      const next = firstEnabledIndex()
+      if (next >= 0) setActiveIndex(next)
+    } else if (event.key === 'End') {
+      event.preventDefault()
+      const next = lastEnabledIndex()
+      if (next >= 0) setActiveIndex(next)
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      const option = options[activeIndex]
+      if (option) choose(option)
+    }
+  }
+
+  function handleNativeChange(event: ChangeEvent<HTMLSelectElement>) {
+    if (!controlled) setInternalValue(event.target.value)
+    onChange?.(event)
+  }
+
+  function handleBlur(event: ReactFocusEvent<HTMLSelectElement>) {
+    if (!rootRef.current?.contains(event.relatedTarget as Node)) setOpen(false)
+    onBlur?.(event)
+  }
+
+  return (
+    <div ref={rootRef} className={cn('select-wrap', pill && 'select-wrap-pill', className)}>
+      <select
+        {...rest}
+        ref={selectRef}
+        id={id}
+        name={name}
+        required={required}
+        disabled={disabled}
+        value={currentValue}
+        onChange={handleNativeChange}
+        onKeyDown={handleKeyDown}
+        onBlur={handleBlur}
+        aria-expanded={open}
+        aria-controls={open ? listboxId : undefined}
+        aria-activedescendant={open && activeIndex >= 0 ? optionId(activeIndex) : undefined}
+        className="sr-only"
+      >
+        {children}
+      </select>
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-hidden="true"
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+        className={cn('select select-trigger', pill && 'select-pill', compact && 'select-sm')}
+      >
+        <span className="min-w-0 truncate" title={selected?.text || undefined}>{selected?.label ?? ''}</span>
+        <ChevronDown size={14} className={cn('shrink-0 text-ink-3 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="select-menu">
+          <ul id={listboxId} role="listbox" aria-label={rest['aria-label']} className="select-list">
+            {options.map((option, index) => (
+              <Fragment key={option.value}>
+                {option.group && (index === 0 || options[index - 1]?.group !== option.group) && (
+                  <li role="presentation" className="select-group">{option.group}</li>
+                )}
+                <li
+                  id={optionId(index)}
+                  role="option"
+                  aria-selected={option.value === currentValue}
+                  aria-disabled={option.disabled || undefined}
+                  data-active={index === activeIndex ? 'true' : undefined}
+                  className="select-option"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onMouseEnter={() => { if (!option.disabled) setActiveIndex(index) }}
+                  onClick={() => choose(option)}
+                >
+                  <span className="min-w-0 truncate" title={option.text || undefined}>{option.label}</span>
+                  {option.value === currentValue && <Check size={14} className="shrink-0" aria-hidden="true" />}
+                </li>
+              </Fragment>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
 }
 
 /** 带标签/提示/错误的表单输入行（error 优先于 hint 展示）。
@@ -320,14 +667,15 @@ export function TextField({ label, hint, error, className, suffix, ...rest }: {
     <div className={className}>
       <label htmlFor={id} className="mb-1.5 block text-compact font-medium text-ink-2">{label}</label>
       <div className="relative">
-      <input
-        id={id}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={desc}
-        className={cn('input', error ? 'input-error' : undefined, suffix ? 'pr-11' : undefined)}
-        {...rest}
-      />
-      {suffix && <div className="absolute inset-y-0 right-1.5 flex items-center">{suffix}</div>}
+        <Input
+          id={id}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={desc}
+          error={Boolean(error)}
+          className={suffix ? 'pr-11' : undefined}
+          {...rest}
+        />
+        {suffix && <div className="absolute inset-y-0 right-1.5 flex items-center">{suffix}</div>}
       </div>
       {desc && (
         <p id={desc} className={cn('mt-1.5 text-meta', error ? 'text-bad' : 'text-ink-3')}>

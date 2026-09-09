@@ -9,7 +9,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { Logo } from './Logo'
 import { LocaleSwitcher } from './LocaleSwitcher'
-import { StatusDot } from './ui'
+import { Button, IconButton, StatusDot } from './ui'
 import { ToastViewport } from './Toast'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/cn'
@@ -140,13 +140,13 @@ function AccountPill() {
           {roleLabel(user.role)}
         </span>
       </span>
-      <button
-        type="button" onClick={() => void signOut()} disabled={busy}
-        aria-label={t('actions.logout')} title={t('actions.logoutTitle')}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-pill text-ink-3 transition-colors hover:text-bad disabled:opacity-disabled"
+      <IconButton
+        label={t('actions.logout')} title={t('actions.logoutTitle')}
+        size="sm" className="shrink-0 text-ink-3 hover:text-bad"
+        disabled={busy} onClick={() => void signOut()}
       >
         <LogOut size={13} />
-      </button>
+      </IconButton>
     </div>
   )
 }
@@ -270,19 +270,19 @@ export default function Layout() {
           <div className="flex items-center gap-2">
             <ConnPill />
             <div ref={moreRef} className="relative">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
                 aria-label={t('layout.moreNavAria')}
                 aria-expanded={moreOpen}
                 aria-controls="mobile-more-menu"
                 onClick={() => setMoreOpen((open) => !open)}
                 className={cn(
-                  'btn btn-ghost min-h-touch',
+                  'min-h-touch',
                   (moreOpen || moreActive) && 'border-accent/30 bg-accent/8 text-accent',
                 )}
               >
                 {t('layout.more')} <ChevronDown size={14} className={cn('transition-transform', moreOpen && 'rotate-180')} />
-              </button>
+              </Button>
               {moreOpen && <div id="mobile-more-menu" className="absolute right-0 z-overlay mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-card border border-hairline bg-surface p-3 shadow-lift">
                 <p className="px-2 pb-1 text-micro font-medium text-ink-3">{t('layout.morePages')}</p>
                 <AccountPill />

@@ -2,7 +2,7 @@ import { Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { History, RefreshCw } from 'lucide-react'
-import { Panel, Badge, ErrorState } from '@/components/ui'
+import { Badge, Button, ErrorState, Panel } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { CommandButton } from '@/components/CommandButton'
 import { commandDisplayMeta, commandFailureInfo, commandStatusLabel } from '@/components/EventFeed'
@@ -51,11 +51,11 @@ export function CommandHistory({ deviceId, targetLabel, actions, limit, footer, 
       right={!isLoading && !error ? (
         <span className="flex items-center gap-2 text-meta text-ink-3">
           <span className="num">{t('command.count', { count: shown.length })}</span>
-          <button type="button" className="btn btn-ghost btn-sm h-7 min-h-touch px-2 sm:min-h-0" disabled={isFetching}
+          <Button variant="ghost" size="sm" className="h-7 min-h-touch px-2 sm:min-h-0" disabled={isFetching}
             aria-label={t('command.refreshAria')} onClick={() => { void refetch() }}>
             <RefreshCw size={12} className={isFetching ? 'animate-spin' : undefined} />
             {t('refresh')}
-          </button>
+          </Button>
         </span>
       ) : undefined}
     >

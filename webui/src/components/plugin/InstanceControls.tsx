@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/store/auth'
 import { Pencil, Power, RefreshCw, Trash2 } from 'lucide-react'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { Button, Checkbox } from '@/components/ui'
 import { PermissionList, PluginErrorNote } from './PluginFacts'
 import { pluginErrorCopy } from '@/lib/plugins'
 import {
@@ -58,42 +59,42 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
   return (
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button" className="btn btn-ghost" disabled={busy}
+        <Button
+          variant="ghost" disabled={busy}
           onClick={() => void patch({ enabled: !v.desired.enabled })}
           title={t('controls.toggleTitle', { action: toggleLabel, host })}
         >
           <Power size={13} className="shrink-0" />
           {update.isPending ? t('controls.submitting') : toggleLabel}
-        </button>
+        </Button>
 
         {variant === 'detail' && needsReapply && (
-          <button
-            type="button" className="btn btn-ghost" disabled={busy}
+          <Button
+            variant="ghost" disabled={busy}
             onClick={() => setReconcileOpen(true)}
             title={t('controls.reapplyTitle', { host })}
           >
             <RefreshCw size={13} className="shrink-0" />
             {reconcile.isPending ? t('controls.applying') : t('controls.reapply')}
-          </button>
+          </Button>
         )}
 
         {showEdit && onEdit && (
-          <button type="button" className="btn btn-ghost" disabled={busy} onClick={onEdit}>
+          <Button variant="ghost" disabled={busy} onClick={onEdit}>
             <Pencil size={13} className="shrink-0" /> {t('common.edit')}
-          </button>
+          </Button>
         )}
       </div>
 
       {variant === 'detail' && (
         <details className="mt-3 border-t border-hairline pt-3">
           <summary className="flex min-h-touch cursor-pointer items-center text-meta text-ink-2">{t('controls.more')}</summary>
-          <button
-            type="button" className="btn btn-danger-ghost mt-2" disabled={busy}
+          <Button
+            variant="danger-ghost" className="mt-2" disabled={busy}
             onClick={() => { setPurge(false); setDeleteOpen(true) }}
           >
             <Trash2 size={13} className="shrink-0" /> {t('controls.deleteInstance')}
-          </button>
+          </Button>
         </details>
       )}
 
@@ -149,8 +150,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
         busy={reconcile.isPending}
         extra={
           <label className="flex cursor-pointer items-start gap-2.5 rounded-tile bg-surface-2 p-3">
-            <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)}
-              className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
+            <Checkbox checked={purge} onChange={(e) => setPurge(e.target.checked)} className="mt-0.5" />
             <span className="min-w-0 text-meta leading-relaxed">
               {t('controls.forceReconcile', { host })}
             </span>
@@ -185,8 +185,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
         requireAck={t('controls.deleteAck')}
         extra={
           <label className="flex cursor-pointer items-start gap-2.5 rounded-tile bg-surface-2 p-3">
-            <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)}
-              className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
+            <Checkbox checked={purge} onChange={(e) => setPurge(e.target.checked)} className="mt-0.5" />
             <span className="min-w-0 text-meta leading-relaxed">
               {t('controls.purge')}
             </span>

@@ -14,7 +14,7 @@ import { Link, useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, Eye, EyeOff, KeyRound } from 'lucide-react'
 import '@/i18n'
-import { AuthCard, Button, Spinner, TextField } from '@/components/ui'
+import { AuthCard, Button, IconButton, Spinner, TextField } from '@/components/ui'
 import { ApiError, api, getToken, setToken } from '@/lib/api'
 import { loginErrorCopy } from '@/lib/authErrors'
 import { confirmSession, useAuth } from '@/store/auth'
@@ -176,16 +176,14 @@ export default function Login() {
           disabled={locked}
           onChange={(e) => { setPassword(e.target.value); setFieldError((f) => ({ ...f, pass: undefined })) }}
           suffix={
-            <button
-              type="button"
-              onClick={() => setReveal(!reveal)}
-              aria-label={reveal ? t('login.fields.password.hide') : t('login.fields.password.show')}
+            <IconButton
+              label={reveal ? t('login.fields.password.hide') : t('login.fields.password.show')}
               title={reveal ? t('login.fields.password.hide') : t('login.fields.password.show')}
-              aria-pressed={reveal}
-              className="flex h-7 w-7 items-center justify-center rounded-pill text-ink-3 transition-colors hover:text-ink"
+              aria-pressed={reveal} size="sm" className="text-ink-3"
+              onClick={() => setReveal(!reveal)}
             >
               {reveal ? <EyeOff size={15} /> : <Eye size={15} />}
-            </button>
+            </IconButton>
           }
         />
 

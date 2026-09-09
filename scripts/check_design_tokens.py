@@ -30,13 +30,22 @@ RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bmin-h-11\b"), "raw touch height; use min-h-touch"),
     (re.compile(r"\btransition-all\b"), "transition-all; name the property"),
     (re.compile(r"#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\("), "raw color; use a color token"),
+    (re.compile(r"<select\b"), "raw select; use the Select primitive"),
+    (re.compile(r"<input\b"), "raw input; use Input/Checkbox/Radio primitive"),
+    (re.compile(r"<textarea\b"), "raw textarea; use Textarea primitive"),
 ]
 
 
-def scan_text(text: str) -> list[str]:
+def scan_text(text: str, *, allow_primitive_tags: bool = False) -> list[str]:
     hits: list[str] = []
     for line_no, line in enumerate(text.splitlines(), 1):
         for pattern, message in RULES:
+            if allow_primitive_tags and message in {
+                "raw select; use the Select primitive",
+                "raw input; use Input/Checkbox/Radio primitive",
+                "raw textarea; use Textarea primitive",
+            }:
+                continue
             match = pattern.search(line)
             if match:
                 hits.append(f"line {line_no}: {match.group(0)} ({message})")
@@ -60,12 +69,15 @@ def self_test() -> int:
             'className="min-h-11"',
             'className="transition-all"',
             'style={{ color: "#fff" }}',
+            '<select aria-label="raw" />',
+            '<input aria-label="raw" />',
+            '<textarea aria-label="raw" />',
         ]
     )
     good = 'className="text-meta rounded-tile z-overlay transition-colors"'
     failures: list[str] = []
-    if len(scan_text(bad)) != 6:
-        failures.append("forbidden sample did not produce six hits")
+    if len(scan_text(bad)) != 9:
+        failures.append("forbidden sample did not produce nine hits")
     if scan_text(good):
         failures.append("semantic sample produced a hit")
     if failures:
@@ -85,8 +97,10 @@ def main() -> int:
 
     failures: list[str] = []
     files = production_files()
+    primitive = ROOT / "webui" / "src" / "components" / "ui.tsx"
     for path in files:
-        for hit in scan_text(path.read_text(encoding="utf-8")):
+        allow_primitive_tags = path == primitive
+        for hit in scan_text(path.read_text(encoding="utf-8"), allow_primitive_tags=allow_primitive_tags):
             failures.append(f"{path.relative_to(ROOT)}:{hit}")
 
     if failures:
