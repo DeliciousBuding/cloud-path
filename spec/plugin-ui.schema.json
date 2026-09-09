@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "cloudpath.dev/plugin-ui/v1",
+  "title": "PluginUIContribution",
+  "description": "Declarative UI contribution for an Application or Driver plugin. Core validates and renders allowlisted sections; arbitrary scripts are not allowed.",
+  "type": "object",
+  "required": ["apiVersion"],
+  "properties": {
+    "apiVersion": {"const": 1},
+    "navigation": {"$ref": "#/$defs/navigation"},
+    "pages": {"type": "array", "maxItems": 8, "items": {"$ref": "#/$defs/page"}},
+    "device": {"$ref": "#/$defs/device"}
+  },
+  "$defs": {
+    "navigation": {
+      "type": "object",
+      "required": ["title", "route"],
+      "properties": {
+        "title": {"type": "string", "minLength": 1, "maxLength": 40},
+        "icon": {"type": "string", "maxLength": 40},
+        "order": {"type": "integer", "minimum": 0, "maximum": 999},
+        "route": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"},
+        "visibility": {"enum": ["instance-enabled", "always"]}
+      },
+      "additionalProperties": false
+    },
+    "page": {
+      "type": "object",
+      "required": ["id", "title", "sections"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 80},
+        "sections": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "#/$defs/section"}}
+      },
+      "additionalProperties": false
+    },
+    "device": {
+      "type": "object",
+      "properties": {
+        "sections": {"type": "array", "maxItems": 24, "items": {"$ref": "#/$defs/section"}}
+      },
+      "additionalProperties": false
+    },
+    "section": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {"enum": ["status", "metrics", "form", "actions", "records", "timeline", "table", "schedule", "chart", "markdown", "diagnostics", "custom"]},
+        "source": {"enum": ["instance", "bindings", "jobs", "manual-jobs", "records", "config", "device", "device-actions", "diagnostics", "state", "events"]},
+        "recordType": {"type": "string", "maxLength": 64},
+        "presentation": {"enum": ["list", "timeline", "table", "cards"]},
+        "text": {"type": "string", "maxLength": 4000},
+        "entry": {"type": "string", "maxLength": 240},
+        "scopes": {"type": "array", "maxItems": 16, "items": {"type": "string", "maxLength": 80}},
+        "fields": {"type": "array", "maxItems": 64, "items": {"type": "object"}}
+      },
+      "additionalProperties": false
+    }
+  }
+}
