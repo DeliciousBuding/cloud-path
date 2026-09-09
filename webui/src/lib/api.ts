@@ -165,8 +165,10 @@ export const api = {
   events: (params?: { device?: string; since?: number; limit?: number }) =>
     req<{ events: EventView[] }>(`/api/events${qs(params ?? {})}`),
   edges: () => req<{ edges: EdgeView[] }>('/api/edges'),
-  commands: (params?: { device?: string; status?: string; limit?: number }) =>
+  commands: (params?: { device?: string; status?: string; handled?: string; limit?: number }) =>
     req<{ commands: CommandView[] }>(`/api/commands${qs(params ?? {})}`),
+  markCommandsHandled: (body: { ids?: number[]; all_unhandled?: boolean }) =>
+    req<{ handled: number }>('/api/commands/handled', { method: 'POST', body: JSON.stringify(body) }),
   sendCommand: (edgeId: string, devId: string, cmd: string, args?: string) =>
     req<CommandView>(
       `/api/devices/${encodeURIComponent(edgeId)}/${encodeURIComponent(devId)}/commands`,

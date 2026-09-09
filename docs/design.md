@@ -4,7 +4,7 @@
 设备侧协议见 [protocol.md](protocol.md)；架构状态分层见 [architecture.md](architecture.md)；
 面向使用者的说明见根 [README.md](../README.md)。
 
-> 状态：以当前 `main` 为实现基线，最新发布版本为 `v0.2.24`。外部 Driver Host、Registry、
+> 状态：以当前 `main` 为实现基线，最新发布版本为 `v0.2.25`。外部 Driver Host、Registry、
 > Application Runtime 与多租户隔离已实现；目标态与未实现项见 [architecture.md](architecture.md) §11。
 > 历史记录用于解释设计取舍，不代表当前缺口。
 
@@ -156,10 +156,13 @@ INDEX idx_commands_device(device_id, created_at) -- 设备详情页命令历史
 
 -- v12（migrate_v12.go）：数值采样历史（按设备/序列/秒）
 observation_samples(tenant_id, device_id, series_key, ts, value, quality, PK(tenant_id,device_id,series_key,ts))
+
+-- v13（migrate_v13.go）：失败/超时操作的人工处理时间
+commands.handled_at INTEGER NULL
 ```
 
 迁移是有序表（`internal/store/store.go` 的 `migrations`）：新增版本追加一项，**永不修改已发布项**。
-当前 `PRAGMA user_version = 12`（v0.2.20 持久化最后已知 Descriptor，v12 增加数值采样历史）；上面的 v1/v2 只是基础表示意，
+当前 `PRAGMA user_version = 13`（v0.2.20 持久化最后已知 Descriptor，v12 增加数值采样历史，v13 增加失败操作处理状态）；上面的 v1/v2 只是基础表示意，
 完整迁移见 `internal/store/migrate_v*.go`。连接池上限 4 + WAL + `busy_timeout(5000)`，避免 `database is locked`。
 
 ## 并发与稳定性不变量
@@ -227,6 +230,8 @@ observation_samples(tenant_id, device_id, series_key, ts, value, quality, PK(ten
 `[server_time - 86400, server_time]`，按 `acked_at`（缺失时 `created_at`）归属时间窗；
 计数来自完整匹配集，不因预览截断。原始命令历史与保留期不变。聚合来源不可用时返回 `503`，
 客户端必须保留错误来源并允许重试，不能把不可用伪装成没有失败。
+
+概览把实时故障与历史失败分开：网关/设备离线等实时问题随真实状态恢复自动消失，不提供“已读”；近 24 小时的失败/超时操作属于历史记录，可在运行记录中单条或批量标记为已处理。标记后不再进入概览待处理计数，但原始记录仍保留，并可用 `handled=unhandled|handled` 筛选。批量操作在无筛选时覆盖窗口内全部未处理项，有筛选时只覆盖当前列表。
 
 状态管理：zustand 持有 WS 实时快照（设备 map + 事件环形缓冲 300 条 + 会话级漂移历史 240 点 +
 ack map）；TanStack Query 管 REST（设备/事件/命令/统计/数值采样历史）。`store/ws.ts` 是单例连接，

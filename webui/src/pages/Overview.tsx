@@ -110,14 +110,14 @@ export default function Overview() {
     ...devices.filter((d) => !d.online).map((d): OverviewAlert => {
       const [edgeId, devId] = d.id.split('/')
       return {
-        id: `dev-offline-${d.id}`, tone: 'warn', count: 1,
+        id: `dev-offline-${d.id}`, tone: 'warn', kind: 'live', count: 1,
         to: `/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`,
         title: t('fallback.deviceOfflineTitle', { name: deviceShortName(d) }),
         hint: t('fallback.deviceOfflineHint'),
       }
     }),
     ...edges.list.filter((e) => !e.online).map((e): OverviewAlert => ({
-      id: `edge-offline-${e.edge_id}`, tone: 'bad', count: 1,
+      id: `edge-offline-${e.edge_id}`, tone: 'bad', kind: 'live', count: 1,
       to: `/edges/${encodeURIComponent(e.edge_id)}`,
       title: t('fallback.edgeOfflineTitle', { id: e.edge_id }),
       hint: t('fallback.edgeOfflineHint'),
@@ -125,8 +125,11 @@ export default function Overview() {
   ] : []
 
   const attentionRows = [...alerts, ...fallbackAlerts]
-  const attention = serverOk ? alerts.reduce((n, a) => n + a.count, 0) : fallbackAlerts.length
-  const attentionCategories = attentionRows.length
+  const liveRows = attentionRows.filter((a) => a.kind === 'live')
+  const historyRows = attentionRows.filter((a) => a.kind === 'history')
+  const attention = liveRows.reduce((n, a) => n + a.count, 0)
+  const historyAttention = historyRows.reduce((n, a) => n + a.count, 0)
+  const attentionCategories = liveRows.length
   const deviceStat = shownStats?.find((s) => s.key === 'devices')
   const hasStats = Boolean(shownStats?.length)
   const stillLoading = !hasStats && (loading || devLoading)
@@ -143,10 +146,17 @@ export default function Overview() {
     nowDetail = t('now.unavailableDetail')
     NowIcon = WifiOff
   } else if (hasStats && attention > 0) {
-    nowTone = attentionRows.some((a) => a.tone === 'bad') ? 'bad' : 'warn'
+    nowTone = liveRows.some((a) => a.tone === 'bad') ? 'bad' : 'warn'
     nowTitle = t('now.attentionTitle', { count: attention })
-    nowDetail = t('now.attentionDetail')
+    nowDetail = historyAttention > 0
+      ? t('now.attentionWithHistoryDetail', { count: historyAttention })
+      : t('now.attentionDetail')
     NowIcon = AlertTriangle
+  } else if (hasStats && historyAttention > 0) {
+    nowTone = 'warn'
+    nowTitle = t('now.historyTitle', { count: historyAttention })
+    nowDetail = t('now.historyDetail')
+    NowIcon = History
   } else if (hasStats && (deviceStat?.total ?? 0) === 0) {
     nowTone = 'idle'
     nowTitle = t('now.waitingTitle')
@@ -162,6 +172,24 @@ export default function Overview() {
   const subtitle = data?.server_time
     ? t('subtitleUpdated', { time: timeAgo(data.server_time) })
     : fmtUptime(health?.uptime_s) ?? (health ? t('serviceHealthy') : t('latestStatus'))
+
+  const renderAttentionRow = (a: OverviewAlert) => (
+    <li key={a.id}>
+      <Link
+        to={a.to}
+        className="group flex min-w-0 items-center gap-3 px-4 py-3.5 transition-colors hover:bg-ink-3/5 sm:px-5"
+      >
+        <span className={cn('h-2 w-2 shrink-0 rounded-pill',
+          a.tone === 'bad' ? 'bg-bad' : a.tone === 'warn' ? 'bg-warn' : 'bg-ink-3')} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-body font-medium">{a.title}{a.count > 1 ? t('attention.itemCount', { count: a.count }) : ''}</span>
+          <span className="mt-0.5 hidden truncate text-meta text-ink-3 sm:block">{a.hint}</span>
+        </span>
+        <span className="shrink-0 text-meta font-medium text-accent">{a.kind === 'history' ? t('attention.historyAction') : t('attention.action')}</span>
+        <ArrowRight size={13} className="shrink-0 text-ink-3 transition-transform group-hover:translate-x-0.5" />
+      </Link>
+    </li>
+  )
 
   return (
     <>
@@ -207,6 +235,10 @@ export default function Overview() {
                 </button>
               ) : attention > 0 ? (
                 <a href="#attention" className="btn btn-primary">{t('actions.viewAttention')} <ArrowDown size={14} /></a>
+              ) : historyAttention > 0 ? (
+                <Link to="/activity?tab=commands&status=failed&handled=unhandled" className="btn btn-primary">
+                  {t('actions.viewHistory')} <ArrowRight size={14} />
+                </Link>
               ) : (deviceStat?.total ?? 0) === 0 && hasStats ? (
                 <Link to="/edges" className="btn btn-primary">{t('actions.goEdges')} <ArrowRight size={14} /></Link>
               ) : hasStats ? (
@@ -266,9 +298,16 @@ export default function Overview() {
                     <AlertTriangle size={14} className="text-warn" /> {t('attention.title')}
                   </h2>
                 </div>
-                {attention > 0 && <Badge tone="warn">
-                    {t('attention.badge', { count: attention, categories: attentionCategories, items: attention })}
-                  </Badge>}
+                <div className="flex flex-wrap justify-end gap-2">
+                  {attention > 0 && (
+                    <Badge tone="warn">
+                      {t('attention.badge', { count: attention, categories: attentionCategories, items: attention })}
+                    </Badge>
+                  )}
+                  {historyAttention > 0 && (
+                    <Badge tone="idle">{t('attention.historyBadge', { count: historyAttention })}</Badge>
+                  )}
+                </div>
               </div>
 
               {attentionRows.length === 0 ? (
@@ -290,25 +329,35 @@ export default function Overview() {
                   </div>
                 )
               ) : (
-                <ul className="m-0 list-none divide-y divide-hairline p-0">
-                  {attentionRows.map((a) => (
-                    <li key={a.id}>
-                      <Link
-                        to={a.to}
-                        className="group flex min-w-0 items-center gap-3 px-4 py-3.5 transition-colors hover:bg-ink-3/5 sm:px-5"
-                      >
-                        <span className={cn('h-2 w-2 shrink-0 rounded-pill',
-                          a.tone === 'bad' ? 'bg-bad' : a.tone === 'warn' ? 'bg-warn' : 'bg-ink-3')} />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-body font-medium">{a.title}{a.count > 1 ? t('attention.itemCount', { count: a.count }) : ''}</span>
-                          <span className="mt-0.5 hidden truncate text-meta text-ink-3 sm:block">{a.hint}</span>
-                        </span>
-                        <span className="shrink-0 text-meta font-medium text-accent">{t('attention.action')}</span>
-                        <ArrowRight size={13} className="shrink-0 text-ink-3 transition-transform group-hover:translate-x-0.5" />
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
+                <div>
+                  {liveRows.length > 0 && (
+                    <section aria-labelledby="attention-live-title">
+                      <div className="border-b border-hairline bg-ink-3/5 px-4 py-2.5 sm:px-5">
+                        <h3 id="attention-live-title" className="text-meta font-medium text-ink-2">{t('attention.liveTitle')}</h3>
+                        <p className="mt-0.5 text-meta text-ink-3">{t('attention.liveHint')}</p>
+                      </div>
+                      <ul className="m-0 list-none divide-y divide-hairline p-0">
+                        {liveRows.map(renderAttentionRow)}
+                      </ul>
+                    </section>
+                  )}
+                  {historyRows.length > 0 && (
+                    <section aria-labelledby="attention-history-title" className={liveRows.length > 0 ? 'border-t border-hairline' : ''}>
+                      <div className="border-b border-hairline bg-ink-3/5 px-4 py-2.5 sm:px-5">
+                        <h3 id="attention-history-title" className="text-meta font-medium text-ink-2">{t('attention.historyTitle')}</h3>
+                        <p className="mt-0.5 text-meta text-ink-3">{t('attention.historyHint')}</p>
+                      </div>
+                      <ul className="m-0 list-none divide-y divide-hairline p-0">
+                        {historyRows.map(renderAttentionRow)}
+                      </ul>
+                      <div className="border-t border-hairline px-4 py-2.5 sm:px-5">
+                        <Link to="/activity?tab=commands&handled=handled" className="link inline-flex min-h-touch items-center gap-0.5 text-meta sm:min-h-0">
+                          {t('attention.viewHandled')} <ArrowRight size={12} />
+                        </Link>
+                      </div>
+                    </section>
+                  )}
+                </div>
               )}
             </section>
 

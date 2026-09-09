@@ -63,6 +63,8 @@ export interface CommandView {
   created_at: number
   acked_at: number
   result: string
+  /** 人工确认失败/超时操作已处理的时间；不改变命令执行状态，也不删除原始记录。 */
+  handled_at?: number
 }
 
 export interface HealthView {

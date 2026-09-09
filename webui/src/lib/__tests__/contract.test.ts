@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 
 const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url))
 const GO_SRC = readFileSync(`${REPO_ROOT}internal/api/types.go`, 'utf8')
-const TS_SRC = readFileSync(`${REPO_ROOT}webui/src/lib/types.ts`, 'utf8')
+const TS_SRC = readFileSync(`${REPO_ROOT}webui/src/lib/types.ts`, 'utf8').replace(/\r\n/g, '\n')
 
 describe('稳定错误码 PluginErr* 镜像', () => {
   const goCodes = [...GO_SRC.matchAll(/PluginErr\w+\s*=\s*"([^"]+)"/g)].map((m) => m[1])

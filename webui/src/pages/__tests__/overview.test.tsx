@@ -61,14 +61,14 @@ describe('概览：有数据', () => {
     route(FULL)
     renderWithProviders(<Overview />)
     expect(await screen.findByText('当前状态')).toBeInTheDocument()
-    expect(await screen.findByText('有 4 项需要处理')).toBeInTheDocument()
+    expect(await screen.findByText('有 3 项需要处理')).toBeInTheDocument()
     expect(await screen.findByText('在线设备')).toBeInTheDocument()
     expect(screen.getByText('在线网关')).toBeInTheDocument()
     expect(screen.getByText('应用运行正常')).toBeInTheDocument()
     expect(screen.getByText('失败的操作')).toBeInTheDocument()
     expect(screen.getByText('2/3')).toBeInTheDocument()
     expect(screen.getAllByText('1/2')).toHaveLength(2)
-    expect(screen.getByText('需要关注')).toBeInTheDocument()
+    expect(screen.getByText('需要处理')).toBeInTheDocument()
     const text = document.body.textContent ?? ''
     for (const word of ['Schema', 'Descriptor', 'Capability', 'Adapter', 'ACK', '结构化数据', '契约', '回执', '收敛', '快照', 'server', 'cookie', 'SQLite', 'WebSocket']) {
       expect(text).not.toContain(word)
@@ -95,7 +95,7 @@ describe('概览：有数据', () => {
     expect(screen.queryByText('Relay On')).not.toBeInTheDocument()
     expect(screen.queryByText('失败')).not.toBeInTheDocument()
     const links = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))
-    expect(links).toContain('/activity')
+    expect(links).toContain('/activity?tab=commands&status=failed&handled=unhandled')
   })
 
   it('网关离线与运行项未活跃各生成一条可执行的提醒（含去向链接）', async () => {
