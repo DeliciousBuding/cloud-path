@@ -1,12 +1,13 @@
-// 基础 UI 原语（Apple 极简）：Badge / StatusDot / Panel / PageHeader / StatTile / EmptyState /
-// Segmented / KeyValue / Spinner / Button / TextField / ThemeToggle / AuthCard
-// 颜色一律走 index.css token（Tailwind 主题类或 .btn/.input/.card 基类），组件内禁止裸色值。
+// 基础 UI 原语（Apple 极简）：布局/状态、导航、表单、动作和反馈。
+// 组件只消费 index.css 的语义 token（Tailwind 主题类或 .btn/.input/.card 基类），禁止裸色值。
+// 页面和领域组件不得直写 input/textarea/select；统一走这里的 primitive。
 import { Children, Fragment, isValidElement, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import '@/i18n'
-import type { ButtonHTMLAttributes, ChangeEvent, FocusEvent as ReactFocusEvent, InputHTMLAttributes, KeyboardEvent as ReactKeyboardEvent, ReactNode, SelectHTMLAttributes } from 'react'
+import type { ChangeEvent, ComponentPropsWithRef, FocusEvent as ReactFocusEvent, InputHTMLAttributes, KeyboardEvent as ReactKeyboardEvent, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 import { ArrowLeft, Check, ChevronDown, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
 import { Link } from 'react-router'
+import type { LinkProps } from 'react-router'
 import { cn } from '@/lib/cn'
 import { getTheme, setTheme } from '@/lib/theme'
 import type { ThemeMode } from '@/lib/theme'
@@ -129,9 +130,9 @@ export function ErrorState({ icon, title, hint, onRetry, retrying, compact, plai
       <p className="mt-3 text-lead font-semibold">{title}</p>
       {hint && <p className="mt-1 max-w-md text-body break-words text-ink-2">{hint}</p>}
       {onRetry && (
-        <button type="button" className="btn btn-primary mt-5" onClick={onRetry} disabled={retrying}>
-          {retrying ? <Spinner size={13} /> : <RefreshCw size={13} />} {retryText}
-        </button>
+        <Button className="mt-5" loading={retrying} onClick={onRetry}>
+          {!retrying && <RefreshCw size={13} />} {retryText}
+        </Button>
       )}
     </div>
   )
@@ -282,17 +283,120 @@ export function Spinner({ size = 14, className }: { size?: number; className?: s
 }
 
 
-/** 通用按钮：variant 映射 .btn-* 基类；尺寸 lg 用于认证页主操作 */
-export function Button({ variant = 'primary', lg, className, ...rest }: {
-  variant?: 'primary' | 'ghost'
+/** 通用按钮：variant/size 只映射设计系统基类，调用方不再自行拼 btn-*。 */
+export type ButtonVariant = 'primary' | 'ghost' | 'quiet' | 'bare' | 'danger' | 'danger-ghost'
+export type ButtonSize = 'sm' | 'md' | 'lg'
+
+const BUTTON_VARIANT_CLS: Record<ButtonVariant, string> = {
+  primary: 'btn-primary',
+  ghost: 'btn-ghost',
+  quiet: 'btn-quiet',
+  bare: 'btn-bare',
+  danger: 'btn-danger',
+  'danger-ghost': 'btn-danger-ghost',
+}
+
+export function Button({
+  variant = 'primary', size = 'md', lg, loading = false,
+  className, children, disabled, type = 'button', ...rest
+}: {
+  variant?: ButtonVariant
+  size?: ButtonSize
+  /** 兼容旧调用；新代码用 size="lg"。 */
   lg?: boolean
-} & ButtonHTMLAttributes<HTMLButtonElement>) {
+  loading?: boolean
+} & ComponentPropsWithRef<'button'>) {
+  const resolvedSize: ButtonSize = lg ? 'lg' : size
   return (
     <button
-      className={cn('btn', variant === 'primary' ? 'btn-primary' : 'btn-ghost', lg && 'btn-lg', className)}
+      type={type}
+      className={cn(
+        'btn', BUTTON_VARIANT_CLS[variant],
+        resolvedSize === 'sm' && 'btn-sm',
+        resolvedSize === 'lg' && 'btn-lg',
+        className,
+      )}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      {...rest}
+    >
+      {loading && <Spinner size={13} />}
+      {children}
+    </button>
+  )
+}
+
+/** 图标按钮：可读名称必填，视觉只保留图标，触控目标仍由 token 管理。 */
+export function IconButton({
+  label, variant = 'bare', size = 'md', className, children, type = 'button', ...rest
+}: {
+  label: string
+  variant?: ButtonVariant
+  size?: 'sm' | 'md'
+} & Omit<ComponentPropsWithRef<'button'>, 'aria-label'>) {
+  return (
+    <Button
+      type={type}
+      variant={variant}
+      aria-label={label}
+      className={cn('btn-icon', size === 'sm' && 'btn-icon-sm', className)}
+      {...rest}
+    >
+      {children}
+    </Button>
+  )
+}
+
+/** 链接按钮：保留 Link 的导航语义，视觉复用 Button 的 variant/size。 */
+export function ButtonLink({
+  variant = 'primary', size = 'md', className, children, ...rest
+}: {
+  variant?: ButtonVariant
+  size?: ButtonSize
+} & LinkProps) {
+  return (
+    <Link
+      className={cn(
+        'btn', BUTTON_VARIANT_CLS[variant],
+        size === 'sm' && 'btn-sm',
+        size === 'lg' && 'btn-lg',
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </Link>
+  )
+}
+
+/** 单行文本输入：只负责 .input 语义类和尺寸，标签/提示由 TextField 或领域组件负责。 */
+export function Input({
+  compact, error, className, ...rest
+}: { compact?: boolean; error?: boolean } & InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      className={cn('input', compact && 'input-sm', error && 'input-error', className)}
       {...rest}
     />
   )
+}
+
+/** 多行文本输入：与 Input 共用 token、边框、聚焦环和错误态。 */
+export function Textarea({ compact, error, className, ...rest }: {
+  compact?: boolean
+  error?: boolean
+} & TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return <textarea className={cn('input', compact && 'input-sm', error && 'input-error', className)} {...rest} />
+}
+
+/** 复选框：视觉走 .checkbox，业务标签由调用方用 label 关联。 */
+export function Checkbox({ className, ...rest }: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>) {
+  return <input type="checkbox" className={cn('checkbox', className)} {...rest} />
+}
+
+/** 单选框：视觉走 .radio，业务标签由调用方用 label 关联。 */
+export function Radio({ className, ...rest }: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>) {
+  return <input type="radio" className={cn('radio', className)} {...rest} />
 }
 
 type SelectOptionItem = {
@@ -563,14 +667,15 @@ export function TextField({ label, hint, error, className, suffix, ...rest }: {
     <div className={className}>
       <label htmlFor={id} className="mb-1.5 block text-compact font-medium text-ink-2">{label}</label>
       <div className="relative">
-      <input
-        id={id}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={desc}
-        className={cn('input', error ? 'input-error' : undefined, suffix ? 'pr-11' : undefined)}
-        {...rest}
-      />
-      {suffix && <div className="absolute inset-y-0 right-1.5 flex items-center">{suffix}</div>}
+        <Input
+          id={id}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={desc}
+          error={Boolean(error)}
+          className={suffix ? 'pr-11' : undefined}
+          {...rest}
+        />
+        {suffix && <div className="absolute inset-y-0 right-1.5 flex items-center">{suffix}</div>}
       </div>
       {desc && (
         <p id={desc} className={cn('mt-1.5 text-meta', error ? 'text-bad' : 'text-ink-3')}>

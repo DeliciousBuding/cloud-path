@@ -5,7 +5,7 @@ import { Link, useParams, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {Activity, ArrowRight, Braces, Command, Grid3x3, History, LayoutDashboard, RadioTower, Sparkles, Zap} from 'lucide-react'
 import {
-  BackLink, Badge, EmptyState, ErrorState, KeyValue, Panel, Segmented, Select, StatusDot, TabBar, TabPanel,
+  BackLink, Badge, Button, EmptyState, ErrorState, KeyValue, Panel, Segmented, Select, StatusDot, TabBar, TabPanel,
 } from '@/components/ui'
 import type { TabItem } from '@/components/ui'
 import {
@@ -368,10 +368,10 @@ export default function DeviceDetail() {
               <Panel
                 title={<span className="flex items-center gap-1.5"><Activity size={14} />{t('detail.overview.recentEvents')}</span>}
                 right={
-                  <button type="button" onClick={() => setTab('events')}
-                    className="link flex items-center gap-0.5 text-meta">
+                  <Button variant="quiet" onClick={() => setTab('events')}
+                    className="flex items-center gap-0.5 text-meta">
                     {t('detail.overview.viewRecord')} <ArrowRight size={12} />
-                  </button>
+                  </Button>
                 }>
                 {events.length === 0
                   ? <p className="py-6 text-center text-body text-ink-3">{t('detail.overview.noEvents')}</p>

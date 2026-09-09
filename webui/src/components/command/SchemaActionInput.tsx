@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { ReactNode } from 'react'
 import { i18n } from '@/i18n'
 import { cn } from '@/lib/cn'
-import { Select } from '@/components/ui'
+import { Button, Input, Radio, Select, Textarea } from '@/components/ui'
 import { commandArgsErrorCopy, commandForm, unsupportedSchemaKeywords } from '@/lib/command-schema'
 import type { CommandField } from '@/lib/command-schema'
 
@@ -287,8 +287,8 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
             {fieldExamples.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-1.5">
                 {fieldExamples.map((example, exampleIndex) => (
-                  <button key={exampleIndex} type="button" className="btn btn-ghost btn-sm"
-                    onClick={() => setField(field.key, example.value)}>{example.label}</button>
+                  <Button key={exampleIndex} variant="ghost" size="sm"
+                    onClick={() => setField(field.key, example.value)}>{example.label}</Button>
                 ))}
               </div>
             )}
@@ -297,11 +297,11 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
                 <p className="mb-1 text-meta text-ink-3">
                   {t('commandInput.rowsHint', { fields: (field.fields ?? []).map((nested) => nested.label).join(t('commandInput.listSeparator')) })}
                 </p>
-                <textarea id={fieldId} rows={4} value={value} required={field.required}
+                <Textarea id={fieldId} rows={4} value={value} required={field.required}
                   placeholder={(field.fields ?? []).map((nested) => nested.label).join(', ')}
                   aria-describedby={[fieldDescription, describedBy].filter(Boolean).join(' ')}
                   onChange={(e) => setField(field.key, e.target.value)}
-                  className="input input-sm min-w-0 font-mono" />
+                  compact className="min-w-0 font-mono" />
               </div>
             ) : field.type === 'enum' || field.type === 'boolean' ? (
               <Select id={fieldId} compact value={value} required={field.required}
@@ -313,7 +313,7 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
                   : field.choices?.map((choice, i) => <option key={i} value={String(i)}>{field.choiceLabels?.[i] ?? choiceLabel(choice)}</option>)}
               </Select>
             ) : (
-              <input id={fieldId} type={field.type === 'string' || field.type === 'array' ? 'text' : 'number'}
+              <Input id={fieldId} type={field.type === 'string' || field.type === 'array' ? 'text' : 'number'}
                 value={value} required={field.required}
                 step={field.type === 'integer' ? 1 : field.type === 'number' ? 'any' : undefined}
                 min={typeof field.schema.minimum === 'number' ? field.schema.minimum : undefined}
@@ -352,8 +352,8 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
                     'flex min-w-0 cursor-pointer items-start gap-2 rounded-tile border px-3 py-2 text-meta transition-colors',
                     branch === index ? 'border-accent/60 bg-accent/8 text-ink' : 'border-hairline text-ink-2 hover:bg-ink-3/5',
                   )}>
-                    <input type="radio" name={id + '-branch'} checked={branch === index}
-                      onChange={() => chooseBranch(index)} className="mt-0.5 shrink-0 accent-accent" />
+                    <Radio name={id + '-branch'} checked={branch === index}
+                      onChange={() => chooseBranch(index)} className="mt-0.5" />
                     <span className="min-w-0 break-words">{choice.label}</span>
                   </label>
                 ))}
@@ -367,12 +367,12 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
           <label htmlFor={id + '-args'} className="mb-1 block text-meta text-ink-2">
             {action.inputSchema ? t('commandInput.technicalParams') : t('commandInput.params')}
           </label>
-          <textarea id={id + '-args'} rows={form ? 3 : 2} spellCheck={false}
+          <Textarea id={id + '-args'} rows={form ? 3 : 2} spellCheck={false}
             aria-label={action.inputSchema ? t('commandInput.technicalParamsAria', { label: action.label }) : t('commandInput.paramsAria', { label: action.label })}
             aria-invalid={shownError ? true : undefined} aria-describedby={describedBy}
             value={json ?? args} onChange={(e) => { onEdit?.(); setJSON(e.target.value); setEdited(true) }}
             placeholder={action.inputPlaceholder ?? (form ? t('commandInput.parameterPlaceholder') : t('commandInput.params'))}
-            className={cn('input input-sm min-w-0 font-mono', shownError && 'input-error')} />
+            compact error={Boolean(shownError)} className="min-w-0 font-mono" />
         </div>
       )}
 
@@ -389,19 +389,19 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
       </div>
       {form && json === null && activeFields.length > 0 && (
         <div className="mt-2 flex justify-end">
-          <button type="button" className="link inline-flex min-h-touch items-center text-meta text-ink-3 sm:min-h-0" aria-label={t('commandInput.technicalOptionsAria', { label: action.label })}
+          <Button variant="quiet" className="inline-flex min-h-touch items-center text-meta text-ink-3 sm:min-h-0" aria-label={t('commandInput.technicalOptionsAria', { label: action.label })}
             onClick={() => { onEdit?.(); setJSON(args); setEdited(true) }}>
             {t('commandInput.technicalOptions')}
-          </button>
+          </Button>
         </div>
       )}
       {form && json !== null && backToFields === null && <p className="mt-2 text-meta text-ink-3">{t('commandInput.cannotConvert')}</p>}
       {form && json !== null && (
         <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-meta">
-          <button type="button" className="link inline-flex min-h-touch items-center sm:min-h-0" disabled={backToFields === null} aria-label={t('commandInput.useFormAria', { label: action.label })}
+          <Button variant="quiet" className="inline-flex min-h-touch items-center sm:min-h-0" disabled={backToFields === null} aria-label={t('commandInput.useFormAria', { label: action.label })}
             onClick={() => { if (backToFields) { setValues(backToFields); setJSON(null); setEdited(true) } }}>
             {t('commandInput.useForm')}
-          </button>
+          </Button>
         </div>
       )}
     </fieldset>

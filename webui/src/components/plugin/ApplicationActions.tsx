@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Loader2 } from 'lucide-react'
 import { SchemaActionInput } from '@/components/command/SchemaActionInput'
+import { Button } from '@/components/ui'
 import { useApplicationAction } from '@/hooks/useApplicationAction'
 import { applicationResultSummary } from '@/lib/application-plane'
 import { appActionError, appActionScope, appJobArgsError, appJobSchema, manualAppJobs } from '@/lib/application-actions'
@@ -42,12 +42,11 @@ function ActionForm({ instanceID, job, scope, schema, enabled, hasInput }: {
       description={hasInput ? t('actions.inputDescription') : t('actions.noInputDescription')}
       emptyHint={hasInput ? t('actions.inputHint') : t('actions.noInputHint')}
       validationSource={t('actions.validationSource')} disabled={!enabled || mutation.isPending} onEdit={edit}
-      renderSubmit={(args, error) => <button type="button" className="btn btn-primary shrink-0"
+      renderSubmit={(args, error) => <Button className="shrink-0" loading={mutation.isPending}
         aria-label={mutation.isError ? t('actions.retryAria', { title }) : mutation.isSuccess ? t('actions.againAria', { title }) : t('actions.runAria', { title })}
-        aria-busy={mutation.isPending} disabled={!enabled || Boolean(error) || mutation.isPending} onClick={() => run(args)}>
-        {mutation.isPending && <Loader2 size={14} className="animate-spin" />}
+        disabled={!enabled || Boolean(error)} onClick={() => run(args)}>
         {mutation.isPending ? t('actions.waiting') : mutation.isError ? t('actions.retry') : mutation.isSuccess ? t('actions.again') : t('actions.run')}
-      </button>} />
+      </Button>} />
     {mutation.isError && <div className="mt-3 min-w-0 space-y-2 rounded-tile border border-hairline p-3">
       <p role="alert" className="break-words text-body text-bad">{appActionError(mutation.error)}</p>
       <p className="text-meta leading-relaxed text-ink-2">{t('actions.noAutoRetry')}</p>

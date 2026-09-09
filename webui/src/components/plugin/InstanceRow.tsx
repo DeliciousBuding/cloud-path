@@ -3,7 +3,7 @@
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { ArrowRight, Boxes, Server } from 'lucide-react'
-import { Badge, StatusDot } from '@/components/ui'
+import { Badge, ButtonLink, StatusDot } from '@/components/ui'
 import { DesiredObserved, SyncBanner } from './DesiredObserved'
 import { InstanceControls } from './InstanceControls'
 import {
@@ -113,9 +113,9 @@ export function InstanceRow({ v, catalog, onEdit }: {
       </details>
 
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-hairline pt-3">
-        <Link to={`/plugins/${encodeURIComponent(v.id)}`} className="btn btn-primary">
+        <ButtonLink to={`/plugins/${encodeURIComponent(v.id)}`}>
           {t('instance.viewDetails')} <ArrowRight size={13} />
-        </Link>
+        </ButtonLink>
         <InstanceControls v={v} catalog={catalog} onEdit={onEdit} variant="list" />
       </div>
     </section>

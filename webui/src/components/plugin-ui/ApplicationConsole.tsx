@@ -2,9 +2,8 @@
 //
 // It reuses the existing Application Plane reads/actions; the UI page only
 // decides which white-listed sections are shown and in what order.
-import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { Panel } from '@/components/ui'
+import { ButtonLink, Panel } from '@/components/ui'
 import { useApplicationPlane } from '@/hooks/useApplicationPlane'
 import { applicationRunningState } from '@/lib/application-plane'
 import { resolveLocalizedText } from '@/i18n/pluginText'
@@ -31,7 +30,7 @@ export function ApplicationConsole({ instance, catalog, page, readOnly, lifecycl
   if (!canRead) {
     return <Panel title={t('console.appData')}>
       <p className="text-body text-ink-2">{t('console.loginHint')}</p>
-      <Link to="/login" className="btn btn-ghost mt-3">{t('console.login')}</Link>
+      <ButtonLink to="/login" variant="ghost" className="mt-3">{t('console.login')}</ButtonLink>
     </Panel>
   }
 
