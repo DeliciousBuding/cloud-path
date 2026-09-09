@@ -7,11 +7,12 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactElement } from 'react'
 import App from '@/App'
 import Login from '@/pages/Login'
 import Setup from '@/pages/Setup'
+import { i18n } from '@/i18n'
 import { api, getToken, setToken } from '@/lib/api'
 import { installFetch, stubResponse } from '@/test/http'
 import { resetStores } from '@/test/render'
@@ -49,6 +50,7 @@ vi.mock('@/store/ws', async (importOriginal) => {
 })
 
 beforeEach(() => { resetStores(); setToken('') })
+afterEach(async () => { await i18n.changeLanguage('zh-CN') })
 
 describe('Login：真实账号鉴权（D3 修复）', () => {
   it('渲染用户名与密码两个字段，不再是单一「访问令牌」', () => {
@@ -64,6 +66,17 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
     expect(screen.getByLabelText('密码')).toHaveAttribute('type', 'password')
     expect(screen.getByRole('button', { name: '登录' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '第一次使用？完成初始化' })).toHaveAttribute('href', '/setup')
+  })
+
+  it('en-US locale 渲染英文文案，默认中文不受影响', async () => {
+    await i18n.changeLanguage('en-US')
+    routeWith(() => stubResponse(404, {}))
+    renderPage(<Login />, '/login')
+    expect(screen.getByRole('heading', { level: 1, name: 'Sign in to CloudPath' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Username')).toBeInTheDocument()
+    expect(screen.getByLabelText('Password')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'First time here? Set up CloudPath' })).toHaveAttribute('href', '/setup')
   })
 
   it('提交走 POST /api/auth/login，且**不**把 /healthz 当成功判据', async () => {
