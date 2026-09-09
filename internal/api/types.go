@@ -176,6 +176,14 @@ type CommandView struct {
 	CreatedAt int64  `json:"created_at"`
 	AckedAt   int64  `json:"acked_at"`
 	Result    string `json:"result"`
+	HandledAt int64  `json:"handled_at,omitempty"`
+}
+
+// CommandHandledRequest 将失败/超时操作标记为已处理。
+// ids 用于单条/批量处理；all_unhandled 用于清空当前 24 小时窗口内的未处理失败项。
+type CommandHandledRequest struct {
+	IDs          []int64 `json:"ids,omitempty"`
+	AllUnhandled bool    `json:"all_unhandled,omitempty"`
 }
 
 // HealthView 是 /healthz 载荷。

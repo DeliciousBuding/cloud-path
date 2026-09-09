@@ -36,6 +36,11 @@ shasum -a 256 -c checksums.txt --ignore-missing      # macOS
 certutil -hashfile <文件> SHA256                      # Windows（逐项对照）
 ```
 
+## Unreleased
+
+- 概览：实时故障与历史失败操作分组展示；实时状态恢复后自动消失，失败操作可标记已处理，原始记录保留。
+- 运行记录：新增处理状态筛选、单条/批量标记已处理，并支持从概览直接跳到未处理失败项。
+
 ## v0.2.24 — 2026-09-09
 
 ### 发布工程

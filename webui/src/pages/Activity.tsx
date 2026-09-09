@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router'
-import { useQuery } from '@tanstack/react-query'
+import { Link, useSearchParams } from 'react-router'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Activity as ActivityIcon, FilterX, RefreshCw, Terminal, WifiOff } from 'lucide-react'
+import { Activity as ActivityIcon, CheckCheck, FilterX, RefreshCw, Terminal, WifiOff } from 'lucide-react'
 import { Badge, EmptyState, ErrorState, Panel, PageHeader, Segmented, Select, Spinner } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { EventFeed, commandDisplayMeta, commandFailureInfo, commandStatusLabel, eventDisplayLabel } from '@/components/EventFeed'
@@ -16,6 +16,7 @@ import { cn } from '@/lib/cn'
 import type { CommandView } from '@/lib/types'
 import type { CapabilityIndex } from '@/lib/descriptor'
 import { usePageTitle } from '@/hooks/usePageTitle'
+import { toast } from '@/store/toast'
 
 /** 单次拉取与当前展示共用同一上限；超出部分给出明确说明而不是静默截断 */
 const PAGE_LIMIT = 200
@@ -30,6 +31,12 @@ const STATUS_FILTERS = [
   { value: 'ok', labelKey: 'filters.statusOk' },
   { value: 'failed', labelKey: 'filters.statusFailed' },
   { value: 'timeout', labelKey: 'filters.statusTimeout' },
+]
+
+const HANDLED_FILTERS = [
+  { value: '', labelKey: 'filters.handledAll' },
+  { value: 'unhandled', labelKey: 'filters.handledUnhandled' },
+  { value: 'handled', labelKey: 'filters.handledHandled' },
 ]
 
 /** 下拉共用的样式（390px：min-w-0 + max-w-full，长设备名靠 option 自身截断） */
@@ -48,12 +55,16 @@ export default function Activity() {
   const { t } = useTranslation('activity')
   usePageTitle(t('title'))
 
-  const [tab, setTab] = useState<Tab>('events')
+  const [searchParams] = useSearchParams()
+  const initialTab: Tab = searchParams.get('tab') === 'commands' ? 'commands' : 'events'
+  const [tab, setTab] = useState<Tab>(initialTab)
   const [device, setDevice] = useState('')
   const [edge, setEdge] = useState('')
   const [types, setTypes] = useState<Set<string>>(new Set())
-  const [status, setStatus] = useState('')
+  const [status, setStatus] = useState(searchParams.get('status') ?? '')
+  const [handled, setHandled] = useState(searchParams.get('handled') ?? '')
 
+  const queryClient = useQueryClient()
   const { list: devices } = useDevices()
   const { list: edges } = useEdges()
   const liveEvents = useLive((s) => s.events)
@@ -66,10 +77,22 @@ export default function Activity() {
     enabled: tab === 'events',
   })
   const cmdQuery = useQuery({
-    queryKey: ['activity-commands', device, status],
-    queryFn: () => api.commands({ device: device || undefined, status: status || undefined, limit: PAGE_LIMIT }),
+    queryKey: ['activity-commands', device, status, handled],
+    queryFn: () => api.commands({ device: device || undefined, status: status || undefined, handled: handled || undefined, limit: PAGE_LIMIT }),
     refetchInterval: 5000,
     enabled: tab === 'commands',
+  })
+  const markHandled = useMutation({
+    mutationFn: (body: { ids?: number[]; all_unhandled?: boolean }) => api.markCommandsHandled(body),
+    onSuccess: (result) => {
+      toast.ok(t('handled.toastTitle'), t('handled.toastDetail', { count: result.handled }))
+      void queryClient.invalidateQueries({ queryKey: ['activity-commands'] })
+      void queryClient.invalidateQueries({ queryKey: ['overview'] })
+    },
+    onError: (error) => {
+      const detail = error instanceof Error ? error.message : t('handled.errorDetail')
+      toast.bad(t('handled.errorTitle'), detail)
+    },
   })
 
   const events = useMemo(() => {
@@ -101,10 +124,16 @@ export default function Activity() {
   const active = evQuery.isFetching || cmdQuery.isFetching
   const query = tab === 'events' ? evQuery : cmdQuery
   const eventFilter = Boolean(device || edge || types.size)
-  const commandFilter = Boolean(device || edge || status)
+  const commandFilter = Boolean(device || edge || status || handled)
   const anyFilter = tab === 'events' ? eventFilter : commandFilter
   const rows = Math.min(tab === 'events' ? events.length : commands.length, PAGE_LIMIT)
-  const failedCount = commands.filter((c) => c.status === 'failed' || c.status === 'timeout').length
+  const failedCount = commands.filter((c) => (c.status === 'failed' || c.status === 'timeout') && !c.handled_at).length
+  const unhandledFailures = commands.filter((c) => (c.status === 'failed' || c.status === 'timeout') && !c.handled_at)
+  const markAllFiltered = Boolean(device || edge || status || handled)
+  const markAll = () => {
+    if (markAllFiltered) markHandled.mutate({ ids: unhandledFailures.map((c) => c.id) })
+    else markHandled.mutate({ all_unhandled: true })
+  }
   const atLimit = tab === 'events'
     ? (evQuery.data?.events.length ?? 0) >= PAGE_LIMIT
     : (cmdQuery.data?.commands.length ?? 0) >= PAGE_LIMIT
@@ -114,7 +143,7 @@ export default function Activity() {
         ? t('subtitleEvents', { count: rows })
         : `${t('subtitleCommands', { count: rows })}${failedCount > 0 ? t('subtitleFailures', { count: failedCount }) : ''}`
 
-  const clearAll = () => { setDevice(''); setEdge(''); setTypes(new Set()); setStatus('') }
+  const clearAll = () => { setDevice(''); setEdge(''); setTypes(new Set()); setStatus(''); setHandled('') }
 
   return (
     <>
@@ -165,6 +194,10 @@ export default function Activity() {
                 <label className="sr-only" htmlFor="act-status">{t('filters.statusLabel')}</label>
                 <Select id="act-status" pill value={status} onChange={(e) => setStatus(e.target.value)} className="min-w-0 max-w-full">
                   {STATUS_FILTERS.map((s) => <option key={s.value} value={s.value}>{t(s.labelKey)}</option>)}
+                </Select>
+                <label className="sr-only" htmlFor="act-handled">{t('filters.handledLabel')}</label>
+                <Select id="act-handled" pill value={handled} onChange={(e) => setHandled(e.target.value)} className="min-w-0 max-w-full">
+                  {HANDLED_FILTERS.map((s) => <option key={s.value} value={s.value}>{t(s.labelKey)}</option>)}
                 </Select>
               </>
             )}
@@ -217,14 +250,30 @@ export default function Activity() {
         />
       ) : (
         <Panel>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-hairline pb-3">
-            <span className="text-meta text-ink-3">
-              {tab === 'events' ? t('panel.eventsOrder') : t('panel.commandsOrder')}
-            </span>
-            <span className="flex items-center gap-2 text-meta text-ink-3">
-              {query.isFetching && <Spinner size={12} />}
-              <span className="num">{t('panel.current', { count: rows })}</span>
-            </span>
+          <div className="mb-3 border-b border-hairline pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-meta text-ink-3">
+                {tab === 'events' ? t('panel.eventsOrder') : t('panel.commandsOrder')}
+              </span>
+              <span className="flex flex-wrap items-center gap-2 text-meta text-ink-3">
+                {tab === 'commands' && failedCount > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    disabled={markHandled.isPending}
+                    onClick={markAll}
+                  >
+                    {markHandled.isPending ? <Spinner size={12} /> : <CheckCheck size={13} />}
+                    {markAllFiltered ? t('handled.markFiltered') : t('handled.markAll')}
+                  </button>
+                )}
+                {query.isFetching && <Spinner size={12} />}
+                <span className="num">{t('panel.current', { count: rows })}</span>
+              </span>
+            </div>
+            {tab === 'commands' && (
+              <p className="mt-2 max-w-[90ch] text-meta text-ink-3">{t('handled.help')}</p>
+            )}
           </div>
           {query.isLoading ? (
             <RowSkeleton rows={8} />
@@ -252,7 +301,13 @@ export default function Activity() {
             <>
               <div tabIndex={0} role="region" aria-label={t('aria.commandsList')}
                 className="max-h-[34rem] overflow-y-auto overscroll-contain pr-1">
-                <CommandRows rows={commands} names={deviceNames} index={index} />
+                <CommandRows
+                  rows={commands}
+                  names={deviceNames}
+                  index={index}
+                  onMarkHandled={(id) => markHandled.mutate({ ids: [id] })}
+                  pending={markHandled.isPending}
+                />
               </div>
               {atLimit && <LimitNote what={t('limit.commandsWhat')} hint={t('limit.commandsHint')} />}
             </>
@@ -276,8 +331,9 @@ function LimitNote({ what, hint }: { what: string; hint: string }) {
  * 操作历史：跨天按天分组（组头承载日期，与事件流同一视觉语言），行内只留时刻。
  * 机器 cmd / args / 成功回执一律收进 title（悬停可查），只有失败原因才是需要行内呈现的人话信息。
  */
-function CommandRows({ rows, names, index }: {
+function CommandRows({ rows, names, index, onMarkHandled, pending }: {
   rows: CommandView[]; names: Map<string, string>; index: CapabilityIndex
+  onMarkHandled: (id: number) => void; pending: boolean
 }) {
   const groups: { day: string; items: CommandView[] }[] = []
   for (const c of rows.slice(0, PAGE_LIMIT)) {
@@ -292,7 +348,10 @@ function CommandRows({ rows, names, index }: {
         <section key={`${g.day}-${gi}`}>
           <h4 className="mb-1 px-0.5 text-meta font-medium text-ink-3">{g.day}</h4>
           <ul className="divide-y divide-hairline">
-            {g.items.map((c) => <CommandRow key={c.id} c={c} names={names} index={index} />)}
+            {g.items.map((c) => (
+              <CommandRow key={c.id} c={c} names={names} index={index}
+                onMarkHandled={onMarkHandled} pending={pending} />
+            ))}
           </ul>
         </section>
       ))}
@@ -300,8 +359,9 @@ function CommandRows({ rows, names, index }: {
   )
 }
 
-function CommandRow({ c, names, index }: {
+function CommandRow({ c, names, index, onMarkHandled, pending }: {
   c: CommandView; names: Map<string, string>; index: CapabilityIndex
+  onMarkHandled: (id: number) => void; pending: boolean
 }) {
   const { t } = useTranslation('activity')
   const st = cmdStatusMeta(c.status)
@@ -320,7 +380,10 @@ function CommandRow({ c, names, index }: {
   return (
     // 390px：首行只放状态 / 操作 / 时刻；失败原因与目标放到第二行，避免四段横向挤成一团。
     <li className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-2.5 lg:grid-cols-[auto_minmax(10rem,auto)_minmax(0,1fr)_minmax(8rem,0.7fr)_auto]">
-      <Badge tone={st.tone} className="shrink-0">{statusLabel}</Badge>
+      <span className="flex shrink-0 items-center gap-1.5">
+        <Badge tone={st.tone}>{statusLabel}</Badge>
+        {c.handled_at && <Badge tone="ok">{t('handled.badge')}</Badge>}
+      </span>
       <span className="min-w-0 truncate text-meta font-medium lg:col-start-2" title={rawTitle}>
         {meta.label}
       </span>
@@ -337,6 +400,22 @@ function CommandRow({ c, names, index }: {
         >
           {t('command.viewDevice', { name: target })}
         </Link>
+        {failed && !c.handled_at && (
+          <button
+            type="button"
+            className="link flex min-h-touch items-center gap-1 text-meta lg:min-h-0"
+            disabled={pending}
+            onClick={() => onMarkHandled(c.id)}
+          >
+            {pending ? <Spinner size={11} /> : <CheckCheck size={12} />}
+            {t('handled.markOne')}
+          </button>
+        )}
+        {c.handled_at && (
+          <span className="text-meta text-ink-3" title={t('handled.at', { time: fmtDateTime(c.handled_at) })}>
+            {t('handled.done')}
+          </span>
+        )}
       </div>
       <span className="num col-start-3 row-start-1 shrink-0 text-meta text-ink-3 lg:col-start-5 lg:row-start-1"
         title={c.acked_at ? t('command.completedAt', { time: fmtDateTime(c.acked_at) }) : fmtDateTime(c.created_at)}>

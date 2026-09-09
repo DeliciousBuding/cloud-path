@@ -63,6 +63,7 @@ var migrations = []migration{
 	{version: 9, custom: migrateV9},
 	{version: 10, custom: migrateV10},
 	{version: 11, custom: migrateV11},
+	{version: 12, custom: migrateV12},
 }
 
 // schemaVersion 是当前 schema 版本（迁移表最后一项）。
@@ -645,21 +646,32 @@ type CommandRow struct {
 	CreatedAt int64
 	AckedAt   sql.NullInt64
 	Result    string
+	HandledAt sql.NullInt64
 }
 
 // ListCommands 查询命令。deviceID/status 为空表示不过滤。
 func (s *Store) ListCommands(deviceID, status string, limit int) ([]CommandRow, error) {
-	return s.listCommands(0, deviceID, status, limit)
+	return s.listCommands(0, deviceID, status, "", limit)
 }
 
 // ListCommandsTenant 查询指定租户的命令（账号模式）。
 func (s *Store) ListCommandsTenant(tenantID int64, deviceID, status string, limit int) ([]CommandRow, error) {
-	return s.listCommands(tenantID, deviceID, status, limit)
+	return s.listCommands(tenantID, deviceID, status, "", limit)
 }
 
-func (s *Store) listCommands(tenantID int64, deviceID, status string, limit int) ([]CommandRow, error) {
+// ListCommandsFiltered 查询命令，并可按 handled_at 过滤（unhandled|handled）。
+func (s *Store) ListCommandsFiltered(deviceID, status, handled string, limit int) ([]CommandRow, error) {
+	return s.listCommands(0, deviceID, status, handled, limit)
+}
+
+// ListCommandsTenantFiltered 查询指定租户的命令，并可按 handled_at 过滤。
+func (s *Store) ListCommandsTenantFiltered(tenantID int64, deviceID, status, handled string, limit int) ([]CommandRow, error) {
+	return s.listCommands(tenantID, deviceID, status, handled, limit)
+}
+
+func (s *Store) listCommands(tenantID int64, deviceID, status, handled string, limit int) ([]CommandRow, error) {
 	limit = clampLimit(limit)
-	q := `SELECT id, device_id, cmd, args, status, created_at, acked_at, result FROM commands WHERE 1=1`
+	q := `SELECT id, device_id, cmd, args, status, created_at, acked_at, result, handled_at FROM commands WHERE 1=1`
 	args := []any{}
 	if tenantID > 0 {
 		q += ` AND tenant_id = ?`
@@ -673,6 +685,12 @@ func (s *Store) listCommands(tenantID int64, deviceID, status string, limit int)
 		q += ` AND status = ?`
 		args = append(args, status)
 	}
+	switch handled {
+	case "unhandled":
+		q += ` AND handled_at IS NULL`
+	case "handled":
+		q += ` AND handled_at IS NOT NULL`
+	}
 	q += ` ORDER BY id DESC LIMIT ?`
 	args = append(args, limit)
 	rows, err := s.db.Query(q, args...)
@@ -683,7 +701,7 @@ func (s *Store) listCommands(tenantID int64, deviceID, status string, limit int)
 	var out []CommandRow
 	for rows.Next() {
 		var c CommandRow
-		if err := rows.Scan(&c.ID, &c.DeviceID, &c.Cmd, &c.Args, &c.Status, &c.CreatedAt, &c.AckedAt, &c.Result); err != nil {
+		if err := rows.Scan(&c.ID, &c.DeviceID, &c.Cmd, &c.Args, &c.Status, &c.CreatedAt, &c.AckedAt, &c.Result, &c.HandledAt); err != nil {
 			return nil, err
 		}
 		out = append(out, c)

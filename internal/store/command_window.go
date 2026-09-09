@@ -8,9 +8,9 @@ import "fmt"
 // 列表按失败时间、ID 降序且有界；窗口计数先于 LIMIT，二者来自同一 SQL 读快照。
 func (s *Store) FailedCommandsWindow(tenantID *int64, since, until int64, limit int) ([]CommandRow, int, error) {
 	limit = clampLimit(limit)
-	q := `SELECT id, device_id, cmd, args, status, created_at, acked_at, result, COUNT(*) OVER ()
+	q := `SELECT id, device_id, cmd, args, status, created_at, acked_at, result, handled_at, COUNT(*) OVER ()
 		FROM commands
-		WHERE status IN ('failed', 'timeout') AND COALESCE(acked_at, created_at) BETWEEN ? AND ?`
+		WHERE status IN ('failed', 'timeout') AND handled_at IS NULL AND COALESCE(acked_at, created_at) BETWEEN ? AND ?`
 	args := []any{since, until}
 	if tenantID != nil {
 		q += ` AND tenant_id = ?`
@@ -27,7 +27,7 @@ func (s *Store) FailedCommandsWindow(tenantID *int64, since, until int64, limit 
 	var total int
 	for rows.Next() {
 		var c CommandRow
-		if err := rows.Scan(&c.ID, &c.DeviceID, &c.Cmd, &c.Args, &c.Status, &c.CreatedAt, &c.AckedAt, &c.Result, &total); err != nil {
+		if err := rows.Scan(&c.ID, &c.DeviceID, &c.Cmd, &c.Args, &c.Status, &c.CreatedAt, &c.AckedAt, &c.Result, &c.HandledAt, &total); err != nil {
 			return nil, 0, fmt.Errorf("store: scan failed commands window: %w", err)
 		}
 		out = append(out, c)

@@ -44,7 +44,8 @@
 | `POST /api/devices/{edge}/{device}/commands` | 写 | `{cmd,args}`；`cmd` 必须在适配器白名单；args ≤64 字节且无换行/NUL；限流 `429` |
 | `GET /api/events?device=&since=&limit=` | 读 | 事件流（limit 默认 200，上限 1000） |
 | `GET /api/edges` | 读 | 边缘节点（含离线） |
-| `GET /api/commands?device=&status=&limit=` | 读 | 命令历史 |
+| `GET /api/commands?device=&status=&handled=&limit=` | 读 | 命令历史；`handled=unhandled\|handled` 只筛选人工处理状态 |
+| `POST /api/commands/handled` | 写 | `{ids?:number[],all_unhandled?:boolean}`；只处理 `failed`/`timeout`，保留原记录 |
 | `GET /api/adapters` | 读 | 适配器命令白名单（前端命令面板事实源） |
 | `GET /api/devices/{edge}/{device}/descriptor` | 读 | 单设备 Descriptor（Schema-driven UI 事实源） |
 | `GET /api/descriptors` | 读 | 会话可见的全部设备 Descriptor + 随行 Capability catalog |
@@ -148,7 +149,7 @@ WebUI 首屏一次性聚合。所有计数来自真实 Edge 上报与 Server 权
 | `devices_online` / `devices_total` | 设备在线数 / 总数 |
 | `edges_online` / `edges_total` | Edge 在线数 / 总数 |
 | `plugins_active` / `plugins_desired` | 未过期的实际运行数（Edge 健康/降级或中心 AppHost `running`）/ 期望启用数；期望启用不计作已运行 |
-| `commands_failed` | 近24小时 `failed` / `timeout` 命令的完整计数，不受预览条数限制 |
+| `commands_failed` | 近24小时未处理的 `failed` / `timeout` 命令完整计数，不受预览条数限制 |
 | `recent_events` | 近期事件（`EventView[]`，新→旧） |
 | `offline_devices` | 离线设备（`DeviceView[]`） |
 | `failed_commands` | 同一时间窗内最新20条失败或超时命令（`CommandView[]`），按失败时间、ID 降序 |
@@ -157,6 +158,8 @@ WebUI 首屏一次性聚合。所有计数来自真实 Edge 上报与 Server 权
 失败时间优先取 `acked_at`，缺失时回退 `created_at`；计数与预览共用闭区间
 `[server_time - 86400, server_time]` 与同一 SQL 读快照。鉴权请求始终按租户过滤，
 只有明确的无鉴权访问使用全局视图。此窗口不改变 `/api/commands` 的历史查询或数据保留。
+
+失败/超时命令可用 POST /api/commands/handled 标记为已处理。标记只影响概览待处理计数和 handled 筛选，不改变命令执行状态，也不删除原始记录；ll_unhandled 只处理同一 24 小时窗口内的未处理失败项。
 聚合来源读取失败返回 `503`，不伪装成零计数；无持久层的 API-only 模式仍返回空历史列表。
 
 ### 5.2 插件目录（读）

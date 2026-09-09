@@ -80,6 +80,8 @@ export interface OverviewAlert {
   tone: Tone
   title: string
   hint: string
+  /** live=当前运行状态，恢复后自动消失；history=历史失败记录，可人工标记已处理。 */
+  kind: 'live' | 'history'
   /** 跳转目标（让用户能一步走到可操作的页面） */
   to: string
   count: number
@@ -91,7 +93,7 @@ export function overviewAlerts(o: OverviewView): OverviewAlert[] {
   const offlineEdges = Math.max(0, o.edges_total - o.edges_online)
   if (offlineEdges > 0) {
     out.push({
-      id: 'edges-offline', tone: 'bad', count: offlineEdges, to: '/edges',
+      id: 'edges-offline', tone: 'bad', kind: 'live', count: offlineEdges, to: '/edges',
       title: i18n.t('alertDetails.edgesOfflineTitle', { ns: 'overview', count: offlineEdges }),
       hint: i18n.t('alertDetails.edgesOfflineHint', { ns: 'overview' }),
     })
@@ -99,7 +101,7 @@ export function overviewAlerts(o: OverviewView): OverviewAlert[] {
 
   if (o.offline_devices.length > 0) {
     out.push({
-      id: 'devices-offline', tone: 'warn', count: o.offline_devices.length, to: '/devices',
+      id: 'devices-offline', tone: 'warn', kind: 'live', count: o.offline_devices.length, to: '/devices',
       title: i18n.t('alertDetails.devicesOfflineTitle', { ns: 'overview', count: o.offline_devices.length }),
       hint: i18n.t('alertDetails.devicesOfflineHint', { ns: 'overview' }),
     })
@@ -108,7 +110,7 @@ export function overviewAlerts(o: OverviewView): OverviewAlert[] {
   if (o.commands_failed > 0) {
     const n = o.commands_failed
     out.push({
-      id: 'commands-failed', tone: 'bad', count: n, to: '/activity',
+      id: 'commands-failed', tone: 'bad', kind: 'history', count: n, to: '/activity?tab=commands&status=failed&handled=unhandled',
       title: i18n.t('alertDetails.commandsFailedTitle', { ns: 'overview', count: n }),
       hint: i18n.t('alertDetails.commandsFailedHint', { ns: 'overview' }),
     })
@@ -117,7 +119,7 @@ export function overviewAlerts(o: OverviewView): OverviewAlert[] {
   const pluginGap = Math.max(0, o.plugins_desired - o.plugins_active)
   if (pluginGap > 0) {
     out.push({
-      id: 'plugins-gap', tone: 'warn', count: pluginGap, to: '/plugins',
+      id: 'plugins-gap', tone: 'warn', kind: 'live', count: pluginGap, to: '/plugins',
       title: i18n.t('alertDetails.pluginsGapTitle', { ns: 'overview', count: pluginGap }),
       hint: i18n.t('alertDetails.pluginsGapHint', { ns: 'overview' }),
     })

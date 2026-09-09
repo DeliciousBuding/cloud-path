@@ -47,7 +47,7 @@ describe('overview failure window', () => {
     })
     const alert = commandAlert(o)
     expect(alert).toMatchObject({
-      count: 1, to: '/activity', title: '近 24 小时有 1 条操作失败或超时',
+      count: 1, kind: 'history', to: '/activity?tab=commands&status=failed&handled=unhandled', title: '近 24 小时有 1 条操作失败或超时',
     })
     expect(alert?.hint).toContain('查看失败或超时的操作')
     expect(alert?.hint).toContain('发生时间')

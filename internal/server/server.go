@@ -862,6 +862,7 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/api/plugin-instances/{id}/jobs", s.handlePluginInstanceJobs)
 		})
 		r.Post("/api/devices/{edgeID}/{deviceID}/commands", s.authWrite(s.handlePostCommand))
+		r.Post("/api/commands/handled", s.authWrite(s.handleMarkCommandsHandled))
 		// 插件实例管理写面（control-plane-sync §6）：viewer 只读，operator 可写，
 		// purge / 权限扩大 / secret binding 变更额外要求 admin 或显式 confirm_permissions。
 		r.Group(func(r chi.Router) {
@@ -1214,13 +1215,14 @@ func (s *Server) handleListCommands(w http.ResponseWriter, r *http.Request) {
 	}
 	dev := r.URL.Query().Get("device")
 	status := r.URL.Query().Get("status")
+	handled := r.URL.Query().Get("handled")
 	limit := queryInt(r, "limit", 100, 1000)
 	var rows []store.CommandRow
 	var err error
 	if p := auth.FromContext(r.Context()); p != nil {
-		rows, err = s.cfg.Store.ListCommandsTenant(p.TenantID, dev, status, limit)
+		rows, err = s.cfg.Store.ListCommandsTenantFiltered(p.TenantID, dev, status, handled, limit)
 	} else {
-		rows, err = s.cfg.Store.ListCommands(dev, status, limit)
+		rows, err = s.cfg.Store.ListCommandsFiltered(dev, status, handled, limit)
 	}
 	if err != nil {
 		slog.Warn("request failed", "err", err, "path", r.URL.Path)
@@ -1234,9 +1236,52 @@ func (s *Server) handleListCommands(w http.ResponseWriter, r *http.Request) {
 		if c.AckedAt.Valid {
 			cv.AckedAt = c.AckedAt.Int64
 		}
+		if c.HandledAt.Valid {
+			cv.HandledAt = c.HandledAt.Int64
+		}
 		out = append(out, cv)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"commands": out})
+}
+
+// handleMarkCommandsHandled 将失败/超时操作标记为已处理。
+// 只改变概览的“待查看失败操作”语义，不修改命令执行状态，也不删除运行记录。
+func (s *Server) handleMarkCommandsHandled(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Store == nil {
+		writeAPIError(w, r, http.StatusServiceUnavailable, api.APIErrInternal, "storage unavailable")
+		return
+	}
+	var body api.CommandHandledRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&body); err != nil {
+		writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidRequest, "body must be a JSON object", map[string]any{"field": "body"})
+		return
+	}
+	if len(body.IDs) == 0 && !body.AllUnhandled {
+		writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidRequest, "ids or all_unhandled is required", map[string]any{"field": "body"})
+		return
+	}
+	if len(body.IDs) > 200 {
+		writeAPIError(w, r, http.StatusBadRequest, api.APIErrInvalidRequest, "at most 200 command ids are allowed", map[string]any{"max_ids": 200})
+		return
+	}
+	var tenantID *int64
+	if p := auth.FromContext(r.Context()); p != nil {
+		tenantID = &p.TenantID
+	}
+	now := time.Now().Unix()
+	var n int64
+	var err error
+	if body.AllUnhandled {
+		n, err = s.cfg.Store.MarkFailedCommandsHandled(tenantID, now-86400, now, now)
+	} else {
+		n, err = s.cfg.Store.MarkCommandsHandled(tenantID, body.IDs, now)
+	}
+	if err != nil {
+		slog.Warn("mark commands handled failed", "err", err, "path", r.URL.Path)
+		writeAPIError(w, r, http.StatusInternalServerError, api.APIErrInternal, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"handled": n})
 }
 
 // handleListAdapters 暴露已注册设备适配器与其命令白名单——前端命令面板以此为准，
