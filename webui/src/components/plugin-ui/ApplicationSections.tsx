@@ -439,7 +439,7 @@ export function ApplicationSection(props: ApplicationSectionProps) {
     case 'diagnostics':
       return <DiagnosticsSection instance={instance} bindings={bindings} jobs={jobs} />
     case 'custom':
-      return <PluginUIBridge pluginId={catalog.id} version={catalog.version || instance.desired.version} instance={instance} section={section} />
+      return <PluginUIBridge pluginId={catalog.id} version={catalog.version || instance.desired.version} instance={instance} section={section} readOnly={readOnly} />
     default:
       return <div role="alert" className="rounded-tile bg-warn/12 px-3.5 py-3 text-body text-warn">{t('sections.unsupported')}</div>
   }
