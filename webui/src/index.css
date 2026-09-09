@@ -72,6 +72,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --color-canvas: #000000;
   --color-surface: #1c1c1e;
   --color-surface-2: #232325;
@@ -88,7 +89,7 @@
   --shadow-lift: 0 2px 8px rgba(0, 0, 0, 0.5), 0 16px 40px rgba(0, 0, 0, 0.55);
 }
 
-html { min-width: 320px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
+html { color-scheme: light; min-width: 320px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
 body {
   margin: 0;
   background: var(--color-canvas);
@@ -263,6 +264,42 @@ p { text-wrap: pretty; }
 .input-error, .input-error:focus {
   border-color: var(--color-bad);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-bad) 15%, transparent);
+}
+
+/* 原生 select 的展开菜单由浏览器绘制，普通 CSS 改不到圆角和主题。
+ * Chromium/Edge 支持 appearance:base-select 时，用 picker 伪元素把弹出层纳入设计 token；
+ * 不支持的浏览器保留原生箭头，并通过 color-scheme 至少跟随深浅主题。 */
+select:not([multiple]) { appearance: auto; }
+@supports (appearance: base-select) {
+  select:not([multiple]) { appearance: base-select; }
+  select:not([multiple]):open {
+    background: var(--color-surface);
+    border-color: color-mix(in srgb, var(--color-accent) 55%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 16%, transparent);
+  }
+  select:not([multiple])::picker-icon { color: var(--color-ink-3); }
+  select:not([multiple])::picker(select) {
+    margin-top: 6px;
+    padding: 4px;
+    background: var(--color-surface);
+    color: var(--color-ink);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-tile);
+    box-shadow: var(--shadow-lift);
+  }
+  select:not([multiple]) option {
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--color-surface);
+    color: var(--color-ink);
+  }
+  select:not([multiple]) option:checked {
+    background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
+  }
+  select:not([multiple]) option:hover,
+  select:not([multiple]) option:focus {
+    background: color-mix(in srgb, var(--color-ink) 8%, var(--color-surface));
+  }
 }
 
 /* 大号按钮（认证页主操作） */
