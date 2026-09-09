@@ -47,9 +47,9 @@ export function Panel({ title, right, className, children }: {
   title?: ReactNode; right?: ReactNode; className?: string; children: ReactNode
 }) {
   return (
-    <section className={cn('card p-4 sm:p-5', className)}>
+    <section className={cn('card min-w-0 p-4 sm:p-5', className)}>
       {(title || right) && (
-        <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="mb-4 flex min-w-0 items-center justify-between gap-3">
           {title && <h2 className="text-lead font-semibold tracking-[-0.01em]">{title}</h2>}
           {right && <div className={cn(!title && 'ml-auto')}>{right}</div>}
         </div>
