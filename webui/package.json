@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "i18n:check": "python ../scripts/check_i18n.py"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.62.0",
