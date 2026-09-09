@@ -89,7 +89,7 @@ export default function DeviceDetail() {
   const setTab = (value: Tab) => setSearchParams((previous) => {
     const next = new URLSearchParams(previous)
     if (value === 'overview') {
-      next.delete('tab'); next.delete('view')
+      next.set('tab', 'overview'); next.delete('view')
     } else if (value === 'advanced') {
       next.set('tab', 'advanced'); next.set('view', advancedView)
     } else {

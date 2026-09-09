@@ -204,6 +204,16 @@ describe('设备分区深链接', () => {
     expect(screen.getByRole('heading', { level: 2, name: '设备操作' })).toBeInTheDocument()
   })
 
+  it('点击概览会显式进入概览，不被默认设备操作弹回', async () => {
+    route({ descriptor: makeDescriptor(), capabilities: catalogPayload })
+    renderDetail(ROUTE)
+    const user = userEvent.setup()
+    await screen.findByRole('heading', { level: 1 })
+    await user.click(screen.getByRole('tab', { name: /概览/ }))
+    expect(await screen.findByRole('tab', { name: /概览/ })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByText('设备摘要')).toBeInTheDocument()
+  })
+
   it('controls 查询参数直接打开正确设备的控制区', async () => {
     route({ adapters: [{ name: 'demo', commands: ['identify'] }] })
     renderDetail(ROUTE + '?tab=controls')
