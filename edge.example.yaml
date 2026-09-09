@@ -46,8 +46,8 @@ devices:
 
 # 可选的进程内外部 Driver Plugin Host（默认不启用，保持纯内置 adapter 行为）。
 # 启用后由 desired-state + plugins.lock 启动外部 driver 实例；edge 退出时优雅关闭。
-# 外部 driver 的 handshake/descriptor/observation 尚未桥接进 edge 数据流：
-# 只报告 unsupported，不会伪装成在线设备。内置 adapter 与外部 driver ID 冲突会拒绝启动。
+# 外部 driver 通过 Driver Protocol v1 完成握手，并桥接 Descriptor / Observation / Action；
+# 插件进程不可用时由监督循环如实上报，不会伪装成在线设备。内置 adapter 与外部 driver ID 冲突会拒绝启动。
 # plugin_host:
 #   enabled: true                      # 是否启用外部 host
 #   root: plugins.d                    # 插件安装根目录（支持 ${ENV} 展开）

@@ -48,10 +48,10 @@ export function edgeFacts(edges: EdgeView[], devices: DeviceView[]): EdgeFacts[]
   })
 }
 
-/** 在线优先，其次按最近上报倒序，最后按 ID 字典序（同一次渲染内顺序稳定，不跳位） */
+/** 离线优先暴露待处理项，其次按最近上报倒序，最后按 ID 字典序（同一次渲染内顺序稳定，不跳位） */
 export function sortEdgeFacts(facts: EdgeFacts[]): EdgeFacts[] {
   return [...facts].sort((a, b) => {
-    if (a.edge.online !== b.edge.online) return a.edge.online ? -1 : 1
+    if (a.edge.online !== b.edge.online) return a.edge.online ? 1 : -1
     if (b.lastReport !== a.lastReport) return b.lastReport - a.lastReport
     return a.edge.edge_id.localeCompare(b.edge.edge_id)
   })

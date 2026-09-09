@@ -87,7 +87,7 @@ function Brand() {
       <Logo size={26} />
       <span className="leading-tight">
         <span className="block text-[15px] font-semibold tracking-[-0.01em] text-ink">CloudPath</span>
-        <span className="block text-[12px] text-ink-3">云径 · 设备接入平台</span>
+        <span className="hidden text-[12px] text-ink-3 sm:block">云径 · 设备接入平台</span>
       </span>
     </NavLink>
   )
@@ -223,7 +223,7 @@ export default function Layout() {
       </aside>
 
       {/* 移动端顶栏 */}
-      <header className="bg-surface sticky top-0 z-40 border-b border-hairline px-4 py-3 lg:hidden">
+      <header className="bg-surface sticky top-0 z-40 border-b border-hairline px-4 py-2.5 lg:hidden">
         <div className="flex items-center justify-between gap-3">
           <Brand />
           <div className="flex items-center gap-2">
@@ -236,7 +236,7 @@ export default function Layout() {
                 aria-controls="mobile-more-menu"
                 onClick={() => setMoreOpen((open) => !open)}
                 className={cn(
-                  'btn btn-ghost',
+                  'btn btn-ghost min-h-11',
                   (moreOpen || moreActive) && 'border-accent/30 bg-accent/8 text-accent',
                 )}
               >
@@ -266,11 +266,11 @@ export default function Layout() {
             </div>
           </div>
         </div>
-        <nav className="mt-3 grid grid-cols-4 gap-1" aria-label="主导航">
+        <nav className="mt-2 grid grid-cols-4 gap-1" aria-label="主导航">
           {CORE_NAV.map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} title={label}
               className={({ isActive }) => cn(
-                'flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-1.5 text-[11px] font-medium transition-colors',
+                'flex min-h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1 text-[11px] font-medium transition-colors',
                 isActive ? 'bg-accent/10 text-accent' : 'text-ink-2 hover:bg-ink-3/8 hover:text-ink',
               )}>
               <Icon size={15} strokeWidth={1.9} />

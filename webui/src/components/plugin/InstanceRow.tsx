@@ -65,13 +65,13 @@ export function InstanceRow({ v, catalog, onEdit }: {
           <p className="text-[12px] font-medium text-ink-3">当前运行情况</p>
           {v.has_observed ? (
             <>
-              <p className={`mt-1 flex min-w-0 items-baseline gap-1 text-[12px] font-medium ${
+              <p className={`mt-1 break-words text-[12px] font-medium ${
                 status.tone === 'ok' ? 'text-ok' : status.tone === 'bad' ? 'text-bad'
                   : status.tone === 'warn' ? 'text-warn' : ''}`}
                 title={`${st.label} · ${v.observed?.version ?? '未给出版本'}`}>
-                <span className="min-w-0 truncate">{status.summary}</span>
+                {status.summary}
               </p>
-              <p className="mt-0.5 truncate text-[12px] text-ink-3">
+              <p className="mt-0.5 break-words text-[12px] text-ink-3">
                 {v.observed?.health ? '健康：' + hl.label : '健康状态未上报'}
                 {v.stale ? ' · 状态可能不是最新' : ''}
               </p>
@@ -87,10 +87,9 @@ export function InstanceRow({ v, catalog, onEdit }: {
         </div>
       </div>
 
-      {status.needsAttention && (
-        <div className="mt-3 rounded-lg bg-warn/10 px-3 py-2.5 text-[12px] leading-relaxed">
-          <p className="font-medium text-warn">{status.label}</p>
-          {status.next && <p className="mt-1 text-ink-2">下一步：{status.next}</p>}
+      {status.needsAttention && status.next && (
+        <div className="mt-3 rounded-lg bg-warn/10 px-3 py-2.5 text-[12px] leading-relaxed text-ink-2">
+          下一步：{status.next}
         </div>
       )}
 

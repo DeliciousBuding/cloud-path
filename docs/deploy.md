@@ -1,6 +1,6 @@
-# Cloudpath 部署指南
+# CloudPath 部署指南
 
-最后更新：2026-09-03
+最后更新：2026-09-09
 
 > 本文面向部署者，覆盖本地、Docker、edge 容器与反向代理。安全基线见
 > [security.md](security.md)，HTTP 契约见 [api.md](api.md)，源码入口见
@@ -8,7 +8,7 @@
 
 ## 1. 前置条件
 
-- Go 1.26+、Node 20+、pnpm 9（本地开发/构建）
+- Go 1.26+、Node 20+、pnpm（版本以 `webui/package.json` 的 `packageManager` 为准）
 - Docker 24+ / Docker Compose v2（容器部署）
 - 反向代理示例：nginx 1.25+（TLS）
 - 真机 edge：Linux 串口设备 `/dev/ttyUSB0` 等；Windows 建议直接在宿主机跑
@@ -86,7 +86,7 @@ curl -fsS http://127.0.0.1:8080/healthz
 `docker-compose.public.yml`（L2 公网，含 nginx TLS）。`CLOUDPATH_BIND` 默认
 `127.0.0.1:8080`（只暴露本机），公网不要改成 `0.0.0.0:8080` 直出；TLS 交给反代。
 
-> ⚠️ **容器首装**：Docker 端口映射后 server 进程看到的源 IP 是网关（非回环），所以从宿主
+> **容器首装**：Docker 端口映射后 server 进程看到的源 IP 是网关（非回环），所以从宿主
 > `POST /api/auth/setup` 会 403。应在 server 容器内走回环，或设 `CLOUDPATH_SETUP_TOKEN`
 > 后带 `X-Cloudpath-Setup-Token` 头首装（详见 `deploy/compose/README.md`）。
 
@@ -149,8 +149,8 @@ CLOUDPATH_ALLOWED_ORIGINS=console.example.com
 - `CLOUDPATH_ALLOWED_ORIGINS` 填浏览器访问的 host（如 `console.example.com`），
   不要填 `http://` 前缀；如端口不是 443，需带端口。
 - 不要在 NAT 上把 8080 暴露到公网；server 只应被反代在本机/内网访问。
-- `X-Forwarded-Proto` 用于未来的安全 cookie/TLS 感知；当前服务并未依赖它判断
-  鉴权，不能据此放宽边界。
+- `CLOUDPATH_TRUSTED_PROXIES` 必须包含反代来源，服务才会采信 `X-Forwarded-Proto` 并为会话 cookie
+  标记 `Secure`；未命中可信反代时伪造该头一律忽略，不能据此放宽鉴权边界。
 
 ## 6. 健康检查、日志与数据
 

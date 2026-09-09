@@ -98,7 +98,7 @@ export default function EdgeDetail() {
           <dl className="space-y-2.5">
             <KeyValue k="网关编号" v={e.edge_id} mono />
             <KeyValue k="版本" v={e.version || '未知'} mono />
-            <KeyValue k="最近更新"
+            <KeyValue wrap k="最近更新"
               v={<span className="num font-mono">{f.lastReport ? fmtDateTime(f.lastReport) : '从未更新'}</span>} />
             <KeyValue k="接入设备" v={`${f.devices.length} 台 · ${f.onlineDevices} 台在线`} />
             {f.declared.length !== f.devices.length && <KeyValue k="已发现设备" v={`${f.declared.length} 台`} />}
@@ -130,8 +130,8 @@ export default function EdgeDetail() {
                         <span className="sr-only">{d.online ? '在线，' : '离线，'}</span>
                         {deviceLabel(d)}
                       </span>
-                      <span className="num block truncate font-mono text-[11px] text-ink-3" title={d.id}>
-                        {d.adapter || '未知设备类型'}{d.port ? ` · ${d.port}` : ''}
+                      <span className="num block truncate font-mono text-[11px] text-ink-3" title={`${d.adapter || '未知设备类型'}${d.port ? ` · ${d.port}` : ''}`}>
+                        {d.port ? `串口 ${d.port}` : '串口未报告'}
                       </span>
                     </Link>
                     <span className="num shrink-0 font-mono text-[11px] text-ink-3 sm:text-right"
@@ -148,7 +148,7 @@ export default function EdgeDetail() {
         </Panel>
 
         <Panel className="lg:col-span-3"
-          title={<span className="flex items-center gap-1.5"><History size={14} />该网关近期状态事件</span>}
+          title={<span className="flex items-center gap-1.5"><History size={14} />近期状态事件</span>}
           right={<span className="num text-[12px] text-ink-3">{events.length} 条</span>}>
           {evLoading && events.length === 0 ? (
             <RowSkeleton rows={5} />

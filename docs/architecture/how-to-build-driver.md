@@ -102,7 +102,7 @@ python scripts/validate_manifest.py plugin.yaml --dir .
 WebUI → Server → Edge → Driver → 硬件 → ACK/Event/State → Server → WebUI
 ```
 
-不能靠代码存在、CI 绿或模拟器补绿冒充硬件完成。
+不能靠代码存在、CI 通过或模拟器结果冒充硬件完成。
 
 ## 6. 完成标准（自查）
 

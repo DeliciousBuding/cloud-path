@@ -167,6 +167,7 @@ Topic 只是候选集合，不是信任证明。CLI 搜到仓库后还必须检�
 | UI | Descriptor / Capability 驱动设备视图、能力动作与命令表单 | 任意第三方 React bundle 注入仍是非目标 |
 | STC-B | 已拆为独立 Driver Plugin [`cloud-path-driver-stcb`](https://github.com/DeliciousBuding/cloud-path-driver-stcb)，Core 生产二进制不再内置 STC-B | 发布版本以插件仓库 tag 为准 |
 | 业务应用 | Server AppHost + `internal/appruntime` + Application Protocol v1，支持 Capability 绑定、领域记录、任务与手动操作 | 参考应用已拆为独立仓库；旧 bootstrap 仅作历史参考 |
+| Connector / 通知 | Connector Manifest 贡献可安装与披露；运行时未实现，`SendNotification` effect fail-closed | 没有 Connector 进程宿主或通知投递通道；不得按现状使用 |
 | 插件发现与安装 | GitHub Topic 开放发现 + Registry CLI（search/inspect/install/enable/disable/update/remove/host），校验 Manifest、digest、兼容范围并写 `plugins.lock` | Registry 是信任增强通道，不替代摘要与权限校验 |
 | 多租户 | 账号/RBAC、tenant token、审计、设备和插件实例按 `tenant_id` 隔离；浏览器 WS 快照与 fan-out 按租户过滤 | 单 Server 部署；分布式全局配额与跨 Server 调度未实现 |
 

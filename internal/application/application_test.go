@@ -2,7 +2,6 @@ package application
 
 import (
 	"errors"
-	"os"
 	"testing"
 )
 
@@ -215,17 +214,7 @@ func TestRejectCrossTenantBinding(t *testing.T) {
 }
 
 func TestScheduledCompartmentBinding(t *testing.T) {
-	data, err := os.ReadFile("../../examples/scheduled-compartment/requirements.yaml")
-	if err != nil {
-		t.Fatalf("read fixture: %v", err)
-	}
-	reqs, err := ParseRequirements(data)
-	if err != nil {
-		t.Fatalf("ParseRequirements: %v", err)
-	}
-	if len(reqs) != 3 {
-		t.Fatalf("expected 3 requirements, got %d", len(reqs))
-	}
+	reqs := scRequirements()
 
 	binder := Binder{
 		ApplicationID:    "io.github.deliciousbuding.cloud-path-app-scheduled-compartment",

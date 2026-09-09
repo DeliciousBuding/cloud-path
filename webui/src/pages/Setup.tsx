@@ -197,7 +197,7 @@ export default function Setup() {
           )}
           <div className="flex gap-2">
             <Button variant="ghost" lg disabled={phase === 'checking'} onClick={() => void probe()} className="shrink-0">
-              <RefreshCw size={14} /> 重试
+              <RefreshCw size={14} /> {phase === 'checking' ? '检测中…' : phase === 'ok' ? '重新检测' : '重试'}
             </Button>
             {alreadyIn ? (
               <Button lg onClick={() => navigate('/', { replace: true })} className="min-w-0 flex-1">
@@ -205,7 +205,7 @@ export default function Setup() {
               </Button>
             ) : (
               <Button lg disabled={phase !== 'ok'} onClick={() => setStep(1)} className="min-w-0 flex-1">
-                下一步 <ArrowRight size={14} />
+                下一步：创建账号 <ArrowRight size={14} />
               </Button>
             )}
           </div>
@@ -213,15 +213,37 @@ export default function Setup() {
       )}
 
       {step === 1 && (
+        redirectToLogin ? (
+          <div className="space-y-4">
+            <div role="alert" className="rounded-lg bg-warn/12 p-3.5 text-[13px] leading-relaxed break-words text-warn">
+              {formError}
+              <Link to="/login" className="link mt-2 flex items-center gap-1 text-[13px]">
+                <LogIn size={13} /> 去登录页
+              </Link>
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="ghost" lg onClick={() => { setRedirectToLogin(false); setFormError(''); setStep(0) }} className="shrink-0">
+                <ArrowLeft size={14} /> 上一步
+              </Button>
+              <Button type="button" lg className="min-w-0 flex-1" onClick={() => navigate('/login', { replace: true })}>
+                去登录页 <ArrowRight size={14} />
+              </Button>
+            </div>
+          </div>
+        ) : (
         <form onSubmit={onCreate} noValidate className="space-y-4">
           <div className="rounded-lg bg-surface-2 p-3.5">
-            <p className="flex items-start gap-2 text-[12px] leading-relaxed text-ink-2">
+            <div className="flex items-start gap-2">
               <ShieldAlert size={14} className="mt-0.5 shrink-0 text-warn" />
-              <span>
-                这里创建的是<span className="font-semibold text-ink">首个管理员账号</span>。完成后，只有已登录的成员可以进入；其他成员由管理员在
-                「管理 → 成员与访问权限」中添加。如果你不是这台设备的直接使用者，请联系管理员协助。
-              </span>
-            </p>
+              <div className="min-w-0 text-[12px] leading-relaxed text-ink-2">
+                <p>这里创建的是<span className="font-semibold text-ink">首个管理员账号</span>。完成后：</p>
+                <ul className="mt-2 list-disc space-y-1 pl-4">
+                  <li>只有已登录的成员可以进入平台。</li>
+                  <li>其他成员由管理员在「管理 → 成员与访问权限」中添加。</li>
+                </ul>
+                <p className="mt-2">如果你不是这台设备的直接使用者，请先联系管理员。</p>
+              </div>
+            </div>
           </div>
 
           <TextField
@@ -276,20 +298,13 @@ export default function Setup() {
           />
 
           {formError && (
-            <div role="alert"
-              className={cn('rounded-lg p-3.5 text-[13px] leading-relaxed break-words',
-                redirectToLogin ? 'bg-warn/12 text-warn' : 'bg-bad/10 text-bad')}>
+            <div role="alert" className="rounded-lg bg-bad/10 p-3.5 text-[13px] leading-relaxed break-words text-bad">
               {formError}
-              {redirectToLogin && (
-                <Link to="/login" className="link mt-2 flex items-center gap-1 text-[13px]">
-                  <LogIn size={13} /> 去登录页
-                </Link>
-              )}
             </div>
           )}
 
           <div className="flex gap-2">
-            <Button type="button" variant="ghost" lg disabled={busy} onClick={() => setStep(0)} className="shrink-0">
+            <Button type="button" variant="ghost" lg disabled={busy} onClick={() => { setRedirectToLogin(false); setFormError(''); setStep(0) }} className="shrink-0">
               <ArrowLeft size={14} /> 上一步
             </Button>
             <Button type="submit" lg disabled={busy} className="min-w-0 flex-1">
@@ -298,6 +313,7 @@ export default function Setup() {
             </Button>
           </div>
         </form>
+      )
       )}
 
       {step === 2 && (

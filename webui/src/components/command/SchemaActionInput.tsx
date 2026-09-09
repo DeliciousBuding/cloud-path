@@ -263,7 +263,7 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
   }
 
   const fieldsUI = activeFields.length > 0 ? (
-    <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+    <div className="grid min-w-0 gap-2 sm:grid-cols-2 sm:gap-3">
       {activeFields.map((field, index) => {
         const fieldId = id + '-field-' + index
         const fieldDescription = field.description ? fieldId + '-description' : undefined
@@ -293,12 +293,12 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
                   placeholder={(field.fields ?? []).map((nested) => nested.label).join(', ')}
                   aria-describedby={[fieldDescription, describedBy].filter(Boolean).join(' ')}
                   onChange={(e) => setField(field.key, e.target.value)}
-                  className="input input-sm min-w-0 font-mono" />
+                  className="input input-sm min-h-11 min-w-0 font-mono sm:min-h-0" />
               </div>
             ) : field.type === 'enum' || field.type === 'boolean' ? (
               <select id={fieldId} value={value} required={field.required}
                 aria-describedby={[fieldDescription, describedBy].filter(Boolean).join(' ')}
-                className="input input-sm min-w-0"
+                className="input input-sm min-h-11 min-w-0 sm:min-h-0"
                 onChange={(e) => setField(field.key, e.target.value)}>
                 <option value="">请选择</option>
                 {field.type === 'boolean' ? <><option value="true">是</option><option value="false">否</option></>
@@ -316,7 +316,7 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
                     : '用逗号或空格分隔')
                   : undefined}
                 aria-describedby={[fieldDescription, describedBy].filter(Boolean).join(' ')}
-                onChange={(e) => setField(field.key, e.target.value)} className="input input-sm min-w-0" />
+                onChange={(e) => setField(field.key, e.target.value)} className="input input-sm min-h-11 min-w-0 sm:min-h-0" />
             )}
             {field.description && <p id={fieldDescription} className="mt-1 break-words text-[12px] text-ink-3">{field.description}</p>}
           </div>
@@ -326,7 +326,7 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
   ) : null
 
   return (
-    <fieldset className="min-w-0 border-t border-hairline pt-3" aria-describedby={describedBy} disabled={disabled}>
+    <fieldset className={cn('min-w-0', showTitle && 'border-t border-hairline pt-3')} aria-describedby={describedBy} disabled={disabled}>
       <legend className={cn('max-w-full break-words text-[13px] text-ink-2 [overflow-wrap:anywhere]',
         showTitle ? 'mb-1.5' : 'sr-only')}>
         {action.label}
@@ -369,31 +369,33 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
       )}
 
       {shownError && <p id={errorId} role="alert" className="mt-2 break-words text-[12px] text-bad">{shownError}</p>}
-      {!edited && error && <p className="mt-2 text-[12px] text-ink-3">{emptyHint}</p>}
+      {!edited && error && <p className="sr-only text-[12px] text-ink-3 sm:not-sr-only sm:mt-2 sm:block">{emptyHint}</p>}
       {unsupported.length > 0 && (json !== null || !form) && (
         <details className="mt-2 text-[12px] text-ink-3">
-          <summary className="cursor-pointer select-none transition-colors hover:text-ink-2">部分参数由{validationSource}确认</summary>
+          <summary className="flex min-h-11 cursor-pointer select-none items-center transition-colors hover:text-ink-2 sm:min-h-0">部分参数由{validationSource}确认</summary>
           <p className="mt-1 break-words">未校验：{unsupported.join('、')}；最终结果由{validationSource}确认。</p>
         </details>
       )}
+      <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+        {renderSubmit(args, error)}
+      </div>
       {form && json === null && activeFields.length > 0 && (
-        <button type="button" className="link mt-2 text-[12px] text-ink-3" aria-label={action.label + ' 技术人员选项'}
-          onClick={() => { onEdit?.(); setJSON(args); setEdited(true) }}>
-          技术人员选项
-        </button>
+        <div className="mt-2 flex justify-end">
+          <button type="button" className="link inline-flex min-h-11 items-center text-[12px] text-ink-3 sm:min-h-0" aria-label={action.label + ' 技术人员选项'}
+            onClick={() => { onEdit?.(); setJSON(args); setEdited(true) }}>
+            技术人员选项
+          </button>
+        </div>
       )}
       {form && json !== null && backToFields === null && <p className="mt-2 text-[12px] text-ink-3">当前参数无法自动转换为表单，请继续在高级参数中编辑。</p>}
       {form && json !== null && (
         <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-[12px]">
-          <button type="button" className="link" disabled={backToFields === null} aria-label={action.label + ' 使用表单填写'}
+          <button type="button" className="link inline-flex min-h-11 items-center sm:min-h-0" disabled={backToFields === null} aria-label={action.label + ' 使用表单填写'}
             onClick={() => { if (backToFields) { setValues(backToFields); setJSON(null); setEdited(true) } }}>
             使用表单填写
           </button>
         </div>
       )}
-      <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
-        {renderSubmit(args, error)}
-      </div>
     </fieldset>
   )
 }

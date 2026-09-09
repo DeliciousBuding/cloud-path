@@ -283,15 +283,17 @@ export function instanceStatus(v: PluginInstanceView): InstanceStatus {
   const health = healthMeta(v.observed?.health)
 
   if (!v.has_observed) {
+    const hostOffline = !serverHosted && v.desired.enabled && !v.edge_online
     return {
-      key: 'unknown', label: '状态待确认', tone: 'idle',
-      summary: `还没有收到${host}的运行状态`,
+      key: hostOffline ? 'attention' : 'unknown', label: hostOffline ? '等待网关连接' : '状态待确认',
+      tone: hostOffline ? 'warn' : 'idle',
+      summary: hostOffline ? '网关离线，还没有收到运行状态' : `还没有收到${host}的运行状态`,
       next: serverHosted
         ? '稍后刷新；如果一直没有状态，请查看运行记录。'
-        : v.edge_online
-          ? '稍后刷新；如果一直没有状态，请重新应用设置。'
-          : '先恢复网关连接，连接后会自动更新。',
-      needsAttention: false, priority: 1,
+        : hostOffline
+          ? '先恢复网关连接，连接后会自动更新。'
+          : '稍后刷新；如果一直没有状态，请重新应用设置。',
+      needsAttention: hostOffline, priority: hostOffline ? 0 : 1,
     }
   }
 
@@ -307,10 +309,13 @@ export function instanceStatus(v: PluginInstanceView): InstanceStatus {
   }
 
   if (v.drift || (!v.desired.enabled && state.tone === 'ok')) {
+    const healthCopy = v.observed?.health && health.tone !== 'ok' && health.tone !== 'idle'
+      ? ` · 健康${health.label}` : ''
     return {
       key: 'attention', label: '最新设置尚未生效', tone: 'warn',
-      summary: !v.desired.enabled && state.tone === 'ok' ? '当前仍在运行' : `当前：${state.label}`,
-      next: '打开详情，确认设置后重新应用。',
+      summary: !v.desired.enabled && state.tone === 'ok'
+        ? '当前仍在运行' : `当前：${state.label}${healthCopy}`,
+      next: '打开详情核对设置，再点击「重新应用设置」。',
       needsAttention: true, priority: 0,
     }
   }

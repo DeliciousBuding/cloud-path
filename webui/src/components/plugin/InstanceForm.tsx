@@ -38,12 +38,14 @@ function legalIsolation(value: string | undefined): 'shared' | 'per-instance' {
   return 'shared'
 }
 
-export function InstanceForm({ mode, instance, catalog, onDone }: {
+export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone }: {
   mode: 'create' | 'edit'
   /** edit 模式下的当前实例（用于预填） */
   instance?: PluginInstanceView | null
   /** 目录（提供插件候选与权限声明） */
   catalog: PluginCatalogView[]
+  /** 从「可用插件」卡片进入时预选插件；只接受可创建的应用/驱动 */
+  initialPluginId?: string
   onDone: () => void
 }) {
   const { list: edges } = useEdges()
@@ -51,7 +53,7 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
 
   const [edgeId, setEdgeId] = useState(instance?.edge_id ?? '')
   const [instanceId, setInstanceId] = useState(d?.instance_id ?? '')
-  const [pluginId, setPluginId] = useState(d?.plugin_id ?? '')
+  const [pluginId, setPluginId] = useState(d?.plugin_id ?? initialPluginId ?? '')
   const [version, setVersion] = useState(d?.version ?? '')
   const [enabled, setEnabled] = useState(d?.enabled ?? true)
   const [isolation, setIsolation] = useState<'shared' | 'per-instance'>(() => legalIsolation(d?.isolation))
@@ -64,11 +66,13 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
     const kind = normalizePluginKind(p.kind)
     return kind === 'application' || kind === 'driver'
   }), [catalog])
-  const preferredCreate = useMemo(
-    () => createOptions.find((p) => normalizePluginKind(p.kind) === 'application')
-      ?? createOptions.find((p) => normalizePluginKind(p.kind) === 'driver'),
-    [createOptions],
-  )
+  const preferredCreate = useMemo(() => {
+    const verified = createOptions.filter((p) => p.verified)
+    return verified.find((p) => normalizePluginKind(p.kind) === 'application')
+      ?? verified.find((p) => normalizePluginKind(p.kind) === 'driver')
+      ?? createOptions.find((p) => normalizePluginKind(p.kind) === 'application')
+      ?? createOptions.find((p) => normalizePluginKind(p.kind) === 'driver')
+  }, [createOptions])
   const effectivePluginId = pluginId || (mode === 'create' ? preferredCreate?.id : catalog[0]?.id) || ''
   const selected = useMemo(() => catalog.find((p) => p.id === effectivePluginId), [catalog, effectivePluginId])
   const pluginKind = normalizePluginKind(selected?.kind)

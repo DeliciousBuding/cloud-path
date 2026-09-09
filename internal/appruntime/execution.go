@@ -22,19 +22,6 @@ type BatchResult struct {
 	Failed   int
 }
 
-// ExecuteEffect validates, tenant-checks and idempotently executes one effect
-// against the named instance.
-func (r *Runtime) ExecuteEffect(ctx context.Context, tenantID, instanceID string, effect Effect) error {
-	res, err := r.ExecuteEffects(ctx, tenantID, instanceID, []Effect{effect})
-	if err != nil {
-		return err
-	}
-	if len(res.Results) == 1 && res.Results[0].Err != nil {
-		return res.Results[0].Err
-	}
-	return nil
-}
-
 // ExecuteEffects runs a batch with fail-fast semantics. It returns the
 // partial-success facts on failure so callers can observe which effects ran
 // before the first failure.

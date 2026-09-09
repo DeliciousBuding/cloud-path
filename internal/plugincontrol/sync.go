@@ -168,15 +168,6 @@ func (s *Syncer) AppliedRevision() uint64 {
 	return s.cache.AppliedRevision
 }
 
-// Cache 返回本地 applied cache 的副本（诊断/测试用）。
-func (s *Syncer) Cache() AppliedCache {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := s.cache
-	out.Results = append([]api.PluginApplyResultData(nil), s.cache.Results...)
-	return out
-}
-
 // HandleDesired 按契约规则处理一份 Server 期望态快照并产出 ack：
 //
 //   - new revision > applied            → apply，成功才推进 applied_revision

@@ -211,7 +211,11 @@ func TestSameRevisionDifferentDigestRejected(t *testing.T) {
 	if applier.callCount() != calls {
 		t.Fatal("被拒绝的快照不得触发 apply")
 	}
-	if got := s.Cache().SnapshotDigest; got != "digest-A" {
+	cache, err := plugincontrol.LoadAppliedCache(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cache.SnapshotDigest; got != "digest-A" {
 		t.Fatalf("cache 摘要被改写: %q, want digest-A", got)
 	}
 	data, err := os.ReadFile(cachePath)
@@ -271,13 +275,17 @@ func TestEmptyDigestRejected(t *testing.T) {
 // Server 的初始快照（revision 可能是 0），不会把首次收敛误判成异摘要。
 func TestFirstSnapshotAtRevisionZeroApplies(t *testing.T) {
 	applier := &fakeApplier{}
-	s, _ := newTestSyncer(t, applier)
+	s, cachePath := newTestSyncer(t, applier)
 	ack := s.HandleDesired(context.Background(), desired(0, "digest-0", "i1"))
 	if ack.Status != api.PluginAckApplied {
 		t.Fatalf("首次 revision=0 快照应被应用，got %q（%+v）", ack.Status, ack.Results)
 	}
-	if s.Cache().SnapshotDigest != "digest-0" {
-		t.Fatalf("cache 摘要 = %q", s.Cache().SnapshotDigest)
+	cache, err := plugincontrol.LoadAppliedCache(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cache.SnapshotDigest != "digest-0" {
+		t.Fatalf("cache 摘要 = %q", cache.SnapshotDigest)
 	}
 	// 此后同 revision 异摘要必须被拒（不再是「从未应用」状态）。
 	if ack := s.HandleDesired(context.Background(), desired(0, "digest-0b", "i1")); ack.Status != api.PluginAckRejected {
@@ -574,7 +582,7 @@ func TestConcurrentDesiredIsSerialized(t *testing.T) {
 		}
 		return out, nil
 	}
-	s, _ := newTestSyncer(t, applier)
+	s, cachePath := newTestSyncer(t, applier)
 
 	var wg sync.WaitGroup
 	for i := 1; i <= 12; i++ {
@@ -594,7 +602,11 @@ func TestConcurrentDesiredIsSerialized(t *testing.T) {
 	if applied != 12 {
 		t.Fatalf("applied revision = %d, want 12", applied)
 	}
-	if got := s.Cache().SnapshotDigest; got != fmt.Sprintf("digest-%d", applied) {
+	cache, err := plugincontrol.LoadAppliedCache(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cache.SnapshotDigest; got != fmt.Sprintf("digest-%d", applied) {
 		t.Fatalf("cache 摘要 = %q，与 applied revision %d 不一致", got, applied)
 	}
 }

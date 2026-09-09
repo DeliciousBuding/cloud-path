@@ -7,7 +7,7 @@ import {
 } from '@/components/ui'
 import type { TabItem } from '@/components/ui'
 import {
-  CapabilityBrowser, EntityInventory, JsonBlock, MetricTile, RawView, StateMatrix, StatusBadge,
+  CapabilityBrowser, EntityInventory, JsonBlock, MetricTile, RawView, StateMatrix,
 } from '@/components/SchemaRenderer'
 import { ActionPanel } from '@/components/ActionPanel'
 import { CommandHistory } from '@/components/CommandHistory'
@@ -18,13 +18,18 @@ import { api, isNotFound } from '@/lib/api'
 import { useLive } from '@/store/ws'
 import { useNow } from '@/hooks/useNow'
 import { useDeviceDescriptor } from '@/hooks/useDescriptor'
+import type { DescriptorSource } from '@/hooks/useDescriptor'
 import {
-  entityTitle, formatTimestamp, formatValue, metricTiles, observationsOf, primaryObservation,
+  deviceStatusMeta, entityTitle, formatTimestamp, formatValue, metricTiles, observationsOf, primaryObservation,
   propertyLabel,
   qualityTone, summarizeRaw, unitLabel, widgetFor, QUALITY_LABEL,
 } from '@/lib/descriptor'
 import type { SummaryValue } from '@/lib/descriptor'
 import { eventLabel, fmtDateTime, mergeEvents, optionLabel, payloadLabel, timeAgo } from '@/lib/format'
+
+const DESCRIPTOR_SOURCE_LABEL: Record<DescriptorSource, string> = {
+  ws: '实时同步', inline: '设备上报', rest: '设备直连', bulk: '批量同步', none: '尚未同步', error: '加载失败',
+}
 
 const STATE_VALUE_LABEL: Record<string, string> = {
   free: '空闲', busy: '忙碌', idle: '空闲', running: '运行中', stopped: '已停止',
@@ -289,15 +294,13 @@ export default function DeviceDetail() {
         <h1 className="min-w-0 max-w-full truncate text-[24px] font-semibold tracking-[-0.01em]" title={d.id}>
           {d.name || deviceId}
         </h1>
-        {descriptor
-          ? <StatusBadge status={descriptor.status} />
-          : <Badge tone={d.online ? 'ok' : 'idle'}>{d.online ? '在线' : '离线'}</Badge>}
+        <Badge tone={deviceStatusMeta(d.online, descriptor?.status).tone}>{deviceStatusMeta(d.online, descriptor?.status).label}</Badge>
         <span className="num ml-auto truncate font-mono text-[11px] text-ink-3" title={`设备键 ${d.id}`}>
           {d.online ? `更新于 ${timeAgo(d.updated_at)}` : `最后见 ${timeAgo(d.last_seen)}`}
         </span>
       </header>
 
-      <div className="mb-5">
+      <div className="mb-5 [&_button]:min-h-11 sm:[&_button]:min-h-0">
         <TabBar items={tabs} value={tab} onChange={setTab} label="设备详情分区" />
       </div>
 
@@ -310,7 +313,7 @@ export default function DeviceDetail() {
       )}
 
       {tab === 'advanced' && (
-        <div className="mb-5">
+        <div className="mb-5 [&_button]:min-h-11 sm:[&_button]:min-h-0">
           <Segmented
             label="高级视图"
             options={[
@@ -359,7 +362,7 @@ export default function DeviceDetail() {
                   ? <p className="py-6 text-center text-sm text-ink-3">还没有事件</p>
                   : <EventFeed events={events} showDevice={false} limit={8} />}
               </Panel>
-              <CommandHistory deviceId={key} actions={commands.actions} limit={8} />
+              <CommandHistory deviceId={key} targetLabel={d.name || deviceId} actions={commands.actions} limit={8} />
             </div>
           </div>
         </TabPanel>
@@ -459,7 +462,7 @@ export default function DeviceDetail() {
                 ? <Panel title="设备操作" className="lg:col-span-2">
                   <p className="py-4 text-center text-sm text-ink-3">设备功能加载失败，操作列表暂不可用。</p>
                 </Panel>
-                : <ActionPanel deviceId={key} set={commands} className="lg:col-span-2" />}
+                : <ActionPanel deviceId={key} targetLabel={d.name || deviceId} set={commands} className="lg:col-span-2" />}
               {actuators.length > 0 && (
                 <Panel title={<span className="flex items-center gap-1.5"><Zap size={14} />执行器状态</span>}>
                   <dl className="space-y-2.5">
@@ -481,7 +484,7 @@ export default function DeviceDetail() {
       {tab === 'events' && (
         <TabPanel value={tab}>
           <div className="space-y-5">
-            <CommandHistory deviceId={key} actions={commands.actions} />
+            <CommandHistory deviceId={key} targetLabel={d.name || deviceId} actions={commands.actions} />
             <details className="card overflow-hidden">
               <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-4 py-3 text-[13px] font-semibold">
                 <span className="flex items-center gap-1.5"><Activity size={14} />设备事件</span>
@@ -557,7 +560,7 @@ export default function DeviceDetail() {
                   <KeyValue k="在线" v={d.online ? '是' : '否'} />
                   <KeyValue k="最后更新" v={<span className="num">{fmtDateTime(d.updated_at)}</span>} />
                   <KeyValue k="最后见" v={<span className="num">{fmtDateTime(d.last_seen)}</span>} />
-                  <KeyValue k="设备说明来源" v={descriptorFailed ? '加载失败' : source} mono={!descriptorFailed} />
+                  <KeyValue k="设备说明来源" v={descriptorFailed ? '加载失败' : DESCRIPTOR_SOURCE_LABEL[source]} />
                   {descriptor?.manufacturer && <KeyValue k="厂商" v={descriptor.manufacturer} />}
                   {descriptor?.model && <KeyValue k="型号" v={descriptor.model} />}
                   {descriptor?.external_id && <KeyValue k="外部 ID" v={descriptor.external_id} mono />}

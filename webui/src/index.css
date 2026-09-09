@@ -206,8 +206,8 @@ body {
 
 /* 表格化键值行（详情页/系统页） */
 .kv { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.kv dt { color: var(--color-ink-2); font-size: 14px; }
-.kv dd { margin: 0; font-size: 14px; font-weight: 500; text-align: right; }
+.kv dt { flex-shrink: 0; white-space: nowrap; color: var(--color-ink-2); font-size: 14px; }
+.kv dd { margin: 0; overflow-wrap: anywhere; font-size: 14px; font-weight: 500; text-align: right; }
 
 /* 表格：体单元格对齐行首基线（多行表头才底对齐）；Vercel 表格纪律 */
 table td, table th { vertical-align: baseline; }

@@ -5,7 +5,7 @@
 //      所以 wsUrl() 必须始终是干净的 `/ws`（本机 token 也绝不拼进 query）；
 //   ② 登出 → 再登录必须真的重新拨号（旧实现 started 永不复位，第二次登录收不到实时数据）；
 //   ③ 握手连续失败要如实计数，并定期用 me 复核登录态；未知/畸形 WS 帧一律忽略，不得崩。
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connectLive, disconnectLive, reconnectLive, useLive } from '@/store/ws'
 import { useAuth } from '@/store/auth'
 import { setToken } from '@/lib/api'
@@ -60,6 +60,9 @@ let lastStub: ReturnType<typeof installFetch> | null = null
 function installFetchCount(fragment: string): number {
   return lastStub ? lastStub.to(fragment).length : 0
 }
+
+const NATIVE_WEBSOCKET = globalThis.WebSocket
+const LIVE_WS = process.env.CLOUDPATH_E2E_WS
 
 beforeEach(() => {
   resetStores()
@@ -201,6 +204,25 @@ describe('WS 消费必须宽容（不得让整个 UI 崩）', () => {
     expect(useLive.getState().status).toBe('open')
   })
 
+  it('协议版本不匹配的已声明帧不得污染 v1 状态', () => {
+    const s = openSocket()
+    const existing = {
+      id: 'e1/d1', edge_id: 'e1', adapter: 'demo', online: true,
+      state: { a: 1 }, updated_at: 10, last_seen: 10,
+    }
+    useLive.setState({ devices: { 'e1/d1': existing }, edges: {} })
+    s.simulateMessage({
+      v: 2, type: 'snapshot', ts: 11,
+      data: { devices: [{ ...existing, id: 'e2/d2', edge_id: 'e2' }], edges: [] },
+    })
+    s.simulateMessage({
+      v: 2, type: 'state', device: 'e1/d1', ts: 12,
+      data: { online: false, raw: { a: 2 }, updated_at: 12 },
+    })
+    expect(useLive.getState().devices).toEqual({ 'e1/d1': existing })
+    expect(useLive.getState().edges).toEqual({})
+  })
+
   it('正常配置与状态帧仍被采纳（宽容不等于什么都不收）', () => {
     const s = openSocket()
     s.simulateMessage({
@@ -212,6 +234,7 @@ describe('WS 消费必须宽容（不得让整个 UI 崩）', () => {
     })
     expect(Object.keys(useLive.getState().devices)).toEqual(['e1/d1'])
     expect(useLive.getState().edges.e1?.online).toBe(true)
+    expect(useLive.getState().snapshotEpoch).toBe(useLive.getState().connectionEpoch)
 
     s.simulateMessage({ v: 1, type: 'state', device: 'e1/d1', ts: 12, data: { online: false, raw: { a: 2 }, updated_at: 12 } })
     expect(useLive.getState().devices['e1/d1']?.online).toBe(false)
@@ -509,5 +532,32 @@ describe('typed observation session isolation', () => {
     current.simulateMessage({ v: 1, type: 'descriptor', device: 'e1/d1', data: sampleDescriptor('e1/d1') })
     current.simulateMessage(stateFrame([{ entity_id: 'shared', observations: { value: sample({ sequence: 2 }) } }]))
     expect(useLive.getState().descriptors['e1/d1'].entities[0].observations?.value.sequence).toBe(2)
+  })
+})
+
+describe('真实 server WS E2E（opt-in，CLOUDPATH_E2E_WS）', () => {
+  it.runIf(Boolean(LIVE_WS && NATIVE_WEBSOCKET))('store/ws.ts 能消费真实首帧 snapshot 与后续增量', async () => {
+    const target = new URL(LIVE_WS as string)
+    vi.stubGlobal('WebSocket', NATIVE_WEBSOCKET)
+    vi.stubGlobal('location', { protocol: target.protocol, host: target.host })
+    try {
+      useAuth.setState({ status: 'in', user: null })
+      connectLive()
+      const deadline = Date.now() + 10000
+      while (Date.now() < deadline) {
+        const state = useLive.getState()
+        if (state.status === 'open' && Object.keys(state.devices).length >= 2 &&
+            Object.keys(state.edges).length >= 1 && Object.keys(state.descriptors).length >= 2) break
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+      const state = useLive.getState()
+      expect(state.status).toBe('open')
+      expect(state.devices['e2e-edge/demo-1']).toMatchObject({ adapter: 'demo', online: true })
+      expect(state.edges['e2e-edge']).toMatchObject({ online: true })
+      expect(state.descriptors['e2e-edge/demo-1']?.entities.length).toBeGreaterThanOrEqual(1)
+    } finally {
+      disconnectLive()
+      vi.unstubAllGlobals()
+    }
   })
 })

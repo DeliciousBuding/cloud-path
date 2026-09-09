@@ -27,13 +27,14 @@ CloudPath 把「插上一台设备 → 上云看到它 → 远程控制它」做
 - **分布式 Hub-Spoke**：多边缘节点 + 单中心控制面，天然中心-边缘拓扑；当前为单 Server 部署，
   多 Server 横向扩展仍属目标态。
 - **设备身份** = `(tenant_id, edge_id, device_id)`；线上传输键 `<edge_id>/<device_id>`。
-- **全链路实时**：edge → server → 浏览器全程 WebSocket；REST 只承担历史查询与管理操作。
+- **全链路实时**：账号会话下 edge → server → 浏览器全程 WebSocket；REST 承担历史查询与管理操作。
+  租户令牌会话只有 REST，无浏览器实时通道（见下文边界）。
 - **单二进制 · 零 CGO**：WebUI `go:embed` 进 server；SQLite 用 `modernc.org/sqlite`，交叉编译 Linux/arm64 无需工具链。
 
 ```text
         ┌──────────────────────────────────────────────────────────┐
         │  Experience Plane                                        │
-        │  WebUI（概览/设备/事件/边缘/系统/管理）· Schema 渲染        │
+        │  WebUI（概览/设备/网关/运行记录/应用与插件/设置/管理）· Schema 渲染 │
         └───────────────▲──────────────────────────────────────────┘
                         │ REST + WebSocket（/ws）
         ┌───────────────┴──────────────────────────────────────────┐
@@ -65,7 +66,7 @@ UI 贡献不是独立的可执行插件类型：当前由 Descriptor/Capability 
 
 | 位置 | 形态 | 说明 |
 |---|---|---|
-| [cloud-path-driver-stcb](https://github.com/DeliciousBuding/cloud-path-driver-stcb) | **独立 Driver Plugin** | STC-B 参考驱动；经 GitHub discover/install 由 Plugin Host 运行（已发布） |
+| [cloud-path-driver-stcb](https://github.com/DeliciousBuding/cloud-path-driver-stcb) | **独立 Driver Plugin** | STC-B 参考驱动；经 GitHub discover/install 由 Plugin Host 运行 |
 | [cloud-path-app-scheduled-compartment](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment) | **独立 Application Plugin** | 定时隔间应用的现役源码、配置与发布说明 |
 | [cloud-path-app-button-indicator](https://github.com/DeliciousBuding/cloud-path-app-button-indicator) | **独立 Application Plugin** | 按键指示应用的现役源码、配置与发布说明 |
 | [cloud-path-app-environment-guard](https://github.com/DeliciousBuding/cloud-path-app-environment-guard) | **独立 Application Plugin** | 环境监护应用的现役源码、配置与发布说明 |
@@ -127,13 +128,13 @@ cp edge.example.yaml edge.yaml    # edge.yaml 是本地私有配置，不入库
 ./bin/cloudpath-edge              # Windows: .\bin\cloudpath-edge.exe
 ```
 
-- **有真实串口设备**：在 `edge.yaml` 里填 `port`（Windows `COM3`、Linux `/dev/ttyUSB0`、
-  macOS `/dev/cu.usbserial-*`）与 `adapter: stcb`。
-- **没有硬件**：用内置参考演示适配器 `adapter: demo`（无需串口）。设备会真实上线并持续
-  上报模拟状态（tick/uptime/level），命令 `ping/set/dump/noop` 真实执行并返回结果，
-  零硬件即可验证「Edge 接入 / 多机接入 / 命令闭环 / 断线重连」全链路；demo 与 `stcb` 真板
-  设备可挂在同一个 Edge 上共存。（`adapter: stcb` 而串口不存在时设备保持 offline，
-  Edge 按 1→2→4→8…→30s 退避重试拔插自愈。）
+- **没有硬件**：直接用母版里的内置 `adapter: demo`（无需串口）。设备会真实上线并持续
+  上报进程内状态，命令真实执行并返回结果，可验证「Edge 接入 / 多机接入 / 命令闭环 /
+  断线重连」全链路。
+- **有真实串口设备**：先安装并启用对应 Driver Plugin，再在 `edge.yaml` 启用
+  `plugin_host`，填写 `port`（Windows `COM3`、Linux `/dev/ttyUSB0`、macOS
+  `/dev/cu.usbserial-*`）与 `adapter: stcb`。串口不存在时设备保持 offline，Edge 按
+  1→2→4→8…→30s 退避重试拔插自愈；demo 与外部 Driver 设备可挂在同一个 Edge 上共存。
 
 ### 3. 打开管理台
 
@@ -143,9 +144,9 @@ cp edge.example.yaml edge.yaml    # edge.yaml 是本地私有配置，不入库
 - `/login`：登录页。**账号密码登录**（会话 cookie）为主路径，实时通道 `/ws` 跟随登录态；
   也接受「访问令牌」（`CLOUDPATH_TOKEN` 或租户令牌）作为兜底——令牌会话只有 REST、没有实时推送
   （浏览器 WebSocket 无法携带 Authorization header），UI 会诚实显示「实时通道已断开」并定时刷新数据。
-- 登录后：概览 `/`、设备 `/devices`、设备详情 `/devices/<edge>/<device>`、活动 `/activity`
-  （旧 `/events` 路由自动跳转）、插件 `/plugins`、实例详情 `/plugins/<id>`、边缘节点 `/edges`、
-  边缘详情 `/edges/<edge>`、设置 `/settings`；`role=admin` 另有管理页 `/admin`（用户、令牌、一次性令牌明文面板）。
+- 登录后：概览 `/`、设备 `/devices`、设备详情 `/devices/<edge>/<device>`、运行记录 `/activity`
+  （旧 `/events` 路由自动跳转）、应用与插件 `/plugins`、实例详情 `/plugins/<id>`、网关 `/edges`、
+  网关详情 `/edges/<edge>`、设置 `/settings`；`role=admin` 另有 `/admin`（成员、权限和访问令牌）。
 
 ### 4. 看设备、下发命令、看事件
 
@@ -158,7 +159,7 @@ curl -fsS -X POST http://127.0.0.1:8080/api/devices/<edge_id>/<device_id>/comman
 # 返回 {"id":1,...,"status":"sent"}；设备离线时回执为 failed / "device offline"
 
 curl -fsS "http://127.0.0.1:8080/api/events?limit=10"     # 事件流（新→旧）
-curl -fsS http://127.0.0.1:8080/api/edges                 # 边缘节点在线状态
+curl -fsS http://127.0.0.1:8080/api/edges                 # 网关在线状态
 ```
 
 命令闭环是 `pending → sent → ok|failed`，90 秒未回执由后台 sweeper 标 `timeout`；
@@ -168,8 +169,7 @@ curl -fsS http://127.0.0.1:8080/api/edges                 # 边缘节点在线�
 
 苹果极简风管理台：浅色/深色双主题、移动端自适应、尊重系统「减少动效」偏好。
 
-界面截图不在仓库内维护：历史验证截图含本机串口号与内部 edge id，按公开边界只保留在私有验证目录；
-正式产品截图随每次 Release 的发布说明提供。
+界面截图不在仓库内维护：验证截图可能含本机串口号与设备标识，按公开边界不入库。
 
 ---
 
@@ -177,8 +177,8 @@ curl -fsS http://127.0.0.1:8080/api/edges                 # 边缘节点在线�
 
 完整逐条 SOP 见 [deploy/README.md](deploy/README.md)。要点：
 
-1. **先断言产物架构，再投递**。生产主机是原生 `aarch64` 且没有 qemu/binfmt 回退，
-   拿错架构必然 `exec format error`。门禁是硬失败，不是警告：
+1. **先断言产物架构，再投递**。发布矩阵必须包含 `linux/arm64`，拿错架构会直接失败。
+   门禁是硬失败，不是警告：
 
    ```bash
    task build:linux-arm64      # 交叉编译 + 自动断言 linux/arm64 + embed_ui
@@ -190,7 +190,7 @@ curl -fsS http://127.0.0.1:8080/api/edges                 # 边缘节点在线�
    —— 专用非 root 账号、`Restart=always`、资源上限、沙箱加固、
    `ReadWritePaths` 指向 SQLite 持久目录；机密走 0600 的
    [systemd/cloudpath-server.env.example](deploy/systemd/cloudpath-server.env.example)（模板只有变量名）。
-3. **nginx 反代（HTTPS + WSS）**：[deploy/nginx/cloudpath.vectorcontrol.tech.conf](deploy/nginx/cloudpath.vectorcontrol.tech.conf)
+3. **nginx 反代（HTTPS + WSS）**：[deploy/nginx.conf](deploy/nginx.conf)
    —— `/ws` 与 `/ws/edge` 单独 location、`Upgrade`/`Connection` 升级头、
    `proxy_read_timeout 3600s`（60s 会掐断健康长连接）、CDN 真实客户端 IP、
    请求体上限与 gzip；HSTS 由反代补，应用自身的安全头（含 CSP）不被覆盖。
@@ -461,15 +461,15 @@ cloud-path/
   账号密码登录（会话 cookie，实时通道跟随登录态）。
 - `secret://<name>` handle 边界（本地 provider、租户/实例隔离、未声明 fail-closed；明文 secret
   永不进 Server DB / WS / 审计 / 日志 / UI）。
-- WebUI：概览/设备/详情/活动/插件（目录·实例·desired/observed）/边缘/设置 + 管理页
-  （用户、令牌、一次性令牌明文面板），浅色/深色双主题。
+- WebUI：概览/设备/详情/运行记录/应用与插件（目录·实例·desired/observed）/网关/设置 + 管理页
+  （成员、权限和访问令牌），浅色/深色双主题。
 - 发布工程：全平台构建矩阵、架构断言门禁、CI（Linux+Windows）、Release + checksums、
   systemd/nginx 部署物料与 SOP。
 
 ### 真板 E2E 缺口
 
 - 多实例多设备映射与插件实例串口注入已有实现和协议级回归测试，但尚未完成同一外部 Driver
-  驱动多块真板、覆盖拔插/重连/命令 ACK 的现场 E2E。模拟插件测试、CI 绿或单板历史验收都不能替代
+  驱动多块真板、覆盖拔插/重连/命令 ACK 的现场 E2E。模拟插件测试、CI 通过或单板历史验收都不能替代
   这项证据。
 - 现有 STC-B 单板链路可用于回归；新结论必须附真板日志、命令 ACK 与设备事件，不用代码存在推断硬件完成。
 - **身份链边界**：命令/事件当前只保证 `entity_id` 全局唯一，`(device_key, entity_id)` 尚未贯穿绑定与路由；
@@ -482,6 +482,9 @@ cloud-path/
   （浏览器 WebSocket 无法携带自定义 header）；账号密码会话功能完整。当前接受此限制，UI 诚实呈现。
 - **中心 Secret Store**：当前明确不做（见上）；secret 一律 `secret://<name>` handle + Edge 本地
   provider 解析，未来可替换 Vault/KMS 而不改 desired 协议。
+- **Connector / 通知**：Manifest 已有 Connector 贡献契约，但进程宿主没有 Connector 运行时；
+  Application 的 `SendNotification` effect 当前 fail-closed 返回 `not_implemented`。
+- **Transform/WASM**：仍在设计阶段，不在当前 `kind` 枚举中。
 - MQTT/Modbus 等协议接入、远程 OTA 编排、时序聚合与业务分析（目标态规划，见
   [docs/architecture.md](docs/architecture.md)）。
 
@@ -499,14 +502,21 @@ cloud-path/
 | [docs/security.md](docs/security.md) | 安全与运维基线（L0/L1/L2、令牌、检查表） |
 | [docs/deploy.md](docs/deploy.md) | 部署指南（本地/容器/反代） |
 | [docs/architecture/plugin-system.md](docs/architecture/plugin-system.md) | 插件运行时与协议契约 |
+| [docs/architecture/github-ecosystem.md](docs/architecture/github-ecosystem.md) | GitHub Topic 发现与信任链 |
+| [docs/architecture/registry.md](docs/architecture/registry.md) | Registry 索引与 `cloudpath plugin` CLI 契约 |
 | [docs/architecture/how-to-build-driver.md](docs/architecture/how-to-build-driver.md) | 新增 Driver 的操作入口 |
 | [docs/architecture/capability-model.md](docs/architecture/capability-model.md) | Device/Entity/Capability 模型 |
 | [docs/architecture/control-plane-sync.md](docs/architecture/control-plane-sync.md) | 声明式快照 + 单调 revision 同步语义 |
 | [docs/architecture/tenant-security-policy.md](docs/architecture/tenant-security-policy.md) | 租户配额、保留期与 secret 边界 |
 | [docs/architecture/repository-strategy.md](docs/architecture/repository-strategy.md) | 仓库组合、命名、拆仓门与公开边界 |
+| [docs/architecture/adr/0001-capability-centered-plugins.md](docs/architecture/adr/0001-capability-centered-plugins.md) | 能力中心插件模型决策 |
+| [docs/architecture/adr/0002-github-plugin-discovery.md](docs/architecture/adr/0002-github-plugin-discovery.md) | GitHub 发现与 Registry 信任决策 |
 | [deploy/README.md](deploy/README.md) | 公网落地 SOP（systemd + nginx + WSS） |
 | [deploy/edge/README.md](deploy/edge/README.md) | 客户端分发与 `edge.yaml` 填写指引 |
+| [deploy/compose/README.md](deploy/compose/README.md) | Docker Compose 本地与公网形态 |
+| [deploy/split/README.md](deploy/split/README.md) | 参考 Application 拆仓与历史 bootstrap 说明 |
+| [templates/go-plugin/README.md](templates/go-plugin/README.md) | 新 Driver/Application 插件模板 |
 
 ## 许可
 
-MIT © Cloudpath Authors — 见 [LICENSE](LICENSE)。
+MIT © CloudPath Authors — 见 [LICENSE](LICENSE)。

@@ -157,7 +157,7 @@ func TestDispatchDeviceCommandAppPath(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	id, err := srv.dispatchDeviceCommand(ctx, tenantID, "e1/d1", "buzzer", `{"freq":5,"duration":6}`)
+	id, err := srv.dispatchDeviceCommandWithHook(ctx, tenantID, "e1/d1", "buzzer", `{"freq":5,"duration":6}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,12 +191,12 @@ func TestDispatchDeviceCommandAppPath(t *testing.T) {
 		Entities: []model.Entity{{EntityID: "led", Capabilities: []string{"cloudpath.dev/capability/led@1"}}},
 	}
 	srv.mu.Unlock()
-	if _, err := srv.dispatchDeviceCommand(ctx, tenantID, "e2/d2", "led", `{}`); err == nil {
+	if _, err := srv.dispatchDeviceCommandWithHook(ctx, tenantID, "e2/d2", "led", `{}`, nil); err == nil {
 		t.Fatal("队列满应返回错误")
 	}
 
 	// 未知设备 / 离线 edge
-	if _, err := srv.dispatchDeviceCommand(ctx, tenantID, "e9/d9", "buzzer", ""); err == nil {
+	if _, err := srv.dispatchDeviceCommandWithHook(ctx, tenantID, "e9/d9", "buzzer", "", nil); err == nil {
 		t.Fatal("未知设备应失败")
 	}
 }

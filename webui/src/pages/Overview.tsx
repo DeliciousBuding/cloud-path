@@ -120,6 +120,7 @@ export default function Overview() {
 
   const attentionRows = [...alerts, ...fallbackAlerts]
   const attention = serverOk ? alerts.reduce((n, a) => n + a.count, 0) : fallbackAlerts.length
+  const attentionCategories = attentionRows.length
   const deviceStat = shownStats?.find((s) => s.key === 'devices')
   const hasStats = Boolean(shownStats?.length)
   const stillLoading = !hasStats && (loading || devLoading)
@@ -152,9 +153,6 @@ export default function Overview() {
     NowIcon = CheckCircle2
   }
 
-  const updated = data?.server_time
-    ? `更新于 ${timeAgo(data.server_time)}`
-    : hasStats ? '状态会持续更新' : '等待恢复'
   const subtitle = data?.server_time
     ? `更新于 ${timeAgo(data.server_time)}`
     : fmtUptime(health?.uptime_s) ?? (health ? '服务状态正常' : '设备与网关的最新状态')
@@ -182,21 +180,21 @@ export default function Overview() {
         role={!hasStats && !stillLoading ? 'alert' : undefined}
       >
         <div className={cn(hasStats && 'lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(22rem,1fr)]')}>
-          <div className="p-5 sm:p-6">
+          <div className="p-4 sm:p-6">
             <p className="text-[12px] font-medium text-ink-3">现在怎样</p>
             <div className="mt-3 flex items-start gap-3">
-              <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-full', TONE_CLS[nowTone])}>
+              <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9', TONE_CLS[nowTone])}>
                 <NowIcon size={18} strokeWidth={2} />
               </span>
               <div className="min-w-0">
-                <h2 id="overview-now-title" className={cn('text-[22px] font-semibold leading-tight tracking-[-0.01em]', TONE_TEXT_CLS[nowTone])}>
+                <h2 id="overview-now-title" className={cn('text-[20px] font-semibold leading-tight tracking-[-0.01em] sm:text-[22px]', TONE_TEXT_CLS[nowTone])}>
                   {nowTitle}
                 </h2>
                 <p className="mt-1.5 max-w-[58ch] text-sm text-ink-2">{nowDetail}</p>
               </div>
             </div>
 
-            <div className="mt-5 flex flex-wrap items-center gap-2">
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               {!hasStats && !stillLoading ? (
                 <button type="button" className="btn btn-primary" onClick={() => { void refetch(); void refetchDevices() }} disabled={isFetching}>
                   {isFetching ? <Spinner size={13} /> : <RefreshCw size={13} />} 重新加载
@@ -208,7 +206,6 @@ export default function Overview() {
               ) : hasStats ? (
                 <Link to="/devices" className="btn btn-primary">查看设备 <ArrowRight size={14} /></Link>
               ) : null}
-              <span className="text-[12px] text-ink-3">{updated}</span>
             </div>
 
             {partial && (
@@ -223,7 +220,7 @@ export default function Overview() {
           {hasStats && (
             <div className="border-t border-hairline bg-surface-2/60 p-4 sm:p-5 lg:border-l lg:border-t-0">
               <p className="text-[12px] font-medium text-ink-3">关键状态</p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
                 {shownStats?.map((s) => {
                   const value = s.key === 'commands' ? s.online : `${s.online}/${s.total}`
                   const hint = s.key === 'devices' || s.key === 'edges'
@@ -232,10 +229,10 @@ export default function Overview() {
                       ? s.total === 0 ? s.emptyHint : s.online === s.total ? '全部正常' : `${s.total - s.online} 个未运行`
                       : s.online === 0 ? '没有失败或超时' : '24 小时内需要查看'
                   return (
-                    <div key={s.key} className="min-w-0 rounded-lg border border-hairline bg-surface px-3 py-2.5">
+                    <div key={s.key} className="min-w-0 border-b border-hairline pb-2 last:border-b-0">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="min-w-0 truncate text-[12px] text-ink-2">{s.label}</span>
-                        <span className={cn('num shrink-0 text-[19px] font-semibold leading-none', TONE_TEXT_CLS[s.tone])}>{value}</span>
+                        <span className="min-w-0 truncate text-[12px] text-ink-3">{s.label}</span>
+                        <span className={cn('num shrink-0 text-[18px] font-semibold leading-none', TONE_TEXT_CLS[s.tone])}>{value}</span>
                       </div>
                       <p className="mt-1 truncate text-[11px] text-ink-3" title={hint}>{hint}</p>
                     </div>
@@ -263,17 +260,27 @@ export default function Overview() {
                     <AlertTriangle size={14} className="text-warn" /> 需要关注
                   </h2>
                 </div>
-                {attention > 0 && <Badge tone="warn">{attention} 项</Badge>}
+                {attention > 0 && <Badge tone="warn">{attentionCategories} 类 · {attention} 项</Badge>}
               </div>
 
               {attentionRows.length === 0 ? (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-4 sm:px-5">
-                  <CheckCircle2 size={16} className="shrink-0 text-ok" />
-                  <p className="min-w-0 flex-1 text-sm text-ink-2">当前没有需要处理的异常。</p>
-                  <Link to="/activity" className="link flex shrink-0 items-center gap-0.5 text-xs">
-                    查看运行记录 <ArrowRight size={12} />
-                  </Link>
-                </div>
+                !hasStats && !stillLoading ? (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-4 sm:px-5">
+                    <AlertTriangle size={16} className="shrink-0 text-warn" />
+                    <p className="min-w-0 flex-1 text-sm text-ink-2">状态不可用，暂时无法判断是否需要处理。</p>
+                    <button type="button" className="link shrink-0 text-xs" onClick={() => { void refetch(); void refetchDevices() }}>
+                      重新检查
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-4 sm:px-5">
+                    <CheckCircle2 size={16} className="shrink-0 text-ok" />
+                    <p className="min-w-0 flex-1 text-sm text-ink-2">当前没有需要处理的异常。</p>
+                    <Link to="/activity" className="link flex shrink-0 items-center gap-0.5 text-xs">
+                      查看运行记录 <ArrowRight size={12} />
+                    </Link>
+                  </div>
+                )
               ) : (
                 <ul className="m-0 list-none divide-y divide-hairline p-0">
                   {attentionRows.map((a) => (
@@ -285,7 +292,7 @@ export default function Overview() {
                         <span className={cn('h-2 w-2 shrink-0 rounded-full',
                           a.tone === 'bad' ? 'bg-bad' : a.tone === 'warn' ? 'bg-warn' : 'bg-ink-3')} />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">{a.title}</span>
+                          <span className="block truncate text-sm font-medium">{a.title}{a.count > 1 ? ` · ${a.count} 项` : ''}</span>
                           <span className="mt-0.5 hidden truncate text-[12px] text-ink-3 sm:block">{a.hint}</span>
                         </span>
                         <span className="shrink-0 text-xs font-medium text-accent">去处理</span>
@@ -359,7 +366,7 @@ export default function Overview() {
                     action={<Link to="/devices" className="btn btn-ghost">查看设备 <ArrowRight size={13} /></Link>}
                   />
                 ) : (
-                  <p className="py-8 text-center text-sm text-ink-3">暂无可显示的运行记录，恢复后会自动出现。</p>
+                  <p className="py-8 text-center text-sm text-ink-3">运行记录暂时不可用，恢复后会自动出现。</p>
                 )
               ) : (
                 <EventFeed events={feed} limit={10} />

@@ -25,20 +25,33 @@ function machineNameKeys(value: string): string[] {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
-  return normalized === tailKey ? [normalized] : [normalized, tailKey]
+  // 命名空间事件（如 stcb.sensor）的最后一段常是稳定语义词；
+  // 保留完整键，同时允许通用词典命中 sensor / led / buzzer 等尾段。
+  const parts = normalized.split(' ').filter(Boolean)
+  return [...new Set([normalized, tailKey, ...parts.slice(1), ...parts])]
 }
 
 /** 通用事件展示词典：只覆盖跨设备、低歧义的机器名；未知值继续 humanize。 */
 const EVENT_LABEL_FALLBACK: Record<string, string> = {
   'device booted': '设备启动',
   'device online': '设备上线',
+  sensor: '传感器状态',
+  led: '指示灯状态',
+  buzzer: '蜂鸣器状态',
+  motor: '电机状态',
   'device offline': '设备离线',
+  'edge online': '网关上线',
+  'edge offline': '网关离线',
+  'device state changed': '状态变化',
+  'state changed': '状态变化',
   'device compartment opened': '设备舱门已打开',
   'device compartment closed': '设备舱门已关闭',
   'pillbox remind': '药盒提醒',
   'pillbox reminded': '药盒提醒',
   'pillbox missed': '错过服药',
   'pillbox taken': '已取药',
+  'read sample': '读取采样值',
+  'read samples': '读取采样值',
   'read register': '读取寄存器',
   'register read': '读取寄存器',
   'write register': '写入寄存器',
@@ -205,7 +218,7 @@ function EventRow({ e, first, showDevice, name }: {
               onClick={() => setOpen((v) => !v)}
               aria-expanded={open}
               aria-label={open ? '收起运行记录详情' : '查看运行记录详情'}
-              className="flex shrink-0 items-center text-ink-3 transition-colors hover:text-ink-2">
+              className="flex h-11 w-11 shrink-0 items-center justify-center text-ink-3 transition-colors hover:text-ink-2 sm:h-8 sm:w-8">
               <ChevronRight size={12} className={open ? 'rotate-90 transition-transform' : 'transition-transform'} />
             </button>
           )}

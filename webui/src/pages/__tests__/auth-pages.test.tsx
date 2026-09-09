@@ -237,6 +237,8 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
     await user.click(screen.getByRole('button', { name: '用访问令牌登录' }))
 
     expect(await screen.findByText(/令牌被拒绝/)).toBeInTheDocument()
+    expect(screen.getByText(/联系管理员重新签发/)).toBeInTheDocument()
+    expect(screen.getByLabelText('访问令牌')).toHaveValue('')
     expect(healthSpy).not.toHaveBeenCalled()
     expect(getToken()).toBe('')
     expect(screen.queryByRole('heading', { name: '首页占位' })).not.toBeInTheDocument()
@@ -404,6 +406,8 @@ describe('Setup：真实创建首个账号', () => {
     expect(alert).toHaveTextContent('请联系管理员创建账号')
     expect(alert.textContent).not.toContain('setup 需要回环来源或一次性 setup token')
     expect(within(alert).getByRole('link', { name: /去登录页/ })).toHaveAttribute('href', '/login')
+    expect(screen.getByRole('button', { name: /去登录页/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /创建账号并继续/ })).not.toBeInTheDocument()
   })
 
   it('409（已初始化）→ 说明去登录，不是失败噪音', async () => {
@@ -422,6 +426,8 @@ describe('Setup：真实创建首个账号', () => {
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('系统已经完成初始化')
     expect(within(alert).getByRole('link', { name: /去登录页/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /去登录页/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /创建账号并继续/ })).not.toBeInTheDocument()
   })
 })
 

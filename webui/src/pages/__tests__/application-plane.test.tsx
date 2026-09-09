@@ -278,6 +278,8 @@ describe('插件实例详情的应用入口', () => {
     })])
     expect(screen.getByText('应用运行中')).toBeVisible()
     expect(screen.queryByText('应用未运行')).not.toBeInTheDocument()
+    expect(screen.queryByText('应用已停止，不能执行操作。')).not.toBeInTheDocument()
+    expect(screen.getByText('设置已停用，不能执行操作。')).toBeVisible()
   })
 
   it('普通驱动详情不探测应用数据', async () => {

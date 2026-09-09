@@ -35,6 +35,7 @@ const PROPERTY_LABEL: Record<string, string> = {
   raw: '原始值', value: '数值', state: '状态', time: '时间', direction: '方向',
   mask: '掩码', mode: '模式', level: '设定值', enabled: '开关', count: '计数',
   status: '状态', notes: '音符序列', frequency_hz: '频率 (Hz)', duration_ms: '时长 (ms)', gap_ms: '音符间隔 (ms)',
+  slot: '位置', taken_at: '取用时间', scheduled_at: '计划时间',
   commands: '命令数', pings: 'Ping 计数', ticks: '心跳计数', uptime_s: '运行时长',
   seconds: '秒数',
 }
@@ -501,6 +502,13 @@ export function statusMeta(s: DeviceStatus | undefined): { label: string; tone: 
     case 'unavailable': return { label: '不可用', tone: 'bad', online: false }
     default: return { label: '未知', tone: 'idle', online: false }
   }
+}
+
+/** 设备行/详情的唯一在线事实：传输在线性以 DeviceView.online 为准；
+ * Descriptor 只补充“降级”这一层，不能在设备离线时反向声称在线。 */
+export function deviceStatusMeta(online: boolean, descriptorStatus?: DeviceStatus): { label: string; tone: Tone; online: boolean } {
+  if (!online) return statusMeta('offline')
+  return descriptorStatus === 'degraded' ? statusMeta('degraded') : statusMeta('online')
 }
 
 export const CATEGORY_ORDER: EntityCategory[] = ['sensor', 'actuator', 'diagnostic', 'config']

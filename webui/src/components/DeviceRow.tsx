@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { ChevronRight } from 'lucide-react'
 import { Badge } from './ui'
 import { useDeviceDescriptor } from '@/hooks/useDescriptor'
-import { metricTiles, statusMeta } from '@/lib/descriptor'
+import { deviceStatusMeta, metricTiles } from '@/lib/descriptor'
 import { fmtDateTime } from '@/lib/format'
 import type { DeviceView } from '@/lib/types'
 
@@ -23,7 +23,7 @@ export function DeviceRow({ d }: { d: DeviceView }) {
   // 舰队行的「关键读数」：声明主观测至多两条（metricTiles 与概览 KPI 同一推导，无设备特例）
   const metrics = useMemo(() => (descriptor ? metricTiles(descriptor, capabilities, 2) : []), [descriptor, capabilities])
 
-  const st = descriptor ? statusMeta(descriptor.status) : null
+  const st = deviceStatusMeta(d.online, descriptor?.status)
   const name = d.name || devId || d.id
   const seen = d.online ? d.updated_at : d.last_seen
   return (
@@ -42,9 +42,7 @@ export function DeviceRow({ d }: { d: DeviceView }) {
           {devId}
         </span>
         <span className="ml-auto shrink-0 lg:hidden">
-          {st
-            ? <Badge tone={st.tone}>{st.label}</Badge>
-            : <Badge tone={d.online ? 'ok' : 'idle'}>{d.online ? '在线' : '离线'}</Badge>}
+          <Badge tone={st.tone}>{st.label}</Badge>
         </span>
       </div>
 
@@ -52,7 +50,6 @@ export function DeviceRow({ d }: { d: DeviceView }) {
       <div className="num col-span-2 min-w-0 truncate text-xs text-ink-2 lg:col-span-1" title={`${d.edge_id}${d.adapter ? ` · 设备类型 ${d.adapter}` : ''}${d.port ? ` · ${d.port}` : ''}`}>
         <span className="text-ink-3 lg:hidden">网关 </span>
         {d.edge_id || '—'}
-        {d.adapter && <span className="text-ink-3"> · {d.adapter}</span>}
       </div>
 
       {/* 关键读数（声明主观测；能力全量事实面在详情页「能力」tab） */}
@@ -79,9 +76,7 @@ export function DeviceRow({ d }: { d: DeviceView }) {
 
       {/* Online / Offline（桌面列；窄屏已在名称行呈现） */}
       <div className="hidden lg:block">
-        {st
-          ? <Badge tone={st.tone}>{st.label}</Badge>
-          : <Badge tone={d.online ? 'ok' : 'idle'}>{d.online ? '在线' : '离线'}</Badge>}
+        <Badge tone={st.tone}>{st.label}</Badge>
       </div>
 
       {/* Last Seen（桌面列；窄屏已并入读数行） */}

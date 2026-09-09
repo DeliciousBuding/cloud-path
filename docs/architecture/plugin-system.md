@@ -14,7 +14,7 @@
 |---|---|---|---|
 | `Driver` | Driver Protocol v1 | Edge Plugin Host | 已实现 |
 | `Application` | Application Protocol v1 | Server AppHost | 已实现 |
-| `Connector` | Connector Protocol | Edge 或 Server，由贡献声明决定 | 契约已定义，运行时待实现 |
+| `Connector` | Manifest contribution only | Edge 或 Server，由贡献声明决定 | 安装契约可校验，运行时待实现 |
 
 UI 贡献不是独立可执行插件类型，也不使用 `views` Manifest 字段；Core 通过
 Descriptor/Capability schema 渲染通用界面。Transform/WASM 属于后续目标态，不在当前 `kind` 枚举中。
@@ -78,29 +78,33 @@ contributes:
 
 ### Application Plugin
 
-Application 可为：
+当前可执行路径是 **process Application**：业务逻辑运行在 Server AppHost 子进程中，通过
+Application Protocol v1 调用 Core。SDK descriptor 仍保留 `declarative_only` 字段，但当前没有
+独立的“仅声明式、无进程”执行器；需要安装的 Application 仍必须具备 manifest `entrypoint`。
+纯声明式执行属于目标态，不得把它当成现成运行时。
 
-1. `declarative-only`：绑定、自动化、数据模型和页面均由 Schema 描述；优先使用。
-2. `process`：复杂业务逻辑在 Server 子进程中运行，通过受限 App Protocol 调用 Core。
-
-Application Backend 不直接打开 Core SQLite，不获得全局管理员令牌；API 只能挂在
-`/api/plugins/{plugin_id}/instances/{instance_id}/...`。请求上下文由 Core 注入 tenant、actor、instance 和 scope。数据写入插件 namespaced store 或插件专属数据目录，纳入备份清单。
+Application Backend 不直接打开 Core SQLite，也不获得全局管理员令牌。协议预留的插件 HTTP
+子路由命名空间是 `/api/plugins/{plugin_id}/instances/{instance_id}/...`；当前公开 Server 路由面
+仍以 [api.md](../api.md) 为准，不表示任意插件子路由已经开放。请求上下文由 Core 注入 tenant、actor、
+instance 和 scope。数据写入插件 namespaced store 或插件专属数据目录，纳入备份清单。
 
 ### Connector Plugin
 
-Connector 明确声明方向和宿主：
+Connector 目前只有 Manifest 贡献契约，没有进程运行时。合法形状是：
 
 ```yaml
-connectors:
-  - id: mqtt-export
-    direction: outbound
-    host: server
-  - id: local-modbus-gateway
-    direction: inbound
-    host: edge
+contributes:
+  connectors:
+    - id: mqtt-export
+      direction: outbound
+      host: server
+    - id: local-modbus-gateway
+      direction: inbound
+      host: edge
 ```
 
-Transport 生命周期与 Mapping Schema 分离；第一版可由同一插件同时提供，接口上不耦死。
+安装/目录/权限披露可以识别该声明；启动 Connector 会被 host 以 `connector plugin kind is not
+supported` fail-closed。Transport 生命周期、Mapping Schema 和通知投递属于目标态。
 
 ## 4. 进程启动与握手
 

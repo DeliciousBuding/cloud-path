@@ -1,10 +1,9 @@
 <div align="center">
 
-# CloudPath · Cloud Path
+# CloudPath
 
-**A cloud-native, plugin-driven IoT control plane** that connects any device to the cloud in a
-**center-control + edge-agent** edge-cloud synergy architecture: on-board visualization and remote control,
-device-agnostic, edge-autonomous — a new device is just a Driver plugin.
+**A cloud-native, plugin-driven IoT control plane** for connecting devices through edge agents,
+with real-time visibility, remote control, tenant isolation, and an embedded WebUI.
 
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
@@ -18,106 +17,166 @@ device-agnostic, edge-autonomous — a new device is just a Driver plugin.
 
 ## What it is
 
-CloudPath turns **plug in a device → see it in the cloud → control it remotely** into an
-**out-of-the-box cloud-native infrastructure**, not a host program for one dev board.
+CloudPath separates the control plane from device-specific code:
 
-- **Cloud-native · edge-cloud synergy**: the central control plane (Server) is the **authority for desired state /
-  tenant / audit**; the edge agent (Edge) is the **authority for observed state** and keeps the last successfully
-  applied snapshot. Edge is autonomous: keeps running offline, and on reconnect applies only the final snapshot
-  without replaying intermediate side effects.
-- **Device-agnostic · plugin-driven**: core (`internal/*`) knows no concrete hardware; a new device = one Driver plugin.
-- **Distributed Hub-Spoke**: multiple edge nodes + one control plane. The current release runs one Server;
-  multi-Server scaling and distributed quotas remain target-state work.
-- **Device identity** = `(tenant_id, edge_id, device_id)`; the wire key is `<edge_id>/<device_id>`.
-- **Real-time end-to-end**: edge → server → browser all over WebSocket; REST only serves history and management.
-- **Single binary · zero CGO**: WebUI `go:embed`-ed into server; SQLite via `modernc.org/sqlite`; cross-compiles to Linux/arm64 with no toolchain.
+- **Control plane**: `cloudpath-server` owns desired state, tenants, RBAC, audit, commands, and
+  the embedded WebUI.
+- **Edge plane**: `cloudpath-edge` owns observed state, device supervision, offline buffering,
+  and the local Driver Plugin Host.
+- **Device semantics live in plugins**: Core (`internal/*`) does not know a specific board or
+  business domain. A new device is a Driver plugin, not a Core change.
+- **Realtime path**: with account login, Edge state and events flow to Server and then to the browser
+  over WebSocket. REST serves history and management operations; tenant-token sessions are REST-only.
+- **Single binary**: the React WebUI is embedded into the Go server; SQLite uses the pure-Go
+  `modernc.org/sqlite` driver.
 
 ```text
-        ┌──────────────────────────────────────────────────────────┐
-        │  Experience Plane                                        │
-        │  WebUI (overview/devices/events/edges/system/admin) · Schema rendering │
-        └───────────────▲──────────────────────────────────────────┘
-                        │ REST + WebSocket (/ws)
-        ┌───────────────┴──────────────────────────────────────────┐
-        │  Control Plane — cloudpath-server (single binary + SQLite)│
-        │  desired authority · tenant/RBAC · tokens · audit · rate-limit · retention │
-        │  plugin catalog/instance desired state · command dispatch & ack settlement │
-        └───────────────▲──────────────────────────────────────────┘
-                        │ WebSocket (/ws/edge): state/event up, command down
-        ┌───────────────┴──────────────────────────────────────────┐
-        │  Edge Plane — cloudpath-edge (one per host/site)          │
-        │  observed authority · device supervision & backoff restart · offline event buffer │
-        │  Driver Host (external plugin process) · local secret resolution │
-        └───────────────▲──────────────────────────────────────────┘
-                        │ serial / local bus
-                  devices (reference Driver: stcb; or external Driver plugins)
+Experience Plane
+  WebUI: overview / devices / gateways / run log / apps & plugins / settings / administration
+        |
+        | REST + WebSocket (/ws)
+        v
+Control Plane: cloudpath-server
+  desired state / tenant + RBAC / audit / retention / plugin catalog / command settlement
+        |
+        | WebSocket (/ws/edge): state + event up, command down
+        v
+Edge Plane: cloudpath-edge
+  observed state / device supervision / offline event buffer / Driver Plugin Host
+        |
+        | serial or local bus
+        v
+devices (reference Driver: stcb; or external Driver plugins)
 ```
 
-## Plugin types & runtime
+## Plugin types
 
-| Type | Default host | Responsible for | Not responsible for |
+| Type | Default host | Responsibility | Not responsible for |
 |---|---|---|---|
-| **Driver** | Edge | device discovery, connect, protocol parse, capability mapping, device actions | business flow, tenant UI |
-| **Application** | Server | business objects, bindings, rules, tasks, domain APIs | direct serial access or Core DB |
-| **Connector** | Edge or Server | MQTT / Webhook / external platforms / notifications / data egress | defining the core device model |
+| **Driver** | Edge | discovery, connection, protocol parsing, capability mapping, device actions | business flow or tenant UI |
+| **Application** | Server | business objects, bindings, rules, jobs, domain APIs | direct serial access or Core database access |
+| **Connector** | Edge or Server | MQTT, webhook, external platforms, notifications, data egress | defining the core device model |
 
-Driver Protocol v1 and Application Protocol v1 are implemented. Connector has a manifest contract but
-no runtime yet. UI contributions are not a separate executable plugin type: the current WebUI uses
-Descriptor/Capability schemas for generic device views, capability actions, and command forms.
-Arbitrary page schemas and third-party JavaScript remain target-state work. See
-[docs/architecture.md](docs/architecture.md) for the current-versus-target boundary.
+Driver Protocol v1 and Application Protocol v1 are implemented. Connector has a manifest
+contribution contract but no runtime. UI contributions are not an executable plugin type; the
+current WebUI renders Descriptor/Capability schemas for device views, capability actions, and
+command forms. Arbitrary page schemas and third-party JavaScript remain target-state work.
 
-Current plugin source repositories:
+Current plugin repositories:
 
-- [cloud-path-driver-stcb](https://github.com/DeliciousBuding/cloud-path-driver-stcb) - STC-B reference Driver plugin
+- [cloud-path-driver-stcb](https://github.com/DeliciousBuding/cloud-path-driver-stcb)
 - [cloud-path-app-scheduled-compartment](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment)
 - [cloud-path-app-button-indicator](https://github.com/DeliciousBuding/cloud-path-app-button-indicator)
 - [cloud-path-app-environment-guard](https://github.com/DeliciousBuding/cloud-path-app-environment-guard)
 
-These independent repositories own application source, configuration and upgrades; consult their
-Releases for installable versions, assets and digests. A merged source change is not a published release.
-The Core [scheduled-compartment example](examples/scheduled-compartment/README.md) and
-[split generator](deploy/split/README.md) are reference / historical bootstrap material.
-[Go plugin templates](templates/go-plugin/README.md) are starting points for new plugins,
-not an update source: never regenerate or copy them over an independently maintained application.
+Application repositories are the source of truth for application code and releases. Core
+examples and split/scaffold tooling are reference or historical bootstrap material; do not use
+them to overwrite an independently maintained application.
 
-Core >= v0.2.15 provides typed `property-observed`, manual jobs and explicit `app_bindings`; see
-the [application input and operation contract](docs/design.md#应用输入与操作契约). Each application
-repository declares its dependency range in `plugin.yaml` and `go.mod`.
-
-The STC-B reference Driver lives in the separate `cloud-path-driver-stcb` repo and is installed
-via GitHub discover/install. See the [plugin runtime contract](docs/architecture/plugin-system.md).
-
-**Identity-chain boundary:** command/event routing currently assumes globally unique `entity_id`;
-`(device_key, entity_id)` is not yet threaded through binding and routing. Reusing an `entity_id`
-across multiple boards of the same model can make entity binding or event routing ambiguous. Until
-that contract and multi-board hardware evidence exist, use the single-board boundary or require the
-Driver to keep `entity_id` globally unique.
+**Identity-chain boundary:** command and event routing currently assumes globally unique
+`entity_id`. `(device_key, entity_id)` is not yet threaded through binding and routing, so reuse
+of an `entity_id` across multiple boards of the same model can make entity binding or event
+routing ambiguous. Until that contract and multi-board hardware evidence exist, use the
+single-board boundary or require the Driver to keep `entity_id` globally unique.
 
 ## Quick start (local)
 
-Prereqs: **Go 1.26+**, **Node 20+** (CI uses 24), **pnpm**, optional [task](https://taskfile.dev/).
+Prerequisites: **Go 1.26+**, **Node 20+**, **pnpm** (version from
+[webui/package.json](webui/package.json)), optional [task](https://taskfile.dev/).
 
 ```bash
 git clone https://github.com/DeliciousBuding/cloud-path.git
 cd cloud-path
-task setup && task build       # → bin/cloudpath-server + bin/cloudpath-edge
-./bin/cloudpath-server         # default 127.0.0.1:8080, DB data/cloudpath.db, WebUI embedded
+task setup
+task build
+```
+
+Start the server:
+
+```bash
+./bin/cloudpath-server
+# default: 127.0.0.1:8080, data/cloudpath.db, embedded WebUI
 curl -fsS http://127.0.0.1:8080/healthz
 ```
 
-Then set up an admin account (`POST /api/auth/setup`), install the STC-B Driver plugin
-(`cloudpath plugin install github.com/DeliciousBuding/cloud-path-driver-stcb`), and run an edge
-(`cp edge.example.yaml edge.yaml; ./bin/cloudpath-edge`) with `adapter: stcb` for real devices.
+Local mode is L0 by default: reads are open and writes are accepted only from loopback. To use
+account mode, create the first administrator from the same machine:
 
-## Docs & architecture
+```bash
+curl -fsS -X POST http://127.0.0.1:8080/api/auth/setup \
+  -H 'Content-Type: application/json' \
+  --data '{"username":"admin","password":"<strong-password>"}'
+```
 
-- `docs/design.md` — technical SSOT
-- `docs/protocol.md` — message envelope / DTO contracts
-- `docs/plugin-system.md` — plugin system (Developer)
-- `docs/architecture/*` — capability model, control-plane sync, tenant security policy
-- `docs/api.md` · `docs/deploy.md` · `docs/security.md`
+Start an Edge with the built-in no-hardware demo:
+
+```bash
+cp edge.example.yaml edge.yaml
+./bin/cloudpath-edge
+```
+
+For a real serial device, install and enable its Driver Plugin, enable `plugin_host` in
+`edge.yaml`, and configure the device's `port` and adapter. A missing port keeps the device
+offline while Edge retries with backoff.
+
+Open <http://127.0.0.1:8080>. Account login uses the session cookie and the realtime `/ws`
+channel. Tenant-token login is REST-only because browsers cannot attach custom headers to
+WebSocket connections; the UI reports that boundary explicitly.
+
+## Current implementation and boundaries
+
+The current codebase includes:
+
+- Server, Edge, and plugin CLI; embedded WebUI; WebSocket state/event/command paths.
+- Account setup/login/logout, session cookies, RBAC (`admin` / `operator` / `viewer`), tenant
+  tokens, audit records, retention, rate limits, and tenant isolation.
+- Device supervision with reconnect backoff, offline event buffering, replay, and SQLite
+  hydration after restart.
+- Driver Plugin Host, Registry install/update controls, desired/observed reconciliation, and
+  secret handle resolution on Edge.
+- Application Protocol v1, AppHost, capability bindings, domain records, durable scheduled jobs,
+  and manual application actions.
+- Descriptor/Capability-driven device views and command forms.
+
+Not current capabilities:
+
+- Connector runtime and notification delivery. `SendNotification` fails closed with
+  `not_implemented`.
+- Transform/WASM runtime.
+- Multi-Server scaling, distributed quotas, centralized KMS/Vault, MQTT/Modbus gateways,
+  remote OTA orchestration, and time-series analytics.
+- Arbitrary third-party React bundles in the main WebUI.
+
+Real-hardware acceptance is separate from implementation. Protocol tests, mocked plugins, CI,
+or a merged source change do not prove a new multi-board hardware path. Evidence must include
+the real board log, command acknowledgement, and device event.
+
+## Docs
+
+- [README.md](README.md) - Chinese product and operations guide
+- [docs/design.md](docs/design.md) - technical SSOT
+- [webui/DESIGN.md](webui/DESIGN.md) - WebUI presentation and interaction SSOT
+- [docs/architecture.md](docs/architecture.md) - architecture and current-versus-target boundary
+- [docs/protocol.md](docs/protocol.md) - WebSocket protocol and DTO contract
+- [docs/api.md](docs/api.md) - HTTP API, authentication, RBAC, limits
+- [docs/security.md](docs/security.md) - security and operations baseline
+- [docs/deploy.md](docs/deploy.md) - local, container, and reverse-proxy deployment
+- [docs/architecture/plugin-system.md](docs/architecture/plugin-system.md) - plugin runtime and contracts
+- [docs/architecture/github-ecosystem.md](docs/architecture/github-ecosystem.md) - discovery and trust
+- [docs/architecture/registry.md](docs/architecture/registry.md) - Registry and CLI contract
+- [docs/architecture/how-to-build-driver.md](docs/architecture/how-to-build-driver.md) - Driver implementation guide
+- [docs/architecture/capability-model.md](docs/architecture/capability-model.md) - Device/Entity/Capability model
+- [docs/architecture/control-plane-sync.md](docs/architecture/control-plane-sync.md) - desired/observed synchronization
+- [docs/architecture/tenant-security-policy.md](docs/architecture/tenant-security-policy.md) - tenant and secret boundaries
+- [docs/architecture/repository-strategy.md](docs/architecture/repository-strategy.md) - repository and publication strategy
+- [docs/architecture/adr/0001-capability-centered-plugins.md](docs/architecture/adr/0001-capability-centered-plugins.md) - capability-centered plugin decision
+- [docs/architecture/adr/0002-github-plugin-discovery.md](docs/architecture/adr/0002-github-plugin-discovery.md) - discovery and trust decision
+- [deploy/README.md](deploy/README.md) - public deployment SOP
+- [deploy/edge/README.md](deploy/edge/README.md) - Edge distribution and configuration
+- [deploy/compose/README.md](deploy/compose/README.md) - Docker Compose profiles
+- [deploy/split/README.md](deploy/split/README.md) - application split and bootstrap reference
+- [templates/go-plugin/README.md](templates/go-plugin/README.md) - new Driver/Application plugin templates
 
 ## License
 
-MIT (see `LICENSE`).
+MIT. See [LICENSE](LICENSE).

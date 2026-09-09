@@ -154,7 +154,8 @@ export default function PluginInstanceDetail() {
 
           {isApplication && instance.desired.instance_id && (
             <ApplicationPlane key={instance.id} instanceID={instance.desired.instance_id} lifecycleKey={lifecycleKey}
-              runtimeState={!instance.desired.enabled ? 'stopped' : !instance.has_observed || instance.stale
+              desiredEnabled={instance.desired.enabled}
+              runtimeState={!instance.has_observed || instance.stale
                 ? 'unknown' : instance.observed?.state ?? 'unknown'} />
           )}
 

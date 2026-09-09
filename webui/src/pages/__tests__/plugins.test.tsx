@@ -170,6 +170,40 @@ describe('插件面分区', () => {
     await screen.findByText(/不代表已经运行/)
   })
 
+  it('可用插件卡片直接进入创建并预选；连接器明确不能创建', async () => {
+    const application: PluginCatalogView = {
+      ...CATALOG[0], id: 'io.github.acme.application', kind: 'application',
+      contributes: { applications: [{ id: 'acme.app', title: '示例应用' }] },
+    }
+    const connector: PluginCatalogView = {
+      ...CATALOG[0], id: 'io.github.acme.connector', kind: 'connector',
+      permissions: { network: ['outbound'] }, contributes: { connectors: [{ id: 'acme.mqtt', title: 'MQTT 连接器' }] },
+    }
+    route({ catalog: [application, CATALOG[0], connector] })
+    const user = userEvent.setup()
+    renderWithProviders(<Plugins />)
+    await gotoTab(/可用插件/)
+
+    expect(await screen.findByText('连接器不创建运行实例')).toBeVisible()
+    expect(screen.queryByRole('button', { name: /创建.*MQTT/ })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /创建应用实例：示例应用/ }))
+    expect(screen.getByRole('tab', { name: /运行实例/ })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('combobox', { name: '要运行什么' })).toHaveValue(application.id)
+  })
+
+  it('新建实例优先选择已验证的可创建插件，不让未验证长名称成为默认', async () => {
+    const unverified: PluginCatalogView = {
+      ...CATALOG[0], id: 'io.github.acme.unverified', verified: false,
+      contributes: { drivers: [{ id: 'acme.long', title: '未验证且名称很长的驱动（不应该默认选中）' }] },
+    }
+    route({ catalog: [unverified, CATALOG[0]] })
+    const user = userEvent.setup()
+    renderWithProviders(<Plugins />)
+    await user.click(await screen.findByRole('button', { name: '新建实例' }))
+    expect(await screen.findByRole('combobox', { name: '要运行什么' })).toHaveValue(CATALOG[0].id)
+  })
+
   it('目录为空 / 加载失败都是设计过的状态', async () => {
     route({ catalog: [] })
     const first = renderWithProviders(<Plugins />)
@@ -259,6 +293,22 @@ describe('实例分区：desired 与 observed 永远分别渲染', () => {
     expect(screen.getAllByText('db-password').length).toBeGreaterThan(0)
     expect(screen.queryByText('secret://db-password')).not.toBeInTheDocument()
     expect(screen.getByText(/密钥只会显示名称/)).toBeInTheDocument()
+  })
+
+  it('同步异常详情直接给出重新应用动作，不再提示用户打开详情', async () => {
+    route({ instances: [instance({ drift: true, applied_revision: 41 })] })
+    renderDetail()
+    expect(await screen.findByText(/确认保存的设置无误后/)).toBeVisible()
+    expect(screen.queryByText(/打开详情核对设置/)).not.toBeInTheDocument()
+  })
+
+  it('中心服务详情说明由中心服务应用，不误写成网关', async () => {
+    route({ instances: [instance({ id: 'server/inst-1', edge_id: 'server' })] })
+    const user = userEvent.setup()
+    renderDetail('/plugins/server%2Finst-1')
+    await user.click(await screen.findByText('查看详细信息'))
+    expect(await screen.findByText('中心服务会按它应用')).toBeVisible()
+    expect(screen.queryByText('网关会按它应用')).not.toBeInTheDocument()
   })
 
   it('详情页不泄漏本机绝对路径与插件 stdout 原文', async () => {
@@ -391,6 +441,15 @@ describe('实例分区的空态与错误态', () => {
     renderWithProviders(<Plugins />)
     await gotoTab(/实例/)
     expect(await screen.findByText('还没有运行实例')).toBeInTheDocument()
+  })
+
+  it('没有可用插件 → 不提供无法完成的创建入口', async () => {
+    route({ catalog: [], instances: [] })
+    renderWithProviders(<Plugins />)
+    await gotoTab(/实例/)
+    expect(await screen.findByText('还没有运行实例')).toBeInTheDocument()
+    expect(screen.getByText(/先同步或安装/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /新建/ })).not.toBeInTheDocument()
   })
 
   it('实例端点失败 → 错误态 + 重试', async () => {

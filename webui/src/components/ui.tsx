@@ -268,11 +268,11 @@ export function TabPanel<T extends string>({ value, children, className }: {
 }
 
 /** 键值行（详情页/系统页的定义列表项） */
-export function KeyValue({ k, v, mono }: { k: ReactNode; v: ReactNode; mono?: boolean }) {
+export function KeyValue({ k, v, mono, wrap }: { k: ReactNode; v: ReactNode; mono?: boolean; wrap?: boolean }) {
   return (
     <div className="kv">
       <dt>{k}</dt>
-      <dd className={cn('min-w-0 truncate', mono && 'num font-mono text-xs text-ink-2')}>{v}</dd>
+      <dd className={cn('min-w-0', wrap ? 'break-words' : 'truncate', mono && 'num font-mono text-xs text-ink-2')}>{v}</dd>
     </div>
   )
 }

@@ -10,10 +10,13 @@ import { cmdMeta, cmdStatusMeta, fmtTime, fmtDateTime } from '@/lib/format'
 import type { ReactNode } from 'react'
 import type { CommandAction } from '@/lib/descriptor'
 
-function failureInfo(result?: string): { message: string; next: string } {
+function failureInfo(status: string, result?: string): { message: string; next: string } {
   const text = result?.trim()
-  if (!text) return { message: '设备没有完成操作', next: '请稍后重试' }
+  if (!text) return status === 'timeout'
+    ? { message: '设备响应超时', next: '确认设备在线且空闲后重试' }
+    : { message: '设备没有完成操作', next: '请稍后重试' }
   if (/timeout|timed out|超时/i.test(text)) return { message: '设备响应超时', next: '确认设备在线且空闲后重试' }
+  if (status === 'timeout') return { message: '设备响应超时', next: '确认设备在线且空闲后重试' }
   if (/busy|queue full|忙/i.test(text)) return { message: '设备正忙', next: '等待设备空闲后重试' }
   if (/offline|离线/i.test(text)) return { message: '设备当前离线', next: '确认设备恢复在线后重试' }
   if (/permission|forbidden|unauthorized|权限/i.test(text)) return { message: '当前账号没有操作权限', next: '请联系管理员授权后重试' }
@@ -41,8 +44,8 @@ function controlPath(deviceId: string): string {
 
 /** 操作记录：REST 轮询该设备的操作与执行结果（含超时/失败原因）。
  *  普通用户只看人话结果；状态码、原始返回与参数只放在「技术详情」里。 */
-export function CommandHistory({ deviceId, actions, limit, footer }: {
-  deviceId: string; actions?: CommandAction[];
+export function CommandHistory({ deviceId, targetLabel, actions, limit, footer }: {
+  deviceId: string; targetLabel?: string; actions?: CommandAction[];
   /** 展示上限（概览首屏用：右栏不该拉到 20 行把左栏踢出空洞）；缺省全显 */
   limit?: number;
   /** 被截断时的出口（如「到控制页看全部」） */
@@ -62,7 +65,7 @@ export function CommandHistory({ deviceId, actions, limit, footer }: {
       right={!isLoading && !error ? (
         <span className="flex items-center gap-2 text-[12px] text-ink-3">
           <span className="num">{shown.length} 条</span>
-          <button type="button" className="btn btn-ghost btn-sm h-7 px-2" disabled={isFetching}
+          <button type="button" className="btn btn-ghost btn-sm h-7 min-h-11 px-2 sm:min-h-0" disabled={isFetching}
             aria-label="刷新操作记录" onClick={() => { void refetch() }}>
             <RefreshCw size={12} className={isFetching ? 'animate-spin' : undefined} />
             刷新
@@ -89,7 +92,7 @@ export function CommandHistory({ deviceId, actions, limit, footer }: {
             const failure = isFailure(c.status)
             const progress = isInProgress(c.status)
             const unknown = !failure && !progress && statusLabel === '状态未知'
-            const info = failure ? failureInfo(c.result) : null
+            const info = failure ? failureInfo(c.status, c.result) : null
             const retryError = action ? commandArgsError(c.args ?? '', action.inputSchema, action.inputMaxLength) : undefined
             return (
               <li key={c.id} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-3">
@@ -108,13 +111,13 @@ export function CommandHistory({ deviceId, actions, limit, footer }: {
 
                 {failure && info && (
                   <div className="col-span-3 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2 rounded-lg bg-bad/8 px-2.5 py-2 text-[12px]">
-                    <span className="min-w-0 flex-1 text-ink-2">
+                    <span className="min-w-0 flex-1 break-words text-ink-2">
                       <span className="font-medium text-bad">{info.message}</span>
                       <span className="text-ink-3"> · {info.next}</span>
                     </span>
                     {action && !retryError ? (
-                      <CommandButton deviceId={deviceId} action={action} args={c.args ?? ''}
-                        buttonLabel="重试" buttonAriaLabel={`重试${meta.label}`} className="btn-sm shrink-0" />
+                      <CommandButton deviceId={deviceId} targetLabel={targetLabel} action={action} args={c.args ?? ''}
+                        buttonLabel="重试" buttonAriaLabel={`重试${meta.label}`} className="btn-sm min-h-11 w-full sm:min-h-0 sm:w-auto" />
                     ) : (
                       <Link to={controlPath(deviceId)} className="link shrink-0">去设备操作中重试</Link>
                     )}
@@ -128,7 +131,7 @@ export function CommandHistory({ deviceId, actions, limit, footer }: {
                 )}
 
                 <details className="col-span-3 min-w-0 text-[12px]">
-                  <summary className="cursor-pointer select-none text-ink-3">技术详情</summary>
+                  <summary className="flex min-h-11 cursor-pointer select-none items-center text-ink-3 sm:min-h-0">技术详情</summary>
                   <dl className="mt-1.5 grid gap-1 rounded-lg bg-ink-3/5 p-2 text-ink-2 sm:grid-cols-2">
                     <div className="min-w-0"><dt className="inline text-ink-3">状态码：</dt><dd className="inline break-all font-mono">{c.status}</dd></div>
                     <div className="min-w-0"><dt className="inline text-ink-3">记录编号：</dt><dd className="num inline font-mono">{c.id}</dd></div>

@@ -1,50 +1,41 @@
 # 设备协议契约
 
-最后更新：2026-09-03
+最后更新：2026-09-09
 
-Cloudpath 用四个统一概念对接任何设备：`Command`（下发）、`State`（状态）、`Dump`（转储）、
-`Event`（事件）。具体设备的线上协议由 `examples/<device>` 的适配器实现；本文记录概念契约与
-首个参考设备（STC-B）的线上格式。
+CloudPath 的公共设备模型是 **Device / Entity / Capability / Observation / Event / Command**。
+设备线协议、串口帧、厂商字段和板级容错由对应 Driver Plugin 拥有；Core 只处理平台模型和
+版本化消息。具体设备的协议入口见文末参考表。
 
 ## 概念
 
-| 概念 | 含义 | 谁负责 |
+| 概念 | 含义 | 责任边界 |
 |---|---|---|
-| Command | 上位机 → 设备的指令（对时 / 转储 / 触发 / 刷机 / 原始写入） | 适配器声明白名单，server 校验，edge 执行 |
-| State | 设备状态快照（在线判定 + 自定义语义字段） | 适配器 `Snapshot()` 产出，核心原样透传 |
-| Dump | 设备回传的状态转储行 | 适配器解析成 State |
-| Event | 设备主动上报的事件标签 | 适配器归一化成平台事件类型 |
+| Device | 一台物理或虚拟设备 | Driver 发现并提供稳定 `device_id` / `external_id` |
+| Entity | Device 下可独立观察或控制的逻辑单元 | Driver 声明稳定 `entity_id`、名称和类别 |
+| Capability | Entity 能做什么的版本化声明 | Driver 声明 Properties、Events、Actions 与 UI hints |
+| Observation | 当前状态的类型化采样值 | 保留 `observed_at`、`received_at`、质量和 sequence；不从旧 `raw` 猜实体 |
+| Event | 不可覆盖的时间点事实 | Type 属于 Capability 或 Application 命名空间；设备级事件可省略 `entity_id` |
+| Command | 对声明动作的一次请求 | 命令白名单来自 Driver/Capability 的 action 声明；参数由 Core 做传输边界校验 |
 
 约束：
 
-- **事件不带时间戳**：时间由 edge 打点（设备钟不可信），server 落库并广播。
-- **状态幂等**：转储请求不得改变设备状态，上位机按固定周期轮询。
-- **命令白名单**：只有适配器 `SupportedCommands()` 声明过的命令能被下发；
-  server 拒绝白名单外的命令（400），前端命令面板也以同一份清单渲染。
-- **状态字段自定义**：`State.Raw` 是 `map[string]any`，前端识别通用键
-  （`clock` `hour` `min` `state` `state_label` `slots` `drift_min` `dump_raw`），
-  未知键原样展示在「原始状态」面板。
-
-## 平台事件类型
-
-适配器把设备原始标签归一化成下列类型（前端展示标签见 `webui/src/lib/format.ts`）：
-
-| 类型 | 含义 | 展示 |
-|---|---|---|
-| `BOOT` | 设备上电/复位 | 上电 |
-| `REMIND` | 进入提醒状态 | 提醒 |
-| `TAKEN` | 在窗口内完成确认动作 | 已确认 |
-| `TAKEN-LATE` | 超过窗口后才确认 | 逾期确认 |
-| `MISSED` | 窗口结束仍未确认 | 逾期未确认 |
-| `SYNC-OK` | 对时成功 | 对时成功 |
-
-新增设备可以复用这些类型，也可以在适配器里定义新类型：前端对未知类型回落显示原始名。
+- **协议不枚举具体业务事件**：`Event.type` 对 Core 是不透明字符串。标准事件由 Capability
+  或 Application 命名空间声明，旧适配器发送的标签继续兼容；Core 不维护
+  `BOOT` / `REMIND` / `TAKEN` 等设备专用枚举。
+- **状态幂等**：读取状态的轮询不得改变设备状态。轮询命令名由适配器显式声明，Core 只按
+  白名单下发。
+- **命令白名单**：只有 Driver 的 `ActionDescriptor` / 适配器 `SupportedCommands()` 声明过的动作
+  能被下发；Server 拒绝白名单外命令，前端命令面板消费同一份声明。
+- **Raw 只作兼容和诊断**：`State.raw` 可以承载旧设备字段，但不是跨 Driver 的语义契约。
+  主路径使用 Descriptor / Entity / Capability / Observation；未知字段原样保留，不得推断业务含义。
+- **时间与质量**：设备时钟不可信时，Driver/Edge 必须保留真实采样时间并标明质量；Core 不从
+  时间字符串或旧字段伪造 Observation。
 
 ---
 
-## Platform WebSocket: Plugin Control Plane
+## 平台 WebSocket：插件控制面
 
-插件控制面复用 edge ↔ server 的版本 1 信封，新增三种向后兼容消息。旧实现遇到未知消息只记录并忽略，不因新增类型断开连接。完整权威划分见 [Plugin Control Plane Synchronization](architecture/control-plane-sync.md)。
+插件控制面复用 edge ↔ server 的版本 1 信封，新增四类向后兼容消息。旧实现遇到未知消息只记录并忽略，不因新增类型断开连接。完整权威划分见 [Plugin Control Plane Synchronization](architecture/control-plane-sync.md)。
 
 | 消息 | 方向 | 作用 |
 |---|---|---|

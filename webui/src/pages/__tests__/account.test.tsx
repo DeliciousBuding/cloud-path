@@ -1,7 +1,7 @@
 // 账号可见性与登出：真实登录后用户必须能看到自己是谁、并且能登出（共用机器场景）。
 // 同时守住 Settings 对鉴权方式的诚实描述 —— 账号模式靠会话 cookie，本机令牌是可选的，
 // 不能再把 legacy 共享令牌说成「必须携带」（那会把用户推回 D3 那种假登录心智）。
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -12,10 +12,14 @@ import { installFetch, stubResponse } from '@/test/http'
 import { renderWithProviders, resetStores } from '@/test/render'
 import { useAuth } from '@/store/auth'
 import { useLive } from '@/store/ws'
-import type { AuthMode, UserView } from '@/lib/types'
+import type { AdapterView, AuthMode, UserView } from '@/lib/types'
 
 const admin: UserView = {
   id: 1, username: 'ops-admin', name: '运维管理员', role: 'admin',
+  tenant_id: 1, tenant_slug: 'default',
+}
+const viewer: UserView = {
+  id: 3, username: 'viewer', name: '只读访客', role: 'viewer',
   tenant_id: 1, tenant_slug: 'default',
 }
 const health = { ok: true, version: 'v0.1.0', uptime_s: 60, devices_online: 0, devices_total: 0, edges_online: 0 }
@@ -24,14 +28,18 @@ const stats = {
   retention_days: 30, auth_mode: 'account' as AuthMode,
 }
 
-function route(opts: { authMode?: AuthMode } = {}) {
+function route(opts: { authMode?: AuthMode; adapters?: AdapterView[]; tokenMeStatus?: number } = {}) {
   return installFetch((url, init) => {
     if (url === '/healthz') return stubResponse(200, health)
+    if (url === '/api/auth/me') {
+      return stubResponse(opts.tokenMeStatus ?? 200, opts.tokenMeStatus && opts.tokenMeStatus >= 400
+        ? { error: 'not authenticated' } : { user: admin })
+    }
     if (url === '/api/stats') {
       return stubResponse(200, { ...stats, auth_mode: opts.authMode ?? 'account' })
     }
     if (url === '/api/auth/logout') return stubResponse(204, undefined)
-    if (url === '/api/adapters') return stubResponse(200, { adapters: [] })
+    if (url === '/api/adapters') return stubResponse(200, { adapters: opts.adapters ?? [] })
     if (init?.method) return stubResponse(404, {})
     return stubResponse(404, {})
   })
@@ -49,6 +57,7 @@ function renderLayout() {
 
 beforeEach(() => {
   resetStores()
+  setToken('')
   // 实时通道连上，避免系统提示条抢占 role=status
   useLive.setState({ status: 'open' })
 })
@@ -103,7 +112,7 @@ describe('Settings 账号与令牌面板', () => {
     route()
     useAuth.setState({ status: 'in', user: admin })
     renderWithProviders(<Settings />)
-    expect(screen.getByText('查看当前账号、管理访问令牌和高级诊断。')).toBeInTheDocument()
+    expect(screen.getByText('查看当前账号、保存访问令牌和高级诊断。')).toBeInTheDocument()
     expect((await screen.findAllByText('ops-admin')).length).toBeGreaterThan(0)
     expect(screen.getAllByText('管理员').length).toBeGreaterThan(0)
     expect(screen.getByText('default')).toBeInTheDocument()
@@ -176,6 +185,40 @@ describe('Settings 账号与令牌面板', () => {
     expect(panel.textContent).not.toContain('都必须携带同一令牌')
   })
 
+  it('保存访问令牌前用无 cookie 请求验证，成功后落盘', async () => {
+    const user = userEvent.setup()
+    const http = route({ tokenMeStatus: 200 })
+    useAuth.setState({ status: 'in', user: admin })
+    renderWithProviders(<Settings />)
+
+    const input = screen.getByPlaceholderText('收到令牌或使用自动化工具时填写')
+    await user.type(input, 'cp_valid_token')
+    expect(screen.queryByText('已保存')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '保存令牌' }))
+
+    await waitFor(() => expect(getToken()).toBe('cp_valid_token'))
+    const probe = http.to('/api/auth/me')[0]
+    expect(probe?.credentials).toBe('omit')
+    expect(probe?.headers.Authorization).toBe('Bearer cp_valid_token')
+  })
+
+  it('访问令牌验证失败：不覆盖旧令牌，恢复旧值并提示重试', async () => {
+    const user = userEvent.setup()
+    setToken('cp_previous_token')
+    route({ tokenMeStatus: 401 })
+    useAuth.setState({ status: 'in', user: admin })
+    renderWithProviders(<Settings />)
+
+    const input = screen.getByPlaceholderText('收到令牌或使用自动化工具时填写')
+    await user.clear(input)
+    await user.type(input, 'cp_invalid_token')
+    await user.click(screen.getByRole('button', { name: '保存令牌' }))
+
+    expect(await screen.findByText(/访问令牌无效、已吊销或权限不足/)).toBeInTheDocument()
+    expect(getToken()).toBe('cp_previous_token')
+    expect(input).toHaveValue('cp_previous_token')
+  })
+
   it('外观是普通用户可操作项，切换会保存偏好', async () => {
     const user = userEvent.setup()
     route()
@@ -202,6 +245,21 @@ describe('Settings 账号与令牌面板', () => {
     expect(await screen.findByText('无法读取记录统计')).toBeInTheDocument()
     expect(screen.queryByText('运行记录总数')).not.toBeInTheDocument()
     expect(screen.queryByText('正在读取记录统计…')).not.toBeInTheDocument()
+  })
+
+  it('普通成员的高级诊断不暴露适配器内部标识、命令码或记录格式版本', async () => {
+    route({ adapters: [{ name: 'stcb-internal-adapter-id', commands: ['raw_internal_command'] }] })
+    useAuth.setState({ status: 'in', user: viewer })
+    renderWithProviders(<Settings />)
+    await openDiagnostics()
+
+    expect(await screen.findByText('1 种接入方式')).toBeInTheDocument()
+    expect(screen.getByText(/已登记 1 种设备接入方式/)).toBeInTheDocument()
+    expect(screen.queryByText('stcb-internal-adapter-id')).not.toBeInTheDocument()
+    expect(screen.queryByText('raw_internal_command')).not.toBeInTheDocument()
+    expect(screen.queryByText(/记录格式版本/)).not.toBeInTheDocument()
+    expect(screen.queryByText('账号 ID')).not.toBeInTheDocument()
+    expect(screen.queryByText('所属组织')).not.toBeInTheDocument()
   })
 
   it('登出后回到登录页（Settings 里的登出与侧栏一致）', async () => {

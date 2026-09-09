@@ -8,6 +8,9 @@ import { resetStores } from '@/test/render'
 
 beforeEach(() => { resetStores() })
 
+const NATIVE_FETCH = globalThis.fetch?.bind(globalThis)
+const LIVE_BASE = process.env.CLOUDPATH_E2E_BASE
+
 describe('鉴权接缝', () => {
   it('令牌写入 localStorage 并作为 Bearer 头发出，凭据同源', async () => {
     const http = installFetch(() => stubResponse(200, { devices: [] }))
@@ -118,5 +121,53 @@ describe('wsUrl', () => {
     setToken('')
     expect(wsUrl()).toBe('wss://cp.example.com/ws')
     vi.unstubAllGlobals()
+  })
+})
+
+describe('真实 server REST E2E（opt-in，CLOUDPATH_E2E_BASE）', () => {
+  it.runIf(Boolean(LIVE_BASE && NATIVE_FETCH))('api.ts 对真实 server 的聚合/设备/Descriptor/命令路径全部命中', async () => {
+    const base = new URL(LIVE_BASE as string)
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
+      (NATIVE_FETCH as typeof fetch)(new URL(String(input), base), init))
+    try {
+      const health = await api.health()
+      expect(health.ok).toBe(true)
+
+      const overview = await api.overview()
+      expect(overview.devices_total).toBeGreaterThanOrEqual(2)
+      expect(overview.edges_total).toBeGreaterThanOrEqual(1)
+
+      const devices = await api.devices()
+      const demo = devices.devices.find((d) => d.id === 'e2e-edge/demo-1')
+      expect(demo).toMatchObject({ edge_id: 'e2e-edge', adapter: 'demo', online: true })
+      expect(demo?.state.kind).toBe('reference-demo-device')
+
+      const edges = await api.edges()
+      expect(edges.edges.some((e) => e.edge_id === 'e2e-edge' && e.online)).toBe(true)
+
+      const descriptors = await api.descriptors() as { descriptors?: unknown[]; capabilities?: unknown[] }
+      expect(descriptors.descriptors?.length).toBeGreaterThanOrEqual(2)
+      expect(descriptors.capabilities?.length).toBeGreaterThanOrEqual(1)
+
+      const capabilities = await api.capabilities() as { capabilities?: unknown[] }
+      expect(capabilities.capabilities?.length).toBeGreaterThanOrEqual(1)
+
+      const descriptor = await api.deviceDescriptor('e2e-edge', 'demo-1') as {
+        descriptor?: { device_id?: string }; capabilities?: unknown[]
+      }
+      expect(descriptor.descriptor?.device_id).toBe('e2e-edge/demo-1')
+      expect(descriptor.capabilities?.length).toBeGreaterThanOrEqual(1)
+
+      const sent = await api.sendCommand('e2e-edge', 'demo-1', 'ping')
+      expect(sent).toMatchObject({ device_id: 'e2e-edge/demo-1', cmd: 'ping', status: 'sent' })
+      const commands = await api.commands({ device: 'e2e-edge/demo-1', limit: 20 })
+      expect(commands.commands.some((c) => c.id === sent.id)).toBe(true)
+
+      const events = await api.events({ device: 'e2e-edge/demo-1', limit: 20 })
+      expect(Array.isArray(events.events)).toBe(true)
+      await expect(api.device('missing', 'missing')).rejects.toMatchObject({ status: 404 })
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

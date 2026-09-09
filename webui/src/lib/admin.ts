@@ -67,9 +67,15 @@ export function adminErrorMessage(e: unknown): string {
   if (e instanceof ApiError) {
     if (e.status === 401) return '登录已失效，请重新登录后再操作'
     if (e.status === 403) return '当前账号没有管理权限。请联系管理员。'
+    if (e.status === 404) return '记录不存在或已被删除，请刷新列表后重试。'
     if (e.status === 429) {
       return e.retryAfter ? `操作过于频繁，请 ${e.retryAfter} 秒后重试` : '操作过于频繁，请稍后重试'
     }
+    if (e.status >= 500) return '服务暂时不可用，请稍后重试；如果持续失败，请联系管理员。'
+    if (e.status === 400) {
+      return /[\u3400-\u9fff]/.test(e.message) ? e.message : '提交内容不符合要求，请检查后重试。'
+    }
+    // 409 等业务规则由服务端判定；说明通常已是可直接展示的人话。
     if (e.message) return e.message
     return '操作暂时没有成功，请稍后重试。'
   }

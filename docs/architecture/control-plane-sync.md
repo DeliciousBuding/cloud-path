@@ -202,27 +202,11 @@ Server 在 Edge hello 成功后发送当前完整快照；期望态变更后再�
 | 权限扩大 | 未显式确认不生成新 desired revision |
 | 秘密已吊销 | reconcile 失败；不回落旧明文；审计只记录 handle 名称/版本 |
 
-## 9. 模块边界与实施顺序
+## 9. 模块边界与验证
 
-1. **契约冻结**：本文、API DTO 与协议测试先确定字段和错误语义。
-2. **按模块实现**：
-   - Store：schema/migration/repository；
-   - Edge：状态采集、本地 cache、reconciler、WS report/ack；
-   - Server：WS ingest/downlink、Catalog SourceReader、只读投影；
-   - Security：secret handle/policy/quota 的纯领域逻辑。
-3. **接缝集成**：Server 管理写 API + audit、CLI 远端模式、Catalog UI 接真实数据。
-4. **验收**：断网、重连、重复消息、跨租户、stale boot、权限扩大、secret 吊销的真实 WS + SQLite E2E。
+共享写点的归属固定为：`internal/store/**` 负责 schema/migration/repository，Edge 运行时负责本地
+applied cache 与 reconcile，Server 负责路由、WS ingest/downlink、Catalog 投影和审计。契约变更先改
+API DTO 与协议测试，再跨模块集成。
 
-共享写点唯一归属：`internal/store/**` 由 Store 模块维护；Edge 运行时和 Server 路由/WS 分别由各自模块维护；
-API 契约先冻结，再跨模块集成。
-
-## 10. 验收标准
-
-只有同时满足以下条件，才能称插件控制面完成：
-
-- Server 写 desired，Edge 应用并 ack，Server Catalog 读到真实 observed；
-- Edge 断线重连后自动收敛且不中断上一个已应用配置；
-- desired/observed、tenant、revision、boot/sequence 均有反向测试；
-- 所有写操作进入审计，所有 secret 只以 handle 出现在配置和日志；
-- Core、WebUI、模板、公开审计和链接聚合门禁全绿；
-- 至少一个真实独立 Driver Plugin 和一个 Application Plugin 完成从发现、验证安装到运行的端到端验证。
+控制面验证覆盖断网、重连、重复消息、跨租户、stale boot、权限扩大、secret 吊销的 WS + SQLite
+链路。它证明软件契约和进程行为，不替代 Connector 运行时验证、真板硬件验收或线上部署证据。

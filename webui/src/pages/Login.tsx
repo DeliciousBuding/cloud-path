@@ -99,11 +99,12 @@ export default function Login() {
       toast.ok('访问令牌已生效', user?.name || user?.username || undefined)
       navigate('/', { replace: true })
     } catch (err) {
+      setTokenInput('') // 同时清空输入框，避免无效令牌继续留在页面中
       setToken('') // 复核失败即回滚，不在本机留下无效凭据
       const copy = loginErrorCopy(err)
       setTokenError(copy.unreachable
         ? copy.message
-        : '访问令牌被拒绝：无效、已吊销或权限不足（访问令牌需由管理员在「管理 → 访问令牌」中签发）')
+        : '访问令牌被拒绝：无效、已吊销或权限不足。请联系管理员重新签发。')
       setTokenBusy(false)
     }
   }

@@ -64,9 +64,13 @@ export default function Settings() {
   const status = useLive((s) => s.status)
   const authStatus = useAuth((s) => s.status)
   const user = useAuth((s) => s.user)
+  const isAdmin = user?.role === 'admin'
   const navigate = useNavigate()
   const [tok, setTok] = useState(getToken)
+  const [hasStoredToken, setHasStoredToken] = useState(Boolean(getToken()))
   const [saved, setSaved] = useState(false)
+  const [tokenSaving, setTokenSaving] = useState(false)
+  const [tokenError, setTokenError] = useState('')
   const [signingOut, setSigningOut] = useState(false)
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
   const [themeMode, setThemeMode] = useState<ThemeMode>(getTheme)
@@ -77,12 +81,51 @@ export default function Settings() {
     navigate('/login', { replace: true })
   }
 
-  const saveToken = () => {
-    setToken(tok.trim())
-    setSaved(true)
-    setTimeout(() => setSaved(false), 1500)
-    reconnectLive()
-    toast.ok('访问令牌已保存', '页面会使用新的访问令牌重新连接')
+  const saveToken = async () => {
+    const next = tok.trim()
+    const previous = getToken()
+    if (!next) {
+      setToken('')
+      setTok('')
+      setHasStoredToken(false)
+      setTokenError('')
+      reconnectLive()
+      toast.ok(previous ? '访问令牌已清除' : '没有保存访问令牌')
+      return
+    }
+
+    setTokenSaving(true)
+    setTokenError('')
+    try {
+      // 只带候选令牌、明确省略 cookie：避免已登录会话把无效令牌“验证成成功”。
+      const res = await fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${next}` },
+        credentials: 'omit',
+      })
+      if (!res.ok) {
+        setToken(previous)
+        setTok(previous)
+        setHasStoredToken(Boolean(previous))
+        setTokenError(res.status === 401 || res.status === 403
+          ? '访问令牌无效、已吊销或权限不足。请确认后重试。'
+          : '暂时无法验证访问令牌，请稍后重试。')
+        return
+      }
+      setToken(next)
+      setTok(next)
+      setHasStoredToken(true)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 1500)
+      reconnectLive()
+      toast.ok('访问令牌已验证并保存', '页面会使用新的访问令牌重新连接')
+    } catch {
+      setToken(previous)
+      setTok(previous)
+      setHasStoredToken(Boolean(previous))
+      setTokenError('暂时无法验证访问令牌，请检查网络后重试。')
+    } finally {
+      setTokenSaving(false)
+    }
   }
 
   const changeTheme = (mode: ThemeMode) => {
@@ -107,7 +150,7 @@ export default function Settings() {
       <PageHeader title="设置" subtitle="账号、外观和访问令牌" />
 
       <p className="mb-5 max-w-[62ch] text-sm leading-relaxed text-ink-2">
-        查看当前账号、管理访问令牌和高级诊断。
+        查看当前账号、保存访问令牌和高级诊断。
       </p>
 
       <div className="grid items-start gap-5 lg:grid-cols-2">
@@ -144,8 +187,12 @@ export default function Settings() {
                 <summary className="cursor-pointer select-none">账号详情</summary>
                 <dl className="mt-2.5 space-y-2.5">
                   <KeyValue k="登录账号" v={<span className="font-mono">{user.username}</span>} />
-                  <KeyValue k="所属组织" v={user.tenant_slug || '未设置'} mono />
-                  <KeyValue k="账号 ID" v={user.id} mono />
+                  {isAdmin && (
+                    <>
+                      <KeyValue k="所属组织" v={user.tenant_slug || '未设置'} mono />
+                      <KeyValue k="账号 ID" v={user.id} mono />
+                    </>
+                  )}
                 </dl>
               </details>
 
@@ -191,19 +238,20 @@ export default function Settings() {
 
         <Panel title={<span className="flex items-center gap-1.5"><KeyRound size={14} />访问令牌</span>}
           className="lg:col-span-2"
-          right={tok ? <Badge tone="ok">已保存</Badge> : undefined}>
+          right={hasStoredToken ? <Badge tone="ok">已保存</Badge> : undefined}>
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
             <TextField
               label="访问令牌"
               type="password"
               value={tok}
-              onChange={(e) => setTok(e.target.value)}
+              onChange={(e) => { setTok(e.target.value); setTokenError('') }}
               placeholder="收到令牌或使用自动化工具时填写"
               autoComplete="off"
-              hint="账号登录本身不需要填写。令牌只保存在这台设备，保存后不会显示完整内容。"
+              error={tokenError}
+              hint="账号登录本身不需要填写。保存前会先验证令牌；令牌只保存在这台设备。"
             />
-            <button type="button" className="btn btn-primary lg:mb-[1.625rem]" onClick={saveToken}>
-              {saved && <Check size={14} />}{saved ? '已保存' : '保存令牌'}
+            <button type="button" className="btn btn-primary lg:mb-[1.625rem]" disabled={tokenSaving} onClick={() => void saveToken()}>
+              {saved && <Check size={14} />}{tokenSaving ? '验证中…' : saved ? '已保存' : '保存令牌'}
             </button>
           </div>
         </Panel>
@@ -284,10 +332,12 @@ export default function Settings() {
                     </dl>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3">
                       <Link to="/activity" className="link text-[12px]">查看运行记录</Link>
-                      <details className="text-[12px] text-ink-3">
-                        <summary className="cursor-pointer">技术详情</summary>
-                        <p className="mt-1">记录格式版本：v{stats.schema_version}</p>
-                      </details>
+                      {isAdmin && (
+                        <details className="text-[12px] text-ink-3">
+                          <summary className="cursor-pointer">技术详情</summary>
+                          <p className="mt-1">记录格式版本：v{stats.schema_version}</p>
+                        </details>
+                      )}
                     </div>
                   </>
                 ) : (
@@ -296,7 +346,7 @@ export default function Settings() {
               </Panel>
 
               <Panel title={<span className="flex items-center gap-1.5"><Plug size={14} />设备接入</span>}
-                right={<span className="text-[12px] text-ink-3">{adapters ? `${adapters.adapters.length} 个已登记` : '—'}</span>}>
+                right={<span className="text-[12px] text-ink-3">{adapters ? `${adapters.adapters.length} ${isAdmin ? '个已登记' : '种接入方式'}` : '—'}</span>}>
                 {adaptersError ? (
                   <InlineError title="无法读取设备接入信息" hint="已经接入的设备不会受影响。请稍后重试。"
                     onRetry={() => void refetchAdapters()} retrying={adaptersFetching} />
@@ -305,7 +355,7 @@ export default function Settings() {
                 ) : adapters ? (
                   adapters.adapters.length === 0 ? (
                     <p className="py-4 text-center text-sm text-ink-3">还没有设备接入方式。设备连接后会显示在这里。</p>
-                  ) : (
+                  ) : isAdmin ? (
                     <div className="space-y-4">
                       {adapters.adapters.map((a) => (
                         <div key={a.name}>
@@ -326,6 +376,15 @@ export default function Settings() {
                         <p className="max-w-[42ch] text-[12px] leading-relaxed text-ink-3">
                           这里显示设备可以执行的操作。没有权限时，操作会被拒绝。
                         </p>
+                        <Link to="/devices" className="link text-[12px]">查看已接入设备</Link>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-[13px] leading-relaxed text-ink-2">
+                        已登记 {adapters.adapters.length} 种设备接入方式。设备连接后，平台会在这里显示可用的操作类别。
+                      </p>
+                      <div className="border-t border-hairline pt-3">
                         <Link to="/devices" className="link text-[12px]">查看已接入设备</Link>
                       </div>
                     </div>

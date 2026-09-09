@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, Cpu, Inbox, Search, SearchX, WifiOff } from 'lucide-react'
+import { Cpu, Inbox, Search, SearchX, WifiOff } from 'lucide-react'
 import { EmptyState, ErrorState, PageHeader, Panel, Segmented } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { DeviceRow, DeviceRowHead } from '@/components/DeviceRow'
@@ -46,14 +46,14 @@ export default function Devices() {
   const subtitle = loading ? '正在加载设备状态…'
     : error ? '设备状态暂不可用'
       : list.length === 0 ? '还没有设备接入'
-        : offline > 0 ? `${online} 台在线 · ${offline} 台离线需关注`
+        : offline > 0 ? `${online} 台在线 · ${offline} 台离线，已优先排列`
           : `${online} 台在线 · 全部在线`
 
   return (
     <>
       <PageHeader
         title="设备"
-        subtitle={subtitle}
+        subtitle={!loading && !error && list.length === 0 ? undefined : subtitle}
         actions={
           list.length > 0 ? (
             <Segmented
@@ -69,18 +69,6 @@ export default function Devices() {
           ) : undefined
         }
       />
-
-      {!loading && !error && offline > 0 && (
-        <div className="banner mb-5 rounded-lg fade-up" role="status">
-          <AlertTriangle size={13} className="shrink-0" />
-          <span className="min-w-0 break-words">
-            {offline} 台设备离线，先检查所属网关和网络；设备恢复上报后会自动回到在线。
-          </span>
-          <button type="button" className="link ml-auto shrink-0 text-[12px]" onClick={() => setFilter('offline')}>
-            只看离线
-          </button>
-        </div>
-      )}
 
       {list.length > 0 && (
         <div className="mb-4 flex items-center gap-2">

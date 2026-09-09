@@ -125,10 +125,10 @@ export function UserRow({ user: u }: { user: UserView }) {
             onChange={setConfirmed} hint="勾选后「确认重置密码」才可提交" />
           {update.isError && <ErrorNote message={adminErrorMessage(update.error)} />}
           <div className="flex flex-wrap gap-2">
-            <Button type="submit" disabled={!confirmed || update.isPending}
-              aria-label={`确认重置 ${u.username} 的密码`}>
+            <button type="submit" disabled={!confirmed || update.isPending}
+              className="btn btn-danger" aria-label={`确认重置 ${u.username} 的密码`}>
               {update.isPending ? '重置中…' : '确认重置密码'}
-            </Button>
+            </button>
             <Button type="button" variant="ghost" onClick={() => setMode('idle')}
               aria-label={`取消重置 ${u.username}`}>取消</Button>
           </div>

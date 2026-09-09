@@ -148,16 +148,30 @@ export function useDeviceDescriptor(
   return { descriptor, capabilities, source, loading, error, errorStatus, commands }
 }
 
+/** Capability catalog 的读取状态；索引字段与 CapabilityIndex 完全兼容。 */
+export type CapabilityIndexResult = CapabilityIndex & {
+  loading: boolean
+  /** 404/405/501 缺席时为 null；502/网络故障保留真实错误。 */
+  error: unknown | null
+  errorStatus: number | null
+}
+
 /** 只要 Capability catalog（无设备上下文，例如事件/命令标签的通用推导） */
-export function useCapabilityIndex(): CapabilityIndex {
-  const { data } = useQuery({
+export function useCapabilityIndex(): CapabilityIndexResult {
+  const { data, isLoading, error } = useQuery({
     queryKey: ['capabilities'],
     queryFn: api.capabilities,
     staleTime: 10 * 60_000,
     retry: false,
   })
-  return useMemo(() => {
+  const index = useMemo(() => {
     const docs = normalizeCapabilityDocs(data ?? null)
     return docs.length ? indexCapabilities(docs) : EMPTY_INDEX
   }, [data])
+  return useMemo(() => ({
+    ...index,
+    loading: isLoading,
+    error: error ?? null,
+    errorStatus: error instanceof ApiError ? error.status : null,
+  }), [index, isLoading, error])
 }

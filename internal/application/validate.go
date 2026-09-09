@@ -1,11 +1,30 @@
 package application
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // Validate checks a proposed binding list against the declared requirements and
 // candidate entities. It produces machine-readable issues for: missing required
 // capabilities, duplicate occupation (when reuse is not allowed), cross-tenant
 // entities, cardinality violations, below-minItems, and version incompatibility.
+func validateRequirementList(rs []Requirement) error {
+	var errs []error
+	seen := map[string]bool{}
+	for i := range rs {
+		r := &rs[i]
+		if r.ID != "" && seen[r.ID] {
+			errs = append(errs, fmt.Errorf("requirement %q: duplicate id", r.ID))
+		}
+		seen[r.ID] = true
+		if err := r.Validate(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
 func (b Binder) Validate(requirements []Requirement, candidates []Candidate, bindings []Binding) ValidationResult {
 	var issues []Issue
 

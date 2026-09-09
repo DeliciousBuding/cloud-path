@@ -72,8 +72,8 @@ function Action({ instanceID, job, scope, enabled }: {
   </article>
 }
 
-export function ApplicationActions({ instanceID, jobs, running, lifecycleKey }: {
-  instanceID: string; jobs: AppJobsView | undefined; running: boolean | undefined; lifecycleKey?: string
+export function ApplicationActions({ instanceID, jobs, running, desiredEnabled = true, lifecycleKey }: {
+  instanceID: string; jobs: AppJobsView | undefined; running: boolean | undefined; desiredEnabled?: boolean; lifecycleKey?: string
 }) {
   const scope = useAuth((state) => appActionScope(state, instanceID))
   const actions = manualAppJobs(jobs?.instance_id === instanceID ? jobs.job_descriptors : undefined)
@@ -81,7 +81,8 @@ export function ApplicationActions({ instanceID, jobs, running, lifecycleKey }: 
     <p className="mb-3 text-xs leading-relaxed text-ink-3">这里显示可以手动执行的操作。后台定时任务会自动运行。</p>
     {!scope && <p className="mb-3 text-sm text-ink-2">当前账号只能查看，不能执行操作。</p>}
     {running !== true && <p className="mb-3 text-sm text-ink-2">{running === false
-      ? '应用已停止，不能执行操作。' : '应用运行状态尚未确认，不能执行操作。'}</p>}
+      ? desiredEnabled ? '应用已停止，不能执行操作。' : '设置已停用，不能执行操作。'
+      : '应用运行状态尚未确认，不能执行操作。'}</p>}
     {actions.length ? <div className="divide-y divide-hairline">{actions.map((job) => <Action
       key={JSON.stringify([scope, lifecycleKey, running === false, job])} instanceID={instanceID} job={job} scope={scope} enabled={running === true} />)}</div>
       : jobs && <p className="py-3 text-sm text-ink-3">暂无应用操作</p>}

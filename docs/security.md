@@ -1,6 +1,6 @@
-# Cloudpath 安全与运维基线
+# CloudPath 安全与运维基线
 
-最后更新：2026-09-03
+最后更新：2026-09-09
 
 > 部署者前置阅读。安全模型 SSOT 为 [api.md](api.md)；本文把契约落到
 > 实际操作、风险分级和部署检查点。若代码/契约更新，以 [api.md](api.md) 和
@@ -24,13 +24,13 @@
 |---|---|---|---|
 | L0 单机 | 本机自用 | 默认：`-addr 127.0.0.1:8080`，无 token | 本机其他用户/恶意页面；保持回环绑定，不开放端口 |
 | L1 内网/反代 | 团队内网或 TLS 反代后 | `-allowed-origins`；建议 `-token`；建议反代 TLS | 内网嗅探、跨站 WS；显式 Origin + 令牌 + TLS |
-| L2 公网 | 互联网暴露 | `-token` + `-require-auth`；`-allowed-origins`；TLS 反代；限流/安全头 | 扫描、撞库、命令下发；所有 `/api/*` 与 `/ws` 必须凭据 |
+| L2 公网 | 互联网暴露 | 账号模式，或 `-token` + `-require-auth`；`-allowed-origins`；TLS 反代；限流/安全头 | 扫描、撞库、命令下发；所有 `/api/*` 与 `/ws` 必须凭据 |
 
 `docs/api.md` 的三级模型同时定义了不变量：无凭据不得写、账号模式全鉴权、
 服务令牌等价 admin、命令/登录限流、安全响应头、缓存策略。部署配置必须与
 目标级别匹配，不能把 L0 配置直接放到公网。
 
-当前实现（2026-09-03）已支持：`-token`、`-require-auth`、`-allowed-origins`、
+当前实现已支持：`-token`、`-require-auth`、`-allowed-origins`、
 `-login-rate`、`-session-days`、账号 setup/login/logout/me、会话 cookie、
 L0 回环写放行和账号模式全鉴权。对应环境变量为 `CLOUDPATH_TOKEN`、
 `CLOUDPATH_REQUIRE_AUTH`、`CLOUDPATH_ALLOWED_ORIGINS`、`CLOUDPATH_LOGIN_RATE`、
@@ -63,8 +63,8 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 ### 3.3 令牌作用
 
-`CLOUDPATH_TOKEN` 一旦设置：edge `hello` 必须携带相同 token，浏览器
-`/ws` 与 `/ws/edge` 受 token/Origin 校验，REST 写操作要求 Bearer。服务令牌
+`CLOUDPATH_TOKEN` 一旦设置：edge `hello` 必须携带相同 token，edge `/ws/edge` 与浏览器 `/ws`
+受 token/Origin 校验，REST 写操作要求 Bearer。服务令牌
 等价 admin（default 租户）。仅设 token 时只读 `/api/*` 仍按 L0/L1 策略；
 公网应同时开启 `-require-auth`（`CLOUDPATH_REQUIRE_AUTH=true`），或先完成
 账号 setup 进入账号模式。
@@ -107,23 +107,21 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 应用当前在全部响应上设置以下头：
 
-| Header | 值 | 状态 |
+| Header | 值 | 当前行为 |
 |---|---|---|
-| `X-Content-Type-Options` | `nosniff` | ✅ |
-| `X-Frame-Options` | `DENY` | ✅ |
-| `Referrer-Policy` | `no-referrer` | ✅ |
-| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` | ✅ |
-| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'sha256-jKH63gcAPxRiFu8qDqGCGYrEoEL5nCbt8h3hWkIeBB0='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'` | ✅ |
-| 静态缓存 | `/` = `no-cache`；`/assets/*` = `public, max-age=31536000, immutable` | ✅ |
+| `X-Content-Type-Options` | `nosniff` | 已设置 |
+| `X-Frame-Options` | `DENY` | 已设置 |
+| `Referrer-Policy` | `no-referrer` | 已设置 |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` | 已设置 |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'sha256-jKH63gcAPxRiFu8qDqGCGYrEoEL5nCbt8h3hWkIeBB0='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'` | 已设置 |
+| 静态缓存 | `/` = `no-cache`；`/assets/*` = `public, max-age=31536000, immutable` | 已设置 |
 
 部署注意事项：
 
 - 反代不要用 `add_header Content-Security-Policy ...` 覆盖应用头；CSP
   含构建时内联脚本 hash，错误覆盖会破坏管理台。若必须由反代补充，读取当前
   实际 hash 后保持精确。
-- 应用已返回上述安全头；nginx 示例只补 HSTS 与 `Permissions-Policy` 的
-  反代层加强，避免重复添加相同头（`Permissions-Policy` 由应用返回，nginx
-  示例仅作额外显式设置）。
+- 应用已返回上述安全头；nginx 示例只补 HSTS，避免重复添加相同头。
 - TLS 建议增加 `Strict-Transport-Security`（示例在 `deploy/nginx.conf`）。
 - 反代必须设置 `X-Forwarded-Proto: https`，否则会话 cookie 在 TLS 反代后
   可能不会被标记 Secure。

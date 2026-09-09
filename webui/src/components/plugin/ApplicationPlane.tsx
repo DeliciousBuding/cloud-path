@@ -91,7 +91,7 @@ function ScheduledRow({ job, number }: { job: AppScheduledJobView; number: numbe
   </article>
 }
 
-interface Props { instanceID: string; lifecycleKey?: string; runtimeState?: string }
+interface Props { instanceID: string; lifecycleKey?: string; runtimeState?: string; desiredEnabled?: boolean }
 
 /** 切实例或账号时重建局部筛选/分页；不能把上一实例的视图状态带过来。 */
 export function ApplicationPlane(props: Props) {
@@ -99,13 +99,14 @@ export function ApplicationPlane(props: Props) {
   return <ApplicationPlaneContent key={identity + ':' + props.instanceID} {...props} />
 }
 
-function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState }: Props) {
+function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState, desiredEnabled = true }: Props) {
   const [offset, setOffset] = useState(0)
   const [filter, setFilter] = useState('')
   const [draft, setDraft] = useState('')
   const { records, bindings, jobs, presentation, status, running, canRead } = useApplicationPlane(instanceID, offset, filter, lifecycleKey)
-  const actionRunning = runtimeState === undefined || runtimeState === 'running' ? running
-    : runtimeState === 'stopped' ? false : undefined
+  const actionRunning = !desiredEnabled ? false
+    : runtimeState === undefined || runtimeState === 'running' ? running
+      : runtimeState === 'stopped' ? false : undefined
   const rows = records.data?.records ?? []
   const recordTypes = [...new Set(rows.map((row) => row.record_type).filter(Boolean))].sort()
   const refreshing = records.isFetching || bindings.isFetching || jobs.isFetching
@@ -124,8 +125,8 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState }: Pro
     {running === false && <p className="text-sm text-ink-2">应用当前未运行。设备连接和临时任务会暂时清空，已保存的记录和计划仍可查看。</p>}
     <Panel title="应用操作">
       {(jobs.isPending || jobs.isError) && <ReadContent title="应用操作" query={jobs} empty={false}>{null}</ReadContent>}
-      <ApplicationActions instanceID={instanceID} jobs={jobs.data} running={actionRunning}
-        lifecycleKey={JSON.stringify([lifecycleKey, runtimeState])} />
+      <ApplicationActions instanceID={instanceID} jobs={jobs.data} running={actionRunning} desiredEnabled={desiredEnabled}
+        lifecycleKey={JSON.stringify([lifecycleKey, runtimeState, desiredEnabled])} />
     </Panel>
     <Panel title="应用记录">
       <details className="mb-4 min-w-0">

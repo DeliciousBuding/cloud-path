@@ -21,6 +21,8 @@ interface CommandButtonProps {
   action: CommandAction
   /** 保留受控参数原文；undefined 表示不带 args 下发。 */
   args?: string
+  /** 危险确认优先显示设备名；缺失时回落内部设备键。 */
+  targetLabel?: string
   /** 历史重试等场景可覆盖按钮可见文案，无障碍名称单独给出。 */
   buttonLabel?: ReactNode
   buttonAriaLabel?: string
@@ -36,7 +38,7 @@ export function CommandButton(props: CommandButtonProps) {
 }
 
 /** POST → WS ACK → 历史刷新/超时；危险确认只取声明，不认识设备或具体命令名。 */
-function ScopedCommandButton({ deviceId, action, args, buttonLabel, buttonAriaLabel, className, disabled, scope }: CommandButtonProps & { scope: string }) {
+function ScopedCommandButton({ deviceId, targetLabel, action, args, buttonLabel, buttonAriaLabel, className, disabled, scope }: CommandButtonProps & { scope: string }) {
   const acks = useLive((s) => s.acks)
   const qc = useQueryClient()
   const refreshHistory = useCallback(() => {
@@ -50,6 +52,7 @@ function ScopedCommandButton({ deviceId, action, args, buttonLabel, buttonAriaLa
   const active = useRef(true)
   const sending = useRef(false)
   const label = action.label
+  const displayTarget = targetLabel || deviceId
   const inputSchema = action.inputSchema && commandHasInput(action.inputSchema) ? action.inputSchema : undefined
   const error = commandArgsError(args ?? '', inputSchema, action.inputMaxLength)
   const blocked = !!disabled || !!error
@@ -84,7 +87,7 @@ function ScopedCommandButton({ deviceId, action, args, buttonLabel, buttonAriaLa
       setBusy(false)
       setPendingId(null)
       refreshHistory()
-      toast.bad(label + '超时', '设备没有在规定时间内返回结果，可能离线或正在忙。')
+      toast.info(label + '仍在等待确认', '已下发，设备暂未返回结果；请到操作记录查看，避免重复执行。')
     }, ACK_TIMEOUT_MS)
     return () => clearTimeout(t)
   }, [pendingId, label, current, refreshHistory])
@@ -132,7 +135,7 @@ function ScopedCommandButton({ deviceId, action, args, buttonLabel, buttonAriaLa
         body={<>
           <p>{action.confirmText ?? '请确认要执行此操作。'}</p>
           <p className="num mt-2 text-xs text-ink-3">
-            目标设备 <span className="break-all">{deviceId}</span>
+            目标设备 <span className="break-all">{displayTarget}</span>
           </p>
         </>}
         confirmLabel={label} busy={busy}

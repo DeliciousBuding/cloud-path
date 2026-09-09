@@ -84,6 +84,7 @@ export function InstanceStatusSummary({ v }: { v: PluginInstanceView }) {
   const health = healthMeta(v.observed?.health)
   const Icon = status.key === 'normal' ? TimerReset : status.key === 'stopped' ? Power
     : status.key === 'attention' ? AlertTriangle : CloudOff
+  const next = (v.drift || v.stale) ? '确认保存的设置无误后，点击「重新应用设置」。' : status.next
   const tone = status.tone === 'ok' ? 'text-ok bg-ok/10' : status.tone === 'bad' ? 'text-bad bg-bad/10'
     : status.tone === 'warn' ? 'text-warn bg-warn/12' : 'text-ink-2 bg-ink-3/10'
 
@@ -95,7 +96,7 @@ export function InstanceStatusSummary({ v }: { v: PluginInstanceView }) {
       <div className="min-w-0">
         <Badge tone={status.tone}>{status.label}</Badge>
         <p className="mt-2 break-words text-sm font-medium">{status.summary}</p>
-        {status.next && <p className="mt-1 break-words text-[12px] leading-relaxed text-ink-2">下一步：{status.next}</p>}
+        {next && <p className="mt-1 break-words text-[12px] leading-relaxed text-ink-2">下一步：{next}</p>}
       </div>
     </div>
     <dl className="grid gap-3 border-t border-hairline pt-4 sm:grid-cols-3">
@@ -127,7 +128,7 @@ export function DesiredObserved({ v }: { v: PluginInstanceView }) {
     <div className="space-y-2">
     <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-4">
       <div className="min-w-0 rounded-lg bg-surface-2 p-3 sm:p-3.5">
-        <ColumnHead note="网关会按它应用">保存的设置</ColumnHead>
+        <ColumnHead note={v.edge_id === 'server' ? '中心服务会按它应用' : '网关会按它应用'}>保存的设置</ColumnHead>
         <dl className="m-0">
           <Row k="启用" v={v.desired.enabled ? '已启用' : '已停用'}
             tone={v.desired.enabled ? 'accent' : 'idle'} />

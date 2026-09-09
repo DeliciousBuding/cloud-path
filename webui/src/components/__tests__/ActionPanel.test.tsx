@@ -255,6 +255,16 @@ describe('危险动作与确认结果', () => {
     expect((http.last()?.body as { cmd: string }).cmd).toBe('factory_reset')
   })
 
+  it('有可读设备名时，危险确认只显示设备名，不暴露内部设备键', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<ActionPanel deviceId={KEY} targetLabel="演示设备" set={declared} />)
+
+    await user.click(screen.getByRole('button', { name: '恢复出厂' }))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('演示设备')
+    expect(dialog).not.toHaveTextContent(KEY)
+  })
+
   it('二次确认可以取消或 Esc 关闭，两种路径都不下发命令', async () => {
     const user = userEvent.setup()
     const http = okPost()
@@ -346,8 +356,6 @@ describe('键盘与焦点', () => {
     input.focus()
     await user.tab()
     expect(screen.getByRole('textbox', { name: 'note' })).toHaveFocus()
-    await user.tab()
-    expect(screen.getByRole('button', { name: '点动 技术人员选项' })).toHaveFocus()
     await user.tab()
     expect(screen.getByRole('button', { name: '点动' })).toHaveFocus()
     await user.keyboard('{Enter}')

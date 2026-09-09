@@ -7,7 +7,7 @@ import {
   humanize, indexCapabilities, inferWidget, isScalar, normalizeCapabilityDocs,
   metricTiles, normalizeDescriptor, observationsOf, parseCapabilityRef, pickDescriptorFor,
   presentationOf, primaryObservation, qualityTone, rawRows, readInlineDescriptor,
-  resolveCapability, statusMeta, summarizeRaw, toneFromHint, unitLabel, widgetFor,
+  deviceStatusMeta, resolveCapability, statusMeta, summarizeRaw, toneFromHint, unitLabel, widgetFor,
 } from '@/lib/descriptor'
 import {
   CAP_CLOCK, CAP_RELAY, CAP_TEMPERATURE, UNKNOWN_CAP,
@@ -309,6 +309,13 @@ describe('值格式化与语义色', () => {
     expect(statusMeta('offline')).toEqual({ label: '离线', tone: 'idle', online: false })
     expect(statusMeta('unavailable')).toEqual({ label: '不可用', tone: 'bad', online: false })
     expect(statusMeta(undefined)).toEqual({ label: '未知', tone: 'idle', online: false })
+  })
+
+  it('设备状态以设备在线事实为准，Descriptor 只在在线时补充降级', () => {
+    expect(deviceStatusMeta(false, 'online')).toEqual({ label: '离线', tone: 'idle', online: false })
+    expect(deviceStatusMeta(true, 'online')).toEqual({ label: '在线', tone: 'ok', online: true })
+    expect(deviceStatusMeta(true, 'degraded')).toEqual({ label: '降级', tone: 'warn', online: true })
+    expect(deviceStatusMeta(true, 'unavailable')).toEqual({ label: '在线', tone: 'ok', online: true })
   })
 
   it('toneFromHint 只采纳合法 Tone（UI Hint 是不可信输入）', () => {

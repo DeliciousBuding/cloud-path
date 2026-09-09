@@ -4,9 +4,9 @@
 设备侧协议契约见 [protocol.md](protocol.md)；架构状态分层见 [architecture.md](architecture.md)；
 面向使用者的说明见根 [README.md](../README.md)。
 
-> 状态：以 `v0.2.20` 发布线为当前基线。外部 Driver Host、Registry、Application Runtime 与多租户
-> 隔离已落地；目标态与未实现项见 [architecture.md](architecture.md) §11。历史里程碑和实现偏差记录
-> 只用于解释演进，不代表当前缺口。
+> 状态：以当前 `main` 为实现基线，最新发布版本为 `v0.2.20`。外部 Driver Host、Registry、
+> Application Runtime 与多租户隔离已落地；目标态与未实现项见 [architecture.md](architecture.md) §11。
+> 历史里程碑和实现偏差记录只用于解释演进，不代表当前缺口。
 
 ## 当前基线与范围
 
@@ -55,8 +55,8 @@
                   React 管理台（浏览器，WS 实时 + REST 历史）
 ```
 
-要点：**全链路 WebSocket**（edge→server→浏览器），状态变化秒级到达面板；REST 只承担历史查询与
-管理操作。命令走 server→edge 的 WS 下行，带 ack 回执落库，前端按 `command_id` 结算。外部 Driver
+要点：账号会话下 **edge→server→浏览器全链路 WebSocket**，状态变化实时到达面板；REST 承担历史
+查询与管理操作。服务令牌会话没有浏览器实时通道，边界见 [api.md](api.md#57-已知边界当前接受)。命令走 server→edge 的 WS 下行，带 ack 回执落库，前端按 `command_id` 结算。外部 Driver
 拥有硬件连接与协议解析；内置 `demo` 仅用于无硬件参考，不承载具体设备语义。
 
 ## 目录结构
@@ -145,7 +145,7 @@ Descriptor / Entity / Capability / Observation。核心与前端都不对具体�
 
 HTTP 路由与 DTO 的**唯一**文档事实源是 [`api.md`](api.md)：安全模型三级、鉴权与多租户、
 RBAC、插件控制面写面、Application Data Plane 与稳定错误码都在那里。本文不再复制路由表——
-它已经漂移过一次（缺二十余条已上线路由），复制即负债；这里只留设计层面的约定：
+它已经漂移过一次（缺二十余条已实现路由），复制即负债；这里只留设计层面的约定：
 
 - **错误体**统一 `{"error":"…"}`；插件写面另有稳定错误码（`api.md` §5.6）。
 - **状态码语义**：400 参数/白名单、401 凭据缺失或失效、403 无凭据的非回环写、404 资源不存在、
@@ -218,28 +218,25 @@ INDEX idx_commands_device(device_id, created_at) -- 设备详情页命令历史
 
 | 路由 | 页面 | 内容 |
 |---|---|---|
-| `/` | 概览 | 在线设备/边缘、运行实例、近24小时失败操作、需要关注的状态、设备与事件 |
-| `/devices` | 设备 | 全部设备卡片（WS 快照优先，REST 轮询兜底） |
+| `/` | 概览 | 在线设备/网关、运行实例、近 24 小时失败操作、需要关注的状态、设备与事件 |
+| `/devices` | 设备 | 全部设备列表（WS 快照优先，REST 轮询兜底） |
 | `/devices/:edgeId/:deviceId` | 设备详情 | 声明驱动的观测概览、能力、命令控制、事件与历史、技术诊断 |
-| `/activity` | 活动 | 事件与命令历史、设备/类型筛选、实时与历史合并；`/events` 为兼容重定向 |
-| `/edges` | 边缘节点 | 在线/离线节点、版本、最后在线、所辖设备跳转 |
-| `/settings` | 系统 | 服务状态、实时连接、令牌、存储统计、适配器清单、关于 |
+| `/activity` | 运行记录 | 状态记录与操作记录、设备/类型筛选、实时与历史合并；`/events` 为兼容重定向 |
+| `/edges` | 网关（Edge） | 在线/离线网关、版本、最后在线、所辖设备跳转 |
 | `/plugins` | 应用与插件 | 默认实例列表、按需查看已安装与目录 |
-| `/plugins/:id` | 插件实例 | 应用记录、设备绑定、定时任务；配置与技术信息按需展开 |
+| `/plugins/:id` | 运行实例 | 应用记录、设备绑定、定时任务；配置与技术信息按需展开 |
+| `/settings` | 设置 | 服务状态、实时连接、令牌、存储统计、适配器清单、关于 |
+| `/admin` | 成员与访问权限 | 管理员管理成员、角色和访问令牌 |
+| `/setup` / `/login` | 初始化 / 登录 | 首装向导与账号登录；实时通道跟随登录态 |
 
 设备操作只保留设备详情一个入口，控制分区可用 `?tab=controls` 直达；其它分区同样由明确的
 `tab` 查询参数选择，未知值回落概览。旧 `/pillbox` 链接跳设备列表，带设备的旧链接跳对应
-设备控制区，不再把设备事件与实体观测包装成业务记录。应用结果位于实例详情。
+设备控制区，不再把设备事件与实体观测包装成业务记录。应用结果位于运行实例详情。
 
-“应用与插件”默认展示实例，目录与实际安装作为按需分区；空目录不遮蔽已有实例。
-所有分区都把 `server` 宿主呈现为中心服务，不使用 Edge 在线状态推断中心服务是否离线。
-
-概览将离线状态与“近24小时失败或超时命令”分开表达，不把全部历史失败当作当前告警。
-失败计数与最新20条预览使用同一次 `server_time` 采样的闭区间
+概览的失败统计与最新 20 条预览使用同一次 `server_time` 采样的闭区间
 `[server_time - 86400, server_time]`，按 `acked_at`（缺失时 `created_at`）归属时间窗；
-计数来自完整匹配集，不因预览截断。原始命令历史与保留期不变。聚合来源不可用时返回
-`503`，界面保留错误、来源说明与重试入口，不将不可用伪装成没有失败。
-
+计数来自完整匹配集，不因预览截断。原始命令历史与保留期不变。聚合来源不可用时返回 `503`，
+客户端必须保留错误来源并允许重试，不能把不可用伪装成没有失败。
 
 状态管理：zustand 持有 WS 实时快照（设备 map + 事件环形缓冲 300 条 + 会话级漂移历史 240 点 +
 ack map）；TanStack Query 管 REST（设备/事件/命令/统计）。`store/ws.ts` 是单例连接，
@@ -252,63 +249,14 @@ ack map）；TanStack Query 管 REST（设备/事件/命令/统计）。`store/w
 生产态：`vite build` → `webui/dist` → `go:embed`（构建标签 `embed_ui`，未启用时有 stub 兜底，
 server 退化为 API-only 并返回可读提示）。
 
-### 设备命令
+### 设备命令与应用实例边界
 
-命令及危险性只来自 Descriptor / Capability 或适配器白名单，不由前端猜测。Capability
-action 的 `destructive`（可选布尔值）与 `confirmation`（可选字符串）是正式交互安全声明，
-必须随 Driver RPC `ActionDescriptor`、SDK 模型、Edge 上报与 REST 文档完整往返；动作的
-`title` / `description` 同样来自 Driver 声明。旧 Driver 可省略新增字段，未声明时不按命令名猜测危险性；声明本身
-不替代服务端权限与设备端检查。参数声明完整保留：平铺标量、数组、对象数组和根级
-`oneOf` 在能无损映射时显示为字段或“设置方式”表单；只有无法安全展开的嵌套对象、其他
-组合结构或未知约束才保留高级 JSON 编辑，JSON 与表单切换不得丢弃字段。不预填可能产生
-副作用的零值、布尔值或 schema default。首次显示使用中性填写提示，编辑后才显示具体错误。
-前端校验 JSON 语法、已支持的 required/type/enum、数值/字符串/数组边界以及
-`oneOf` / `anyOf` / `allOf`（包括布尔与嵌套子 schema），并遵守 64 UTF-8 字节及换行/NUL 传输门禁。
-未知约束参与组合匹配时使用未知态，不冒充匹配或不匹配；只有能确定违反约束时才拒绝，
-界面以“部分参数由设备端确认”提示未校验的关键字。设备端仍为最终裁决者，前端校验不替代
-Driver 的参数及帧边界检查。参数与 JSON 切换不得丢弃额外字段，原始 JSON 不静默压缩或截断。
+设备动作的 `title` / `description` / `destructive` / `confirmation` 往返契约在
+[protocol.md](protocol.md#capabilities)；HTTP 写面、RBAC 和 Application Data Plane 在
+[api.md](api.md) 与[应用输入与操作契约](#应用输入与操作契约)。
 
-命令面板及独立按钮都检查当前身份：viewer、加载中、未登录或无效身份无写表单；
-保留显式开放模式和合法服务身份 id=0 的既有设备命令契约。更换设备、账号、租户、角色
-或声明会卸载参数与确认状态，旧请求/回执不能污染新身份。危险动作保留声明确认，
-发送后沿用 POST → WS ACK → 历史刷新或超时反馈。确认框覆盖整个视口、限制背景滚动和
-键盘焦点；默认聚焦取消，关闭后恢复触发位置。长内容在对话框内滚动，不把确认按钮挤到屏外。
-参数错误优先使用声明字段名及中文类型；宽屏控制区给表单更多宽度，危险快捷动作不抢占首位。
-
-### 应用实例详情
-
-Application Plane 的展示入口位于插件实例详情。应用目录声明 kind=application，或实例的
-edge_id=server 时均可进入；目录为空不影响服务端应用。server 是中心服务的应用宿主，
-不是离线边缘节点，不链接到虚构的节点页。隔离方式沿用插件展示词汇，shared 为共享进程，
-per-instance 为实例独立进程。
-
-控制请求原样使用投影的 v.id（可能为裸标识，也可能带节点前缀）；records / bindings / jobs
-三个只读请求始终使用 desired.instance_id。viewer 可读三个分区，但不能新建、编辑、启停、
-重新下发或删除实例；切换为只读角色会关闭列表页已打开的创建或编辑表单。应用数据需要
-已认证且 tenant_id>0 的租户身份；服务令牌的 user.id=0 是合法身份，不以用户标识是否为零
-判断认证。开放访问不等于应用数据授权。
-
-普通视图展示可辨认的结构化字段、公开 Descriptor / Capability 名称与本地化时间。
-已知通用字段沿用公共词汇；无展示声明的字段保留原字段名，不能用“数据项 1”掩盖含义。
-标题/名称、状态类字段与已填内容优先，空值和其它字段可在结构化视图继续展开；数组保持
-原始顺序与空值位置。未知业务枚举保留应用原值，不维护业务专用词典或推断状态颜色。
-明确带时区且有效的 RFC3339 字符串按当前时区显示，同时保留原值；不猜无时区文本或普通数字。
-记录分类/标识、任务标识、时间表达式与完整 JSON 仍在技术详情中。实例配置默认折叠，
-不以 app_config 原文作为应用界面。绑定实体缺少公开名称或局部标识有歧义时，不猜设备归属；
-实体与能力展示名相同时不重复堆叠。记录为主内容，绑定与调度作为紧凑的运行上下文。
-
-运行期绑定与声明任务由 running 投影说明；应用停止后这两类清空，历史记录和持久计划仍
-可查看。持久计划的启用/取消、下次时间、最近调度、错过策略单独呈现，调度时间不代表执行成功。
-计划时间按其 timezone 显示，复杂时间规则保留到技术详情，不猜执行周期。
-
-REST 仍是数据事实源：查询缓存按租户、用户、裸实例标识隔离；记录分页每页 20 条，分类
-筛选失败后仍可清除或重试。初读、空列表、权限拒绝与读取失败分别展示，失败不伪装为空。
-切换实例/身份会复位局部筛选与分页并取消旧请求；旧响应不能覆盖新数据或使新会话退出。
-单例 WebSocket 的 domain_record 仅触发对应实例查询失效，不累积第二份记录库；相邻
-实例通知通过直接订阅逐个消费，同批通知合并补读。每次连接建立/重建都重新读取 REST，
-覆盖断线窗口；在线时也每 10 秒读取绑定与任务，以感知没有独立推送的启停和调度变化。
-控制投影变化会立即补读，运行事实不由 desired.enabled 乐观推断。
-
+WebUI 的表单、确认、身份切换、应用记录/绑定/任务呈现规则统一放在
+[webui/DESIGN.md](../webui/DESIGN.md#设备命令与应用实例)，本节不复制交互细节。
 
 ### 应用输入与操作契约
 
@@ -341,8 +289,13 @@ REST 仍是数据事实源：查询缓存按租户、用户、裸实例标识隔
 | `-token` | `CLOUDPATH_TOKEN` | 空（无鉴权） |
 | `-webui` | `CLOUDPATH_WEBUI` | 空（用内嵌产物） |
 | `-allowed-origins` | `CLOUDPATH_ALLOWED_ORIGINS` | 空（开发策略） |
+| `-require-auth` | `CLOUDPATH_REQUIRE_AUTH` | `false` |
 | `-retention-days` | `CLOUDPATH_RETENTION_DAYS` | `30` |
 | `-cmd-rate` | `CLOUDPATH_CMD_RATE` | `20` |
+| `-login-rate` | `CLOUDPATH_LOGIN_RATE` | `5` |
+| `-session-days` | `CLOUDPATH_SESSION_DAYS` | `7` |
+| `-setup-token` | `CLOUDPATH_SETUP_TOKEN` | 空 |
+| `-trusted-proxies` | `CLOUDPATH_TRUSTED_PROXIES` | 空 |
 | `-log-level` / `-log-format` | `CLOUDPATH_LOG` / `CLOUDPATH_LOG_FORMAT` | `info` / `text` |
 
 **edge**（`edge.yaml`，本地私有不入库；仓库带 `edge.example.yaml`）：
@@ -356,14 +309,12 @@ sync_interval_s: 600           # 周期对时
 report_interval_s: 30          # 状态心跳兜底
 devices:
   - id: demo-1
-    adapter: stcb
-    name: 参考板
-    port: COM3                 # Linux: /dev/ttyUSB0
-    baud: 9600
+    adapter: demo              # 无硬件参考适配器；外部 Driver 需启用 plugin_host
+    name: 参考设备
 ```
 
-配置校验在启动时完成并给出可执行错误信息（缺 id/adapter/port、id 重复、协议前缀错误、
-devices 为空），运行中不热加载（当前有意为之：热加载与串口生命周期纠缠，收益低风险高）。
+配置校验在启动时完成并给出可执行错误信息（缺 id/adapter、需要真实端口的适配器缺 port、id 重复、
+协议前缀错误、devices 为空），运行中不热加载（当前有意为之：热加载与串口生命周期纠缠，收益低风险高）。
 
 ## 测试策略
 
@@ -379,17 +330,16 @@ devices 为空），运行中不热加载（当前有意为之：热加载与串
 | 契约 | `scripts/check_contract.py`（`task check:contract`） | Go `internal/api/types.go` ↔ TS `webui/src/lib/types.ts` 同名类型的 JSON 字段集合一致（含 `extends` 平面化）；`--self-test` 是解析器红队自检 |
 | e2e | 真机手工清单 | 见下；验证证据按发布/真板记录另行归档，不写入公开仓 |
 
-单板真机回归清单（多设备现场 E2E 另列验收）：
+参考设备真机回归清单（使用任意已声明动作的真实 Driver；多设备现场 E2E 另列验收）：
 
-1. `task build` 出双二进制；起 server → 打开 :8080 内嵌管理台可见（无设备时是空状态而非报错）。
-2. 起 edge → 管理台出现 edge 与设备，时钟/漂移/槽位有值，`GET /api/devices` 与之一致。
-3. `POST …/commands {"cmd":"sync"}` → 200 `sent`，随后 ack `ok`，设备事件流出现 `SYNC-OK`，
-   漂移回到 ±1 分钟。
-4. `{"cmd":"trigger"}` / `{"cmd":"open"}` → 设备侧动作 + 对应事件入库并在页面实时出现。
-5. 拔掉 USB → 设备在页面变离线（edge 退避重开），插回 → 自动恢复在线并重新对时。
-6. 杀掉 server → edge 日志显示退避重连，期间产生的事件在重连后回放（页面能补看到）。
-7. 重启 server → 设备仍在列表（水合），状态为离线，edge 重连后恢复。
-8. 未知命令 → 400；高频下发 → 429；`-token` 启用后无令牌写操作 → 401。
+1. `task build` 出双二进制；启动 server 后内嵌管理台可见，无设备时是空状态而非报错。
+2. 启动 edge 后，网关与设备出现在管理台；`GET /api/edges`、`GET /api/devices` 与界面一致。
+3. 对一个 Driver 声明的动作执行 `POST …/commands`，观察 `sent` 与随后 ack 的真实终态；
+   设备事件按声明入库并实时出现。
+4. 拔掉设备连接后设备转为离线，重新连接后 Edge 自动恢复监督并重新上报。
+5. 停止 server 后 Edge 继续运行并缓冲事件；server 恢复后事件按离线缓冲语义回放。
+6. 重启 server 后设备仍可水合，状态先标离线，Edge 重连后恢复。
+7. 未声明命令返回 400；高频下发返回 429；启用鉴权后无凭据写操作返回 401。
 
 
 ## 后续扩展（当前范围外）

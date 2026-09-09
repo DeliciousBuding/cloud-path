@@ -88,6 +88,7 @@ export type WsType =
   | 'hello' | 'snapshot' | 'state' | 'event' | 'command' | 'command_ack'
   | 'edge_up' | 'edge_down' | 'descriptor'
   | 'plugin_status' | 'plugin_desired' | 'plugin_ack'
+  | 'capabilities' | 'domain_record'
   | 'ping' | 'pong'
 
 export interface Envelope<T = unknown> {
@@ -675,7 +676,7 @@ export interface AppJobsView {
   running: boolean
   jobs: string[]
   scheduled: AppScheduledJobView[]
-  job_descriptors?: AppJobView[]
+  job_descriptors: AppJobView[]
 }
 
 export interface AppJobView {

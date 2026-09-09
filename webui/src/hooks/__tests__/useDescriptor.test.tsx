@@ -123,6 +123,16 @@ describe('useDeviceDescriptor：来源优先级与回落', () => {
 })
 
 describe('useCapabilityIndex：无设备上下文的 catalog', () => {
+  it('catalog 502 → 保留真实错误，不伪装成空索引', async () => {
+    installFetch(() => stubResponse(502, { error: 'bad gateway' }))
+    const { result } = renderHook(() => useCapabilityIndex(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.error).not.toBeNull())
+    expect(result.current.error).toBeInstanceOf(ApiError)
+    expect(result.current.errorStatus).toBe(502)
+    expect(result.current.docs).toEqual([])
+    expect(result.current.loading).toBe(false)
+  })
+
   it('catalog 200 → 索引可用；404 → 空索引（事件/命令标签回落 humanize）', async () => {
     installFetch((url) => (url === '/api/capabilities'
       ? stubResponse(200, { capabilities: [capTemperature] })
@@ -133,6 +143,7 @@ describe('useCapabilityIndex：无设备上下文的 catalog', () => {
     resetStores()
     installFetch(() => stubResponse(404, {}))
     const absent = renderHook(() => useCapabilityIndex(), { wrapper: makeWrapper() })
-    await waitFor(() => expect(absent.result.current).toBe(EMPTY_INDEX))
+    await waitFor(() => expect(absent.result.current.docs).toEqual([]))
+    expect(absent.result.current.error).toBeNull()
   })
 })

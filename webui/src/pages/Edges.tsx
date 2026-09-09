@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { Network, PowerOff, WifiOff } from 'lucide-react'
+import { Network, WifiOff } from 'lucide-react'
 import { Badge, EmptyState, ErrorState, PageHeader, Panel, Segmented } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { useDevices } from '@/hooks/useDevices'
@@ -28,7 +28,7 @@ export default function Edges() {
   const subtitle = edgeLoading ? '正在加载网关状态…'
     : error ? '网关状态暂不可用'
       : edges.length === 0 ? '还没有网关注册'
-        : offlineCount > 0 ? `${online} 台在线 · ${offlineCount} 台离线需关注`
+        : offlineCount > 0 ? `${online} 台在线 · ${offlineCount} 台离线（设备暂停更新）`
           : `${online} 台在线 · 全部在线`
 
   return (
@@ -51,19 +51,6 @@ export default function Edges() {
           ) : undefined
         }
       />
-
-      {/* 有节点掉线时给一次系统级说明（不在每张卡上重复，避免噪音） */}
-      {offlineCount > 0 && (
-        <div className="banner mb-5 rounded-lg fade-up" role="status">
-          <PowerOff size={13} className="shrink-0" />
-          <span className="min-w-0 break-words">
-            {offlineCount} 个网关离线：这些网关上的设备暂停更新，已发送的操作排队等待重连；其他在线网关不受影响。
-          </span>
-          <button type="button" className="link ml-auto shrink-0 text-[12px]" onClick={() => setFilter('offline')}>
-            只看离线
-          </button>
-        </div>
-      )}
 
       {edgeLoading ? (
         <Panel><RowSkeleton rows={3} /></Panel>

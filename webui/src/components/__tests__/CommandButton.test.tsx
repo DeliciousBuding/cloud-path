@@ -249,9 +249,9 @@ describe('POST / WS ACK / history / timeout 生命周期', () => {
     expect(invalidate).toHaveBeenCalledTimes(4)
     expect(useToasts.getState().items.at(-1)).toMatchObject({ title: '读取失败', detail: '设备返回失败，请在操作记录中查看结果。', tone: 'bad' })
   })
-  it('15s 超时释放按钮并刷新历史；晚到 ACK 不改写已结算提示', async () => {
+  it('15s 未确认只提示仍在等待，不把设备未回执误报为失败', async () => {
     vi.useFakeTimers()
-    const bad = vi.spyOn(toast, 'bad')
+    const info = vi.spyOn(toast, 'info')
     const ok = vi.spyOn(toast, 'ok')
     const view = mount(<CommandButton deviceId={KEY} action={simple} />)
     const invalidate = vi.spyOn(view.queryClient, 'invalidateQueries')
@@ -260,8 +260,8 @@ describe('POST / WS ACK / history / timeout 生命周期', () => {
     expect(screen.getByRole('button', { name: '读取' })).toBeDisabled()
     await act(async () => { await vi.advanceTimersByTimeAsync(1) })
     expect(screen.getByRole('button', { name: '读取' })).toBeEnabled()
-    expect(bad).toHaveBeenCalledOnce()
-    expect(bad.mock.calls[0]?.[0]).toBe('读取超时')
+    expect(info).toHaveBeenCalledOnce()
+    expect(info.mock.calls[0]).toEqual(['读取仍在等待确认', '已下发，设备暂未返回结果；请到操作记录查看，避免重复执行。'])
     expect(invalidate).toHaveBeenCalledTimes(4)
     act(() => useLive.setState({ acks: { 7: { command_id: 7, status: 'ok' } } }))
     expect(ok).not.toHaveBeenCalled()

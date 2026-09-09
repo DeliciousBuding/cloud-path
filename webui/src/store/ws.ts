@@ -32,6 +32,8 @@ interface LiveState {
   /** 单一通知槽；REST 仍是分页/排序权威，不积累第二份记录库。 */
   domainRecord: { instanceID: string; sequence: number } | null
   connectionEpoch: number
+  /** 最近一次成功 hydration 的 connectionEpoch；0 表示本会话尚未收到 snapshot。 */
+  snapshotEpoch: number
   devices: Record<string, DeviceView>
   edges: Record<string, EdgeView>
   /** WS 实时事件（新→旧，本地负 id，与 REST 历史正 id 不冲突） */
@@ -49,6 +51,7 @@ export const useLive = create<LiveState>(() => ({
   failures: 0,
   domainRecord: null,
   connectionEpoch: 0,
+  snapshotEpoch: 0,
   devices: {},
   edges: {},
   events: [],
@@ -132,7 +135,7 @@ export function connectLive() {
 /** 断开实时通道并停止自动重连（登出/未登录时调用；重新登录后 connectLive 恢复） */
 export function disconnectLive() {
   enabled = false
-  useLive.setState({ domainRecord: null })
+  useLive.setState({ domainRecord: null, snapshotEpoch: 0 })
   retry = 0
   // 必须复位 started：否则「登出 → 再登录」时 connectLive() 会因为 started 仍为 true 直接返回，
   // 实时通道再也拨不出去（页面看着正常却收不到实时数据 = 假数据）。
@@ -243,11 +246,14 @@ export function reconnectLive() {
 }
 
 function handle(env: Envelope) {
+  // 协议版本是硬边界：未知版本可能改变字段语义，不能按当前版本的规则消费。
+  // 未知 type 仍保持宽容（default 忽略），但已声明类型的 v≠1 帧一律丢弃。
+  if (env.v !== 1) return
   const st = useLive.getState()
   switch (env.type) {
     case 'domain_record': {
       const data = env.data as Record<string, unknown> | undefined
-      if (env.v !== 1 || !data || typeof data.instance_id !== 'string' || !data.instance_id ||
+      if (!data || typeof data.instance_id !== 'string' || !data.instance_id ||
           typeof data.record_type !== 'string' || !data.record_type ||
           typeof data.record_id !== 'string' || !data.record_id || typeof data.created !== 'boolean' ||
           (data.version !== undefined && typeof data.version !== 'string') ||
@@ -260,11 +266,17 @@ function handle(env: Envelope) {
     }
     case 'snapshot': {
       const snap = env.data as SnapshotData | undefined
-      if (!snap) return
+      if (!snap || !Array.isArray(snap.devices) || !Array.isArray(snap.edges)) return
       const devices: Record<string, DeviceView> = {}
-      for (const d of snap.devices ?? []) devices[d.id] = d
+      for (const d of snap.devices) {
+        if (!d || typeof d.id !== 'string' || !d.id) continue
+        devices[d.id] = d
+      }
       const edges: Record<string, EdgeView> = {}
-      for (const e of snap.edges ?? []) edges[e.edge_id] = e
+      for (const e of snap.edges) {
+        if (!e || typeof e.edge_id !== 'string' || !e.edge_id) continue
+        edges[e.edge_id] = e
+      }
       // 快照是设备集合的权威：Descriptor 缓存也按本次快照重建，不能留下已删设备的旧操作。
       const descriptors: Record<string, DeviceDescriptor> = {}
       const rawList = (snap as { descriptors?: unknown }).descriptors
@@ -285,7 +297,7 @@ function handle(env: Envelope) {
         }
         if (key) descriptors[key] = dd
       }
-      useLive.setState({ devices, edges, descriptors })
+      useLive.setState({ devices, edges, descriptors, snapshotEpoch: st.connectionEpoch })
       break
     }
     case 'state': {

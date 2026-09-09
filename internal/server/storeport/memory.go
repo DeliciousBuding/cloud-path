@@ -15,7 +15,6 @@ import (
 // 配额原子拒绝、purge 语义、绝不改写既有行 tenant_id。
 type Memory struct {
 	mu      sync.Mutex
-	now     func() time.Time
 	inst    map[instKey]PluginInstanceRow
 	rev     map[edgeKey]uint64
 	edgeRev map[edgeKey]PluginEdgeRevisionRow
@@ -39,7 +38,6 @@ type edgeKey struct {
 // NewMemory 构造空的进程内插件控制面存储。
 func NewMemory() *Memory {
 	return &Memory{
-		now:     time.Now,
 		inst:    map[instKey]PluginInstanceRow{},
 		rev:     map[edgeKey]uint64{},
 		edgeRev: map[edgeKey]PluginEdgeRevisionRow{},
@@ -50,16 +48,7 @@ func NewMemory() *Memory {
 	}
 }
 
-// SetNow 注入时钟（测试可复现 stale/过期判定）。
-func (m *Memory) SetNow(now func() time.Time) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if now != nil {
-		m.now = now
-	}
-}
-
-func (m *Memory) timestamp() int64 { return m.now().Unix() }
+func (m *Memory) timestamp() int64 { return time.Now().Unix() }
 
 // CreatePluginInstance 写入新期望态行并在同一临界区内把 desired revision +1。
 // 已存在返回 ErrConflict；配额已满返回 ErrQuota（不写入、不增 revision）。

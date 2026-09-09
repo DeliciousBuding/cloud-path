@@ -22,8 +22,7 @@ checksums.txt                                  # 全部资产的 sha256（sha256
 - `<version>` 与 git tag 一致（例如 `v0.1.0`）；版本串会被安全化，不能携带路径分隔符或 `..`。
 - `<os>` ∈ `linux` | `windows` | `darwin`；`<arch>` ∈ `amd64` | `arm64`。六个平台组合全部产出，
   共 18 个二进制 + 1 个 `checksums.txt`。
-- **`linux/arm64` 是硬性要求**：生产主机为原生 arm64 且无模拟回退，`--verify-only`
-  会因缺少该产物直接失败。
+- **`linux/arm64` 是硬性要求**：发布矩阵必须产出该目标，`--verify-only` 会因缺少该产物直接失败。
 - 全部产物 `CGO_ENABLED=0`、`-trimpath`、`-ldflags "-s -w -X main.version=<version>"`。
 - 每个产物构建后都会经 [scripts/assert_arch.py](scripts/assert_arch.py) 断言：容器头
   （ELF/PE/Mach-O）与 `go version -m` 构建设置双源交叉校验，server 额外断言 `embed_ui`
@@ -36,6 +35,11 @@ sha256sum -c checksums.txt --ignore-missing          # Linux
 shasum -a 256 -c checksums.txt --ignore-missing      # macOS
 certutil -hashfile <文件> SHA256                      # Windows（逐项对照）
 ```
+
+## Unreleased
+
+- WebUI：收口窄屏导航与可访问名称，统一状态/空态/错误态，并重整运行记录、命令表单和页面视觉层级。
+- 插件边界：强化外部 Driver 命令白名单、Capability/实例租户隔离与控制面写面的 fail-closed 行为。
 
 ## v0.1.0 — 2026-09-04
 
@@ -52,8 +56,8 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 - `deploy/systemd/cloudpath-server.service`：非 root 专用账号、加固沙箱、资源上限、
   `ReadWritePaths` 持久化目录、`EnvironmentFile=-` 机密注入、`SystemCallArchitectures=native`。
 - `deploy/systemd/cloudpath-server.env.example`：环境变量模板，**只有变量名没有值**。
-- `deploy/nginx/cloudpath.vectorcontrol.tech.conf`：可安装的公网站点示例（443 + WSS 升级头 +
-  长 `proxy_read_timeout` + CDN 真实 IP + 请求体上限 + gzip），不覆盖应用自身安全头。
+- nginx 公网站点示例：443 + WSS 升级头 + 长 `proxy_read_timeout` + CDN 真实 IP +
+  请求体上限 + gzip，不覆盖应用自身安全头。
 - `deploy/README.md`：原生二进制 + systemd + nginx 的逐条落地 SOP（架构断言 → 传输 →
   建用户/目录 → 装 unit → 首装账号 → nginx → 健康检查 → 备份 → 升级 → 回滚 → 排查 → 清单）。
 - `deploy/edge/README.md`：客户端分发指引（各平台一句话安装、`edge.yaml` 逐字段填写、
@@ -73,13 +77,13 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 
 ## v0.2.14 — 2026-09-07
 
-主题：**插件实例重配置与身份收口（P1）**。真机升级暴露「PATCH 返回成功、applied revision 前进，旧进程却继续运行」；
+主题：**插件实例重配置与身份收口**。真机升级暴露「PATCH 返回成功、applied revision 前进，旧进程却继续运行」；
 排查发现另有三处同源缺陷（实例身份在某个平面上被部分折叠），在原质量范围内一并收口，未新增架构。
 
 ### 契约变更（读面不再对用户说谎）
 
 - `GET /api/stats`：`auth_enabled: bool` → `auth_mode ∈ account|token|open`，报告 server **实际执行**的鉴权形态。
-  此前账号模式被系统页显示为「未启用（本机模式）」。字段在 [docs/api.md](docs/api.md) §2.2，档位定义见 §1。
+  此前账号模式被设置页显示为「未启用（本机模式）」。字段在 [docs/api.md](docs/api.md) §2.2，档位定义见 §1。
 - 路由表之外的 `/api/*`（含 `/api/auth/*` 下不存在的子路径）与缺失的 `/assets/*` 回 `404`，不再被 SPA 兜底成
   `200 + index.html`——此前一个不存在的 `DELETE` 端点也答 200。见 [docs/api.md](docs/api.md) §2.2。
 - `PluginInstanceView.drift`：启用实例双方版本已知且不一致时如实标记，列表、详情与写响应同形，
@@ -105,9 +109,8 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 
 ### 发布工程
 
-- `.gitattributes` 补 `*.yml text eol=lf`（此前只写 `*.yaml`，12 个 `.yml` 落在规则外），两批共 11 个文件行尾归一化，
-  消除跨 worktree 的幻影 diff；零语义改动由 `yaml.safe_load` 前后比对证明。
-- 消除 `TestOverviewTenantIsolation` 约 5% 的闪断（tenant-b 事件断言前补一次等待）；修复后 120 连跑 0 失败。
+- `.gitattributes` 补 `*.yml text eol=lf`（此前只写 `*.yaml`），并统一 YAML 行尾，避免同一文件在不同检出环境中产生无意义 diff；零语义改动由 `yaml.safe_load` 前后比对证明。
+- 消除 `TestOverviewTenantIsolation` 的偶发闪断（tenant-b 事件断言前补一次等待），恢复稳定回归。
 - 18 二进制 + `checksums.txt` 与多架构 GHCR 镜像已发布；`linux/arm64` 镜像来源提交与 tag 一致。
 - 发布源码同树 CI 覆盖 Linux race、Windows 与六平台构建/产物校验；Go tests、`go vet` / `gofmt`、
   WebUI typecheck/test/build、契约漂移门禁、公开审计与链接检查均通过。
@@ -127,7 +130,7 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
   [设计契约](docs/design.md#应用输入与操作契约) 与 [应用操作 API](docs/api.md#551-应用手动操作operator)。
 - 管理台按运行中插件声明生成操作表单，区分受理结果与设备回执；旧 raw 状态与自动任务保持兼容。
 - 依赖观测事件或 manual_only 语义的应用要求 Core >=0.2.15，不可安装到会忽略该标记的旧宿主。
-- 发布资产命名、六平台矩阵与校验和约定不变。测试/CI与部署/真板验收分别出证据，本节不代表现场验收通过。
+- 发布资产命名、六平台矩阵与校验和约定不变。测试/CI 与部署/真板验收分别出证据，本节不代表现场验收通过。
 
 ## v0.2.18 — 2026-09-09
 
@@ -164,18 +167,18 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 | 版本 | 状态 | 说明 |
 |---|---|---|
 | `v0.1.0` | 已发布（2026-09-04） | 首个公开版本；release workflow 自动产出 18 二进制 + checksums.txt |
-| `v0.2.3` | 已发布（2026-09-05） | AppHost 接线完成（Server 侧 Application Plugin Host + app_domain_records schema v9）；外部 Driver capability 迟到重报；Scheduled Compartment 迁移通用 Capability；真板七阶段 E2E 全绿（Reference Rig） |
+| `v0.2.3` | 已发布（2026-09-05） | AppHost 接线完成（Server 侧 Application Plugin Host + app_domain_records schema v9）；外部 Driver capability 迟到重报；Scheduled Compartment 迁移通用 Capability；参考设备真板 E2E 已通过（Reference Rig） |
 | `v0.2.4` | 已发布（2026-09-05） | Edge applier 修复：实例状态文件收敛后才持久化——失败 apply 不再把不可满足的版本写进 replay 状态（2026-09-05 生产 Edge 无法自举事故的根因），重启照常回放最后可满足配置 |
 | `v0.2.5` | 已发布（2026-09-05） | appruntime 修复：domain-record effect 去重键内容化——upsert 恢复真语义（此前同一记录的后续更新全被幂等去重吞掉，真板实测 reminder_state 恒空）；真板 E2E 增加提醒命令失败路径（freq=9→固件 badarg→RequestCompleted(failed)→应用落痕） |
-| `v0.2.6` | 已发布（2026-09-05） | AppHost 修复×2（生产环境实测 box-prod failed 90 分钟）：共享插件进程停一个实例不再连带杀兄弟（新增 StopInstanceStreamOnly，Shutdown RPC 只留给最后实例）；reconcile 自愈——desired 未变但实际态失活的实例按 stop+start 重建会话 |
-| `v0.2.7` | 已发布（2026-09-05） | D1 Application Data Plane：`/api/plugin-instances/{id}/records|bindings|jobs` 通用读面（分页/过滤/租户隔离）+ WS `domain_record` 实时投影（created/updated）；契约 docs/api.md §5.5 |
-| `v0.2.8` | 已发布（2026-09-05） | D2 Durable Scheduler：schema v10 `scheduled_jobs` + 5 字段 cron 解析器 + claim-then-dispatch 调度循环（重启零重复、missed-run policy skip/run_once、停机不漂移节奏）；`schedule_job`/`cancel_job` 从簿记变真 primitive |
+| `v0.2.6` | 已发布（2026-09-05） | AppHost 修复×2（生产环境实测某应用实例持续失败）：共享插件进程停一个实例不再连带杀兄弟（新增 StopInstanceStreamOnly，Shutdown RPC 只留给最后实例）；reconcile 自愈——desired 未变但实际态失活的实例按 stop+start 重建会话 |
+| `v0.2.7` | 已发布（2026-09-05） | Application Data Plane：`/api/plugin-instances/{id}/records|bindings|jobs` 通用读面（分页/过滤/租户隔离）+ WS `domain_record` 实时投影（created/updated）；契约 docs/api.md §5.5 |
+| `v0.2.8` | 已发布（2026-09-05） | Durable Scheduler：schema v10 `scheduled_jobs` + 5 字段 cron 解析器 + claim-then-dispatch 调度循环（重启零重复、missed-run policy skip/run_once、停机不漂移节奏）；`schedule_job`/`cancel_job` 从簿记变真 primitive |
 | `v0.2.9` | 已发布（2026-09-05） | appruntime 修复：事件流开启即派发初始 `InstanceLifecycle` 事件——RunJob/RunRequest 早于任何设备事件到达时，应用侧 effect writer 尚未注册，其产生的 effect 此前被静默丢弃（button-indicator bootstrap 实测抓出） |
-| `v0.2.10` | 已发布（2026-09-05） | appruntime 修复：实例停机/启动失败即移除记录——此前 failed 记录永远占位，AppHost reconcile 的进程内自愈每轮撞 `ErrInstanceExists`（D3 真板实测：自愈实际只在 server 整体重启时生效）；Stop→Start 重建成为受测契约 |
-| `v0.2.11` | 已发布（2026-09-05） | 绑定确定性修复（D3 真板实测根因）：Edge descriptor 实体按 EntityID 排序、Server appCandidates 按 (device, entity) 排序——此前 map 随机迭代让 Binder first-match 每次绑到不同实体（button-indicator 重启后绑到 key2，用户按 K1 全部静默丢弃），且 descriptor 指纹每拍抖动导致整份 descriptor 每 poll 周期重发；AppHost 事件路由增加 dispatch/unrouted 观测日志（静默丢弃盲区） |
+| `v0.2.10` | 已发布（2026-09-05） | appruntime 修复：实例停机/启动失败即移除记录——此前 failed 记录永远占位，AppHost reconcile 的进程内自愈每轮撞 `ErrInstanceExists`（真板实测：自愈实际只在 server 整体重启时生效）；Stop→Start 重建成为受测契约 |
+| `v0.2.11` | 已发布（2026-09-05） | 绑定确定性修复（真板实测根因）：Edge descriptor 实体按 EntityID 排序、Server appCandidates 按 (device, entity) 排序——此前 map 随机迭代让 Binder first-match 每次绑到不同实体（button-indicator 重启后绑到 key2，用户按 K1 全部静默丢弃），且 descriptor 指纹每拍抖动导致整份 descriptor 每 poll 周期重发；AppHost 事件路由增加 dispatch/unrouted 观测日志（静默丢弃盲区） |
 | `v0.2.12` | 已发布（2026-09-06） | Application Plane Web 三读面与实时/重连恢复；身份及只读权限隔离；中心服务宿主展示与概览活跃统计修复；容器 AppHost 持久化路径统一。发布源码经前端测试、Go tests/vet、CI 和真实浏览器隔离联调验证；本次浏览器设备输入为合成设备，不代表新增真板验收 |
 | `v0.2.13` | 已发布（2026-09-07） | Driver 动作 RPC 透传可选标题、说明与危险确认元数据；`oneOf`/`anyOf`/`allOf` 三态校验；Host 完成认证连接计数后再发布 `ready`。18 二进制 + checksums.txt 与容器镜像已发布，linux/arm64 镜像来源提交与 tag 一致。发布源码同树 CI（含 Linux race、Windows、六平台）与 WebUI typecheck/test/build 通过；浏览器验证限于既有隔离联调，不代表新增真板验收或 Edge/Driver 更新后验完成 |
-| `v0.2.14` | 已发布（2026-09-07） | 插件实例重配置与身份收口（P1）：既有实例变更不再被静默忽略、重启后在 `HEALTHY` 前恢复已应用配置、退出失败不冒充成功、实例身份统一带租户键并如实标记 drift；另修 `auth_mode`、未路由 404、首装会话三处会说谎的读面。详见 [§v0.2.14](#v0214--2026-09-07)。**验证边界**：真机「不靠 Edge 重启」的热更新后验在部署之后进行，本行不代表其已通过 |
+| `v0.2.14` | 已发布（2026-09-07） | 插件实例重配置与身份收口：既有实例变更不再被静默忽略、重启后在 `HEALTHY` 前恢复已应用配置、退出失败不冒充成功、实例身份统一带租户键并如实标记 drift；另修 `auth_mode`、未路由 404、首装会话三处会说谎的读面。详见 [§v0.2.14](#v0214--2026-09-07)。**验证边界**：真机「不靠 Edge 重启」的热更新后验在部署之后进行，本行不代表其已通过 |
 | `v0.2.15` | 已发布（2026-09-08） | 应用输入与操作契约：实体观测上报、显式绑定、手动作业声明/HTTP 调用；详见 [§v0.2.15](#v0215--应用输入与操作契约) |
 | `v0.2.18` | 已发布（2026-09-09） | 控制面稳定性：命令断线/超时终态、Ping 死锁与 SQLite 抖动、执行器独占绑定、AppHost 失败投影；详见 [§v0.2.18](#v0218--2026-09-09) |
 | `v0.2.19` | 已发布（2026-09-09） | `purge=true` 事务化清除插件实例私有数据；详见 [§v0.2.19](#v0219--2026-09-09) |
@@ -183,4 +186,4 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 | `dev` | 本地 | `task build` / `task build:matrix` 的未打标产物（`git describe` 兜底） |
 
 > 仓库没有 `v0.2.16` / `v0.2.17` tag；`v0.2.18` 覆盖 `v0.2.15` 之后累计的变更。当前 `main` 在
-> `v0.2.20` tag 之后仅有文档提交，最新发布版本仍为 `v0.2.20`。
+> `v0.2.20` tag 之后包含尚未打标的 WebUI 与插件边界收口；最新发布版本仍为 `v0.2.20`。

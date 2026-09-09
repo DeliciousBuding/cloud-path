@@ -63,7 +63,7 @@ func TestDispatchDeviceCommandClosedLinkFails(t *testing.T) {
 	srv.devices[key] = onlineDevice(key, "e1")
 	srv.mu.Unlock()
 
-	id, err := srv.dispatchDeviceCommand(context.Background(), tid, key, "buzzer", `{"freq":1}`)
+	id, err := srv.dispatchDeviceCommandWithHook(context.Background(), tid, key, "buzzer", `{"freq":1}`, nil)
 	if err == nil {
 		t.Fatal("旧 link 关闭时命令必须失败")
 	}
@@ -112,7 +112,7 @@ func TestDispatchDeviceCommandUsesReconnectedLink(t *testing.T) {
 		got <- frame
 		frame.result <- nil
 	}()
-	id, err := srv.dispatchDeviceCommand(context.Background(), tid, key, "buzzer", `{"freq":2}`)
+	id, err := srv.dispatchDeviceCommandWithHook(context.Background(), tid, key, "buzzer", `{"freq":2}`, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

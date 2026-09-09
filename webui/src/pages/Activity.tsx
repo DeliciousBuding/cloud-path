@@ -218,7 +218,7 @@ export default function Activity() {
         <Panel>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-hairline pb-3">
             <span className="text-[12px] text-ink-3">
-              {tab === 'events' ? '设备上报事件 · 新到旧' : '下发操作及执行结果 · 新到旧'}
+              {tab === 'events' ? '状态记录 · 新到旧' : '操作记录 · 新到旧'}
             </span>
             <span className="flex items-center gap-2 text-[12px] text-ink-3">
               {query.isFetching && <Spinner size={12} />}

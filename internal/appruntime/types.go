@@ -75,10 +75,6 @@ type InstanceSpec struct {
 	Config         []byte
 	ConfigRevision uint32
 
-	// Requirements is an optional client-side declaration. When the plugin
-	// Describe response carries requirements, those are authoritative and this
-	// field is ignored.
-	Requirements []coreapplication.Requirement
 	// Candidates is the bindable view of entities for binding validation.
 	Candidates []coreapplication.Candidate
 	// Bindings is the proposed binding set for this instance.

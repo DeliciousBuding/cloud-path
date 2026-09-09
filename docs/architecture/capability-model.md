@@ -1,6 +1,6 @@
 # Capability 与领域模型
 
-最后更新：2026-09-03
+最后更新：2026-09-09
 
 > 本文定义 CloudPath 的设备无关模型。它是 Driver 与 Application 解耦的核心契约。
 
@@ -115,18 +115,20 @@ Schema 使用 JSON Schema 可表达的子集；单位使用统一代码表，不
 
 ### Event
 
-不可覆盖的时间点事实，例如 `opened`、`alarm-fired`、`device-booted`。Event Type 属于 Capability 或 Application 命名空间，不能继续维护一个全平台写死的业务事件枚举。
+不可覆盖的时间点事实，例如 `opened`、`alarm-fired`、`device-booted`。Event Type 属于 Capability 或 Application 命名空间，不能继续维护一个全平台写死的业务事件枚举；旧适配器发送的标签由 Core 作为不透明字符串兼容，不据此推断业务含义。
 
 ### Command
 
-有生命周期、幂等键和超时语义的动作请求：
+当前设备命令按 `pending → sent → ok|failed` 结算，90 秒未回执由 sweeper 标 `timeout`；
+请求携带 `cmd` / `args`，命令名必须命中 Driver/适配器声明，参数受长度和控制字符校验。
+
+类型化命令生命周期（`entity_id` / `action` / `idempotency_key` / `deadline` / `actor` 与
+运行中进度、取消）仍是目标态；不得把下面的设计目标当成当前 API：
 
 ```text
 CREATED → DISPATCHED → ACCEPTED → RUNNING
                               └→ SUCCEEDED / FAILED / TIMED_OUT / CANCELLED
 ```
-
-至少携带：`command_id`、`idempotency_key`、`entity_id`、`action`、`args`、`deadline`、`actor`。
 
 ## 5. Application Binding
 
@@ -146,22 +148,22 @@ requirements:
     cardinality: zero-or-one
 ```
 
-安装 Application Instance 时，CloudPath 提供绑定向导：
+当前绑定由运行时 Binder 根据 Capability Requirement 自动匹配；需要确定选择时，实例 config 的
+可选 `app_bindings` 以完整 `{requirement_id,entity_id}` 数组显式指定，非法或不完整选择 fail-closed，
+不会回退到任意在线实体。独立的可视化绑定向导仍是目标态。
 
 ```text
 Requirement             Candidate Entity
-reminder-output    →    stcb-001/alarm
-compartments[0]    →    stcb-001/compartment-1
-compartments[1]    →    stcb-001/compartment-2
-compartments[2]    →    stcb-001/compartment-3
-local-display      →    stcb-001/display
+reminder-output    →    <entity_id>
+compartments[0]    →    <entity_id>
+local-display      →    <entity_id>
 ```
 
 绑定保存稳定 `entity_id`；端口、Edge 重连和 Driver 重启不应改变绑定。当前命令/事件路由仍以
 `entity_id` 全局唯一为前提，`(device_key, entity_id)` 尚未贯穿；同租户同型号多板需由 Driver 保证
 `entity_id` 全局唯一，或按单板边界使用。
 
-### 5.1 执行器独占（MVP 规则）
+### 5.1 执行器独占
 
 传感器和按键允许同一租户的多个 Application 同时订阅；蜂鸣器、LED、数码管、电机和复合声光序列属于
 有物理副作用的执行器，默认同一稳定 `entity_id` 只能由一个运行中的 Application 驱动。Server 在应用实例

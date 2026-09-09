@@ -1220,16 +1220,11 @@ func (s *Server) deviceKeyForEntity(entityID string) string {
 	return ""
 }
 
-// dispatchDeviceCommand 是应用效果 → 设备命令的下发内核（与 handlePostCommand
-// 同一路径：建命令行 + edge 链路投递）。区别：不做进程内适配器白名单——外部
-// Driver 设备本就无注册表项，命令合法性由 Edge/Driver 侧校验；应用可下发的
-// 动作已被 Capability 绑定约束。
-func (s *Server) dispatchDeviceCommand(ctx context.Context, tenantID int64, key, cmd, args string) (int64, error) {
-	return s.dispatchDeviceCommandWithHook(ctx, tenantID, key, cmd, args, nil)
-}
-
-// dispatchDeviceCommandWithHook 与 dispatchDeviceCommand 同路径；onCreated 在
-// 命令落库后、任何网络写入前同步调用，供 AppHost 先登记 RequestCompleted 引用。
+// dispatchDeviceCommandWithHook 是应用效果 → 设备命令的下发内核（与
+// handlePostCommand 同一路径：建命令行 + edge 链路投递）。区别：不做进程内
+// 适配器白名单——外部 Driver 设备本就无注册表项，命令合法性由 Edge/Driver
+// 侧校验；应用可下发的动作已被 Capability 绑定约束。onCreated 在命令落库后、
+// 任何网络写入前同步调用，供 AppHost 先登记 RequestCompleted 引用。
 func (s *Server) dispatchDeviceCommandWithHook(ctx context.Context, tenantID int64, key, cmd, args string, onCreated func(int64)) (int64, error) {
 	s.mu.RLock()
 	v, devOK := s.devices[key]

@@ -1,6 +1,6 @@
-# Cloudpath HTTP API 契约
+# CloudPath HTTP API 契约
 
-最后更新：2026-09-04
+最后更新：2026-09-09
 
 > 管理台与自动化客户端的唯一 HTTP 契约 SSOT。边缘节点走 WebSocket 协议，见 `protocol.md`。
 > 基础路径：管理台同源（默认 `http://127.0.0.1:8080`）。所有 JSON 为 UTF-8。
@@ -15,7 +15,7 @@
 
 不变量（实现必须满足，测试锁定）：
 
-1. **无凭据不写**：未携带有效凭据（会话 cookie / Bearer 服务令牌）时，任何写操作（`POST /api/devices/*/commands`）只允许回环来源地址；否则 `403`。
+1. **无凭据不写**：未携带有效凭据（会话 cookie / Bearer 服务令牌）时，所有写端点（设备命令、插件实例、用户和令牌管理）只允许回环来源地址；否则 `403`。
 2. **账号模式全鉴权**：一旦存在用户（setup 完成），除 `/healthz`、静态资源、`/api/auth/*` 外，全部 `/api/*` 与 `/ws` 需凭据；`-require-auth` 可在无用户时也强制读鉴权（配合服务令牌）。
 3. **服务令牌**：`-token`（env `CLOUDPATH_TOKEN`）为共享服务令牌，等价 admin，用于 edge 接入与自动化；接受 `Authorization: Bearer <token>` 或查询参数 `?token=`（仅 WS 等无法带 header 的场景）。
 4. **限流**：命令下发 `-cmd-rate`（默认 20/分/设备）→ `429`；登录 `-login-rate`（默认 5/分/IP）→ `429`（带 `Retry-After`）。
@@ -27,7 +27,7 @@
 ### 2.1 实体
 
 - `tenant`：`(id, slug, name, created_at)`。首装自动创建 `default`。所有设备/事件/命令行携带 `tenant_id`，查询按会话租户过滤（数据隔离）。
-- `user`：`(id, tenant_id, username, name, role, password_hash, created_at, disabled)`。`role ∈ admin|operator|viewer`：admin=管理（P3 用户管理 API）、operator=可读可写、viewer=只读。密码哈希 argon2id（参数见实现常量），永不落明文。
+- `user`：`(id, tenant_id, username, name, role, password_hash, created_at, disabled)`。`role ∈ admin|operator|viewer`：admin=管理用户、令牌和租户设置；operator=可读可写；viewer=只读。密码哈希 argon2id（参数见实现常量），永不落明文。
 - `session`：服务端会话表 `(id, user_id, created_at, expires_at, last_seen_at)`；cookie `cp_session`（HttpOnly、SameSite=Lax、登录态变更后轮换 id 防会话固定；反代 TLS 下加 Secure）。TTL `-session-days`（默认 7）。
 
 ### 2.2 端点
@@ -61,7 +61,7 @@
 | `GET /api/audit?since=&action=&limit=` | admin | 审计日志（本租户，limit 上限 1000） |
 | `GET /api/stats` | 读 | 计数/保留期/`auth_mode`/`schema_version`；`auth_mode ∈ account\|token\|open`，报告 §1 中 server **实际执行**的鉴权形态 |
 | `GET /ws` | 读 | 浏览器实时通道（快照 + fan-out）；Origin 策略见下 |
-| `GET /ws/edge` | 服务令牌 | edge 接入；hello 携带 `token` |
+| `GET /ws/edge` | edge 令牌 | edge 接入；hello 携带 `token` |
 
 错误统一 `{"error":"<msg>"}`；`401` 未认证、`403` 无权限/来源受限、`404` 不存在、`409` 冲突、`429` 限流。
 
@@ -73,10 +73,10 @@
 
 `-allowed-origins`（逗号分隔 host 模式，支持 `*.example.com`）；留空 = 开发策略（请求同源 + localhost/127.0.0.1 任意端口）并在启动日志告警。非浏览器客户端（edge）不带 Origin，不受影响。
 
-## 3. 多租户演进（P2 落地 / P3 扩展）
+## 3. 多租户与权限
 
-- P2：租户列 + 隔离查询 + 默认租户；edge hello 可带 `tenant`（缺省 default）；旧 `-token` 绑定 default 租户。
-- P3：每租户多服务令牌、用户/RBAC 管理、租户切换 UI、按租户保留期。
+- 每个租户拥有独立的用户、服务令牌、设备/事件/命令/插件数据和保留策略；跨租户资源统一按不存在处理。
+- edge hello 可带 `tenant`（缺省 `default`）；旧 `-token` 绑定 default 租户。
 
 ### 3.1 RBAC
 
@@ -198,7 +198,7 @@ WebUI 首屏一次性聚合。所有计数来自真实 Edge 上报与 Server 权
 - 目标宿主尚未安装/上报该插件，或 manifest `kind` 无法解析时同样拒绝；不猜测类型、不放行。
 - `PATCH` 不改变实例的 `edge_id`。已有实例若与当前规则冲突，应先删除，再在正确的运行位置重新创建。
 
-### 5.5 Application Data Plane（D1，viewer 只读）
+### 5.5 Application Data Plane（viewer 只读）
 
 应用产出（领域记录、绑定、任务）的**设备无关、业务无关**读面。`app_domain_records`
 是 Application 数据 SSOT——本节只读不写，不建第二套业务 store，也没有任何业务特例
@@ -216,7 +216,7 @@ API（没有 `/api/pillbox/*`，永远不会有）。
 
 ```json
 {
-  "instance_id": "box-prod",
+  "instance_id": "instance-1",
   "records": [
     {"record_type":"window","record_id":"w-0630","data_json":"{\"state\":\"missed\",…}",
      "version":"1","updated_at":1756960200}
@@ -238,8 +238,7 @@ descriptor——两者只在实例运行期间存在。AppHost 未启用或实�
 `200 {"running":false,"bindings":[]}`，不伪造持久态。绑定视图字段：
 `{requirement_id, capability, entity_id}`。
 
-**jobs 响应**：`jobs` 为 descriptor 声明的运行态 job id；`scheduled` 为 D2
-Durable Scheduler 的声明式 cron 任务（`schedule_job` 效果声明，DB 持久，含
+**jobs 响应**：`jobs` 为 descriptor 声明的运行态 job id；`scheduled` 为 Durable Scheduler 的声明式 cron 任务（`schedule_job` 效果声明，DB 持久，含
 cancelled，`state` 自述）：`{schedule_id, cron, timezone, missed_policy,
 next_run_at, last_run_at, state, revision}`。`missed_policy ∈ skip|run_once`，
 默认 skip（Server 停机错过的 run 不补执行；run_once 恰好补一次）。派发语义：
@@ -250,7 +249,7 @@ claim-then-dispatch（先持久推进 next_run_at 再派发）——重启零重
 
 ```json
 {"v":1,"type":"domain_record","ts":1756960200,
- "data":{"instance_id":"box-prod","record_type":"window","record_id":"w-0630",
+ "data":{"instance_id":"instance-1","record_type":"window","record_id":"w-0630",
          "data_json":"{…}","version":"1","updated_at":1756960200,"created":false}}
 ```
 

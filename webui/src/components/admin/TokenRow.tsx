@@ -90,10 +90,10 @@ export function TokenRow({ token: t }: { token: TokenView }) {
           </p>
           {revoke.isError && <ErrorNote message={adminErrorMessage(revoke.error)} />}
           <div className="flex flex-wrap gap-2">
-            <Button type="button" disabled={revoke.isPending} onClick={doRevoke}
-              aria-label={`确认吊销令牌 ${t.name}`}>
+            <button type="button" disabled={revoke.isPending} onClick={doRevoke}
+              className="btn btn-danger" aria-label={`确认吊销令牌 ${t.name}`}>
               {revoke.isPending ? '吊销中…' : '确认吊销'}
-            </Button>
+            </button>
             <Button type="button" variant="ghost" onClick={() => setConfirming(false)}
               aria-label={`取消吊销 ${t.name}`}>取消</Button>
           </div>

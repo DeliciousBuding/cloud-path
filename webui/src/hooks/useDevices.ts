@@ -24,6 +24,8 @@ export interface DevicesResult {
 export function useDevices(): DevicesResult {
   const live = useLive((s) => s.devices)
   const status = useLive((s) => s.status)
+  const connectionEpoch = useLive((s) => s.connectionEpoch)
+  const snapshotEpoch = useLive((s) => s.snapshotEpoch)
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['devices'],
     queryFn: api.devices,
@@ -31,17 +33,27 @@ export function useDevices(): DevicesResult {
     retry: false,
   })
 
+  // WS 只有处于 open 时才是当前权威；断开后 REST 轮询必须能纠正遗留的实时缓存。
+  // REST 尚未成功时仍用 live 兜底，避免断网期间把最后已知状态清空。
+  // open 只表示握手成功；必须等本次连接的 snapshot 落地后才把空集合当成权威事实。
+  const liveAuthoritative = status === 'open' &&
+    (connectionEpoch === 0 || snapshotEpoch === connectionEpoch)
   const merged: Record<string, DeviceView> = {}
-  for (const d of data?.devices ?? []) merged[d.id] = d
-  for (const [k, d] of Object.entries(live)) merged[k] = { ...merged[k], ...d }
+  if (liveAuthoritative || data === undefined) {
+    for (const [k, d] of Object.entries(live)) merged[k] = d
+    for (const d of data?.devices ?? []) if (!merged[d.id]) merged[d.id] = d
+  } else {
+    // REST 已成功返回时它就是权威集合；不能把已断开的旧 live 键补回来。
+    for (const d of data.devices) merged[d.id] = d
+  }
   const list = Object.values(merged).sort((a, b) => a.id.localeCompare(b.id))
 
   return {
     list,
     online: list.filter((d) => d.online).length,
-    loading: list.length === 0 && (isLoading || status === 'connecting'),
-    // 已经有任何来源的数据（REST 或 WS）时不再报错误态，避免遮蔽正常内容
-    error: list.length === 0 && !isLoading ? error : null,
+    loading: list.length === 0 && !liveAuthoritative && (isLoading || status === 'connecting'),
+    // WS open 时空快照也是权威事实；只有 REST 才是唯一来源且失败时才报错误态。
+    error: list.length === 0 && !liveAuthoritative && !isLoading ? error : null,
     refetch: () => { void refetch() },
   }
 }

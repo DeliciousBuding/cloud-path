@@ -39,6 +39,7 @@ describe('机器名中文优先展示名', () => {
 
   it('覆盖用户可见的英文事件与命令机器名', () => {
     expect(eventDisplayLabel('Pillbox Remind')).toBe('药盒提醒')
+    expect(eventDisplayLabel('stcb.sensor')).toBe('传感器状态')
     expect(eventDisplayLabel('Read Register')).toBe('读取寄存器')
     expect(commandDisplayMeta('read-register').label).toBe('读取寄存器')
     expect(commandFailureInfo('device busy')).toEqual({

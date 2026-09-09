@@ -23,8 +23,8 @@
 | 仓库 | 职责 | 源码状态 / 创建条件 |
 |---|---|---|
 | `cloud-path` | Core、Server、Edge、WebUI、公共 API/Schema、Go SDK、测试 harness | 当前主仓库 |
-| `cloud-path-registry` | 精选插件索引、发布者策略、digest/attestation 元数据；不存二进制 | A7 稳定后 |
-| `cloud-path-driver-stcb` | STC-B Driver Plugin；板级容错、串口协议、Capability 映射 | A5 拆仓 |
+| `cloud-path-registry` | 精选插件索引、发布者策略、digest/attestation 元数据；不存二进制 | Registry 契约稳定后 |
+| `cloud-path-driver-stcb` | STC-B Driver Plugin；板级容错、串口协议、Capability 映射 | 已拆仓，独立维护 |
 | [cloud-path-app-scheduled-compartment](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment) | 硬件无关的定时隔间 Application Plugin | 独立维护；现役源码入口 |
 | [cloud-path-app-button-indicator](https://github.com/DeliciousBuding/cloud-path-app-button-indicator) | 按键指示 Application Plugin | 独立维护；现役源码入口 |
 | [cloud-path-app-environment-guard](https://github.com/DeliciousBuding/cloud-path-app-environment-guard) | 环境监护 Application Plugin | 独立维护；现役源码入口 |
@@ -104,15 +104,15 @@ Core 的 `examples/scheduled-compartment` 与 [split 生成器](../../deploy/spl
 
 | 内容 | 公开仓库 | 私有层/其他家 |
 |---|---|---|
-| Core/Edge/Server/WebUI、通用 SDK/Schema/协议 | ✅ MIT |
-| 通用 reference Driver/Application | ✅，去行业/个人语义 |
-| 无凭据的 Docker/反代/配置示例 | ✅ |
-| 架构、公开 API、安全模型、威胁边界 | ✅ |
-| 设备清单、串口号、真实 edge/site id、板测日志 | ❌ `.local/` |
-| 路线图、未发布计划、内部验收证据 | ❌ `.local/` 或私有文档家 |
-| 课程 BSP/课件/模板、厂商不可再分发 SDK | ❌ 不进任何公开仓库 |
-| token/password/cookie/私钥/生产 URL/IP/内部昵称 | ❌ secret store；仓库只写 key 名和 example |
-| 云服务运营控制面、计费、内部告警与拓扑 | 默认 ❌ 闭源增值 |
+| Core/Edge/Server/WebUI、通用 SDK/Schema/协议 | 公开，MIT |
+| 通用 reference Driver/Application | 公开，去行业/个人语义 |
+| 无凭据的 Docker/反代/配置示例 | 公开 |
+| 架构、公开 API、安全模型、威胁边界 | 公开 |
+| 设备清单、串口号、真实 edge/site id、板测日志 | 不公开，`.local/` |
+| 路线图、未发布计划、内部验收证据 | 不公开，`.local/` 或私有文档家 |
+| 课程 BSP/课件/模板、厂商不可再分发 SDK | 不公开，不进任何公开仓库 |
+| token/password/cookie/私钥/生产 URL/IP/内部昵称 | 不公开，secret store；仓库只写 key 名和 example |
+| 云服务运营控制面、计费、内部告警与拓扑 | 默认不公开，闭源增值 |
 
 公开截图必须人工复查：账号、真实设备名、主机/IP、串口、事件正文、浏览器书签和桌面路径均不得出现。
 

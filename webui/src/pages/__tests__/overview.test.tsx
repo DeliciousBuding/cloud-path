@@ -179,7 +179,9 @@ describe('概览：加载与错误态（不得白屏）', () => {
     expect(await screen.findAllByRole('alert')).toHaveLength(1)
     expect(screen.getByText('状态暂时不可用')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '重新加载' })).toBeInTheDocument()
-    // 失败 ≠ 空：不许出现「还没有设备接入」这种假空态
+    // 失败 ≠ 空：不许出现「还没有设备接入」或「没有异常」这种假空态
+    expect(screen.getByText('状态不可用，暂时无法判断是否需要处理。')).toBeInTheDocument()
+    expect(screen.queryByText('当前没有需要处理的异常。')).not.toBeInTheDocument()
     expect(screen.queryByText('还没有设备接入')).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '设备状态' })).not.toBeInTheDocument()
   })

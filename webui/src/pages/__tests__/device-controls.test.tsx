@@ -130,6 +130,8 @@ describe('有设备能力声明时以声明为准', () => {
     await user.click(await screen.findByRole('button', { name: '恢复出厂' }))
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toHaveTextContent('确认恢复出厂？设备侧配置将被清空。')
+    expect(dialog).toHaveTextContent('演示设备')
+    expect(dialog).not.toHaveTextContent(KEY)
     expect(within(dialog).getByRole('button', { name: '恢复出厂' })).toBeDisabled()
   })
 })
@@ -216,6 +218,22 @@ describe('操作记录', () => {
 
     const failedDetails = screen.getAllByText('技术详情')[0].closest('details') as HTMLElement
     expect(within(failedDetails).getByText('ERR_BUSY queue full; raw=0x05')).toBeInTheDocument()
+  })
+
+  it('超时状态使用设备响应超时与下一步，不落回通用失败文案', async () => {
+    route({
+      descriptor: makeDescriptor(),
+      capabilities: catalogPayload,
+      commands: [{
+        id: 52, device_id: KEY, cmd: 'motor', args: '{"steps":4}', status: 'timeout',
+        created_at: 1_780_000_000, acked_at: 1_780_000_015, result: 'device did not acknowledge command before deadline',
+      }],
+    })
+    renderDetail(ROUTE + '?tab=events')
+
+    expect(await screen.findByText('设备响应超时')).toBeInTheDocument()
+    expect(screen.getByText(/确认设备在线且空闲后重试/)).toBeInTheDocument()
+    expect(screen.queryByText('设备没有完成操作')).not.toBeInTheDocument()
   })
 
   it('失败记录可直接重试，并沿用原命令参数与权限边界', async () => {

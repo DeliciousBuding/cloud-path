@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '@/lib/api'
 import {
   healthMeta, permissionCount, permissionGroups, pluginErrorCopy, safeConfigEntries,
-  hostDetailLabel, secretHandleName, stateMeta, syncState, trustMeta,
+  hostDetailLabel, instanceStatus, secretHandleName, stateMeta, syncState, trustMeta,
 } from '@/lib/plugins'
 import { PluginErr } from '@/lib/types'
 import type { PluginInstanceView } from '@/lib/types'
@@ -141,6 +141,15 @@ describe('desired / observed 永远分别呈现', () => {
     const un = syncState(instance({ has_observed: false, observed: undefined, edge_online: false }))
     expect(un.key).toBe('unreported')
     expect(un.hint).toMatch(/离线/)
+  })
+
+  it('已启用但网关离线 → 计入需要处理，而不是“需要处理 0”', () => {
+    const v = instance({ has_observed: false, observed: undefined, edge_online: false })
+    const s = instanceStatus(v)
+    expect(s.key).toBe('attention')
+    expect(s.needsAttention).toBe(true)
+    expect(s.summary).toMatch(/网关离线/)
+    expect(s.next).toMatch(/恢复网关连接/)
   })
 
   it('stale=true → 独立「已过期」状态，并声明下面的是历史事实', () => {

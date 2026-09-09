@@ -221,21 +221,6 @@ func (p *pluginPlane) edgePlaneLocked(t *pluginTenantPlane, edgeID string) *plug
 	return ep
 }
 
-// tenantIDForSlug 在已加载的缓存里反查租户 id；未知返回 (0,false)。
-func (p *pluginPlane) tenantIDForSlug(slug string) (int64, bool) {
-	if !p.enabled() || slug == "" {
-		return 0, false
-	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	for id, t := range p.tenants {
-		if t.slug == slug {
-			return id, true
-		}
-	}
-	return 0, false
-}
-
 // quotaLimit 解析租户插件实例配额：策略行 <=0 的字段表示继承 Server 默认值。
 func (p *pluginPlane) quotaLimit(tenantID int64) int {
 	def := tenantpolicy.Defaults().Quotas.PluginInstances
@@ -431,22 +416,6 @@ func (p *pluginPlane) forgetObserved(tenantID int64, edgeID, instanceID string) 
 	}
 	if ep, ok := t.edges[edgeID]; ok {
 		delete(ep.observed, instanceID)
-	}
-}
-
-// setRevision 把 store 返回的新 desired revision 同步进缓存。
-func (p *pluginPlane) setRevision(tenantID int64, edgeID string, revision uint64) {
-	if !p.enabled() {
-		return
-	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	t, err := p.ensureLoadedLocked(tenantID, "")
-	if err != nil || t == nil {
-		return
-	}
-	if ep := p.edgePlaneLocked(t, edgeID); revision > ep.desiredRevision {
-		ep.desiredRevision = revision
 	}
 }
 

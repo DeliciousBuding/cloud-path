@@ -1,8 +1,9 @@
-# Plugin Registry 与 CLI 契约（A7）
+# Plugin Registry 与 CLI 契约
 
-最后更新：2026-09-03
+最后更新：2026-09-09
 
-> A7（Registry + CLI + 供应链）的实现契约。发现通道与信任链见 `docs/architecture/github-ecosystem.md`。
+> Registry 索引、CLI 与供应链验证的实现契约。发现通道与信任链见
+> [github-ecosystem.md](github-ecosystem.md)。
 
 ## 1. Registry Manifest（索引项）
 
@@ -29,9 +30,9 @@ cloudpath plugin inspect <id|url>    # 读根 plugin.yaml + Release/摘要，输
 cloudpath plugin install <id|url>    # 下载 → 校验 digest → 落 plugins.d/ + 写 plugins.lock
 # 匿名 GitHub API 限额 60 次/小时：设置 GITHUB_TOKEN（或 GH_TOKEN）走认证额度，
 # 否则 discover/install 可能返回 ERR_RATE_LIMITED。令牌只从环境读取，不写入 lock/日志。
-cloudpath plugin enable <id>         # 启动实例
-cloudpath plugin disable <id>        # 停用实例
-cloudpath plugin update <id>         # 升级（走 PlanMigration）
+cloudpath plugin enable <id>         # 写入启用期望态
+cloudpath plugin disable <id>        # 写入停用期望态
+cloudpath plugin update <id>         # 更新固定版本/摘要与 desired（迁移计划仍属目标态）
 cloudpath plugin remove <id>         # 卸载（默认保留数据，purge 另设）
 ```
 
@@ -45,7 +46,8 @@ cloudpath plugin remove <id>         # 卸载（默认保留数据，purge 另�
 5. 权限披露展示并确认；
 6. 写 `plugins.lock`。
 
-## 4. 首批范围
+## 4. 当前范围
 
-- 实现 `search` / `inspect` / `install`（本地安装 + digest 校验）为硬目标；`enable/disable/update/remove` 先落命令与错误码，实例运行时接 A4 Plugin Host。
+- CLI 提供 `search` / `inspect` / `install` / `enable` / `disable` / `update` / `remove` / `host`；安装与更新执行 Manifest、兼容范围、Release 资产和摘要校验。
+- `host` 只支持 Driver 与 Application 进程；Connector 可安装和披露，但启动会 fail-closed，直到 Connector 运行时落地。
 - GitHub 搜索走 `gh` 或 GitHub REST（topic `cloudpath-plugin`）；不把 topic 当信任。

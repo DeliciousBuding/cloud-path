@@ -62,9 +62,15 @@ describe('adminErrorMessage', () => {
     expect(adminErrorMessage(new ApiError(409, msg))).toBe(msg)
   })
 
-  it('409 透传服务端说明；空说明回落为可重试的人话', () => {
+  it('409 透传服务端说明；404/5xx 收敛为可执行的本地人话', () => {
     expect(adminErrorMessage(new ApiError(409, 'username 已存在'))).toBe('username 已存在')
-    expect(adminErrorMessage(new ApiError(500, ''))).toBe('操作暂时没有成功，请稍后重试。')
+    expect(adminErrorMessage(new ApiError(404, 'user not found'))).toBe('记录不存在或已被删除，请刷新列表后重试。')
+    expect(adminErrorMessage(new ApiError(500, 'database unavailable'))).toBe('服务暂时不可用，请稍后重试；如果持续失败，请联系管理员。')
+  })
+
+  it('400 的中文业务说明保留，英文机器错误不直接暴露', () => {
+    expect(adminErrorMessage(new ApiError(400, 'password 不能为空'))).toBe('password 不能为空')
+    expect(adminErrorMessage(new ApiError(400, 'invalid request body'))).toBe('提交内容不符合要求，请检查后重试。')
   })
 
   it('429 带上 Retry-After', () => {
