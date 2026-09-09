@@ -134,7 +134,7 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
             <span className="min-w-0 truncate">{pluginDisplayName(selected)}</span>
           </div>
         ) : createOptions.length > 0 ? (
-          <Select id="pi-plugin" className="overflow-hidden" compact value={effectivePluginId}
+          <Select id="pi-plugin" compact value={effectivePluginId}
             onChange={(e) => {
               const nextID = e.target.value
               const next = catalog.find((p) => p.id === nextID)
@@ -178,11 +178,11 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
                   {t('form.connectorNoInstance')}
                 </p>
               ) : pluginKind === 'application' ? (
-                <Select id="pi-edge" className="overflow-hidden" compact value="server" disabled>
+                <Select id="pi-edge" compact value="server" disabled>
                   <option value="server">{t('host.server')}</option>
                 </Select>
               ) : pluginKind === 'driver' ? (
-                <Select id="pi-edge" className="overflow-hidden" compact value={effectiveEdge} onChange={(e) => setEdgeId(e.target.value)}>
+                <Select id="pi-edge" compact value={effectiveEdge} onChange={(e) => setEdgeId(e.target.value)}>
                   {edges.length === 0 && <option value="">{t('form.noEdge')}</option>}
                   {edges.map((edge) => (
                     <option key={edge.edge_id} value={edge.edge_id}>
@@ -226,7 +226,7 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
         <div>
           <label htmlFor="pi-version" className="mb-1.5 block text-compact font-medium text-ink-2">{t('form.version')}</label>
           {versionOptions.length > 0 ? (
-            <Select id="pi-version" className="overflow-hidden" compact value={effectiveVersion}
+            <Select id="pi-version" compact value={effectiveVersion}
               onChange={(e) => setVersion(e.target.value)}>
               {versionOptions.map((v) => <option key={v} value={v}>{v}</option>)}
             </Select>
@@ -241,7 +241,7 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
 
         <div>
           <label htmlFor="pi-iso" className="mb-1.5 block text-compact font-medium text-ink-2">{t('form.isolation')}</label>
-          <Select id="pi-iso" className="overflow-hidden" compact value={isolation} onChange={(e) => setIsolation(e.target.value as 'shared' | 'per-instance')}>
+          <Select id="pi-iso" compact value={isolation} onChange={(e) => setIsolation(e.target.value as 'shared' | 'per-instance')}>
             {ISOLATIONS.map((o) => <option key={o.value} value={o.value}>{t(o.labelKey)}</option>)}
           </Select>
           <p className="mt-1.5 text-meta text-ink-3">{t('form.isolationHint')}</p>

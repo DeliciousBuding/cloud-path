@@ -1,11 +1,11 @@
 // 基础 UI 原语（Apple 极简）：Badge / StatusDot / Panel / PageHeader / StatTile / EmptyState /
 // Segmented / KeyValue / Spinner / Button / TextField / ThemeToggle / AuthCard
 // 颜色一律走 index.css token（Tailwind 主题类或 .btn/.input/.card 基类），组件内禁止裸色值。
-import { useId, useState } from 'react'
+import { Children, Fragment, isValidElement, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import '@/i18n'
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
-import { ArrowLeft, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
+import type { ButtonHTMLAttributes, ChangeEvent, FocusEvent as ReactFocusEvent, InputHTMLAttributes, KeyboardEvent as ReactKeyboardEvent, ReactNode, SelectHTMLAttributes } from 'react'
+import { ArrowLeft, Check, ChevronDown, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
 import { Link } from 'react-router'
 import { cn } from '@/lib/cn'
 import { getTheme, setTheme } from '@/lib/theme'
@@ -295,12 +295,255 @@ export function Button({ variant = 'primary', lg, className, ...rest }: {
   )
 }
 
-/** 原生 select 原语：默认走 .select，pill 只用于筛选器，compact 只用于紧凑表单。 */
-export function Select({ pill, compact, className, ...rest }: {
+type SelectOptionItem = {
+  value: string
+  label: ReactNode
+  text: string
+  disabled: boolean
+  group?: string
+}
+
+function optionText(label: ReactNode): string {
+  return typeof label === 'string' || typeof label === 'number' ? String(label) : ''
+}
+
+function optionsFromChildren(children: ReactNode): SelectOptionItem[] {
+  const options: SelectOptionItem[] = []
+  const appendOption = (child: React.ReactElement, group?: string) => {
+    if (child.type !== 'option') return
+    const props = child.props as {
+      value?: string | number
+      label?: string
+      disabled?: boolean
+      children?: ReactNode
+    }
+    const value = props.value === undefined ? String(props.children ?? '') : String(props.value)
+    const label = props.label ?? props.children ?? value
+    options.push({ value, label, text: optionText(label), disabled: Boolean(props.disabled), group })
+  }
+  Children.forEach(children, (child) => {
+    if (!isValidElement(child)) return
+    if (child.type === 'optgroup') {
+      const props = child.props as { label?: ReactNode; children?: ReactNode }
+      const group = optionText(props.label)
+      Children.forEach(props.children, (nested) => {
+        if (isValidElement(nested)) appendOption(nested, group || undefined)
+      })
+      return
+    }
+    appendOption(child)
+  })
+  return options
+}
+
+/**
+ * 可主题化下拉框。
+ *
+ * 视觉交互由 DOM 中的 combobox + listbox 承担，因此弹层也能完整使用设计 token；
+ * 视觉隐藏的原生 select 保留表单语义、读屏兼容和现有测试 API，但不负责弹层绘制。
+ */
+export function Select({
+  pill, compact, className, children, value, defaultValue, onChange,
+  disabled, id, name, required, onBlur, ...rest
+}: {
   pill?: boolean
   compact?: boolean
-} & SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={cn('select', pill && 'select-pill', compact && 'select-sm', className)} {...rest} />
+  children?: ReactNode
+} & Omit<SelectHTMLAttributes<HTMLSelectElement>, 'children'>) {
+  const options = useMemo(() => optionsFromChildren(children), [children])
+  const controlled = value !== undefined
+  const initialValue = controlled ? value : defaultValue
+  const [internalValue, setInternalValue] = useState(() => {
+    if (initialValue !== undefined && initialValue !== null) return String(initialValue)
+    return options[0]?.value ?? ''
+  })
+  const currentValue = controlled ? String(value) : internalValue
+  const selectedIndex = options.findIndex((option) => option.value === currentValue)
+  const selected = selectedIndex >= 0 ? options[selectedIndex] : options[0]
+  const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const selectRef = useRef<HTMLSelectElement>(null)
+  const listboxId = useId()
+  const optionId = (index: number) => `${listboxId}-option-${index}`
+
+  useEffect(() => {
+    if (!controlled && options.length > 0 && !options.some((option) => option.value === internalValue)) {
+      setInternalValue(options[0].value)
+    }
+  }, [controlled, internalValue, options])
+
+  useEffect(() => {
+    if (!open) return
+    const next = selectedIndex >= 0 ? selectedIndex : options.findIndex((option) => !option.disabled)
+    setActiveIndex(next >= 0 ? next : 0)
+  }, [open, options, selectedIndex])
+
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (event: globalThis.PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false)
+        selectRef.current?.focus()
+      }
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  function emitChange(nextValue: string) {
+    if (!controlled) setInternalValue(nextValue)
+    const target = selectRef.current
+    if (!target) return
+    target.value = nextValue
+    onChange?.({ target, currentTarget: target } as ChangeEvent<HTMLSelectElement>)
+  }
+
+  function choose(option: SelectOptionItem) {
+    if (option.disabled) return
+    emitChange(option.value)
+    setOpen(false)
+    selectRef.current?.focus()
+  }
+
+  function firstEnabledIndex(): number {
+    return options.findIndex((option) => !option.disabled)
+  }
+
+  function lastEnabledIndex(): number {
+    for (let index = options.length - 1; index >= 0; index -= 1) {
+      if (!options[index].disabled) return index
+    }
+    return -1
+  }
+
+  function moveActive(delta: 1 | -1) {
+    if (options.length === 0) return
+    let next = activeIndex
+    for (let step = 0; step < options.length; step += 1) {
+      next = (next + delta + options.length) % options.length
+      if (!options[next].disabled) {
+        setActiveIndex(next)
+        return
+      }
+    }
+  }
+
+  function handleKeyDown(event: ReactKeyboardEvent<HTMLSelectElement>) {
+    if (disabled) return
+    if (event.key === 'Tab') {
+      setOpen(false)
+      return
+    }
+    if (event.key === 'Escape') {
+      if (open) event.preventDefault()
+      setOpen(false)
+      return
+    }
+    if (!open && ['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) {
+      event.preventDefault()
+      setOpen(true)
+      return
+    }
+    if (!open) return
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      moveActive(1)
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      moveActive(-1)
+    } else if (event.key === 'Home') {
+      event.preventDefault()
+      const next = firstEnabledIndex()
+      if (next >= 0) setActiveIndex(next)
+    } else if (event.key === 'End') {
+      event.preventDefault()
+      const next = lastEnabledIndex()
+      if (next >= 0) setActiveIndex(next)
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      const option = options[activeIndex]
+      if (option) choose(option)
+    }
+  }
+
+  function handleNativeChange(event: ChangeEvent<HTMLSelectElement>) {
+    if (!controlled) setInternalValue(event.target.value)
+    onChange?.(event)
+  }
+
+  function handleBlur(event: ReactFocusEvent<HTMLSelectElement>) {
+    if (!rootRef.current?.contains(event.relatedTarget as Node)) setOpen(false)
+    onBlur?.(event)
+  }
+
+  return (
+    <div ref={rootRef} className={cn('select-wrap', pill && 'select-wrap-pill', className)}>
+      <select
+        {...rest}
+        ref={selectRef}
+        id={id}
+        name={name}
+        required={required}
+        disabled={disabled}
+        value={currentValue}
+        onChange={handleNativeChange}
+        onKeyDown={handleKeyDown}
+        onBlur={handleBlur}
+        aria-expanded={open}
+        aria-controls={open ? listboxId : undefined}
+        aria-activedescendant={open && activeIndex >= 0 ? optionId(activeIndex) : undefined}
+        className="sr-only"
+      >
+        {children}
+      </select>
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-hidden="true"
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+        className={cn('select select-trigger', pill && 'select-pill', compact && 'select-sm')}
+      >
+        <span className="min-w-0 truncate" title={selected?.text || undefined}>{selected?.label ?? ''}</span>
+        <ChevronDown size={14} className={cn('shrink-0 text-ink-3 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="select-menu">
+          <ul id={listboxId} role="listbox" aria-label={rest['aria-label']} className="select-list">
+            {options.map((option, index) => (
+              <Fragment key={option.value}>
+                {option.group && (index === 0 || options[index - 1]?.group !== option.group) && (
+                  <li role="presentation" className="select-group">{option.group}</li>
+                )}
+                <li
+                  id={optionId(index)}
+                  role="option"
+                  aria-selected={option.value === currentValue}
+                  aria-disabled={option.disabled || undefined}
+                  data-active={index === activeIndex ? 'true' : undefined}
+                  className="select-option"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onMouseEnter={() => { if (!option.disabled) setActiveIndex(index) }}
+                  onClick={() => choose(option)}
+                >
+                  <span className="min-w-0 truncate" title={option.text || undefined}>{option.label}</span>
+                  {option.value === currentValue && <Check size={14} className="shrink-0" aria-hidden="true" />}
+                </li>
+              </Fragment>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
 }
 
 /** 带标签/提示/错误的表单输入行（error 优先于 hint 展示）。
