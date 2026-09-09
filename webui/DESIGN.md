@@ -1,4 +1,4 @@
-# WebUI 呈现与设计契约
+# WebUI 界面设计规范
 
 最后更新：2026-09-09
 
@@ -36,7 +36,7 @@ resolver 均为纯函数并有确定性单测（fallback 顺序、脏数据降�
 `cmdMeta(cmd, actions?, idx?)` 解析——无单设备命令集时用 `commandDecl`（eventDecl 的命令侧
 对称件）查 catalog 声明，再回落平台词典 / humanize。
 
-状态三态契约：详情类页面在数据未到手时必须区分「加载中（骨架）/ 404（未注册空态）/
+状态三态约定：详情类页面在数据未到手时必须区分「加载中（骨架）/ 404（未注册空态）/
 其它失败（可重试错误态）」。`isNotFound()`（webui/src/lib/api.ts）是 404 语义的唯一判定；
 把 404 渲染成「加载失败」会让用户去查 server，而真相只是设备没接入。
 
@@ -86,8 +86,10 @@ Application Plane 的展示入口位于运行实例详情。应用目录声明 `
 
 控制请求原样使用投影的 `v.id`（可能为裸标识，也可能带节点前缀）；records / bindings / jobs
 三个只读请求始终使用 `desired.instance_id`。viewer 可读三个分区，但不能新建、编辑、启停、重新
-下发或删除实例；切换为只读角色会关闭列表页已打开的创建或编辑表单。应用数据需要已认证且
-`tenant_id>0` 的租户身份；服务令牌的 `user.id=0` 是合法身份，开放访问不等于应用数据授权。
+下发或删除实例；切换为只读角色会关闭列表页已打开的创建或编辑表单。应用读面跟随 `authReady`：
+`open`（L0/认证探针不可用）可读但强制只读，账号模式仍要求合法 `tenant_id>0`；服务令牌的
+`user.id=0` 是合法身份。写操作继续只允许已登录的 operator/admin。插件业务导航、`/apps/:route`
+路由和自定义 iframe bridge 的契约见 `webui/src/components/plugin-ui/README.md`。
 
 普通视图展示可辨认的结构化字段、公开 Descriptor / Capability 名称与本地化时间。已知通用字段沿用
 公共词汇；无展示声明的字段保留原字段名，不能用“数据项 1”掩盖含义。标题/名称、状态类字段与已填
@@ -120,16 +122,16 @@ unicode-range 只接管 CJK，拉丁/数字仍走 Geist；可复现构建见 web
 ### 10.9 排版刻度与字重（2026-09-05 增补）
 
 - 字重阶梯三档：regular 400（降级/单位）/ medium 500（正文与标签）/ semibold 600（标题与值），标题不超 600（Vercel 纪律）。浅色正文基底 450（CJK 光学平价，可变轴真实实例）；**暗色整条阶梯等差上移 50**（450→500 / 500→550 / 600→650）——纯黑 + 灰度抗锯齿削约半档笔画，是 Noto Sans SC 暗底发飘的根因；补偿只平移不改变相对差与层级。
-- 字号刻度 {10,11,12,13,14,15,22,24,26,28,30}：30=指标 display（KPI/观测大数字，`.metric`）；28=页标题；26=认证页标题；24=详情 hero 与槽内短值；22=异常页标题；15=面板标题；14=正文/导航；13=密排正文；12=元数据；11=mono 机器文本下限；10 灭绝。
+- 字号刻度 {11,12,13,14,15,18,20,22,24,26,28,30}，全部由 token 管理：11=mono 微文本（`text-micro`）；12=元数据（`text-meta`）；13=密排正文（`text-compact`）；14=正文/导航（`text-body`）；15=面板标题（`text-lead`）；18=紧凑统计值（`text-stat`）；20=小节标题（`text-section-sm`）；22=异常页标题（`text-section`）；24=详情 hero（`text-hero`）；26=认证页标题（`text-title`）；28=页标题（`text-page-title`）；30=指标 display（`text-display`，配 `.metric`）。组件禁止 `text-[Npx]`。
 - `.metric` 是拉丁负字距唯一出口：等宽数字 + `-0.02em`（Geist 数字刻度）；CJK 文本负字距止于 -0.01em（全角字面会挤），tracking-tight/tighter 灭绝。
 - 中文标点 `palt` 比例宽度全局启用（body），收紧全角逗号/句号而不碰汉字字面；数字恒 `tnum`。标题 `text-wrap: balance`、散文 `pretty`。
-- 字号下限：非 mono 文字 ≥12px；mono 微文本（标识/raw JSON/版本号/SVG 轴刻度）11px；10px 全仓灭绝。阅读字号（键值行/按钮/侧栏导航）14px。
+- 字号下限：非 mono 文字 ≥12px；mono 微文本（标识/raw JSON/版本号/SVG 轴刻度）11px；10px 全仓灭绝。阅读字号（键值行/按钮/侧栏导航）14px。移动端输入框（≤639px）提升到 16px，避免 iOS Safari 聚焦自动放大。
 - 字符串型 KPI（版本号等）用 mono medium 渲染，不用 sans semibold：字符串不是量级。
 - 散文行宽 ≤62ch：全宽长行是布局失败（About 等通栏段落加 max-w）。
 
 ### 10.10 形状与结构
 
-- 圆角刻度只有两档：tile 8px（卡内子面/内联 note/控件）与 card 12px（.card/浮层 Toast/品牌 logo）；rounded-2xl+ 不使用。
+- 圆角只有三种语义：tile 8px（`rounded-tile`，卡内子面/内联 note/控件）、card 12px（`rounded-card`，.card/浮层 Toast/品牌 logo）、pill 999px（`rounded-pill`，状态点/胶囊/圆形按钮）；`rounded-sm/md/lg/xl/2xl` 不再作为业务类使用。
 - 列表在 Panel 内用 divider rows（`divide-y`），不套子卡（嵌套卡片是硬反模式）；Admin 用户/令牌行已行化。
 - 表格体单元格 `vertical-align: baseline`（对齐行首基线；多行表头才底对齐）。
 - 长 ledger（运行记录页状态记录/操作记录）本地滚动（max-h + overflow-y-auto），页面保持一屏可读；天分组头 sticky 于滚动容器顶，跨天查找不迷路。
@@ -144,3 +146,18 @@ unicode-range 只接管 CJK，拉丁/数字仍走 Geist；可复现构建见 web
 - 设备概览组合 = KPI → 事实横条（设备状况 KV 多列通栏，回答「健康吗」）→ 双 ledger 并排（最近活动 | 命令历史，互为 peer 等高互不牵制）；列表型内容不进窄轨。
 - 面积图平涂 `fillOpacity 0.1`：装饰性渐变/渐变淡出是硬反模式，渐变只允许作为有标注的连续数据标尺。
 - 用户可见文案不用破折号「——」接续句子（改逗号/句号）；代码注释不受此限。
+
+### 10.12 设计 token（2026-09-09 收口）
+
+- SSOT 是 `webui/src/index.css` 的 `@theme`。组件只消费语义 token，不写裸色值、任意 px 字号、裸圆角、裸 z-index、裸动效时长。
+- 颜色：`--color-*`（canvas/surface/ink/accent/ok/warn/bad/idle）；语义色只表达状态，不作为装饰。
+- 字号：`--text-*`（micro/meta/compact/body/lead/stat/section-sm/section/hero/title/page-title/display）；12/14 分别落在 meta/body。
+- 形状：`--radius-tile` / `--radius-card` / `--radius-pill`；控件高度：`--spacing-control-sm` / `--spacing-control` / `--spacing-touch`。
+- 层级：`--z-local` / `--z-sticky` / `--z-nav` / `--z-overlay`；动效：`--motion-fast` / `--motion-base` / `--motion-slow` / `--motion-shimmer`，统一 `--ease-standard`。
+- 焦点：`--focus-ring-color` / `--focus-ring-width` / `--focus-ring-offset` / `--focus-halo` / `--focus-halo-bad`；键盘焦点必须可见，输入框错误态用红色 halo。
+- 状态：`--opacity-disabled`；骨架屏 1.6s 微光，`prefers-reduced-motion` 下关闭。
+- 原生 `select` 通过 `Select` 原语统一：默认 `.select`，筛选器用 `pill`，紧凑表单用 `compact`；弹层通过 `color-scheme` + `appearance: base-select` + `::picker(select)` 纳入深浅主题和圆角 token，不支持 `base-select` 的浏览器至少跟随系统主题。
+- 输入框和 Select 的高度只走 `--spacing-control-sm` / `--spacing-control` / `--spacing-touch`，禁用态统一 `--opacity-disabled`；组件不再自己叠 `min-h-11` / `sm:min-h-0`。
+- `theme-color` 随手动浅/深主题更新；Firefox 使用 token 色滚动条，WebKit 使用同一 token 色。
+- CI 由 `scripts/check_design_tokens.py` 守门，禁止任意 px 字号、裸圆角、裸 z-index、`min-h-11`、`transition-all` 和业务源码裸色值。
+- Vercel 官方 `design.md` 是报告网站品牌指南，不是 CloudPath 的 token 来源。只吸收其判断原则，不引入 `vbg-*` 类名、色值或圆角；本地参考文件在 `.local/design/vercel-design.md`，不提交仓库。

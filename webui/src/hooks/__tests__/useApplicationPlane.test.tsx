@@ -78,6 +78,16 @@ describe('应用查询与单例实时通道的接线', () => {
     expect(http.calls.map((call) => call.url)).toEqual(['/api/auth/me'])
   })
 
+  it('open L0 以匿名身份读取应用数据，写权限仍由 appActionScope 收窄', async () => {
+    useAuth.setState({ status: 'open', user: null })
+    const http = installFetch((url) => appResponse(url))
+    const { result } = renderHook(() => useApplicationPlane('app-a'), { wrapper: wrapper() })
+    await advance()
+    expect(result.current.canRead).toBe(true)
+    expect(result.current.records.data?.records).toEqual([appRecord()])
+    expect(http.to('/app-a/records')).toHaveLength(1)
+  })
+
   it('紧邻的不同实例通知不会吞掉当前实例的更新；突发推送只补读一次', async () => {
     let record = appRecord('same-record', { count: 1 })
     const http = installFetch((url) => appResponse(url, { records: [record] }))

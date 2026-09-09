@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError, api } from '@/lib/api'
 import { useLive } from '@/store/ws'
-import { authIdentity, useAuth } from '@/store/auth'
+import { authIdentity, authReady, useAuth } from '@/store/auth'
 
 export const APP_RECORD_PAGE_SIZE = 20
 
@@ -11,13 +11,13 @@ export function useApplicationPlane(instanceID: string, offset = 0, recordType =
   const qc = useQueryClient()
   const tenantID = useAuth((s) => s.user?.tenant_id)
   const userID = useAuth((s) => s.user?.id)
-  const authenticated = useAuth((s) => s.status === 'in')
-  // 服务令牌没有账号 ID（id=0），仍可拥有已认证的租户身份。
-  const canRead = authenticated && (tenantID ?? 0) > 0 && userID != null && Boolean(instanceID)
+  const authStatus = useAuth((s) => s.status)
+  // open（L0/认证探针不可用）允许读；账号模式仍必须有合法租户身份，避免把缺租户的会话读成他人数据。
+  const canRead = authReady(authStatus) && (authStatus === 'open' || ((tenantID ?? 0) > 0 && userID != null)) && Boolean(instanceID)
   const status = useLive((s) => s.status)
   const identity = useAuth(authIdentity)
   // Lifecycle is part of the key: a slow response from the previous run cannot restore its actions.
-  const scope = ['application-plane', tenantID, userID, instanceID, identity, lifecycleKey] as const
+  const scope = ['application-plane', authStatus, tenantID ?? null, userID ?? null, instanceID, identity, lifecycleKey] as const
 
   useEffect(() => {
     if (!canRead) return
@@ -27,7 +27,7 @@ export function useApplicationPlane(instanceID: string, offset = 0, recordType =
       if (timer !== undefined) return
       timer = setTimeout(() => {
         timer = undefined
-        void qc.invalidateQueries({ queryKey: ['application-plane', tenantID, userID, instanceID] })
+        void qc.invalidateQueries({ queryKey: ['application-plane', authStatus, tenantID ?? null, userID ?? null, instanceID] })
       }, 80)
     }
     const unsubscribe = useLive.subscribe((next, previous) => {

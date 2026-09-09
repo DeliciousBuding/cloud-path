@@ -29,7 +29,7 @@ func TestPluginStatusContractRoundTrip(t *testing.T) {
 			PluginID: "io.example.driver", Version: "1.2.3", Kind: "Driver", Protocol: 1,
 			Digest: "abc", TrustMode: "verified-registry", Verified: true,
 			Permissions:   PluginPermissionsData{Hardware: []string{"serial"}, Secrets: []string{"api_token"}},
-			Contributions: PluginContributionsData{Drivers: []PluginDriverContributionData{{ID: "example"}}},
+			Contributions: PluginContributionsData{Drivers: []PluginDriverContributionData{{ID: "example", UI: &PluginUIData{APIVersion: 1, Device: &PluginUIDeviceData{Sections: []PluginUISectionData{{Type: "status"}}}}}}},
 		}},
 		ObservedInstances: []PluginObservedInstanceData{{
 			InstanceID: "instance-1", PluginID: "io.example.driver", Version: "1.2.3",

@@ -48,9 +48,9 @@ export function useApplicationAction(instanceID: string, job: AppJobView, schema
     onSettled: () => {
       sending.current = false
       if (!current()) return
-      const user = useAuth.getState().user!
+      const state = useAuth.getState()
       // Failure/timeout can still have produced records. REST remains their only source of truth.
-      void qc.invalidateQueries({ queryKey: ['application-plane', user.tenant_id, user.id, instanceID] })
+      void qc.invalidateQueries({ queryKey: ['application-plane', state.status, state.user?.tenant_id ?? null, state.user?.id ?? null, instanceID] })
     },
   })
 

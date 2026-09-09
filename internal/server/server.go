@@ -853,6 +853,7 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/api/overview", s.handleOverview)
 			r.Get("/api/plugins", s.handleListPlugins)
 			r.Get("/api/plugins/{pluginID}", s.handleGetPlugin)
+			r.Get("/api/plugin-ui/assets/{pluginID}/{version}/*", s.handlePluginUIAsset)
 			r.Get("/api/plugin-instances", s.handleListPluginInstances)
 			r.Get("/api/plugin-instances/{id}", s.handleGetPluginInstance)
 			// Application Data Plane（Milestone D1）：应用产出通用读面。

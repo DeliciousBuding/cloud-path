@@ -104,6 +104,12 @@ jobs:
         working-directory: webui
         run: pnpm test -- --run
 
+      - name: Design token self-test
+        run: python scripts/check_design_tokens.py --self-test
+
+      - name: Design token drift gate
+        run: python scripts/check_design_tokens.py
+
       - name: Build frontend
         working-directory: webui
         run: pnpm build

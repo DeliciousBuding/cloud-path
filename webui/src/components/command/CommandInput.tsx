@@ -11,5 +11,5 @@ export function CommandInput({ deviceId, targetLabel, action }: { deviceId: stri
     description={action.hint ?? ''}
     emptyHint="填写参数后即可执行。" validationSource="设备端" showTitle={false}
     renderSubmit={(args, error) => <CommandButton deviceId={deviceId} targetLabel={targetLabel} action={action} args={args}
-      disabled={!!error} className="min-h-11 w-full sm:min-h-0 sm:w-auto" />} />
+      disabled={!!error} className="min-h-touch w-full sm:min-h-0 sm:w-auto" />} />
 }

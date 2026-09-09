@@ -141,7 +141,7 @@ export default function Setup() {
             <span
               aria-current={i === step ? 'step' : undefined}
               className={cn(
-                'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold',
+                'flex h-6 w-6 shrink-0 items-center justify-center rounded-pill text-meta font-semibold',
                 i < step ? 'bg-accent text-accent-ink'
                   : i === step ? 'bg-accent/15 text-accent'
                     : 'bg-ink-3/12 text-ink-3',
@@ -150,13 +150,13 @@ export default function Setup() {
               {i < step ? <Check size={13} strokeWidth={2.5} /> : i + 1}
             </span>
             <span className={cn(
-              'ml-2 text-xs sm:hidden',
+              'ml-2 text-meta sm:hidden',
               i === step ? 'font-medium text-ink' : 'text-ink-3',
             )}>
               {item.short}
             </span>
             <span className={cn(
-              'ml-2 hidden text-xs sm:block',
+              'ml-2 hidden text-meta sm:block',
               i === step ? 'font-medium text-ink' : 'text-ink-3',
             )}>
               {item.label}
@@ -171,28 +171,28 @@ export default function Setup() {
       {step === 0 && (
         <div className="space-y-4">
           {phase === 'checking' && (
-            <p className="flex items-center gap-2 text-sm text-ink-2">
+            <p className="flex items-center gap-2 text-body text-ink-2">
               <Spinner /> 正在连接 CloudPath…
             </p>
           )}
           {phase === 'ok' && health && (
-            <div className="rounded-lg bg-ok/10 p-4">
-              <p className="flex items-center gap-2 text-sm font-medium text-ok">
+            <div className="rounded-tile bg-ok/10 p-4">
+              <p className="flex items-center gap-2 text-body font-medium text-ok">
                 <Check size={15} strokeWidth={2.5} /> CloudPath 已就绪
               </p>
-              <p className="mt-1 text-xs break-words text-ink-2">版本 <span className="font-mono">{health.version}</span></p>
+              <p className="mt-1 text-meta break-words text-ink-2">版本 <span className="font-mono">{health.version}</span></p>
               {alreadyIn && (
-                <p className="mt-2 text-xs leading-relaxed text-ink-2">
+                <p className="mt-2 text-meta leading-relaxed text-ink-2">
                   你已经登录了，无需再初始化。
                 </p>
               )}
             </div>
           )}
           {phase === 'fail' && (
-            <div className="rounded-lg bg-bad/10 p-4">
-              <p className="text-sm font-medium text-bad">暂时无法连接 CloudPath</p>
-              <p className="mt-1 break-words text-xs text-ink-2">{probeError}</p>
-              <p className="mt-1 text-xs text-ink-3">请确认 CloudPath 正在运行，然后重试。</p>
+            <div className="rounded-tile bg-bad/10 p-4">
+              <p className="text-body font-medium text-bad">暂时无法连接 CloudPath</p>
+              <p className="mt-1 break-words text-meta text-ink-2">{probeError}</p>
+              <p className="mt-1 text-meta text-ink-3">请确认 CloudPath 正在运行，然后重试。</p>
             </div>
           )}
           <div className="flex gap-2">
@@ -215,9 +215,9 @@ export default function Setup() {
       {step === 1 && (
         redirectToLogin ? (
           <div className="space-y-4">
-            <div role="alert" className="rounded-lg bg-warn/12 p-3.5 text-[13px] leading-relaxed break-words text-warn">
+            <div role="alert" className="rounded-tile bg-warn/12 p-3.5 text-compact leading-relaxed break-words text-warn">
               {formError}
-              <Link to="/login" className="link mt-2 flex items-center gap-1 text-[13px]">
+              <Link to="/login" className="link mt-2 flex items-center gap-1 text-compact">
                 <LogIn size={13} /> 去登录页
               </Link>
             </div>
@@ -232,10 +232,10 @@ export default function Setup() {
           </div>
         ) : (
         <form onSubmit={onCreate} noValidate className="space-y-4">
-          <div className="rounded-lg bg-surface-2 p-3.5">
+          <div className="rounded-tile bg-surface-2 p-3.5">
             <div className="flex items-start gap-2">
               <ShieldAlert size={14} className="mt-0.5 shrink-0 text-warn" />
-              <div className="min-w-0 text-[12px] leading-relaxed text-ink-2">
+              <div className="min-w-0 text-meta leading-relaxed text-ink-2">
                 <p>这里创建的是<span className="font-semibold text-ink">首个管理员账号</span>。完成后：</p>
                 <ul className="mt-2 list-disc space-y-1 pl-4">
                   <li>只有已登录的成员可以进入平台。</li>
@@ -278,7 +278,7 @@ export default function Setup() {
                 aria-label={reveal ? '隐藏密码' : '显示密码'}
                 title={reveal ? '隐藏密码' : '显示密码'}
                 aria-pressed={reveal}
-                className="flex h-7 w-7 items-center justify-center rounded-full text-ink-3 transition-colors hover:text-ink"
+                className="flex h-7 w-7 items-center justify-center rounded-pill text-ink-3 transition-colors hover:text-ink"
               >
                 {reveal ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
@@ -298,7 +298,7 @@ export default function Setup() {
           />
 
           {formError && (
-            <div role="alert" className="rounded-lg bg-bad/10 p-3.5 text-[13px] leading-relaxed break-words text-bad">
+            <div role="alert" className="rounded-tile bg-bad/10 p-3.5 text-compact leading-relaxed break-words text-bad">
               {formError}
             </div>
           )}
@@ -320,8 +320,8 @@ export default function Setup() {
         <div className="space-y-4 text-center">
           <span className="text-ok"><PartyPopper size={22} /></span>
           <div>
-            <p className="text-[15px] font-semibold">设置完成</p>
-            <p className="mt-1 text-[13px] leading-relaxed break-words text-ink-2">
+            <p className="text-lead font-semibold">设置完成</p>
+            <p className="mt-1 text-compact leading-relaxed break-words text-ink-2">
               管理员账号 <span className="font-mono font-medium text-ink">{createdUser || username}</span> 已创建，
               并且你已经登录。现在只有登录后的成员可以访问平台。
             </p>
@@ -337,8 +337,8 @@ export default function Setup() {
               没有这个后果，此时插一段警告只是噪音。判据取步骤 1 的 /healthz 快照——
               那时还没进账号模式，边缘能连上；未携带有效令牌的连接会在启用账号验证后断开。 */}
           {hasConnectedFleet && (
-            <div className="rounded-lg bg-surface-2 p-3.5 text-left">
-              <div className="flex items-start gap-2 text-[12px] leading-relaxed text-ink-2">
+            <div className="rounded-tile bg-surface-2 p-3.5 text-left">
+              <div className="flex items-start gap-2 text-meta leading-relaxed text-ink-2">
                 <ShieldAlert size={14} className="mt-0.5 shrink-0 text-warn" />
                 <div className="min-w-0">
                   启用账号验证后，<span className="font-semibold text-ink">未配置有效网关令牌的已接入网关会被断开</span>。

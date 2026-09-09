@@ -36,6 +36,13 @@ shasum -a 256 -c checksums.txt --ignore-missing      # macOS
 certutil -hashfile <文件> SHA256                      # Windows（逐项对照）
 ```
 
+## Unreleased
+
+- 插件 UI：Manifest 新增声明式 `ui` 契约与真实 schema 校验，支持 Application 导航/页面、Driver 设备扩展、受控 custom section；公开 API 与插件目录完成白名单投影，旧 manifest 无 `ui` 时完全兼容。
+- 插件 UI：新增 `GET /api/plugin-ui/assets/{pluginID}/{version}/{path:.*}`，只服务已声明 custom entry 的本地 AppHost 插件 `ui/` 子树；账号模式强制认证，open 模式按空租户可见性校验，路径/symlink/MIME/大小均 fail-closed。
+- 插件目录：同一 `plugin_id` 先按 semver 取最高版本，同版本 Edge 事实优先，避免旧 Edge 安装遮蔽新版 AppHost Application。
+- 工程：全仓静态检查清零；`docs/api.md` 与 `docs/architecture/plugin-ui.md` 同步 UI 与资产端点契约。
+
 ## v0.2.22 — 2026-09-09
 
 ### 行为修复

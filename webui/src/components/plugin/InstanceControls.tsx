@@ -48,7 +48,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
     }
   }
 
-  if (readOnly) return <p className="text-sm text-ink-3">当前账号只能查看，不能修改这个项目。</p>
+  if (readOnly) return <p className="text-body text-ink-3">当前账号只能查看，不能修改这个项目。</p>
 
   const toggleLabel = v.desired.enabled ? '停用' : '启用'
   const needsReapply = v.drift || v.stale || !v.has_observed
@@ -85,7 +85,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
 
       {variant === 'detail' && (
         <details className="mt-3 border-t border-hairline pt-3">
-          <summary className="flex min-h-11 cursor-pointer items-center text-xs text-ink-2">更多操作</summary>
+          <summary className="flex min-h-touch cursor-pointer items-center text-meta text-ink-2">更多操作</summary>
           <button
             type="button" className="btn btn-danger-ghost mt-2" disabled={busy}
             onClick={() => { setPurge(false); setDeleteOpen(true) }}
@@ -105,7 +105,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
         body={
           <>
             <p>请先核对下面新增的权限，确认后再保存：</p>
-            <div className="mt-3 rounded-lg bg-surface-2 p-3">
+            <div className="mt-3 rounded-tile bg-surface-2 p-3">
               <PermissionList
                 permissions={catalog?.permissions}
                 emptyHint="可用插件列表中没有这个插件的权限信息，无法核对，建议先确认插件来源再重试。"
@@ -136,7 +136,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
                 ? `还没有收到${host}的运行状态。重新应用可能会重启这个项目，请确认后再继续。`
                 : `${host}还没有应用最新设置。重新应用可能会重启这个项目，请确认后再继续。`}
             </p>
-            <p className="mt-2 text-xs text-ink-2">
+            <p className="mt-2 text-meta text-ink-2">
               {v.edge_id !== 'server' && !v.edge_online && '注意：该网关当前离线，重新连接后才会应用。'}
               {v.edge_id !== 'server' && v.edge_online && '该网关在线，通常会立即开始同步。'}
               {v.edge_id === 'server' && '由中心服务处理；请以更新后的运行状态为准。'}
@@ -146,10 +146,10 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
         confirmLabel="重新应用"
         busy={reconcile.isPending}
         extra={
-          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg bg-surface-2 p-3">
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-tile bg-surface-2 p-3">
             <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)}
               className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
-            <span className="min-w-0 text-[12px] leading-relaxed">
+            <span className="min-w-0 text-meta leading-relaxed">
               强制重新应用：即使{host}认为当前设置已经生效，也再执行一次
             </span>
           </label>
@@ -173,7 +173,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
             <p>
               删除后，{host}会在下一次更新时停止这个项目。操作会留下记录。
             </p>
-            <p className="mt-2 text-xs text-ink-3">
+            <p className="mt-2 text-meta text-ink-3">
               运行位置：{v.edge_id === 'server' ? '中心服务' : `网关 ${v.edge_id || '—'}`} · 版本：{v.desired.version || '—'}
             </p>
           </>
@@ -182,10 +182,10 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
         busy={remove.isPending}
         requireAck="我确认要删除这个运行实例。"
         extra={
-          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg bg-surface-2 p-3">
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-tile bg-surface-2 p-3">
             <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)}
               className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
-            <span className="min-w-0 text-[12px] leading-relaxed">
+            <span className="min-w-0 text-meta leading-relaxed">
               同时删除运行数据：该应用保存的数据会一并删除，<span className="font-semibold text-bad">且无法恢复</span>
             </span>
           </label>

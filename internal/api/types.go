@@ -225,15 +225,17 @@ type PluginPermissionsData struct {
 
 // PluginDriverContributionData 是 Driver 插件对外贡献的稳定公开元数据。
 type PluginDriverContributionData struct {
-	ID        string `json:"id"`
-	Title     string `json:"title,omitempty"`
-	Discovery string `json:"discovery,omitempty"`
+	ID        string        `json:"id"`
+	Title     string        `json:"title,omitempty"`
+	Discovery string        `json:"discovery,omitempty"`
+	UI        *PluginUIData `json:"ui,omitempty"`
 }
 
 // PluginApplicationContributionData 是 Application 插件对外贡献的稳定公开元数据。
 type PluginApplicationContributionData struct {
-	ID    string `json:"id"`
-	Title string `json:"title,omitempty"`
+	ID    string        `json:"id"`
+	Title string        `json:"title,omitempty"`
+	UI    *PluginUIData `json:"ui,omitempty"`
 }
 
 // PluginConnectorContributionData 是 Connector 插件对外贡献的稳定公开元数据。

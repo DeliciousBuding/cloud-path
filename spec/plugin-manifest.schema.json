@@ -39,7 +39,8 @@
               "descriptor": {"type": "string"},
               "configSchema": {"type": "string"},
               "discovery": {"type": "string"},
-              "capabilityCatalog": {"type": "string"}
+              "capabilityCatalog": {"type": "string"},
+              "ui": {"type": "object", "description": "Declarative UI contribution validated against spec/plugin-ui.schema.json."}
             }
           }
         },
@@ -51,7 +52,8 @@
             "properties": {
               "id": {"type": "string", "description": "Stable application contribution id (distinct from the plugin id)."},
               "title": {"type": "string"},
-              "requirements": {"type": "array", "items": {"type": "object"}}
+              "requirements": {"type": "array", "items": {"type": "object"}},
+              "ui": {"type": "object", "description": "Declarative UI contribution validated against spec/plugin-ui.schema.json."}
             }
           }
         },

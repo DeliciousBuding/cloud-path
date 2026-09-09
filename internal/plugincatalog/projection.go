@@ -1,6 +1,7 @@
 package plugincatalog
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/DeliciousBuding/cloud-path/internal/api"
@@ -84,6 +85,9 @@ func (c *projectionCatalog) Plugins(tenant string) ([]PluginView, error) {
 		views = append(views, pluginViewFromInstallation(in))
 	}
 	sort.Slice(views, func(i, j int) bool { return views[i].ID < views[j].ID })
+	if err := validateUIRouteConflicts(views); err != nil {
+		return nil, err
+	}
 	return capList(views), nil
 }
 
@@ -185,7 +189,7 @@ func driverViews(in []api.PluginDriverContributionData) []DriverContributionView
 	}
 	out := make([]DriverContributionView, 0, len(in))
 	for _, d := range in {
-		out = append(out, DriverContributionView{ID: d.ID, Title: d.Title, Discovery: d.Discovery})
+		out = append(out, DriverContributionView{ID: d.ID, Title: d.Title, Discovery: d.Discovery, UI: clonePluginUI(d.UI)})
 	}
 	return out
 }
@@ -196,7 +200,7 @@ func applicationViews(in []api.PluginApplicationContributionData) []ApplicationC
 	}
 	out := make([]ApplicationContributionView, 0, len(in))
 	for _, a := range in {
-		out = append(out, ApplicationContributionView{ID: a.ID, Title: a.Title})
+		out = append(out, ApplicationContributionView{ID: a.ID, Title: a.Title, UI: clonePluginUI(a.UI)})
 	}
 	return out
 }
@@ -222,4 +226,102 @@ func cloneConfig(in map[string]string) map[string]string {
 		out[k] = v
 	}
 	return out
+}
+
+// validateUIRouteConflicts fails the whole catalog projection when two visible
+// Application contributions claim the same stable route. Silent last-writer
+// wins would make navigation non-deterministic and is never acceptable.
+func validateUIRouteConflicts(views []PluginView) error {
+	seen := map[string]string{}
+	for _, plugin := range views {
+		for _, app := range plugin.Contributes.Applications {
+			if app.UI == nil || app.UI.Navigation == nil || app.UI.Navigation.Route == "" {
+				continue
+			}
+			route := app.UI.Navigation.Route
+			if previous, exists := seen[route]; exists && previous != plugin.ID {
+				return fmt.Errorf("plugin UI route %q conflicts between %s and %s", route, previous, plugin.ID)
+			}
+			seen[route] = plugin.ID
+		}
+	}
+	return nil
+}
+
+func clonePluginUI(in *api.PluginUIData) *api.PluginUIData {
+	if in == nil {
+		return nil
+	}
+	out := &api.PluginUIData{APIVersion: in.APIVersion}
+	if in.Navigation != nil {
+		n := *in.Navigation
+		out.Navigation = &n
+	}
+	if len(in.Pages) > 0 {
+		out.Pages = make([]api.PluginUIPageData, 0, len(in.Pages))
+		for _, page := range in.Pages {
+			out.Pages = append(out.Pages, api.PluginUIPageData{
+				ID: page.ID, Title: page.Title, Sections: cloneUISections(page.Sections),
+			})
+		}
+	}
+	if in.Device != nil {
+		out.Device = &api.PluginUIDeviceData{Sections: cloneUISections(in.Device.Sections)}
+	}
+	return out
+}
+
+func cloneUISections(in []api.PluginUISectionData) []api.PluginUISectionData {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]api.PluginUISectionData, 0, len(in))
+	for _, section := range in {
+		clone := section
+		clone.Text = SanitizeDetail(section.Text)
+		clone.Scopes = append([]string(nil), section.Scopes...)
+		clone.Fields = sanitizeUIFields(section.Fields)
+		out = append(out, clone)
+	}
+	return out
+}
+
+func sanitizeUIFields(in []map[string]any) []map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(in))
+	for _, field := range in {
+		if field == nil {
+			out = append(out, nil)
+			continue
+		}
+		clone := make(map[string]any, len(field))
+		for k, v := range field {
+			clone[k] = sanitizeUIValue(v)
+		}
+		out = append(out, clone)
+	}
+	return out
+}
+
+func sanitizeUIValue(v any) any {
+	switch value := v.(type) {
+	case string:
+		return SanitizeDetail(value)
+	case []any:
+		out := make([]any, len(value))
+		for i := range value {
+			out[i] = sanitizeUIValue(value[i])
+		}
+		return out
+	case map[string]any:
+		out := make(map[string]any, len(value))
+		for k, child := range value {
+			out[k] = sanitizeUIValue(child)
+		}
+		return out
+	default:
+		return v
+	}
 }

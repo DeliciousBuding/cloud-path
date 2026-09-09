@@ -93,7 +93,7 @@ task run          # 生产模式本地全栈（内嵌 UI）
 - **Go**：`gofmt` + `go vet` 必须干净；错误要包裹上下文（`fmt.Errorf("…: %w", err)`）；
   结构化日志用 `slog`（不用 `fmt.Println`）；并发原语优先 ctx 取消而非 close(chan)。
 - **前端**：TypeScript `strict` + `noUnusedLocals`；数据层 REST 走 TanStack Query、实时态走
-  zustand（`store/ws.ts` 单例连接）；样式只用设计系统里的 CSS 变量与工具类，不写死颜色；
+  zustand（`store/ws.ts` 单例连接）；样式只用设计系统里的语义 token 与工具类，不写死颜色、任意 px 字号、裸圆角、裸层级或裸动效时长，门禁 `scripts/check_design_tokens.py`；
   组件保持展示型（数据从 hooks 进）。
 - **命名**：目录/文件 kebab-case 或小写；Go 包名单词；前端组件 PascalCase。
 - **提交**：`type: 中文简述`（`feat|fix|docs|chore|refactor`），一次一个意图；

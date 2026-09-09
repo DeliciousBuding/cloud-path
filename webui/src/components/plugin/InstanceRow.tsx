@@ -27,11 +27,11 @@ export function InstanceRow({ v, catalog, onEdit }: {
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <StatusDot online={status.key === 'normal'} />
         <Link to={`/plugins/${encodeURIComponent(v.id)}`}
-          className="num inline-flex min-h-11 min-w-0 max-w-full items-center truncate text-[14px] font-semibold tracking-[-0.01em] no-underline hover:text-accent sm:min-h-0"
+          className="num inline-flex min-h-touch min-w-0 max-w-full items-center truncate text-body font-semibold tracking-[-0.01em] no-underline hover:text-accent sm:min-h-0"
           title={`${v.id} · 查看详情`}>
           {v.desired.instance_id || v.id}
         </Link>
-        <span className="flex min-w-0 items-center gap-1 text-[12px] text-ink-3"
+        <span className="flex min-w-0 items-center gap-1 text-meta text-ink-3"
           title={pluginDisplayName(catalog)}>
           <Boxes size={11} className="shrink-0" />
           <span className="min-w-0 truncate">{pluginDisplayName(catalog)}</span>
@@ -39,7 +39,7 @@ export function InstanceRow({ v, catalog, onEdit }: {
         <span className="ml-auto shrink-0"><Badge tone={status.tone}>{status.label}</Badge></span>
       </div>
 
-      <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-ink-3">
+      <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-meta text-ink-3">
         <span className="flex min-w-0 items-center gap-1">
           <Server size={11} className="shrink-0" />
           {serverHosted ? <span>中心服务</span> : (
@@ -52,26 +52,26 @@ export function InstanceRow({ v, catalog, onEdit }: {
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2.5">
-        <div className="min-w-0 rounded-lg bg-surface-2 px-3 py-2.5">
-          <p className="text-[12px] font-medium text-ink-3">保存的设置</p>
-          <p className="mt-1 flex min-w-0 items-baseline gap-1 text-[12px] font-medium"
+        <div className="min-w-0 rounded-tile bg-surface-2 px-3 py-2.5">
+          <p className="text-meta font-medium text-ink-3">保存的设置</p>
+          <p className="mt-1 flex min-w-0 items-baseline gap-1 text-meta font-medium"
             title={`${v.desired.enabled ? '已启用' : '已停用'} · ${v.desired.version}`}>
             <span className="shrink-0">{v.desired.enabled ? '已启用' : '已停用'}</span>
             <span className="shrink-0 text-ink-3">·</span>
             <span className="num min-w-0 truncate">{v.desired.version || '—'}</span>
           </p>
         </div>
-        <div className="min-w-0 rounded-lg bg-surface-2 px-3 py-2.5">
-          <p className="text-[12px] font-medium text-ink-3">当前运行情况</p>
+        <div className="min-w-0 rounded-tile bg-surface-2 px-3 py-2.5">
+          <p className="text-meta font-medium text-ink-3">当前运行情况</p>
           {v.has_observed ? (
             <>
-              <p className={`mt-1 break-words text-[12px] font-medium ${
+              <p className={`mt-1 break-words text-meta font-medium ${
                 status.tone === 'ok' ? 'text-ok' : status.tone === 'bad' ? 'text-bad'
                   : status.tone === 'warn' ? 'text-warn' : ''}`}
                 title={`${st.label} · ${v.observed?.version ?? '未给出版本'}`}>
                 {status.summary}
               </p>
-              <p className="mt-0.5 break-words text-[12px] text-ink-3">
+              <p className="mt-0.5 break-words text-meta text-ink-3">
                 {v.observed?.health
                   ? (hl.tone === 'idle' ? '健康状态暂未提供' : '健康：' + hl.label)
                   : '健康状态未上报'}
@@ -80,8 +80,8 @@ export function InstanceRow({ v, catalog, onEdit }: {
             </>
           ) : (
             <>
-              <p className="mt-1 truncate text-[12px] font-medium text-ink-2">状态待确认</p>
-              <p className="mt-0.5 min-w-0 truncate text-[12px] text-ink-3">
+              <p className="mt-1 truncate text-meta font-medium text-ink-2">状态待确认</p>
+              <p className="mt-0.5 min-w-0 truncate text-meta text-ink-3">
                 {serverHosted ? '还没有收到中心服务的运行状态' : v.edge_online ? '网关在线，还没有收到运行状态' : '网关离线'}
               </p>
             </>
@@ -90,14 +90,14 @@ export function InstanceRow({ v, catalog, onEdit }: {
       </div>
 
       {status.needsAttention && status.next && (
-        <div className="mt-3 rounded-lg bg-warn/10 px-3 py-2.5 text-[12px] leading-relaxed text-ink-2">
+        <div className="mt-3 rounded-tile bg-warn/10 px-3 py-2.5 text-meta leading-relaxed text-ink-2">
           下一步：{status.next}
         </div>
       )}
 
-      <details className="mt-3 min-w-0 text-xs text-ink-2">
-        <summary className="flex min-h-11 cursor-pointer items-center">技术详情</summary>
-        <dl className="mt-2 space-y-1 rounded-lg bg-surface-2 px-3 py-2.5">
+      <details className="mt-3 min-w-0 text-meta text-ink-2">
+        <summary className="flex min-h-touch cursor-pointer items-center">技术详情</summary>
+        <dl className="mt-2 space-y-1 rounded-tile bg-surface-2 px-3 py-2.5">
           <div><dt className="inline">运行位置：</dt><dd className="inline">{hostLocation}</dd></div>
           <div><dt className="inline">运行方式：</dt><dd className="inline">{isolationLabel(v.desired.isolation)}</dd></div>
           <div><dt className="inline">最近更新：</dt><dd className="num inline">{v.last_ack_at ? fmtDateTime(v.last_ack_at) : '尚未更新'}</dd></div>

@@ -425,8 +425,8 @@ func (p *pluginPlane) forgetObserved(tenantID int64, edgeID, instanceID string) 
 // 它取代任何 fake/静态来源：安装物只来自 Edge 上报，期望态只来自 Server 权威存储。
 type pluginProjection struct{ s *Server }
 
-// installationCandidate 是安装物去重的候选行。serverHosted 只用于排序：
-// Edge 上报事实优先于中心 AppHost 事实；两者都不伪造 edge 归属。
+// installationCandidate 是安装物去重的候选行。排序先比较版本，再比较来源：
+// 同一版本 Edge 上报事实优先于中心 AppHost 事实；两者都不伪造 edge 归属。
 type installationCandidate struct {
 	row          api.PluginInstallationStatusData
 	edgeID       string
@@ -481,11 +481,11 @@ func installationCandidateLess(a, b installationCandidate) bool {
 	if a.row.PluginID != b.row.PluginID {
 		return a.row.PluginID < b.row.PluginID
 	}
-	if a.serverHosted != b.serverHosted {
-		return !a.serverHosted
-	}
 	if cmp := comparePluginVersions(a.row.Version, b.row.Version); cmp != 0 {
 		return cmp > 0
+	}
+	if a.serverHosted != b.serverHosted {
+		return !a.serverHosted
 	}
 	if a.edgeID != b.edgeID {
 		return a.edgeID < b.edgeID
@@ -498,7 +498,7 @@ func installationCandidateLess(a, b installationCandidate) bool {
 
 // Installations 返回租户可见的安装物投影。Edge 上报事实按租户过滤；AppHost
 // 的 Application 安装目录是 Server 级事实，所有租户可见。同一 plugin_id
-// Edge 优先于 AppHost，同源重版取最高 semver，并用 edge id 做稳定 tie-break。
+// 先取最高 semver，同版本 Edge 优先于 AppHost，并用 edge id 做稳定 tie-break。
 func (pr pluginProjection) Installations(tenant string) ([]api.PluginInstallationStatusData, error) {
 	s := pr.s
 	serverRows, err := s.appHost.installationStatuses()

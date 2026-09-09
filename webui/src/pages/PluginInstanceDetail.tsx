@@ -86,7 +86,7 @@ export default function PluginInstanceDetail() {
             : '可用插件列表中没有这个插件的权限信息。期望状态与实际状态不受影响。'}
         />
         {catalog?.verified && (
-          <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
+          <p className="mt-3 border-t border-hairline pt-3 text-meta leading-relaxed text-ink-3">
             该插件已通过来源验证，权限声明来自插件信息。
           </p>
         )}
@@ -98,7 +98,7 @@ export default function PluginInstanceDetail() {
 
       <Panel title={<span className="flex items-center gap-1.5"><SlidersHorizontal size={14} />应用设置</span>}>
         <ConfigTable config={instance.desired.config} />
-        <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
+        <p className="mt-3 border-t border-hairline pt-3 text-meta leading-relaxed text-ink-3">
           这里只显示设置内容；密钥只会显示名称，不会显示内容。
         </p>
       </Panel>
@@ -110,18 +110,18 @@ export default function PluginInstanceDetail() {
       <BackLink to="/plugins" label="应用与插件" />
 
       <header className="mb-5 flex flex-wrap items-center gap-2.5 fade-up">
-        <h1 className="metric num min-w-0 max-w-full break-all text-[24px] font-semibold sm:truncate" title={instance.id}>
+        <h1 className="metric num min-w-0 max-w-full break-all text-hero font-semibold sm:truncate" title={instance.id}>
           {instance.desired.instance_id || instance.id}
         </h1>
         {/* 插件/节点 ID 是机器标识：mono 文本，不用胶囊（状态才配胶囊） */}
-        <span className="flex min-w-0 items-center gap-1 text-[12px] text-ink-3"
+        <span className="flex min-w-0 items-center gap-1 text-meta text-ink-3"
           title={pluginDisplayName(catalog)}>
           <Puzzle size={11} className="shrink-0" />
           <span className="min-w-0 truncate">{pluginDisplayName(catalog)}</span>
         </span>
-        {serverHosted ? <span className="flex items-center gap-1 text-xs text-ink-2"><Server size={13} />中心服务</span> : <>
+        {serverHosted ? <span className="flex items-center gap-1 text-meta text-ink-2"><Server size={13} />中心服务</span> : <>
           <Link to={`/edges/${encodeURIComponent(instance.edge_id)}`}
-            className="flex min-w-0 max-w-full items-center gap-1 font-mono text-[11px] text-ink-3 no-underline transition-colors hover:text-accent"
+            className="flex min-w-0 max-w-full items-center gap-1 font-mono text-micro text-ink-3 no-underline transition-colors hover:text-accent"
             title={`网关 ${instance.edge_id}`}>
             <Server size={11} className="shrink-0" />
             <span className="min-w-0 truncate">网关 {instance.edge_id || '—'}</span>
@@ -160,7 +160,7 @@ export default function PluginInstanceDetail() {
           )}
 
           <details className="min-w-0">
-            <summary className="mb-4 flex min-h-11 cursor-pointer items-center text-sm text-ink-2">查看设置、权限与密钥</summary>
+            <summary className="mb-4 flex min-h-touch cursor-pointer items-center text-body text-ink-2">查看设置、权限与密钥</summary>
             {facts}
           </details>
         </>

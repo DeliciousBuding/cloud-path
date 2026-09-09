@@ -372,15 +372,87 @@ export interface PluginPermissionsData {
   secrets?: string[]
 }
 
+export type PluginUIVisibility = 'instance-enabled' | 'always'
+
+export type PluginUISectionType =
+  | 'status' | 'metrics' | 'form' | 'actions' | 'records' | 'timeline'
+  | 'table' | 'schedule' | 'chart' | 'markdown' | 'diagnostics' | 'custom'
+
+export type PluginUISource =
+  | 'instance' | 'bindings' | 'jobs' | 'manual-jobs' | 'records' | 'config'
+  | 'device' | 'device-actions' | 'diagnostics' | 'state' | 'events'
+
+export type PluginUIPresentation = 'list' | 'timeline' | 'table' | 'cards'
+
+export type PluginUIFieldType = 'string' | 'number' | 'integer' | 'boolean' | 'select' | 'textarea'
+
+/** Safe field declaration for a Core-rendered configuration form. */
+export interface PluginUIField {
+  key: string
+  label?: string
+  type?: PluginUIFieldType
+  description?: string
+  placeholder?: string
+  required?: boolean
+  enum?: (string | number | boolean)[]
+  minimum?: number
+  maximum?: number
+  pattern?: string
+  default?: unknown
+  secret?: boolean
+}
+
+/** One allowlisted section in a plugin page or device extension. */
+export interface PluginUISection {
+  type: PluginUISectionType
+  source?: PluginUISource
+  recordType?: string
+  presentation?: PluginUIPresentation
+  text?: string
+  /** Same-origin, package-relative asset path. Core rejects absolute, traversal and remote paths. */
+  entry?: string
+  /** Scoped bridge capabilities; the iframe still goes through tenant/RBAC checks on every call. */
+  scopes?: string[]
+  fields?: PluginUIField[]
+}
+
+export interface PluginUINavigation {
+  title: string
+  icon?: string
+  order?: number
+  route: string
+  visibility?: PluginUIVisibility
+}
+
+export interface PluginUIPage {
+  id: string
+  title: string
+  sections: PluginUISection[]
+}
+
+export interface PluginUIDeviceContribution {
+  sections?: PluginUISection[]
+}
+
+/** Declarative plugin UI contribution. Arbitrary scripts/HTML/CSS are never accepted here. */
+export interface PluginUIContribution {
+  apiVersion: 1
+  navigation?: PluginUINavigation
+  pages?: PluginUIPage[]
+  device?: PluginUIDeviceContribution
+}
+
 export interface PluginDriverContributionData {
   id: string
   title?: string
   discovery?: string
+  ui?: PluginUIContribution
 }
 
 export interface PluginApplicationContributionData {
   id: string
   title?: string
+  ui?: PluginUIContribution
 }
 
 export interface PluginConnectorContributionData {
@@ -599,6 +671,7 @@ export interface PluginCatalogDriverView {
   configSchema?: string
   discovery?: string
   capabilityCatalog?: string
+  ui?: PluginUIContribution
 }
 
 export interface PluginCatalogContributesView {

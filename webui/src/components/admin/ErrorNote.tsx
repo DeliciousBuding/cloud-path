@@ -7,9 +7,9 @@ export function ErrorNote({ message, onRetry, className }: {
   className?: string
 }) {
   return (
-    <div role="alert" className={cn('rounded-lg border border-bad/30 bg-bad/10 px-4 py-3', className)}>
+    <div role="alert" className={cn('rounded-tile border border-bad/30 bg-bad/10 px-4 py-3', className)}>
       {/* 服务端错误文本长度不可控：必须可断行，否则 390px 撑出横向滚动 */}
-      <p className="text-[13px] leading-relaxed text-bad break-words">{message}</p>
+      <p className="text-compact leading-relaxed text-bad break-words">{message}</p>
       {onRetry && (
         <button type="button" className="btn btn-ghost mt-2.5" onClick={onRetry}>重试</button>
       )}

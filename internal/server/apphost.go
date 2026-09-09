@@ -1255,28 +1255,7 @@ func installationStatusFromManifest(m *registry.Manifest, locked registry.Locked
 		},
 		Capabilities: append([]string(nil), m.Capabilities...),
 	}
-	if m.Contributes != nil {
-		out.Contributions = api.PluginContributionsData{
-			Drivers:      make([]api.PluginDriverContributionData, 0, len(m.Contributes.Drivers)),
-			Applications: make([]api.PluginApplicationContributionData, 0, len(m.Contributes.Applications)),
-			Connectors:   make([]api.PluginConnectorContributionData, 0, len(m.Contributes.Connectors)),
-		}
-		for _, d := range m.Contributes.Drivers {
-			out.Contributions.Drivers = append(out.Contributions.Drivers, api.PluginDriverContributionData{
-				ID: d.ID, Title: d.Title, Discovery: d.Discovery,
-			})
-		}
-		for _, a := range m.Contributes.Applications {
-			out.Contributions.Applications = append(out.Contributions.Applications, api.PluginApplicationContributionData{
-				ID: a.ID, Title: a.Title,
-			})
-		}
-		for _, c := range m.Contributes.Connectors {
-			out.Contributions.Connectors = append(out.Contributions.Connectors, api.PluginConnectorContributionData{
-				ID: c.ID, Title: c.Title, Direction: c.Direction, Host: c.Host,
-			})
-		}
-	}
+	out.Contributions = m.PublicContributions()
 	return out
 }
 

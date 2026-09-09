@@ -81,6 +81,38 @@ describe('任务导向导航', () => {
     ])
   })
 
+  it('已启用且已验证的 Application 插件生成动态业务入口，Driver 不进入主导航', async () => {
+    installFetch((url) => {
+      if (url === '/healthz') return stubResponse(200, health)
+      if (url === '/api/plugins') return stubResponse(200, { plugins: [
+        {
+          id: 'example.pillbox', kind: 'application', version: 'v1', source: '', digest: '', verified: true,
+          protocol: 1, permissions: {}, contributes: { applications: [{ id: 'pillbox', title: '药盒', ui: {
+            apiVersion: 1, navigation: { title: '药盒提醒', route: 'pillbox' }, pages: [{ id: 'home', title: '药盒提醒', sections: [{ type: 'status' }] }],
+          } }] },
+        },
+        {
+          id: 'example.driver', kind: 'driver', version: 'v1', source: '', digest: '', verified: true,
+          protocol: 1, permissions: {}, contributes: { drivers: [{ id: 'driver', title: '驱动', ui: {
+            apiVersion: 1, navigation: { title: '驱动页面', route: 'driver' },
+          } }] },
+        },
+      ] })
+      if (url === '/api/plugin-instances') return stubResponse(200, { instances: [{
+        id: 'server/pillbox-a', tenant_id: 1, edge_id: 'server', desired: {
+          instance_id: 'pillbox-a', plugin_id: 'example.pillbox', version: 'v1', enabled: true,
+          isolation: 'shared', revision: 1, updated_at: 1,
+        }, has_observed: true, observed: { state: 'running', health: 'HEALTHY', restart_count: 0 },
+        edge_online: false, desired_revision: 1, applied_revision: 1, drift: false, stale: false,
+      }] })
+      return stubResponse(404, {})
+    })
+    renderLayout()
+    const nav = screen.getAllByRole('navigation', { name: '主导航' })[0] as HTMLElement
+    expect(await within(nav).findByRole('link', { name: '药盒提醒' })).toHaveAttribute('href', '/apps/pillbox')
+    expect(within(nav).queryByRole('link', { name: '驱动页面' })).not.toBeInTheDocument()
+  })
+
   it('移动端“更多”支持 Escape 和点击外部关闭', async () => {
     const user = userEvent.setup()
     renderLayout()

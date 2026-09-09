@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {Activity, ArrowRight, Braces, Command, Grid3x3, History, LayoutDashboard, RadioTower, Sparkles, Zap} from 'lucide-react'
 import {
-  BackLink, Badge, EmptyState, ErrorState, KeyValue, Panel, Segmented, StatusDot, TabBar, TabPanel,
+  BackLink, Badge, EmptyState, ErrorState, KeyValue, Panel, Segmented, Select, StatusDot, TabBar, TabPanel,
 } from '@/components/ui'
 import type { TabItem } from '@/components/ui'
 import {
@@ -300,16 +300,16 @@ export default function DeviceDetail() {
 
       <header className="mb-5 flex flex-wrap items-center gap-3 fade-up">
         <StatusDot online={d.online} />
-        <h1 className="min-w-0 max-w-full truncate text-[24px] font-semibold tracking-[-0.01em]" title={d.id}>
+        <h1 className="min-w-0 max-w-full truncate text-hero font-semibold tracking-[-0.01em]" title={d.id}>
           {d.name || deviceId}
         </h1>
         <Badge tone={deviceStatusMeta(d.online, descriptor?.status).tone}>{deviceStatusMeta(d.online, descriptor?.status).label}</Badge>
-        <span className="num ml-auto truncate font-mono text-[11px] text-ink-3" title={`设备编号 ${d.id}`}>
+        <span className="num ml-auto truncate font-mono text-micro text-ink-3" title={`设备编号 ${d.id}`}>
           {d.online ? `更新于 ${timeAgo(d.updated_at)}` : `最后见 ${timeAgo(d.last_seen)}`}
         </span>
       </header>
 
-      <div className="mb-5 [&_button]:min-h-11 sm:[&_button]:min-h-0">
+      <div className="mb-5 [&_button]:min-h-touch sm:[&_button]:min-h-0">
         <TabBar items={tabs} value={tab} onChange={setTab} label="设备详情分区" />
       </div>
 
@@ -322,7 +322,7 @@ export default function DeviceDetail() {
       )}
 
       {tab === 'advanced' && (
-        <div className="mb-5 [&_button]:min-h-11 sm:[&_button]:min-h-0">
+        <div className="mb-5 [&_button]:min-h-touch sm:[&_button]:min-h-0">
           <Segmented
             label="高级视图"
             options={[
@@ -344,7 +344,7 @@ export default function DeviceDetail() {
               {tiles.map((t, i) => <MetricTile key={`${t.label}-${i}`} v={t} />)}
             </div>
             {tiles.length === 0 && (
-              <p className="py-2 text-center text-sm text-ink-3">
+              <p className="py-2 text-center text-body text-ink-3">
                 {d.online ? '设备已连接，但还没有可呈现的主值' : '设备离线，暂无可呈现的主值'}
               </p>
             )}
@@ -363,12 +363,12 @@ export default function DeviceDetail() {
                 title={<span className="flex items-center gap-1.5"><Activity size={14} />最近活动</span>}
                 right={
                   <button type="button" onClick={() => setTab('events')}
-                    className="link flex items-center gap-0.5 text-xs">
+                    className="link flex items-center gap-0.5 text-meta">
                     查看记录 <ArrowRight size={12} />
                   </button>
                 }>
                 {events.length === 0
-                  ? <p className="py-6 text-center text-sm text-ink-3">还没有事件</p>
+                  ? <p className="py-6 text-center text-body text-ink-3">还没有事件</p>
                   : <EventFeed events={events} showDevice={false} limit={8} />}
               </Panel>
               <CommandHistory deviceId={key} targetLabel={d.name || deviceId} actions={commands.actions} limit={8} online={actionsOnline} />
@@ -384,7 +384,7 @@ export default function DeviceDetail() {
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-0.5">
               <span className="flex items-center gap-2">
                 <StatusDot online={d.online} />
-                <span className="text-[12px] font-medium text-ink-2">{d.online ? '实时' : '离线'}</span>
+                <span className="text-meta font-medium text-ink-2">{d.online ? '实时' : '离线'}</span>
                 {!d.online && <Badge tone="warn">展示最后一次更新的数据</Badge>}
               </span>
                 <Segmented
@@ -425,7 +425,7 @@ export default function DeviceDetail() {
                     />
                   </div>
                   {seriesKeys.length === 0 ? (
-                    <p className="py-8 text-center text-xs text-ink-3">
+                    <p className="py-8 text-center text-meta text-ink-3">
                       暂无趋势数据，设备更新数值后会自动开始采样
                     </p>
                   ) : (
@@ -437,14 +437,14 @@ export default function DeviceDetail() {
                         return (
                           <div key={k} className="card min-w-0 p-3.5">
                             <div className="flex items-baseline justify-between gap-2">
-                              <span className="min-w-0 truncate text-[12px] font-medium text-ink-2">
+                              <span className="min-w-0 truncate text-meta font-medium text-ink-2">
                                 {seriesLabel(k)}
                               </span>
                               <span className="flex shrink-0 items-baseline gap-1.5">
-                                <span className="num text-[13px] font-semibold tracking-[-0.01em]">
+                                <span className="num text-compact font-semibold tracking-[-0.01em]">
                                   {pts.length ? formatValue(pts[pts.length - 1].v) : '—'}
                                 </span>
-                                <span className="num text-[12px] text-ink-3">{pts.length} 点</span>
+                                <span className="num text-meta text-ink-3">{pts.length} 点</span>
                               </span>
                             </div>
                             <TrendChart points={pts} kind={chartKind} height={104} unit={seriesUnit(k)} />
@@ -453,7 +453,7 @@ export default function DeviceDetail() {
                       })}
                     </div>
                   )}
-                  <p className="mt-3 px-0.5 text-[12px] leading-relaxed text-ink-3">
+                  <p className="mt-3 px-0.5 text-meta leading-relaxed text-ink-3">
                     趋势只记录本页打开期间的数据（最多 240 点）；更早的数值请查事件与命令记录。
                   </p>
                 </div>
@@ -469,7 +469,7 @@ export default function DeviceDetail() {
             <div className="grid items-start gap-5 lg:grid-cols-3">
               {descriptorFailed
                 ? <Panel title="设备操作" className="lg:col-span-2">
-                  <p className="py-4 text-center text-sm text-ink-3">设备功能加载失败，操作列表暂不可用。</p>
+                  <p className="py-4 text-center text-body text-ink-3">设备功能加载失败，操作列表暂不可用。</p>
                 </Panel>
                 : <ActionPanel deviceId={key} targetLabel={d.name || deviceId} set={commands} online={actionsOnline} offlineReason={actionsOfflineReason} className="lg:col-span-2" />}
               {actuators.length > 0 && (
@@ -495,30 +495,30 @@ export default function DeviceDetail() {
           <div className="space-y-5">
             <CommandHistory deviceId={key} targetLabel={d.name || deviceId} actions={commands.actions} online={actionsOnline} />
             <details className="card overflow-hidden">
-              <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-4 py-3 text-[13px] font-semibold">
+              <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-4 py-3 text-compact font-semibold">
                 <span className="flex items-center gap-1.5"><Activity size={14} />设备事件</span>
-                <span className="num text-[12px] font-normal text-ink-3">{events.length} 条</span>
+                <span className="num text-meta font-normal text-ink-3">{events.length} 条</span>
               </summary>
               <div className="border-t border-hairline p-4">
                 {eventKinds.length > 1 && (
                   <div className="mb-3 flex items-center gap-2">
-                    <label htmlFor="ev-kind" className="shrink-0 text-[12px] text-ink-3">筛选</label>
-                    <select id="ev-kind" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}
-                      className="input input-sm min-h-11 min-w-0 max-w-[18rem] sm:min-h-0">
+                    <label htmlFor="ev-kind" className="shrink-0 text-meta text-ink-3">筛选</label>
+                    <Select id="ev-kind" compact value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}
+                      className="min-w-0 max-w-[18rem]">
                       <option value="">全部事件</option>
                       {eventKinds.map(([t, l]) => <option key={t} value={t}>{optionLabel(l, 40)}</option>)}
-                    </select>
+                    </Select>
                   </div>
                 )}
                 {evLoading && events.length === 0
                   ? <RowSkeleton rows={5} />
                   : shownEvents.length === 0
-                    ? <p className="py-4 text-center text-sm text-ink-3">还没有事件</p>
+                    ? <p className="py-4 text-center text-body text-ink-3">还没有事件</p>
                     : (
                       <>
                         <EventFeed events={shownEvents} showDevice={false} limit={30} dayGrouped />
                         {shownEvents.length > 30 && (
-                          <Link to="/activity" className="link mt-3 flex min-h-11 items-center gap-0.5 border-t border-hairline pt-3 text-xs">
+                          <Link to="/activity" className="link mt-3 flex min-h-touch items-center gap-0.5 border-t border-hairline pt-3 text-meta">
                             仅显示最近 30 条（共 {shownEvents.length} 条）· 查看完整运行记录 <ArrowRight size={12} />
                           </Link>
                         )}
@@ -534,7 +534,7 @@ export default function DeviceDetail() {
         <TabPanel value={tab}>
           {descriptorFailed ? (
             <Panel title={<span className="flex items-center gap-1.5"><Sparkles size={14} />设备功能</span>}>
-              <p className="py-4 text-center text-sm text-ink-3">设备功能加载失败，暂时无法显示功能列表。</p>
+              <p className="py-4 text-center text-body text-ink-3">设备功能加载失败，暂时无法显示功能列表。</p>
             </Panel>
           ) : !descriptor ? (
             <EmptyState icon={<Sparkles size={24} />} title="该设备还没有同步设备功能"
@@ -542,9 +542,9 @@ export default function DeviceDetail() {
           ) : (
             <Panel
               title={<span className="flex items-center gap-1.5"><Sparkles size={14} />设备功能</span>}
-              right={<span className="num text-[12px] text-ink-3">{capRefs.length} 种 · 已同步 {capabilities.docs.length} 份</span>}>
+              right={<span className="num text-meta text-ink-3">{capRefs.length} 种 · 已同步 {capabilities.docs.length} 份</span>}>
               <CapabilityBrowser descriptor={descriptor} idx={capabilities} />
-              <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
+              <p className="mt-3 border-t border-hairline pt-3 text-meta leading-relaxed text-ink-3">
                 点击一行查看详细说明；名称优先使用设备提供的中文名称。<span className="sm:hidden">字段表可左右滑动查看完整标识。</span>
               </p>
             </Panel>
@@ -557,7 +557,7 @@ export default function DeviceDetail() {
           <div className="space-y-5">
             <Panel
               title={<span className="flex items-center gap-1.5"><Braces size={14} />身份与原始状态</span>}
-              right={<span className="num text-[12px] text-ink-3">
+              right={<span className="num text-meta text-ink-3">
                 参考时间 {now.toLocaleTimeString('zh-CN', { hour12: false })}
               </span>}>
               <div className="grid gap-5 md:grid-cols-2">
@@ -582,13 +582,13 @@ export default function DeviceDetail() {
               </div>
               {descriptor && (
                 <details className="mt-3">
-                  <summary className="flex min-h-11 cursor-pointer select-none items-center text-[12px] text-ink-3 transition-colors hover:text-ink-2">
+                  <summary className="flex min-h-touch cursor-pointer select-none items-center text-meta text-ink-3 transition-colors hover:text-ink-2">
                     设备说明原始数据
                   </summary>
                   <JsonBlock className="mt-1.5" value={descriptor} maxHeight="max-h-56" label="设备说明原始数据" />
                 </details>
               )}
-              <p className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-0.5 border-t border-hairline pt-3 text-[12px] text-ink-3">
+              <p className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-0.5 border-t border-hairline pt-3 text-meta text-ink-3">
                 <Grid3x3 size={11} className="shrink-0" />
                 设备对象 {descriptor ? descriptor.entities.length : 0} 个 ·
                 设备功能 {capRefs.length} 种 ·
@@ -599,7 +599,7 @@ export default function DeviceDetail() {
             {descriptor && (
               <Panel title={<span className="flex items-center gap-1.5"><Grid3x3 size={14} />设备对象（技术详情）</span>}>
                 <EntityInventory descriptor={descriptor} />
-                <p className="mt-2 text-[11px] text-ink-3 sm:hidden">左右滑动可查看完整实体编号和功能标识。</p>
+                <p className="mt-2 text-micro text-ink-3 sm:hidden">左右滑动可查看完整实体编号和功能标识。</p>
               </Panel>
             )}
           </div>
@@ -617,12 +617,12 @@ function StateTable({ descriptor, idx, nowSec }: {
 }) {
   const rows = descriptor.entities.flatMap((e) =>
     observationsOf(e).map((o) => ({ e, o })))
-  if (!rows.length) return <p className="py-6 text-center text-sm text-ink-3">设备信息中没有可显示的数据</p>
+  if (!rows.length) return <p className="py-6 text-center text-body text-ink-3">设备信息中没有可显示的数据</p>
   return (
     <div className="card overflow-x-auto" tabIndex={0} role="region" aria-label="设备状态表">
-      <table className="w-full min-w-[44rem] border-collapse text-left text-xs">
+      <table className="w-full min-w-[44rem] border-collapse text-left text-meta">
         <thead>
-          <tr className="border-b border-hairline text-[12px] text-ink-3">
+          <tr className="border-b border-hairline text-meta text-ink-3">
             <th className="px-3 py-2 font-medium">实体</th>
             <th className="px-3 py-2 font-medium">属性</th>
             <th className="px-3 py-2 text-right font-medium">当前值</th>
@@ -646,7 +646,7 @@ function StateTable({ descriptor, idx, nowSec }: {
                   ? <Badge tone={qualityTone(o.quality)}>{QUALITY_LABEL[o.quality]}</Badge>
                   : <span className="text-ink-3">—</span>}
               </td>
-              <td className="num whitespace-nowrap px-3 py-1.5 text-right font-mono text-[11px] text-ink-3">
+              <td className="num whitespace-nowrap px-3 py-1.5 text-right font-mono text-micro text-ink-3">
                 {o.received_at ? formatTimestamp(o.received_at) : '—'}
                 {o.received_at && isStaleObs(o, nowSec) && (
                   <Badge tone="warn" className="ml-1">已过期</Badge>

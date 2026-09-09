@@ -23,12 +23,12 @@ function InlineError({ title, hint, onRetry, retrying }: {
   retrying?: boolean
 }) {
   return (
-    <div role="alert" className="rounded-lg bg-bad/10 px-3.5 py-3 text-bad">
-      <p className="flex items-start gap-2 text-[13px] font-semibold">
+    <div role="alert" className="rounded-tile bg-bad/10 px-3.5 py-3 text-bad">
+      <p className="flex items-start gap-2 text-compact font-semibold">
         <AlertCircle size={14} className="mt-0.5 shrink-0" />
         <span>{title}</span>
       </p>
-      <p className="mt-1 text-[12px] leading-relaxed opacity-90">{hint}</p>
+      <p className="mt-1 text-meta leading-relaxed opacity-90">{hint}</p>
       {onRetry && (
         <button type="button" className="btn btn-ghost mt-2.5" onClick={onRetry} disabled={retrying}>
           {retrying ? '重试中…' : '重试'}
@@ -170,7 +170,7 @@ export default function Settings() {
     <>
       <PageHeader title="设置" subtitle="账号、外观和访问令牌" />
 
-      <p className="mb-5 max-w-[62ch] text-sm leading-relaxed text-ink-2">
+      <p className="mb-5 max-w-[62ch] text-body leading-relaxed text-ink-2">
         {authStatus === 'in'
           ? '查看当前账号、外观和高级诊断。'
           : '查看当前账号、保存访问令牌和高级诊断。'}
@@ -186,14 +186,14 @@ export default function Settings() {
           {authStatus === 'in' && user ? (
             <>
               <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-accent/10 text-accent">
                   <UserRound size={18} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[15px] font-semibold" title={user.name || user.username}>
+                  <p className="truncate text-lead font-semibold" title={user.name || user.username}>
                     {user.name || user.username}
                   </p>
-                  <p className="num mt-0.5 truncate font-mono text-xs text-ink-3" title={user.username}>
+                  <p className="num mt-0.5 truncate font-mono text-meta text-ink-3" title={user.username}>
                     {user.username}
                   </p>
                 </div>
@@ -202,12 +202,12 @@ export default function Settings() {
                 </Badge>
               </div>
 
-              <p className="mt-4 rounded-lg bg-surface-2 px-3.5 py-3 text-[13px] leading-relaxed text-ink-2">
+              <p className="mt-4 rounded-tile bg-surface-2 px-3.5 py-3 text-compact leading-relaxed text-ink-2">
                 {roleSummary(user.role)}
               </p>
 
-              <details className="mt-4 border-t border-hairline pt-3 text-xs text-ink-2">
-                <summary className="flex min-h-11 cursor-pointer select-none items-center">账号详情</summary>
+              <details className="mt-4 border-t border-hairline pt-3 text-meta text-ink-2">
+                <summary className="flex min-h-touch cursor-pointer select-none items-center">账号详情</summary>
                 <dl className="mt-2.5 space-y-2.5">
                   <KeyValue k="登录账号" v={<span className="font-mono">{user.username}</span>} />
                   {isAdmin && (
@@ -219,7 +219,7 @@ export default function Settings() {
                 </dl>
               </details>
 
-              <p className="mt-3 text-[12px] leading-relaxed text-ink-3">
+              <p className="mt-3 text-meta leading-relaxed text-ink-3">
                 登录状态保存在这台设备。共用电脑请记得退出登录。
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -233,7 +233,7 @@ export default function Settings() {
               </div>
             </>
           ) : (
-            <p className="text-xs leading-relaxed text-ink-2">
+            <p className="text-meta leading-relaxed text-ink-2">
               {authStatus === 'open'
                 ? '当前无需登录即可查看。需要修改设置时，请使用本机操作或联系管理员。'
                 : '尚未登录。请先到登录页用账号密码登录。'}
@@ -242,7 +242,7 @@ export default function Settings() {
         </Panel>
 
         <Panel title={<span className="flex items-center gap-1.5"><Sun size={14} />外观</span>}>
-          <p className="text-xs leading-relaxed text-ink-2">
+          <p className="text-meta leading-relaxed text-ink-2">
             选择你习惯的显示方式。外观偏好只保存在这台设备。
           </p>
           <div className="mt-4">
@@ -263,13 +263,13 @@ export default function Settings() {
           className="lg:col-span-2"
           right={authStatus === 'open' && hasStoredToken ? <Badge tone="ok">已保存</Badge> : undefined}>
           {authStatus === 'in' ? (
-            <p className="text-xs leading-relaxed text-ink-2">
+            <p className="text-meta leading-relaxed text-ink-2">
               当前已登录，不需要再保存访问令牌。访问令牌用于自动化工具；如需切换身份，请先退出登录。
             </p>
           ) : (
             <>
               {hasStoredToken && (
-                <p className="mb-3 text-xs leading-relaxed text-ink-2">
+                <p className="mb-3 text-meta leading-relaxed text-ink-2">
                   本机已保存访问令牌，页面会优先使用它连接平台。
                 </p>
               )}
@@ -294,18 +294,18 @@ export default function Settings() {
       </div>
 
       <details
-        className="mt-6 rounded-xl border border-hairline bg-surface p-4"
+        className="mt-6 rounded-card border border-hairline bg-surface p-4"
         onToggle={(e) => setDiagnosticsOpen(e.currentTarget.open)}
       >
-        <summary className="flex min-h-11 cursor-pointer select-none flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-ink-2">
+        <summary className="flex min-h-touch cursor-pointer select-none flex-wrap items-center gap-x-2 gap-y-1 text-body font-medium text-ink-2">
           <span className="flex items-center gap-1.5"><Activity size={14} />高级诊断</span>
-          <span className="hidden text-xs font-normal text-ink-3 sm:inline">连接、记录与接入方式</span>
-          <span className="ml-auto flex items-center gap-1 text-xs font-normal text-ink-3">
+          <span className="hidden text-meta font-normal text-ink-3 sm:inline">连接、记录与接入方式</span>
+          <span className="ml-auto flex items-center gap-1 text-meta font-normal text-ink-3">
             {diagnosticsOpen ? '收起' : '展开查看'}
             <ChevronDown size={14} className={diagnosticsOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
           </span>
         </summary>
-        <p className="mt-1 max-w-[62ch] text-xs leading-relaxed text-ink-3">
+        <p className="mt-1 max-w-[62ch] text-meta leading-relaxed text-ink-3">
           这里用于排查运行和接入问题。无法读取时会明确显示失败，不会用 0 或假加载代替。
         </p>
 
@@ -319,7 +319,7 @@ export default function Settings() {
                 retrying={healthFetching}
               />
             ) : healthPending && !health ? (
-              <p className="py-4 text-center text-sm text-ink-3">正在读取运行状态…</p>
+              <p className="py-4 text-center text-body text-ink-3">正在读取运行状态…</p>
             ) : (
               <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                 <StatTile icon={<Server size={13} />} label="平台版本"
@@ -347,7 +347,7 @@ export default function Settings() {
                   <KeyValue k="使用权限"
                     v={statsError ? '暂时无法读取' : stats ? authModeLabel(stats.auth_mode) : statsPending ? '正在读取…' : '未提供'} />
                 </dl>
-                <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">{liveHint}</p>
+                <p className="mt-3 border-t border-hairline pt-3 text-meta leading-relaxed text-ink-3">{liveHint}</p>
                 <button type="button" className="btn btn-ghost mt-4"
                   onClick={() => { reconnectLive(); void refetchHealth(); toast.info('正在重新连接…') }}>
                   重新连接
@@ -355,12 +355,12 @@ export default function Settings() {
               </Panel>
 
               <Panel title={<span className="flex items-center gap-1.5"><Database size={14} />记录与保留</span>}
-                right={<span className="text-[12px] text-ink-3">自动清理</span>}>
+                right={<span className="text-meta text-ink-3">自动清理</span>}>
                 {statsError ? (
                   <InlineError title="无法读取记录统计" hint="已经保存的记录不会因此删除。请稍后重试。"
                     onRetry={() => void refetchStats()} retrying={statsFetching} />
                 ) : statsPending && !stats ? (
-                  <p className="py-4 text-center text-sm text-ink-3">正在读取记录统计…</p>
+                  <p className="py-4 text-center text-body text-ink-3">正在读取记录统计…</p>
                 ) : stats ? (
                   <>
                     <dl className="space-y-2.5">
@@ -371,9 +371,9 @@ export default function Settings() {
                       <KeyValue k="自动保留" v={`${stats.retention_days} 天`} />
                     </dl>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3">
-                      <Link to="/activity" className="link text-[12px]">查看运行记录</Link>
+                      <Link to="/activity" className="link text-meta">查看运行记录</Link>
                       {isAdmin && (
-                        <details className="text-[12px] text-ink-3">
+                        <details className="text-meta text-ink-3">
                           <summary className="cursor-pointer">技术详情</summary>
                           <p className="mt-1">记录格式版本：v{stats.schema_version}</p>
                         </details>
@@ -381,27 +381,27 @@ export default function Settings() {
                     </div>
                   </>
                 ) : (
-                  <p className="py-4 text-center text-sm text-ink-3">记录统计未提供。</p>
+                  <p className="py-4 text-center text-body text-ink-3">记录统计未提供。</p>
                 )}
               </Panel>
 
               <Panel title={<span className="flex items-center gap-1.5"><Plug size={14} />设备接入</span>}
-                right={<span className="text-[12px] text-ink-3">{adapters ? `${adapters.adapters.length} ${isAdmin ? '个已登记' : '种接入方式'}` : '—'}</span>}>
+                right={<span className="text-meta text-ink-3">{adapters ? `${adapters.adapters.length} ${isAdmin ? '个已登记' : '种接入方式'}` : '—'}</span>}>
                 {adaptersError ? (
                   <InlineError title="无法读取设备接入信息" hint="已经接入的设备不会受影响。请稍后重试。"
                     onRetry={() => void refetchAdapters()} retrying={adaptersFetching} />
                 ) : adaptersPending && !adapters ? (
-                  <p className="py-4 text-center text-sm text-ink-3">正在读取设备接入信息…</p>
+                  <p className="py-4 text-center text-body text-ink-3">正在读取设备接入信息…</p>
                 ) : adapters ? (
                   adapters.adapters.length === 0 ? (
-                    <p className="py-4 text-center text-sm text-ink-3">还没有设备接入方式。设备连接后会显示在这里。</p>
+                    <p className="py-4 text-center text-body text-ink-3">还没有设备接入方式。设备连接后会显示在这里。</p>
                   ) : isAdmin ? (
                     <div className="space-y-4">
                       {adapters.adapters.map((a) => (
                         <div key={a.name}>
                           <div className="flex min-w-0 items-center gap-2">
-                            <span className="num min-w-0 truncate font-mono text-[13px] font-semibold" title={a.name}>{a.name}</span>
-                            <span className="shrink-0 text-[12px] text-ink-3">{a.commands.length} 个操作</span>
+                            <span className="num min-w-0 truncate font-mono text-compact font-semibold" title={a.name}>{a.name}</span>
+                            <span className="shrink-0 text-meta text-ink-3">{a.commands.length} 个操作</span>
                           </div>
                           <div className="mt-2 flex flex-wrap gap-1.5">
                             {a.commands.map((c) => (
@@ -413,24 +413,24 @@ export default function Settings() {
                         </div>
                       ))}
                       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3">
-                        <p className="max-w-[42ch] text-[12px] leading-relaxed text-ink-3">
+                        <p className="max-w-[42ch] text-meta leading-relaxed text-ink-3">
                           这里显示设备可以执行的操作。没有权限时，操作会被拒绝。
                         </p>
-                        <Link to="/devices" className="link text-[12px]">查看已接入设备</Link>
+                        <Link to="/devices" className="link text-meta">查看已接入设备</Link>
                       </div>
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      <p className="text-[13px] leading-relaxed text-ink-2">
+                      <p className="text-compact leading-relaxed text-ink-2">
                         已登记 {adapters.adapters.length} 种设备接入方式。设备连接后，平台会在这里显示可用的操作类别。
                       </p>
                       <div className="border-t border-hairline pt-3">
-                        <Link to="/devices" className="link text-[12px]">查看已接入设备</Link>
+                        <Link to="/devices" className="link text-meta">查看已接入设备</Link>
                       </div>
                     </div>
                   )
                 ) : (
-                  <p className="py-4 text-center text-sm text-ink-3">设备接入信息未提供。</p>
+                  <p className="py-4 text-center text-body text-ink-3">设备接入信息未提供。</p>
                 )}
               </Panel>
             </div>

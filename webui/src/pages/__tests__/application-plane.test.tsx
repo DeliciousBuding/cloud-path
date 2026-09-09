@@ -237,12 +237,14 @@ describe('应用数据读取和通用展示', () => {
     expect(screen.getByText('自定义时间规则')).toBeVisible()
   })
 
-  it('开放访问不是应用数据授权，未登录不请求或复用上一身份的数据', () => {
+  it('开放访问可读应用数据，但执行入口仍不可用', async () => {
     useAuth.setState({ status: 'open', user: null })
     const http = installFetch((url) => appResponse(url))
     renderWithProviders(<ApplicationPlane instanceID="app-a" />)
-    expect(screen.getByRole('link', { name: '前往登录' })).toBeVisible()
-    expect(http.calls).toHaveLength(0)
+    expect(await screen.findByText('已保存内容')).toBeVisible()
+    expect(screen.queryByRole('link', { name: '前往登录' })).not.toBeInTheDocument()
+    expect(http.to('/app-a/records')).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: /执行/ })).not.toBeInTheDocument()
   })
 })
 

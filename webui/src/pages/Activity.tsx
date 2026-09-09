@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Activity as ActivityIcon, FilterX, RefreshCw, Terminal, WifiOff } from 'lucide-react'
-import { Badge, EmptyState, ErrorState, Panel, PageHeader, Segmented, Spinner } from '@/components/ui'
+import { Badge, EmptyState, ErrorState, Panel, PageHeader, Segmented, Select, Spinner } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { EventFeed, commandDisplayMeta, commandFailureInfo, eventDisplayLabel } from '@/components/EventFeed'
 import { api } from '@/lib/api'
@@ -33,7 +33,6 @@ const STATUS_FILTERS = [
 
 /** 下拉共用的样式（390px：min-w-0 + max-w-full，长设备名靠 option 自身截断） */
 // 原生 select/option 不吃 CSS 截断：select 自身限宽 + overflow-hidden，option 文本另在 optionLabel 里收敛
-const SELECT_CLS = 'min-h-11 min-w-0 max-w-full overflow-hidden rounded-full border border-hairline bg-surface px-3 py-1.5 text-xs font-medium outline-none transition-colors focus:border-accent sm:min-h-0'
 
 /**
  * 活动页：事件与命令历史（/api/events、/api/commands），带设备 / 边缘 / 状态过滤。
@@ -140,36 +139,36 @@ export default function Activity() {
               ]}
             />
             <label className="sr-only" htmlFor="act-device">按设备筛选</label>
-            <select id="act-device" value={device} onChange={(e) => setDevice(e.target.value)} className={SELECT_CLS}>
+            <Select id="act-device" pill value={device} onChange={(e) => setDevice(e.target.value)} className="min-w-0 max-w-full">
               <option value="">设备：全部</option>
               {devices.map((d) => (
                 <option key={d.id} value={d.id}>
                   {optionLabel(d.name ? `${d.name}（${d.id}）` : d.id, 40)}
                 </option>
               ))}
-            </select>
+            </Select>
 
             <label className="sr-only" htmlFor="act-edge">按网关筛选</label>
-            <select id="act-edge" value={edge} disabled={Boolean(device)}
-              onChange={(e) => setEdge(e.target.value)} className={cn(SELECT_CLS, 'disabled:opacity-50')}
+            <Select id="act-edge" pill value={edge} disabled={Boolean(device)}
+              onChange={(e) => setEdge(e.target.value)} className="min-w-0 max-w-full"
               title={device ? '已按具体设备筛选' : undefined}>
               <option value="">网关：全部</option>
               {edges.map((e) => (
                 <option key={e.edge_id} value={e.edge_id}>{optionLabel(e.edge_id, 40)}</option>
               ))}
-            </select>
+            </Select>
 
             {tab === 'commands' && (
               <>
                 <label className="sr-only" htmlFor="act-status">按操作状态筛选</label>
-                <select id="act-status" value={status} onChange={(e) => setStatus(e.target.value)} className={SELECT_CLS}>
+                <Select id="act-status" pill value={status} onChange={(e) => setStatus(e.target.value)} className="min-w-0 max-w-full">
                   {STATUS_FILTERS.map((s) => <option key={s.value} value={s.value}>{s.value ? s.label : '状态：全部'}</option>)}
-                </select>
+                </Select>
               </>
             )}
 
             {anyFilter && (
-              <button type="button" onClick={clearAll} className="link flex items-center gap-0.5 text-[12px]" title="清除全部筛选">
+              <button type="button" onClick={clearAll} className="link flex items-center gap-0.5 text-meta" title="清除全部筛选">
                 <FilterX size={11} /> 清除筛选
               </button>
             )}
@@ -177,7 +176,7 @@ export default function Activity() {
 
           {tab === 'events' && typeOptions.length > 0 && (
             <details className="border-t border-hairline pt-3">
-              <summary className="flex min-h-11 cursor-pointer select-none items-center text-[12px] font-medium text-ink-2">
+              <summary className="flex min-h-touch cursor-pointer select-none items-center text-meta font-medium text-ink-2">
                 按事件类型筛选
                 {types.size > 0 && <span className="ml-1 text-accent">已选 {types.size} 项</span>}
               </summary>
@@ -191,14 +190,14 @@ export default function Activity() {
                       return next
                     })}
                     aria-pressed={types.has(t)} title={`原始类型：${t}`}
-                    className={cn('min-h-11 max-w-full truncate rounded-full px-3 py-1 text-[12px] font-medium transition-colors sm:min-h-0',
+                    className={cn('min-h-touch max-w-full truncate rounded-pill px-3 py-1 text-meta font-medium transition-colors sm:min-h-0',
                       types.has(t) ? 'bg-accent text-accent-ink' : 'bg-ink-3/10 text-ink-2 hover:bg-ink-3/16')}
                   >
                     {eventDisplayLabel(t, index)}
                   </button>
                 ))}
                 {typeOptions.length > 24 && (
-                  <span className="text-[12px] text-ink-3">另有 {typeOptions.length - 24} 种</span>
+                  <span className="text-meta text-ink-3">另有 {typeOptions.length - 24} 种</span>
                 )}
               </div>
             </details>
@@ -217,10 +216,10 @@ export default function Activity() {
       ) : (
         <Panel>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-hairline pb-3">
-            <span className="text-[12px] text-ink-3">
+            <span className="text-meta text-ink-3">
               {tab === 'events' ? '状态记录 · 新到旧' : '操作记录 · 新到旧'}
             </span>
-            <span className="flex items-center gap-2 text-[12px] text-ink-3">
+            <span className="flex items-center gap-2 text-meta text-ink-3">
               {query.isFetching && <Spinner size={12} />}
               <span className="num">当前 {rows} 条</span>
             </span>
@@ -264,7 +263,7 @@ export default function Activity() {
 
 function LimitNote({ what, hint }: { what: string; hint: string }) {
   return (
-    <p className="mt-3 border-t border-hairline pt-3 text-center text-[12px] text-ink-3">
+    <p className="mt-3 border-t border-hairline pt-3 text-center text-meta text-ink-3">
       仅显示最近 {PAGE_LIMIT} 条{what}（更早的记录仍在系统中，{hint}）
     </p>
   )
@@ -288,7 +287,7 @@ function CommandRows({ rows, names, index }: {
     <div className="space-y-4">
       {groups.map((g, gi) => (
         <section key={`${g.day}-${gi}`}>
-          <h4 className="mb-1 px-0.5 text-[12px] font-medium text-ink-3">{g.day}</h4>
+          <h4 className="mb-1 px-0.5 text-meta font-medium text-ink-3">{g.day}</h4>
           <ul className="divide-y divide-hairline">
             {g.items.map((c) => <CommandRow key={c.id} c={c} names={names} index={index} />)}
           </ul>
@@ -311,25 +310,25 @@ function CommandRow({ c, names, index }: {
     // 390px：首行只放状态 / 操作 / 时刻；失败原因与目标放到第二行，避免四段横向挤成一团。
     <li className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-2.5 lg:grid-cols-[auto_minmax(10rem,auto)_minmax(0,1fr)_minmax(8rem,0.7fr)_auto]">
       <Badge tone={st.tone} className="shrink-0">{st.label}</Badge>
-      <span className="min-w-0 truncate text-xs font-medium lg:col-start-2"
+      <span className="min-w-0 truncate text-meta font-medium lg:col-start-2"
         title={`原始操作码：${c.cmd}${meta.hint ? ` · ${meta.hint}` : ''}${c.args ? ` · 参数: ${c.args}` : ''}${c.result && st.tone === 'ok' ? ` · 结果: ${c.result}` : ''}`}>
         {meta.label}
       </span>
       <div className="col-span-3 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 lg:contents">
         {failed && (
-          <span className="min-w-0 max-w-full break-words text-[12px] text-bad lg:col-start-3 lg:truncate" title={c.result}>
+          <span className="min-w-0 max-w-full break-words text-meta text-bad lg:col-start-3 lg:truncate" title={c.result}>
             失败原因：{failure.message} · {failure.next}
           </span>
         )}
         <Link
           to={`/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`}
-          className="flex min-h-11 min-w-0 max-w-full items-center truncate text-[12px] text-ink-3 transition-colors hover:text-accent lg:col-start-4 lg:min-h-0"
+          className="flex min-h-touch min-w-0 max-w-full items-center truncate text-meta text-ink-3 transition-colors hover:text-accent lg:col-start-4 lg:min-h-0"
           title={`${c.device_id} · 查看设备`}
         >
           查看 {target}
         </Link>
       </div>
-      <span className="num col-start-3 row-start-1 shrink-0 text-[12px] text-ink-3 lg:col-start-5 lg:row-start-1"
+      <span className="num col-start-3 row-start-1 shrink-0 text-meta text-ink-3 lg:col-start-5 lg:row-start-1"
         title={c.acked_at ? `完成时间 ${fmtDateTime(c.acked_at)}` : fmtDateTime(c.created_at)}>
         {fmtTime(c.created_at)}
       </span>

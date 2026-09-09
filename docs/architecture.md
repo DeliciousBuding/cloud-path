@@ -179,7 +179,7 @@ Topic 只是候选集合，不是信任证明。CLI 搜到仓库后还必须检�
 - **强隔离与集中秘密**：当前是受用户授权的本地进程插件与 Edge 本地 secret provider；中心 KMS/Vault、远程 secret 分发、自动轮换尚未实现。
 - **横向扩展**：多 Server 全局配额、分布式 limiter、跨节点调度与一致性尚未实现。
 - **协议与数据扩展**：MQTT/Modbus 等接入网关、远程 OTA 编排、时序聚合和业务分析不在当前基线。
-- **第三方 UI 扩展**：任意 React bundle 不进入主页面；未来需要独立 Origin、sandboxed iframe 与细粒度 API token。
+- **第三方 UI 扩展**：任意 React bundle 不进入主页面；插件通过声明式 UI contribution 注册业务导航与页面，复杂页面使用独立 Origin、sandboxed iframe 与细粒度 API token。契约见 [plugin-ui.md](architecture/plugin-ui.md)。
 
 ## 12. 决策记录
 

@@ -9,12 +9,16 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"regexp"
+	"strings"
+	"unicode/utf8"
 )
 
-// SchemaValidator validates YAML/JSON values against a JSON Schema draft-07
-// document. It intentionally implements only the keywords used by
-// spec/plugin-manifest.schema.json: type, required, properties, const, enum and
-// items. This keeps the CLI free of third-party schema dependencies.
+// SchemaValidator validates YAML/JSON values against the JSON Schema subset used
+// by CloudPath contract assets. It intentionally stays dependency-free, but
+// supports local $ref/$defs, object/array/string/number bounds, patterns,
+// additionalProperties, enums/consts and composition keywords used by the
+// manifest and plugin UI schemas.
 type SchemaValidator struct {
 	schema map[string]any
 }
@@ -38,12 +42,29 @@ func (v *SchemaValidator) Validate(value any) error {
 	if v == nil || v.schema == nil {
 		return errors.New("schema validator is not initialized")
 	}
-	return validateValue(v.schema, value, "$")
+	return validateValue(v.schema, v.schema, value, "$", 0)
 }
 
-func validateValue(schema map[string]any, value any, path string) error {
+func validateValue(root, schema map[string]any, value any, path string, depth int) error {
 	if schema == nil {
 		return nil
+	}
+	if depth > 64 {
+		return fmt.Errorf("%s: schema reference depth exceeded", path)
+	}
+
+	if rawRef, ok := schema["$ref"]; ok {
+		ref, ok := rawRef.(string)
+		if !ok {
+			return fmt.Errorf("%s: $ref must be a string", path)
+		}
+		target, err := resolveSchemaRef(root, ref)
+		if err != nil {
+			return fmt.Errorf("%s: %w", path, err)
+		}
+		if err := validateValue(root, target, value, path, depth+1); err != nil {
+			return err
+		}
 	}
 
 	if rawType, ok := schema["type"]; ok {
@@ -70,20 +91,39 @@ func validateValue(schema map[string]any, value any, path string) error {
 		if !ok {
 			return fmt.Errorf("%s: properties must be an object", path)
 		}
-		obj, ok := value.(map[string]any)
-		if !ok {
-			// The type keyword already reports non-object values when needed.
-			return nil
-		}
-		for name, rawChild := range props {
-			child, ok := rawChild.(map[string]any)
-			if !ok {
-				continue
+		if obj, ok := value.(map[string]any); ok {
+			for name, rawChild := range props {
+				child, ok := rawChild.(map[string]any)
+				if !ok {
+					continue
+				}
+				if childValue, exists := obj[name]; exists {
+					if err := validateValue(root, child, childValue, path+"/"+name, depth+1); err != nil {
+						return err
+					}
+				}
 			}
-			if childValue, exists := obj[name]; exists {
-				childPath := path + "/" + name
-				if err := validateValue(child, childValue, childPath); err != nil {
-					return err
+			if rawAdditional, ok := schema["additionalProperties"]; ok {
+				switch additional := rawAdditional.(type) {
+				case bool:
+					if !additional {
+						for name := range obj {
+							if _, declared := props[name]; !declared {
+								return fmt.Errorf("%s: additional property %q is not allowed", path, name)
+							}
+						}
+					}
+				case map[string]any:
+					for name, childValue := range obj {
+						if _, declared := props[name]; declared {
+							continue
+						}
+						if err := validateValue(root, additional, childValue, path+"/"+name, depth+1); err != nil {
+							return err
+						}
+					}
+				default:
+					return fmt.Errorf("%s: additionalProperties must be a boolean or schema object", path)
 				}
 			}
 		}
@@ -122,13 +162,147 @@ func validateValue(schema map[string]any, value any, path string) error {
 			return fmt.Errorf("%s: items requires an array", path)
 		}
 		for i, item := range arr {
-			if err := validateValue(itemSchema, item, fmt.Sprintf("%s/%d", path, i)); err != nil {
+			if err := validateValue(root, itemSchema, item, fmt.Sprintf("%s/%d", path, i), depth+1); err != nil {
 				return err
 			}
 		}
 	}
 
+	if arr, ok := value.([]any); ok {
+		if rawMin, exists := schema["minItems"]; exists {
+			if min, ok := asInt64(rawMin); ok && int64(len(arr)) < min {
+				return fmt.Errorf("%s: has %d items, minimum is %d", path, len(arr), min)
+			}
+		}
+		if rawMax, exists := schema["maxItems"]; exists {
+			if max, ok := asInt64(rawMax); ok && int64(len(arr)) > max {
+				return fmt.Errorf("%s: has %d items, maximum is %d", path, len(arr), max)
+			}
+		}
+		if unique, ok := schema["uniqueItems"].(bool); ok && unique {
+			for i := 0; i < len(arr); i++ {
+				for j := i + 1; j < len(arr); j++ {
+					if reflect.DeepEqual(arr[i], arr[j]) {
+						return fmt.Errorf("%s: items must be unique", path)
+					}
+				}
+			}
+		}
+	}
+
+	if str, ok := value.(string); ok {
+		length := utf8.RuneCountInString(str)
+		if rawMin, exists := schema["minLength"]; exists {
+			if min, ok := asInt64(rawMin); ok && int64(length) < min {
+				return fmt.Errorf("%s: length %d is below minimum %d", path, length, min)
+			}
+		}
+		if rawMax, exists := schema["maxLength"]; exists {
+			if max, ok := asInt64(rawMax); ok && int64(length) > max {
+				return fmt.Errorf("%s: length %d exceeds maximum %d", path, length, max)
+			}
+		}
+		if rawPattern, exists := schema["pattern"]; exists {
+			pattern, ok := rawPattern.(string)
+			if !ok {
+				return fmt.Errorf("%s: pattern must be a string", path)
+			}
+			re, err := regexp.Compile(pattern)
+			if err != nil {
+				return fmt.Errorf("%s: invalid pattern: %w", path, err)
+			}
+			if !re.MatchString(str) {
+				return fmt.Errorf("%s: value %q does not match pattern %q", path, str, pattern)
+			}
+		}
+	}
+
+	if num, ok := asFloat64(value); ok {
+		if rawMin, exists := schema["minimum"]; exists {
+			if min, ok := asFloat64(rawMin); ok && num < min {
+				return fmt.Errorf("%s: value %v is below minimum %v", path, value, min)
+			}
+		}
+		if rawMax, exists := schema["maximum"]; exists {
+			if max, ok := asFloat64(rawMax); ok && num > max {
+				return fmt.Errorf("%s: value %v exceeds maximum %v", path, value, max)
+			}
+		}
+	}
+
+	for _, keyword := range []string{"allOf", "anyOf", "oneOf"} {
+		raw, exists := schema[keyword]
+		if !exists {
+			continue
+		}
+		children, ok := raw.([]any)
+		if !ok {
+			return fmt.Errorf("%s: %s must be an array", path, keyword)
+		}
+		matches := 0
+		var firstErr error
+		for _, rawChild := range children {
+			child, ok := rawChild.(map[string]any)
+			if !ok {
+				return fmt.Errorf("%s: %s entries must be schema objects", path, keyword)
+			}
+			if err := validateValue(root, child, value, path, depth+1); err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
+			}
+			matches++
+		}
+		switch keyword {
+		case "allOf":
+			if matches != len(children) {
+				return firstErr
+			}
+		case "anyOf":
+			if matches == 0 {
+				return fmt.Errorf("%s: does not match anyOf: %v", path, firstErr)
+			}
+		case "oneOf":
+			if matches != 1 {
+				return fmt.Errorf("%s: matches %d schemas, want exactly one", path, matches)
+			}
+		}
+	}
+
+	if rawNot, ok := schema["not"].(map[string]any); ok {
+		if err := validateValue(root, rawNot, value, path, depth+1); err == nil {
+			return fmt.Errorf("%s: value must not match schema", path)
+		}
+	}
+
 	return nil
+}
+
+func resolveSchemaRef(root map[string]any, ref string) (map[string]any, error) {
+	if ref == "#" {
+		return root, nil
+	}
+	if !strings.HasPrefix(ref, "#/") {
+		return nil, fmt.Errorf("unsupported $ref %q", ref)
+	}
+	var current any = root
+	for _, rawPart := range strings.Split(strings.TrimPrefix(ref, "#/"), "/") {
+		part := strings.ReplaceAll(strings.ReplaceAll(rawPart, "~1", "/"), "~0", "~")
+		obj, ok := current.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("$ref %q does not resolve to an object", ref)
+		}
+		current, ok = obj[part]
+		if !ok {
+			return nil, fmt.Errorf("$ref %q not found", ref)
+		}
+	}
+	target, ok := current.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("$ref %q does not resolve to a schema object", ref)
+	}
+	return target, nil
 }
 
 func matchesType(rawType, value any) bool {

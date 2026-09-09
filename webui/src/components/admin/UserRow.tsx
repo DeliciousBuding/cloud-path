@@ -63,9 +63,9 @@ export function UserRow({ user: u }: { user: UserView }) {
       <div className="flex min-w-0 items-start gap-2">
         {/* 用户名/显示名由管理员填写，长度不可控：必须各自截断 */}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold" title={u.name || u.username}>{u.name || u.username}</p>
+          <p className="truncate text-body font-semibold" title={u.name || u.username}>{u.name || u.username}</p>
           {u.name && u.name !== u.username && (
-            <p className="num mt-0.5 truncate font-mono text-xs text-ink-3" title={u.username}>{u.username}</p>
+            <p className="num mt-0.5 truncate font-mono text-meta text-ink-3" title={u.username}>{u.username}</p>
           )}
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
@@ -76,8 +76,8 @@ export function UserRow({ user: u }: { user: UserView }) {
         </div>
       </div>
 
-      <details className="mt-3 text-xs text-ink-2">
-        <summary className="flex min-h-11 cursor-pointer items-center">技术详情</summary>
+      <details className="mt-3 text-meta text-ink-2">
+        <summary className="flex min-h-touch cursor-pointer items-center">技术详情</summary>
         <dl className="mt-2 space-y-2">
           <KeyValue k="成员 ID" v={<span className="font-mono">{u.id}</span>} />
           <KeyValue k="登录账号" v={u.username} mono />
@@ -115,7 +115,7 @@ export function UserRow({ user: u }: { user: UserView }) {
       {mode === 'reset' && (
         <form onSubmit={saveReset} aria-label={`重置 ${u.username} 的密码`}
           className="mt-3 space-y-3 border-t border-hairline pt-3">
-          <p className="text-xs leading-relaxed text-warn break-words">
+          <p className="text-meta leading-relaxed text-warn break-words">
             重置后该成员需要重新登录，当前登录状态会立即失效。此操作不可撤销。
           </p>
           <TextField label="新密码" type="password" value={password} error={passwordErr}

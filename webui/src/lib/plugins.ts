@@ -8,8 +8,11 @@
 import { ApiError } from './api'
 import type { Tone } from '@/components/ui'
 import { PluginErr } from './types'
+import { normalizePluginUI } from './plugin-ui'
 import type {
-  PluginCatalogView, PluginErrCode, PluginInstanceView, PluginPermissionsData,
+  PluginApplicationContributionData, PluginCatalogContributesView, PluginCatalogDriverView,
+  PluginCatalogView, PluginConnectorContributionData, PluginErrCode, PluginInstanceView,
+  PluginPermissionsData,
 } from './types'
 
 /* ------------------------------------------------------------------ *
@@ -551,7 +554,75 @@ export function normalizePluginKind(kind: string | undefined): PluginKind {
   return 'unknown'
 }
 
-/** GET /api/plugins 的宽容归一化 */
+function normalizePermissions(raw: unknown): PluginPermissionsData {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const o = raw as Record<string, unknown>
+  const list = (key: string) => Array.isArray(o[key]) ? o[key].map(str).filter(Boolean) : undefined
+  return {
+    hardware: list('hardware'),
+    network: list('network'),
+    filesystem: list('filesystem'),
+    secrets: list('secrets'),
+  }
+}
+
+function normalizeDriverContribution(raw: unknown): PluginCatalogDriverView | null {
+  if (!raw || typeof raw !== 'object') return null
+  const o = raw as Record<string, unknown>
+  const id = str(o.id)
+  if (!id) return null
+  return {
+    id,
+    title: str(o.title) || undefined,
+    descriptor: str(o.descriptor) || undefined,
+    configSchema: str(o.configSchema) || undefined,
+    discovery: str(o.discovery) || undefined,
+    capabilityCatalog: str(o.capabilityCatalog) || undefined,
+    ui: normalizePluginUI(o.ui),
+  }
+}
+
+function normalizeApplicationContribution(raw: unknown): PluginApplicationContributionData | null {
+  if (!raw || typeof raw !== 'object') return null
+  const o = raw as Record<string, unknown>
+  const id = str(o.id)
+  if (!id) return null
+  return {
+    id,
+    title: str(o.title) || undefined,
+    ui: normalizePluginUI(o.ui),
+  }
+}
+
+function normalizeConnectorContribution(raw: unknown): PluginConnectorContributionData | null {
+  if (!raw || typeof raw !== 'object') return null
+  const o = raw as Record<string, unknown>
+  const id = str(o.id)
+  if (!id) return null
+  return {
+    id,
+    title: str(o.title) || undefined,
+    direction: str(o.direction) || undefined,
+    host: str(o.host) || undefined,
+  }
+}
+
+function normalizeContributions(raw: unknown): PluginCatalogContributesView {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const o = raw as Record<string, unknown>
+  const map = <T>(value: unknown, fn: (item: unknown) => T | null): T[] | undefined => {
+    if (!Array.isArray(value)) return undefined
+    const items = value.map(fn).filter((item): item is T => item !== null)
+    return items.length > 0 ? items : undefined
+  }
+  return {
+    drivers: map(o.drivers, normalizeDriverContribution),
+    applications: map(o.applications, normalizeApplicationContribution),
+    connectors: map(o.connectors, normalizeConnectorContribution),
+  }
+}
+
+/** GET /api/plugins 的宽容归一化；UI contribution 只保留契约允许的形状。 */
 export function normalizeCatalog(raw: unknown): PluginCatalogView[] {
   const list = Array.isArray(raw)
     ? raw
@@ -561,10 +632,19 @@ export function normalizeCatalog(raw: unknown): PluginCatalogView[] {
   for (const item of list) {
     if (!item || typeof item !== 'object') continue
     const o = item as Record<string, unknown>
-    if (!str(o.id)) continue
+    const id = str(o.id)
+    if (!id) continue
     out.push({
-      ...(o as unknown as PluginCatalogView),
+      id,
       kind: normalizePluginKind(str(o.kind)),
+      version: str(o.version),
+      source: str(o.source),
+      digest: str(o.digest),
+      verified: bool(o.verified),
+      compatibility: str(o.compatibility) || undefined,
+      protocol: typeof o.protocol === 'number' && Number.isFinite(o.protocol) ? o.protocol : 0,
+      permissions: normalizePermissions(o.permissions),
+      contributes: normalizeContributions(o.contributes),
     })
   }
   return out.sort((a, b) => a.id.localeCompare(b.id))

@@ -56,8 +56,17 @@ describe('应用操作的授权、生命周期与明确用户意图', () => {
     expect(actionRequests(http)).toHaveLength(0)
   })
 
-  it.each(['open', 'out'] as const)('%s 不是应用执行授权，连读取都不发起', (status) => {
-    useAuth.setState({ status, user: null })
+  it('open 可读应用数据，但不提供执行入口', async () => {
+    useAuth.setState({ status: 'open', user: null })
+    const http = installFetch((url) => actionResponse(url))
+    renderWithProviders(<ApplicationPlane instanceID="app-a" />)
+    expect(await screen.findByText('更新计数')).toBeVisible()
+    expect(screen.queryByRole('button', { name: /执行/ })).not.toBeInTheDocument()
+    expect(actionRequests(http)).toHaveLength(0)
+  })
+
+  it('out 不读取也不提供执行入口', () => {
+    useAuth.setState({ status: 'out', user: null })
     const http = installFetch((url) => actionResponse(url))
     renderWithProviders(<ApplicationPlane instanceID="app-a" />)
     expect(screen.queryByRole('button', { name: /执行/ })).not.toBeInTheDocument()

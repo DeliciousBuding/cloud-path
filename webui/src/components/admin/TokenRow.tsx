@@ -41,13 +41,13 @@ export function TokenRow({ token: t }: { token: TokenView }) {
     <li className="py-4 first:pt-0">
       <div className="flex min-w-0 items-start gap-2">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold" title={t.name}>{t.name || '（未命名）'}</p>
+          <p className="truncate text-body font-semibold" title={t.name}>{t.name || '（未命名）'}</p>
         </div>
         <span className="shrink-0"><Badge tone={tone}>{stateLabel}</Badge></span>
       </div>
 
       <div className="mt-3">
-        <p className="mb-1.5 text-[11px] font-medium text-ink-3">权限范围</p>
+        <p className="mb-1.5 text-micro font-medium text-ink-3">权限范围</p>
         {(t.scopes ?? []).length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
             {(t.scopes ?? []).map((s) => (
@@ -57,7 +57,7 @@ export function TokenRow({ token: t }: { token: TokenView }) {
             ))}
           </div>
         ) : (
-          <p className="text-[12px] text-ink-3">未设置权限范围</p>
+          <p className="text-meta text-ink-3">未设置权限范围</p>
         )}
       </div>
 
@@ -68,8 +68,8 @@ export function TokenRow({ token: t }: { token: TokenView }) {
         {revoked && <KeyValue k="吊销于" v={<span className="font-mono">{fmtDateTime(t.revoked_at ?? 0)}</span>} />}
       </dl>
 
-      <details className="mt-3 text-xs text-ink-2">
-        <summary className="flex min-h-11 cursor-pointer items-center">技术详情</summary>
+      <details className="mt-3 text-meta text-ink-2">
+        <summary className="flex min-h-touch cursor-pointer items-center">技术详情</summary>
         <dl className="mt-2 space-y-2">
           <KeyValue k="令牌 ID" v={<span className="font-mono">{t.id}</span>} />
           <KeyValue k="识别前缀" v={t.prefix} mono />
@@ -85,7 +85,7 @@ export function TokenRow({ token: t }: { token: TokenView }) {
 
       {!revoked && confirming && (
         <div className="mt-3 space-y-3 border-t border-hairline pt-3">
-          <p className="text-xs leading-relaxed text-warn break-words">
+          <p className="text-meta leading-relaxed text-warn break-words">
             确认吊销「{t.name}」？该令牌会立即失效且无法恢复，正在使用它的网关或自动化工具将无法继续访问。
           </p>
           {revoke.isError && <ErrorNote message={adminErrorMessage(revoke.error)} />}
@@ -101,7 +101,7 @@ export function TokenRow({ token: t }: { token: TokenView }) {
       )}
 
       {revoked && (
-        <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3 break-words">
+        <p className="mt-3 border-t border-hairline pt-3 text-meta leading-relaxed text-ink-3 break-words">
           已吊销的令牌会保留基本信息，方便以后核对；不能恢复，需要时请新建一个。
         </p>
       )}
