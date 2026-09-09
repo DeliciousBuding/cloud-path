@@ -284,7 +284,7 @@ describe('运行项分区：desired 与 observed 永远分别渲染', () => {
     await user.click(await screen.findByText('查看设置、权限与密钥'))
     expect(await screen.findByText('基本信息')).toBeInTheDocument()
     // 'Edge 在线' 在头部徽标与事实一览里各出现一次，故按「至少一处」断言
-    for (const label of ['期望版本', '实际版本', '运行位置', '网关状态', '来源验证', '安装信息']) {
+    for (const label of ['目标版本', '实际版本', '在哪里运行', '网关状态', '来源检查', '安装信息']) {
       expect(screen.getAllByText(label).length, `${label} 缺席`).toBeGreaterThan(0)
     }
     expect(screen.getByText('已验证')).toBeInTheDocument()
@@ -393,13 +393,13 @@ describe('写操作按稳定错误码呈现', () => {
     const user = userEvent.setup()
     renderDetail()
     await user.click(await screen.findByText('更多操作'))
-    await user.click(await screen.findByRole('button', { name: /删除运行项/ }))
+    await user.click(await screen.findByRole('button', { name: /删除应用或驱动/ }))
 
     const dialog = await screen.findByRole('dialog')
-    expect(dialog).toHaveTextContent('删除运行项 inst-1')
-    const go = within(dialog).getByRole('button', { name: '删除运行项' })
+    expect(dialog).toHaveTextContent('删除应用或驱动 inst-1')
+    const go = within(dialog).getByRole('button', { name: '删除应用或驱动' })
     expect(go).toBeDisabled()
-    await user.click(within(dialog).getByRole('checkbox', { name: /我确认要删除这个运行项/ }))
+    await user.click(within(dialog).getByRole('checkbox', { name: /我确认要删除这个应用或驱动/ }))
     await user.click(within(dialog).getByRole('checkbox', { name: /同时删除应用数据/ }))
     expect(go).toBeEnabled()
     await user.click(go)
@@ -414,7 +414,7 @@ describe('写操作按稳定错误码呈现', () => {
     const user = userEvent.setup()
     renderDetail()
     await user.click(await screen.findByText('更多操作'))
-    await user.click(await screen.findByRole('button', { name: /删除运行项/ }))
+    await user.click(await screen.findByRole('button', { name: /删除应用或驱动/ }))
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '取消' }))
     expect(http.to('/api/plugin-instances/').filter((c) => c.method === 'DELETE')).toHaveLength(0)
   })

@@ -197,8 +197,8 @@ describe('参数与不可信执行结果', () => {
     expect(container.textContent).toContain(dangerous)
     expect(screen.queryByText('javascript:alert(3)')).not.toBeInTheDocument()
     expect(container.querySelector('img, script, a[href^="javascript:"]')).toBeNull()
-    await user.click(screen.getByText('查看原始结果'))
-    expect(screen.getByRole('group', { name: '执行原始结果' }).textContent).toBe(JSON.stringify(result))
+    await user.click(screen.getByText('查看完整结果'))
+    expect(screen.getByRole('group', { name: '执行结果原文' }).textContent).toBe(JSON.stringify(result))
     expect(screen.getByText('操作已受理')).toBeVisible()
     expect(screen.queryByText('板端成功')).not.toBeInTheDocument()
   })
@@ -213,9 +213,9 @@ describe('参数与不可信执行结果', () => {
     expect(await screen.findByText(/自检完成 · 执行次数 3 · 完成时间/)).toBeVisible()
     expect(screen.queryByText('run_count')).not.toBeInTheDocument()
     expect(screen.queryByText('finished_at')).not.toBeInTheDocument()
-    await user.click(screen.getByText('查看原始结果'))
-    expect(screen.getByRole('group', { name: '执行原始结果' })).toHaveTextContent('run_count')
-    expect(screen.getByRole('group', { name: '执行原始结果' })).toHaveTextContent('finished_at')
+    await user.click(screen.getByText('查看完整结果'))
+    expect(screen.getByRole('group', { name: '执行结果原文' })).toHaveTextContent('run_count')
+    expect(screen.getByRole('group', { name: '执行结果原文' })).toHaveTextContent('finished_at')
   })
   it.each(['', '<svg onload="alert(1)">raw response</svg>'])('空或非 JSON 结果不伪造结构：%s', async (result_json) => {
     installFetch((url, init) => init?.method === 'POST'
@@ -224,10 +224,10 @@ describe('参数与不可信执行结果', () => {
     const { container } = renderWithProviders(<ApplicationPlane instanceID="app-a" />)
     fireEvent.click(await screen.findByRole('button', { name: '执行「刷新记录」' }))
     expect(await screen.findByText('操作已受理')).toBeVisible()
-    expect(screen.getByText(result_json ? '应用返回的内容无法直接展示，请查看原文。' : '应用未返回结果内容，请查看应用记录。')).toBeVisible()
+    expect(screen.getByText(result_json ? '应用返回的内容无法直接展示，请查看完整内容。' : '应用未返回结果内容，请查看应用记录。')).toBeVisible()
     if (result_json) {
-      fireEvent.click(screen.getByText('查看原始结果'))
-      expect(screen.getByRole('group', { name: '执行原始结果' })).toHaveTextContent(result_json)
+      fireEvent.click(screen.getByText('查看完整结果'))
+      expect(screen.getByRole('group', { name: '执行结果原文' })).toHaveTextContent(result_json)
       expect(container.querySelector('svg[onload]')).toBeNull()
     }
   })

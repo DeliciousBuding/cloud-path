@@ -254,7 +254,7 @@ describe('运行项详情的应用入口', () => {
     const http = installFetch((url) => appResponse(url, { instance }))
     const { container } = renderDetail(controlID)
     expect(await screen.findByText('已保存内容')).toBeVisible()
-    expect(screen.getByText(/当前账号只能查看，不能修改这个运行项/)).toBeVisible()
+    expect(screen.getByText(/当前账号只能查看，不能修改这个应用或驱动/)).toBeVisible()
     expect(screen.queryByRole('button', { name: /停用|启用|删除|编辑|重新下发/ })).not.toBeInTheDocument()
     expect(screen.queryByText('网关离线')).not.toBeInTheDocument()
     expect(container.querySelector('a[href="/edges/server"]')).toBeNull()
@@ -264,7 +264,7 @@ describe('运行项详情的应用入口', () => {
     expect(screen.getByText('{"example_input":"input-1"}')).not.toBeVisible()
     await userEvent.setup().click(screen.getByText('查看设置、权限与密钥'))
     expect(screen.getByText('共享运行')).toBeVisible()
-    expect(screen.getAllByText('运行位置').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('在哪里运行').length).toBeGreaterThan(0)
     expect(screen.getAllByText('平台服务').length).toBeGreaterThan(0)
   })
 
