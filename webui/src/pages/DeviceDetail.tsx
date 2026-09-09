@@ -23,15 +23,20 @@ import { useLive } from '@/store/ws'
 import { useNow } from '@/hooks/useNow'
 import { useDeviceDescriptor } from '@/hooks/useDescriptor'
 import { useEdges } from '@/hooks/useEdges'
+import { usePluginCatalog } from '@/hooks/usePlugins'
 import type { DescriptorSource } from '@/hooks/useDescriptor'
 import {
   deviceStatusMeta, entityTitle, formatTimestamp, formatValue, metricTiles, observationsOf, primaryObservation,
   propertyLabel,
   qualityTone, summarizeRaw, unitLabel, widgetFor,
 } from '@/lib/descriptor'
-import type { SummaryValue } from '@/lib/descriptor'
+import type { CapabilityIndex, CommandSet, SummaryValue } from '@/lib/descriptor'
 import { fmtDateTime, mergeEvents, optionLabel, payloadLabel, timeAgo } from '@/lib/format'
 import { orderSeriesKeys, seriesLabel, seriesUnit } from '@/lib/series'
+import { resolveDriverDeviceUI } from '@/lib/plugin-ui'
+import type { DriverDeviceUIResolution } from '@/lib/plugin-ui'
+import { resolveLocalizedText } from '@/i18n/pluginText'
+import type { DeviceDescriptor, DeviceView, PluginUISection } from '@/lib/types'
 
 const DESCRIPTOR_SOURCE_KEY: Record<DescriptorSource, string> = {
   ws: 'source.ws', inline: 'source.inline', rest: 'source.rest', bulk: 'source.bulk', none: 'source.none', error: 'source.error',
@@ -65,7 +70,7 @@ import { isStaleObs } from '@/components/SchemaRenderer'
 import { usePageTitle } from '@/hooks/usePageTitle'
 
 type Tab = 'overview' | 'controls' | 'events' | 'advanced'
-type AdvancedView = 'state' | 'capabilities' | 'diagnostics'
+type AdvancedView = 'state' | 'capabilities' | 'diagnostics' | 'driver'
 type StateView = 'rows' | 'table' | 'trend'
 
 /**
@@ -78,6 +83,7 @@ type StateView = 'rows' | 'table' | 'trend'
  */
 export default function DeviceDetail() {
   const { t, i18n } = useTranslation('devices')
+  const { t: pluginT } = useTranslation('plugins')
   const { edgeId = '', deviceId = '' } = useParams()
   const key = `${decodeURIComponent(edgeId)}/${decodeURIComponent(deviceId)}`
   const now = useNow()
@@ -89,27 +95,11 @@ export default function DeviceDetail() {
     : requestedTab === 'capabilities' ? 'capabilities'
       : requestedTab === 'diagnostics' ? 'diagnostics' : undefined
   const isAdvancedView = (value: string | null): value is AdvancedView =>
-    value === 'state' || value === 'capabilities' || value === 'diagnostics'
+    value === 'state' || value === 'capabilities' || value === 'diagnostics' || value === 'driver'
   const defaultTab: Tab = requestedTab == null && !legacyAdvanced ? 'controls' : 'overview'
   const tab: Tab = (['overview', 'controls', 'events', 'advanced'] as const)
     .find((value) => value === requestedTab) ?? (legacyAdvanced ? 'advanced' : defaultTab)
-  const advancedView: AdvancedView = isAdvancedView(requestedView) ? requestedView : legacyAdvanced ?? 'diagnostics'
-  const setTab = (value: Tab) => setSearchParams((previous) => {
-    const next = new URLSearchParams(previous)
-    if (value === 'overview') {
-      next.set('tab', 'overview'); next.delete('view')
-    } else if (value === 'advanced') {
-      next.set('tab', 'advanced'); next.set('view', advancedView)
-    } else {
-      next.set('tab', value); next.delete('view')
-    }
-    return next
-  })
-  const setAdvancedView = (value: AdvancedView) => setSearchParams((previous) => {
-    const next = new URLSearchParams(previous)
-    next.set('tab', 'advanced'); next.set('view', value)
-    return next
-  })
+  const requestedAdvancedView: AdvancedView = isAdvancedView(requestedView) ? requestedView : legacyAdvanced ?? 'diagnostics'
   const [kindFilter, setKindFilter] = useState('')
   const requestedStateView = searchParams.get('stateView')
   const stateView: StateView = requestedStateView === 'trend' || requestedStateView === 'table' ? requestedStateView : 'rows'
@@ -138,8 +128,35 @@ export default function DeviceDetail() {
     queryKey: ['adapters'], queryFn: api.adapters, staleTime: 5 * 60_000,
   })
   const edgeList = useEdges()
+  const pluginCatalog = usePluginCatalog()
 
   const d = live ?? rest
+  // DeviceView.adapter 是后端登记的适配器事实；Driver contribution id 必须与其精确相等。
+  const driverUI = useMemo(
+    () => resolveDriverDeviceUI(pluginCatalog.plugins, d?.adapter ?? ''),
+    [pluginCatalog.plugins, d?.adapter],
+  )
+  const advancedView: AdvancedView = requestedAdvancedView === 'driver' && !driverUI
+    ? 'diagnostics' : requestedAdvancedView
+  const driverLabel = resolveLocalizedText(
+    driverUI?.contribution, 'title', i18n.resolvedLanguage ?? i18n.language,
+  ) ?? pluginT('detail.contributionDriver')
+  const setTab = (value: Tab) => setSearchParams((previous) => {
+    const next = new URLSearchParams(previous)
+    if (value === 'overview') {
+      next.set('tab', 'overview'); next.delete('view')
+    } else if (value === 'advanced') {
+      next.set('tab', 'advanced'); next.set('view', advancedView)
+    } else {
+      next.set('tab', value); next.delete('view')
+    }
+    return next
+  })
+  const setAdvancedView = (value: AdvancedView) => setSearchParams((previous) => {
+    const next = new URLSearchParams(previous)
+    next.set('tab', 'advanced'); next.set('view', value)
+    return next
+  })
   usePageTitle(d ? (d.name || d.id) : t('page.title'))
 
   const edgeOnline = edgeList.list.find((edge) => edge.edge_id === d?.edge_id)?.online
@@ -301,6 +318,7 @@ export default function DeviceDetail() {
               { value: 'state' as AdvancedView, label: t('detail.advanced.state') },
               { value: 'capabilities' as AdvancedView, label: t('detail.advanced.capabilities') },
               { value: 'diagnostics' as AdvancedView, label: t('detail.advanced.diagnostics') },
+              ...(driverUI ? [{ value: 'driver' as AdvancedView, label: driverLabel }] : []),
             ]}
             value={advancedView}
             onChange={setAdvancedView}
@@ -538,6 +556,21 @@ export default function DeviceDetail() {
         </TabPanel>
       )}
 
+      {tab === 'advanced' && advancedView === 'driver' && driverUI && (
+        <TabPanel value={tab}>
+          <DriverDeviceSections
+            resolution={driverUI}
+            device={d}
+            descriptor={descriptor}
+            capabilities={capabilities}
+            commands={commands}
+            online={actionsOnline}
+            offlineReason={actionsOfflineReason}
+            descriptorSource={source}
+          />
+        </TabPanel>
+      )}
+
       {tab === 'advanced' && advancedView === 'diagnostics' && (
         <TabPanel value={tab}>
           <div className="space-y-5">
@@ -594,6 +627,107 @@ export default function DeviceDetail() {
         </TabPanel>
       )}
     </>
+  )
+}
+
+function DriverSectionIntro({ text }: { text?: string }) {
+  if (!text?.trim()) return null
+  return <p className="mb-3 text-meta leading-relaxed text-ink-3">{text}</p>
+}
+
+function driverSectionTitle(section: { type: string; title?: string }, fallback: string): string {
+  return section.title?.trim() || fallback
+}
+
+function DriverStatusSection({ section, device, descriptor, pluginVersion, descriptorSource }: {
+  section: PluginUISection
+  device: DeviceView
+  descriptor: DeviceDescriptor | null
+  pluginVersion: string
+  descriptorSource: DescriptorSource
+}) {
+  const { t } = useTranslation('devices')
+  const { t: pluginT } = useTranslation('plugins')
+  const status = deviceStatusMeta(device.online, descriptor?.status)
+  return (
+    <Panel title={<span className="flex items-center gap-1.5"><RadioTower size={14} />{driverSectionTitle(section, t('detail.overview.summary'))}</span>}>
+      <DriverSectionIntro text={section.description} />
+      <div className="mb-3 flex min-w-0 flex-wrap items-center gap-2">
+        <Badge tone={status.tone}>{status.label}</Badge>
+        <span className="text-meta text-ink-3">
+          {device.online
+            ? t('detail.header.updatedAt', { time: timeAgo(device.updated_at) })
+            : t('detail.header.lastSeen', { time: timeAgo(device.last_seen) })}
+        </span>
+      </div>
+      <dl className="grid min-w-0 gap-x-8 gap-y-2.5 sm:grid-cols-2">
+        <KeyValue k={pluginT('desired.version')} v={<span className="num">{pluginVersion || '—'}</span>} />
+        {descriptor?.manufacturer && <KeyValue k={t('detail.diagnostics.manufacturer')} v={descriptor.manufacturer} />}
+        {descriptor?.model && <KeyValue k={t('detail.diagnostics.model')} v={descriptor.model} />}
+        <KeyValue k={t('detail.diagnostics.descriptorSource')} v={t(DESCRIPTOR_SOURCE_KEY[descriptorSource])} />
+        <KeyValue k={t('detail.diagnostics.lastUpdate')} v={<span className="num">{fmtDateTime(device.updated_at)}</span>} />
+      </dl>
+    </Panel>
+  )
+}
+
+function DriverDiagnosticsSection({ section, descriptor, capabilities }: {
+  section: PluginUISection
+  descriptor: DeviceDescriptor | null
+  capabilities: CapabilityIndex
+}) {
+  const { t } = useTranslation('devices')
+  const entities = descriptor?.entities.filter((entity) => entity.category === 'diagnostic') ?? []
+  return (
+    <Panel title={<span className="flex items-center gap-1.5"><Activity size={14} />{driverSectionTitle(section, t('detail.advanced.diagnostics'))}</span>}>
+      <DriverSectionIntro text={section.description} />
+      {!descriptor ? (
+        <p className="py-3 text-body text-ink-3">{t('detail.capabilities.loadFailed')}</p>
+      ) : entities.length === 0 ? (
+        <p className="py-3 text-body text-ink-3">{section.emptyText?.trim() || t('state.empty')}</p>
+      ) : (
+        <StateMatrix
+          descriptor={{ ...descriptor, entities }}
+          idx={capabilities}
+          categories={['diagnostic']}
+          className="min-w-0"
+        />
+      )}
+    </Panel>
+  )
+}
+
+function DriverDeviceSections({ resolution, device, descriptor, capabilities, commands, online, offlineReason, descriptorSource }: {
+  resolution: DriverDeviceUIResolution
+  device: DeviceView
+  descriptor: DeviceDescriptor | null
+  capabilities: CapabilityIndex
+  commands: CommandSet
+  online: boolean
+  offlineReason?: string
+  descriptorSource: DescriptorSource
+}) {
+  return (
+    <div data-testid="driver-device-sections" className="min-w-0 space-y-5">
+      {resolution.sections.map((section, index) => {
+        const key = `${section.type}:${index}`
+        if (section.type === 'status') {
+          return <DriverStatusSection key={key} section={section} device={device} descriptor={descriptor}
+            pluginVersion={resolution.plugin.version} descriptorSource={descriptorSource} />
+        }
+        if (section.type === 'actions') {
+          return <div key={key} className="min-w-0">
+            <DriverSectionIntro text={section.description} />
+            <ActionPanel deviceId={device.id} targetLabel={device.name || device.id} set={commands}
+              online={online} offlineReason={offlineReason} className="min-w-0" />
+          </div>
+        }
+        if (section.type === 'diagnostics') {
+          return <DriverDiagnosticsSection key={key} section={section} descriptor={descriptor} capabilities={capabilities} />
+        }
+        return null
+      })}
+    </div>
   )
 }
 

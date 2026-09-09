@@ -69,6 +69,49 @@ describe('PluginConfigForm typed app_config writeback', () => {
     expect(typeof (written.reminder as Record<string, unknown>).enabled).toBe('boolean')
   })
 
+
+  it('renders select labels, help text, and textarea controls from the manifest', () => {
+    const richSection: PluginUISection = {
+      type: 'form', source: 'config', fields: [
+        { key: 'app_config.threshold_mode', label: '触发方式', type: 'select', enum: ['below', 'above'], values: { below: '低于下限', above: '高于上限' }, description: '选择触发条件。' },
+        { key: 'app_config.alert', label: '开启告警', type: 'boolean', description: '关闭后只记录状态。' },
+        { key: 'app_config.note', label: '说明', type: 'textarea', description: '可填写处理说明。' },
+      ],
+    }
+    renderWithProviders(<PluginConfigForm instance={instance} section={richSection} readOnly={false} />)
+    expect(screen.getByText('关闭后只记录状态。')).toBeInTheDocument()
+    expect(screen.getByText('可填写处理说明。')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: '说明' }).tagName).toBe('TEXTAREA')
+    expect(screen.getByRole('combobox', { name: /触发方式/ })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '低于下限' })).toBeInTheDocument()
+    expect(screen.getByText('选择触发条件。')).toBeInTheDocument()
+  })
+
+
+  it('edits nested array fields without requiring raw JSON', async () => {
+    const http = installFetch((url, init) => url.includes('/api/plugin-instances/') && init?.method === 'PATCH'
+      ? stubResponse(200, { id: 'server/app-a', revision: 2, request_id: 'r1', instance })
+      : stubResponse(404, {}))
+    const user = userEvent.setup()
+    const arraySection: PluginUISection = {
+      type: 'form', source: 'config', fields: [{
+        key: 'app_config.compartments', label: '药格', type: 'array', required: true, minItems: 1,
+        itemFields: [
+          { key: 'id', label: '编号', type: 'string', required: true },
+          { key: 'name', label: '名称', type: 'string' },
+        ],
+      }],
+    }
+    renderWithProviders(<PluginConfigForm instance={instance} section={arraySection} readOnly={false} />)
+    await user.click(screen.getByRole('button', { name: '添加一项' }))
+    fireEvent.change(screen.getByRole('textbox', { name: /编号/ }), { target: { value: 'c1' } })
+    fireEvent.change(screen.getByRole('textbox', { name: '名称' }), { target: { value: '早药' } })
+    await user.click(screen.getByRole('button', { name: /保存设置/ }))
+    const patch = http.to('/api/plugin-instances/server%2Fapp-a').find((call) => call.method === 'PATCH')
+    const written = JSON.parse((patch?.body as { config: Record<string, string> }).config.app_config) as Record<string, unknown>
+    expect(written.compartments).toEqual([{ id: 'c1', name: '早药' }])
+  })
+
   it('deletes an empty leaf without dropping sibling app_config keys', async () => {
     const http = installFetch((url, init) => url.includes('/api/plugin-instances/') && init?.method === 'PATCH'
       ? stubResponse(200, { id: 'server/app-a', revision: 2, request_id: 'r1', instance })

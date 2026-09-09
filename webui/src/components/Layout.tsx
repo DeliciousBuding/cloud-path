@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
   LayoutDashboard, Cpu, Activity, LogOut, Network, Settings, Monitor, Puzzle, ShieldCheck, Sun, Moon,
-  ChevronDown, UserRound, WifiOff, Boxes, Bell, Music, Thermometer, Megaphone, Pill, AppWindow,
+  ChevronDown, UserRound, WifiOff, Boxes, Bell, BellRing, DoorOpen, Leaf, Music, Thermometer, Megaphone, Pill, AppWindow,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Logo } from './Logo'
@@ -41,7 +41,8 @@ const ADMIN_NAV = { to: '/admin', labelKey: 'admin', icon: ShieldCheck, end: fal
 const TAIL_NAV = [{ to: '/settings', labelKey: 'settings', icon: Settings, end: false }]
 
 const APP_ICONS: Record<string, LucideIcon> = {
-  pill: Pill, pillbox: Pill, bell: Bell, music: Music, thermometer: Thermometer,
+  pill: Pill, pillbox: Pill, bell: Bell, 'bell-ring': BellRing, 'door-open': DoorOpen,
+  leaf: Leaf, music: Music, thermometer: Thermometer,
   megaphone: Megaphone, 'service-desk': Megaphone, environment: Thermometer,
   box: Boxes, application: AppWindow,
 }
@@ -155,7 +156,7 @@ function SidebarFooter() {
   const { t } = useTranslation('common')
   const { data } = useQuery({ queryKey: ['health-sidebar'], queryFn: api.health, refetchInterval: 30000 })
   return (
-    <div className="mt-auto space-y-3 border-t border-hairline px-3 pt-3 pb-1">
+    <div className="mt-auto shrink-0 space-y-3 border-t border-hairline px-3 pt-3 pb-1">
       <AccountPill />
       <div className="flex items-center justify-between gap-2">
         <ConnPill />
@@ -252,7 +253,7 @@ export default function Layout() {
         <div className="px-1">
           <Brand />
         </div>
-        <nav className="mt-7 space-y-0.5" aria-label={t('layout.mainNavigation')}>
+        <nav className="mt-7 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1" aria-label={t('layout.mainNavigation')}>
           {nav.map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} title={label} className={({ isActive }) => navCls(isActive)}>
               <Icon size={16} strokeWidth={1.9} />
@@ -283,7 +284,7 @@ export default function Layout() {
               >
                 {t('layout.more')} <ChevronDown size={14} className={cn('transition-transform', moreOpen && 'rotate-180')} />
               </Button>
-              {moreOpen && <div id="mobile-more-menu" className="absolute right-0 z-overlay mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-card border border-hairline bg-surface p-3 shadow-lift">
+              {moreOpen && <div id="mobile-more-menu" className="absolute right-0 z-overlay mt-2 max-h-[calc(100dvh-5rem)] w-[min(18rem,calc(100vw-2rem))] overflow-y-auto rounded-card border border-hairline bg-surface p-3 shadow-lift">
                 <p className="px-2 pb-1 text-micro font-medium text-ink-3">{t('layout.morePages')}</p>
                 <AccountPill />
                 {moreNav.length > 0 && (

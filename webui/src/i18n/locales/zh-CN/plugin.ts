@@ -357,13 +357,13 @@ export default {
   config: {
     invalidJson: '现有配置无法正常读取，暂时不能安全修改。请先在下方“高级设置”中修正。',
     required: '这一项不能为空。', invalidNumber: '请输入有效数字。', invalidInteger: '请输入整数。',
-    minimum: '不能小于 {{value}}。', maximum: '不能大于 {{value}}。', invalidPattern: '格式不符合要求。',
+    minimum: '不能小于 {{value}}。', maximum: '不能大于 {{value}}。', minItems: '至少添加 {{value}} 项。', maxItems: '最多添加 {{value}} 项。', invalidPattern: '格式不符合要求。',
     invalidPatternRule: '插件提供的格式规则无效。', invalidOption: '请选择一个有效选项。',
     unavailable: '配置表单不可用', unavailableHint: '插件没有提供可安全显示的设置项。完整配置只放在下方“更多信息”中。',
     readOnly: '当前账号只能查看设置，不能修改。', select: '请选择', secretPlaceholder: '填写密钥名称，不要填密钥内容',
     saving: '保存中…', save: '保存设置', advanced: '高级设置（完整配置）',
     advancedHint: '这里只用于排查问题；日常设置请使用上方表单。', secretHidden: '已隐藏密钥内容',
-    empty: '暂无配置项',
+    empty: '暂无配置项', addItem: '添加一项', removeItem: '删除第 {{index}} 项', item: '第 {{index}} 项', noItems: '还没有添加内容。',
   },
   bridge: {
     invalidConfig: '配置格式无效', invalidConfigItem: '配置项格式无效',

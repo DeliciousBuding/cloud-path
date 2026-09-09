@@ -36,6 +36,15 @@ shasum -a 256 -c checksums.txt --ignore-missing      # macOS
 certutil -hashfile <文件> SHA256                      # Windows（逐项对照）
 ```
 
+## v0.2.28 — 2026-09-10
+
+- 插件 UI：配置表单新增通用数组编辑器（`array` + `itemFields` + `minItems/maxItems`），药格、日程等结构化配置不再要求用户手写 JSON。
+- 插件 UI：选择项使用 manifest 的业务文案，boolean/select/textarea 补齐说明、必填、错误态；记录标题优先使用字段值映射。
+- 应用页面：metrics/actions 正确区分加载、失败、空态；`schedule` 明确以 jobs 为数据源；`always` 插件在无实例时仍保留入口并进入解释页。
+- 设备与网关：Driver 的 `ui.device.sections` 接入设备详情高级区；窄屏访问令牌改为卡片布局，桌面侧栏与移动“更多”菜单支持纵向滚动。
+- 插件 iframe：桥接加入 nonce/ready 握手、导航重置与 viewer 写操作拒绝，保留 sandbox 最小权限。
+- 同步发布：environment-guard `v0.1.4`、scheduled-compartment `v0.2.9`、hall-pillbox `v0.1.7`。
+
 ## v0.2.27 — 2026-09-10
 
 - WebUI：整合 shadcn 组件模式，统一 Dialog、Drawer、Dropdown、Popover、Table 等交互基元的主题与行为。
@@ -232,6 +241,7 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 | `v0.2.20` | 已发布（2026-09-09） | 持久化设备最后已知 Descriptor（schema v11），离线重启后可水合并恢复 Application 绑定；详见 [§v0.2.20](#v0220--2026-09-09) |
 | `v0.2.21` | 已发布（2026-09-09） | WebUI 易用性、响应式布局与文案收口；离线设备操作 fail-closed；应用结果与原始 JSON 分层展示；RBAC 稳定错误体与 AppHost observed 即时投影；全仓静态检查清零 |
 | `v0.2.22` | 已发布（2026-09-09） | 修复设备详情「概览」标签点击后被默认「设备操作」弹回 |
+| `v0.2.28` | 已发布（2026-09-10） | 插件数组配置、状态态与窄屏表格收口；Driver 设备扩展与 iframe 桥接加固 |
 | `v0.2.27` | 已发布（2026-09-10） | WebUI 整合 shadcn 交互基元与通用数据表，重构访问令牌管理并收口设备/趋势页面组件复用 |
 | `v0.2.26` | 已发布（2026-09-09） | 应用中心按业务字段呈现插件页面，隐藏机器字段与原始 JSON；插件 UI 契约支持字段格式化、值映射与空值隐藏 |
 | `v0.2.25` | 已发布（2026-09-09） | 概览分离实时故障与历史失败；失败操作可标记已处理，原记录保留 |
@@ -240,4 +250,4 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 | `dev` | 本地 | `task build` / `task build:matrix` 的未打标产物（`git describe` 兜底） |
 
 > 仓库没有 `v0.2.16` / `v0.2.17` tag；`v0.2.18` 覆盖 `v0.2.15` 之后累计的变更。当前 `main` 在
-> 最新发布版本为 `v0.2.27`。
+> 最新发布版本为 `v0.2.28`。

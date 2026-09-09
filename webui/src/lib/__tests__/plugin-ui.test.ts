@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applicationUIReadable, buildApplicationNavigation, normalizePluginUI, pluginUIAssetURL,
-  resolveApplicationRoute,
+  resolveApplicationRoute, resolveDriverDeviceUI,
 } from '@/lib/plugin-ui'
 import { normalizeCatalog } from '@/lib/plugins'
 import type { PluginCatalogView, PluginInstanceView } from '@/lib/types'
@@ -67,6 +67,30 @@ describe('plugin UI normalization and asset URLs', () => {
     expect(ui?.pages?.[0]?.sections[1].fields).toEqual([{ key: 'name', required: true, type: undefined, label: undefined, description: undefined, placeholder: undefined, minimum: undefined, maximum: undefined, pattern: undefined, secret: undefined }])
   })
 
+
+  it('keeps every declared field and nested array item fields', () => {
+    const ui = normalizePluginUI({
+      apiVersion: 1,
+      navigation: { title: '示例', route: 'example' },
+      pages: [{ id: 'home', title: '首页', sections: [{
+        type: 'form', fields: [
+          { key: 'a', type: 'string' },
+          { key: 'b', type: 'string' },
+          { key: 'c', type: 'string' },
+          { key: 'rows', type: 'array', minItems: 1, maxItems: 3, itemFields: [
+            { key: 'id', type: 'string', required: true },
+            { key: 'start', type: 'string', pattern: '^\\d{2}:\\d{2}$' },
+          ] },
+        ],
+      }] }],
+    })
+    const fields = ui?.pages?.[0]?.sections[0].fields ?? []
+    expect(fields).toHaveLength(4)
+    expect(fields[3]).toMatchObject({ key: 'rows', type: 'array', minItems: 1, maxItems: 3 })
+    expect(fields[3]?.itemFields).toHaveLength(2)
+    expect(fields[3]?.itemFields?.[1]).toMatchObject({ key: 'start', pattern: '^\\d{2}:\\d{2}$' })
+  })
+
   it('preserves navigation/page i18n maps and drops invalid values', () => {
     const ui = normalizePluginUI({
       apiVersion: 1,
@@ -102,6 +126,7 @@ describe('application navigation and route resolution', () => {
       ...plugin().contributes.applications![0], ui: { ...plugin().contributes.applications![0].ui!, navigation: { title: '示例', route: 'example', visibility: 'always' } },
     }] } })
     expect(buildApplicationNavigation([always], [disabled], true)).toHaveLength(1)
+    expect(buildApplicationNavigation([always], [], true)).toHaveLength(1)
     const conflict = plugin({ id: 'example.other', contributes: { applications: [{ id: 'other', ui: { apiVersion: 1, navigation: { title: '其他', route: 'example' }, pages: [{ id: 'home', title: '其他', sections: [{ type: 'status' }] }] } }] } })
     expect(buildApplicationNavigation([plugin(), conflict], [instance(), instance('example.other')], true)).toHaveLength(0)
   })
@@ -122,5 +147,35 @@ describe('application navigation and route resolution', () => {
     expect(applicationUIReadable(null, 'out')).toBe(false)
     expect(applicationUIReadable({ id: 1, username: 'u', name: 'U', role: 'viewer', tenant_id: 1, tenant_slug: 't' }, 'in')).toBe(true)
     expect(applicationUIReadable({ id: 1, username: 'u', name: 'U', role: 'viewer', tenant_id: 0, tenant_slug: 't' }, 'in')).toBe(false)
+  })
+})
+
+describe('Driver device UI resolution', () => {
+  const driver = plugin({
+    id: 'example.driver',
+    kind: 'driver',
+    contributes: {
+      drivers: [{
+        id: 'stcb', title: 'STC-B Driver',
+        ui: { apiVersion: 1, device: { sections: [{ type: 'status', source: 'device' }] } },
+      }],
+    },
+  })
+
+  it('matches the exact adapter through a verified Driver contribution', () => {
+    expect(resolveDriverDeviceUI([driver], 'stcb')?.plugin.id).toBe('example.driver')
+    expect(resolveDriverDeviceUI([driver], 'other')).toBeUndefined()
+    expect(resolveDriverDeviceUI([{ ...driver, verified: false }], 'stcb')).toBeUndefined()
+    expect(resolveDriverDeviceUI([{ ...driver, kind: 'application' }], 'stcb')).toBeUndefined()
+  })
+
+  it('fails closed on ambiguous matches and invalid section sources', () => {
+    const second = { ...driver, id: 'example.driver-two' }
+    expect(resolveDriverDeviceUI([driver, second], 'stcb')).toBeUndefined()
+    const invalidSource = plugin({
+      id: 'example.driver-bad', kind: 'driver',
+      contributes: { drivers: [{ id: 'stcb', ui: { apiVersion: 1, device: { sections: [{ type: 'status', source: 'records' }] } } }] },
+    })
+    expect(resolveDriverDeviceUI([invalidSource], 'stcb')).toBeUndefined()
   })
 })

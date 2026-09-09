@@ -82,8 +82,8 @@ function Action({ instanceID, job, scope, enabled }: {
   </article>
 }
 
-export function ApplicationActions({ instanceID, jobs, running, conflict = false, desiredEnabled = true, lifecycleKey }: {
-  instanceID: string; jobs: AppJobsView | undefined; running: boolean | undefined; conflict?: boolean; desiredEnabled?: boolean; lifecycleKey?: string
+export function ApplicationActions({ instanceID, jobs, emptyText, running, conflict = false, desiredEnabled = true, lifecycleKey }: {
+  instanceID: string; jobs: AppJobsView | undefined; emptyText?: string; running: boolean | undefined; conflict?: boolean; desiredEnabled?: boolean; lifecycleKey?: string
 }) {
   const { t } = useTranslation('plugin')
   const scope = useAuth((state) => appActionScope(state, instanceID))
@@ -98,6 +98,6 @@ export function ApplicationActions({ instanceID, jobs, running, conflict = false
         : t('actions.unknown')}</p>}
     {actions.length ? <div className="divide-y divide-hairline">{actions.map((job) => <Action
       key={JSON.stringify([scope, lifecycleKey, running === false, job])} instanceID={instanceID} job={job} scope={scope} enabled={running === true} />)}</div>
-      : jobs && <p className="py-3 text-body text-ink-3">{t('actions.empty')}</p>}
+      : jobs && <p className="py-3 text-body text-ink-3">{emptyText?.trim() || t('actions.empty')}</p>}
   </div>
 }

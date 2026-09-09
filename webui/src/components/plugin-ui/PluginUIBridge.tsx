@@ -14,22 +14,61 @@ import { pluginUIAssetURL } from '@/lib/plugin-ui'
 import { Panel } from '@/components/ui'
 import type { PluginInstanceView, PluginUISection } from '@/lib/types'
 
+interface BridgeReady {
+  type: 'cloudpath:ready'
+  nonce: string
+}
+
 interface BridgeRequest {
   type: 'cloudpath:request'
+  nonce: string
   id: string
   method: string
   params?: unknown
+}
+
+interface BridgeSession {
+  nonce: string
+  ready: boolean
+  targetOrigin: string
+}
+
+interface BridgeErrorPayload {
+  code: string
+  message: string
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
+function nonceOf(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 && value.length <= 128 ? value : null
+}
+
+function readyOf(value: unknown): BridgeReady | null {
+  if (!isRecord(value) || value.type !== 'cloudpath:ready') return null
+  const nonce = nonceOf(value.nonce)
+  return nonce ? { type: 'cloudpath:ready', nonce } : null
+}
+
 function requestOf(value: unknown): BridgeRequest | null {
   if (!isRecord(value) || value.type !== 'cloudpath:request') return null
+  const nonce = nonceOf(value.nonce)
+  if (!nonce) return null
   if (typeof value.id !== 'string' || value.id.length === 0 || value.id.length > 120) return null
   if (typeof value.method !== 'string' || value.method.length === 0 || value.method.length > 80) return null
-  return { type: 'cloudpath:request', id: value.id, method: value.method, params: value.params }
+  return { type: 'cloudpath:request', nonce, id: value.id, method: value.method, params: value.params }
+}
+
+function newNonce(): string {
+  if (typeof crypto !== 'undefined') {
+    if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+    if (typeof crypto.getRandomValues === 'function') {
+      return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, '0')).join('')
+    }
+  }
+  return `ui-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
 function safeIdempotencyKey(): string {
@@ -37,6 +76,13 @@ function safeIdempotencyKey(): string {
     return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, '0')).join('')
   }
   return `ui-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function safeTargetOrigin(origin: string): string {
+  // sandbox="allow-scripts" gives the iframe an opaque origin. The browser
+  // requires "*" for that origin; authorization remains the exact source
+  // window plus the live nonce. Same-origin frames can use the exact origin.
+  return origin === window.location.origin ? origin : '*'
 }
 
 function bridgeError(code: string, message: string): Error & { code?: string } {
@@ -57,15 +103,17 @@ function configPayload(value: unknown, t: (key: string, options?: Record<string,
   return out
 }
 
-export function PluginUIBridge({ pluginId, version, instance, section }: {
+export function PluginUIBridge({ pluginId, version, instance, section, readOnly = false }: {
   pluginId: string
   /** Canonical catalog version; callers fall back to the desired instance version only when absent. */
   version?: string
   instance: PluginInstanceView
   section: PluginUISection
+  readOnly?: boolean
 }) {
   const { t } = useTranslation('plugin')
   const frame = useRef<HTMLIFrameElement>(null)
+  const session = useRef<BridgeSession | null>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
   const titleId = useId()
   const src = pluginUIAssetURL(pluginId, version?.trim() || instance.desired.version, section.entry)
@@ -73,18 +121,47 @@ export function PluginUIBridge({ pluginId, version, instance, section }: {
   const dataInstanceID = instance.desired.instance_id
 
   useEffect(() => {
-    if (!src || !frame.current) return
+    if (!src) return
     const onMessage = (event: MessageEvent) => {
-      if (event.source !== frame.current?.contentWindow) return
+      const sourceWindow = frame.current?.contentWindow
+      const active = session.current
+      if (!sourceWindow || !active || event.source !== sourceWindow) return
+
+      const ready = readyOf(event.data)
+      if (ready) {
+        if (ready.nonce !== active.nonce || active.ready) return
+        active.ready = true
+        active.targetOrigin = safeTargetOrigin(event.origin)
+        setState('ready')
+        sourceWindow.postMessage({
+          type: 'cloudpath:init',
+          nonce: active.nonce,
+          apiVersion: 1,
+          instance: { id: dataInstanceID, plugin_id: instance.desired.plugin_id },
+          scopes: section.scopes ?? [],
+        }, active.targetOrigin)
+        return
+      }
+
       const request = requestOf(event.data)
-      if (!request) return
-      const reply = (ok: boolean, data?: unknown, error?: { code: string; message: string }) => {
-        frame.current?.contentWindow?.postMessage({
-          type: 'cloudpath:response', id: request.id, ok, data, error,
-        }, '*')
+      if (!request || !active.ready || request.nonce !== active.nonce) return
+
+      const reply = (ok: boolean, data?: unknown, error?: BridgeErrorPayload) => {
+        const current = session.current
+        const target = frame.current?.contentWindow
+        // A navigation/reload replaces the session object; never deliver a
+        // response from an old request to the new document.
+        if (!current || current !== active || !current.ready || current.nonce !== request.nonce || !target) return
+        target.postMessage({
+          type: 'cloudpath:response', nonce: request.nonce, id: request.id, ok, data, error,
+        }, current.targetOrigin)
       }
       const deny = (message: string) => reply(false, undefined, { code: 'forbidden_scope', message })
       const run = async () => {
+        if (readOnly && (request.method === 'jobs.run' || request.method === 'config.update')) {
+          const message = request.method === 'jobs.run' ? t('bridge.denyJobsRun') : t('bridge.denyConfigWrite')
+          return reply(false, undefined, { code: 'forbidden_readonly', message })
+        }
         const params = isRecord(request.params) ? request.params : {}
         switch (request.method) {
           case 'instance.get':
@@ -139,15 +216,20 @@ export function PluginUIBridge({ pluginId, version, instance, section }: {
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [dataInstanceID, instance.id, scopes, src])
+  }, [dataInstanceID, instance.desired.plugin_id, instance.id, readOnly, section.scopes, src])
 
   const onLoad = () => {
-    setState('ready')
-    frame.current?.contentWindow?.postMessage({
-      type: 'cloudpath:init', apiVersion: 1,
-      instance: { id: dataInstanceID, plugin_id: instance.desired.plugin_id },
-      scopes: section.scopes ?? [],
-    }, '*')
+    const nonce = newNonce()
+    session.current = { nonce, ready: false, targetOrigin: '*' }
+    setState('loading')
+    // This bootstrap deliberately contains no scopes or instance data. It
+    // only gives the newly loaded document the nonce for the ready handshake.
+    frame.current?.contentWindow?.postMessage({ type: 'cloudpath:hello', nonce }, '*')
+  }
+
+  const onError = () => {
+    session.current = null
+    setState('error')
   }
 
   if (!src) {
@@ -172,7 +254,7 @@ export function PluginUIBridge({ pluginId, version, instance, section }: {
         sandbox="allow-scripts"
         referrerPolicy="no-referrer"
         onLoad={onLoad}
-        onError={() => setState('error')}
+        onError={onError}
         className="h-64 w-full border-0 bg-surface"
       />
     </div>

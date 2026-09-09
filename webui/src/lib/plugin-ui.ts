@@ -5,7 +5,7 @@
 //   - 任意远程 URL、绝对路径、`..`、未知 section、未知 scope 一律丢弃或 fail-closed；
 //   - 这里不读取 cookie/localStorage，也不把插件字段拼成 HTML。
 import type {
-  PluginApplicationContributionData, PluginCatalogView, PluginInstanceView, PluginUIContribution,
+  PluginApplicationContributionData, PluginCatalogDriverView, PluginCatalogView, PluginInstanceView, PluginUIContribution,
   PluginUIField, PluginUIFieldType, PluginUINavigation, PluginUIPage, PluginUIPresentation,
   PluginUISection, PluginUISectionType, PluginUISource, PluginUIVisibility, UserView,
 } from './types'
@@ -20,8 +20,10 @@ export const PLUGIN_UI_SOURCES: readonly PluginUISource[] = [
   'device-actions', 'diagnostics', 'state', 'events',
 ]
 export const PLUGIN_UI_PRESENTATIONS: readonly PluginUIPresentation[] = ['list', 'timeline', 'table', 'cards']
-export const PLUGIN_UI_FIELD_TYPES: readonly PluginUIFieldType[] = ['string', 'number', 'integer', 'boolean', 'select', 'textarea']
+export const PLUGIN_UI_FIELD_TYPES: readonly PluginUIFieldType[] = ['string', 'number', 'integer', 'boolean', 'select', 'textarea', 'array']
 export const PLUGIN_UI_FIELD_FORMATS = ['text', 'time', 'number', 'percent', 'duration'] as const
+/** Driver 设备详情只接受这三种 section；来源必须与契约一一对应。 */
+export const PLUGIN_UI_DEVICE_SECTION_TYPES = ['status', 'actions', 'diagnostics'] as const
 /** 自定义 iframe 只能通过 Core 的 bridge 调用这些收窄能力。 */
 export const PLUGIN_UI_SCOPE_ALLOWLIST = [
   'instance.read', 'bindings.read', 'jobs.read', 'records.read', 'jobs.run', 'config.write',
@@ -35,6 +37,12 @@ const PRESENTATION_SET = new Set<string>(PLUGIN_UI_PRESENTATIONS)
 const FIELD_TYPE_SET = new Set<string>(PLUGIN_UI_FIELD_TYPES)
 const FIELD_FORMAT_SET = new Set<string>(PLUGIN_UI_FIELD_FORMATS)
 const SCOPE_SET = new Set<string>(PLUGIN_UI_SCOPE_ALLOWLIST)
+const DEVICE_SECTION_TYPE_SET = new Set<string>(PLUGIN_UI_DEVICE_SECTION_TYPES)
+const DEVICE_SECTION_SOURCE: Record<typeof PLUGIN_UI_DEVICE_SECTION_TYPES[number], PluginUISource> = {
+  status: 'device',
+  actions: 'device-actions',
+  diagnostics: 'diagnostics',
+}
 const ROUTE_RE = /^[a-z0-9][a-z0-9-]{0,62}$/
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -61,6 +69,10 @@ function finite(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
+function boundedCount(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 64 ? value : undefined
+}
+
 function safeEntry(value: unknown): string | undefined {
   const raw = text(value)
   if (!raw || raw.length > 240 || raw.startsWith('/') || raw.includes('\\') || raw.includes('..')) return undefined
@@ -70,8 +82,8 @@ function safeEntry(value: unknown): string | undefined {
   return parts.join('/')
 }
 
-function normalizeField(raw: unknown): PluginUIField | null {
-  if (!record(raw)) return null
+function normalizeField(raw: unknown, depth = 0): PluginUIField | null {
+  if (!record(raw) || depth > 2) return null
   const key = text(raw.key)
   if (!key || key.length > 120) return null
   const type = text(raw.type)
@@ -93,6 +105,13 @@ function normalizeField(raw: unknown): PluginUIField | null {
     format: format && FIELD_FORMAT_SET.has(format) ? format as PluginUIField['format'] : undefined,
     primary: raw.primary === true ? true : undefined,
     hideWhenEmpty: raw.hideWhenEmpty === true ? true : undefined,
+    minItems: boundedCount(raw.minItems),
+    maxItems: boundedCount(raw.maxItems),
+  }
+  if (Array.isArray(raw.itemFields) && raw.itemFields.length > 0) {
+    const itemFields = raw.itemFields.slice(0, 32).map((item) => normalizeField(item, depth + 1))
+      .filter((item): item is PluginUIField => item !== null)
+    if (itemFields.length > 0) field.itemFields = itemFields
   }
   if (record(raw.values)) {
     const values: Record<string, string> = {}
@@ -138,7 +157,7 @@ function normalizeSection(raw: unknown): PluginUISection | null {
       .slice(0, 16)
   }
   if (Array.isArray(raw.fields)) {
-    section.fields = raw.fields.slice(0, 64).map(normalizeField)
+    section.fields = raw.fields.slice(0, 64).map((item) => normalizeField(item))
       .filter((item): item is PluginUIField => item !== null)
   }
   return section
@@ -222,7 +241,7 @@ export interface ApplicationNavigationItem {
   contribution: PluginApplicationContributionData
   navigation: PluginUINavigation
   instances: PluginInstanceView[]
-  primaryInstance: PluginInstanceView
+  primaryInstance?: PluginInstanceView
 }
 
 export interface ApplicationRouteReady {
@@ -256,8 +275,8 @@ function hasEnabled(instances: PluginInstanceView[]): boolean {
   return instances.some((instance) => instance.desired.enabled)
 }
 
-function primaryInstance(instances: PluginInstanceView[]): PluginInstanceView {
-  return instances.find((instance) => instance.desired.enabled) ?? instances[0]!
+function primaryInstance(instances: PluginInstanceView[]): PluginInstanceView | undefined {
+  return instances.find((instance) => instance.desired.enabled) ?? instances[0]
 }
 
 /**
@@ -275,8 +294,8 @@ export function buildApplicationNavigation(
       const navigation = contribution.ui?.navigation
       if (!navigation) continue
       const related = instances.filter((instance) => instance.desired.plugin_id === plugin.id)
-      if (related.length === 0) continue
       const visibility = navigation.visibility ?? 'instance-enabled'
+      if (related.length === 0 && visibility !== 'always') continue
       if (visibility !== 'always' && !hasEnabled(related)) continue
       candidates.push({
         key: `${plugin.id}:${contribution.id}:${navigation.route}`,
@@ -321,10 +340,10 @@ export function resolveApplicationRoute(
   if (pages.length === 0) return { kind: 'no-page', route }
   const page = pageId ? pages.find((candidate) => candidate.id === pageId) : pages[0]
   if (!page) return { kind: 'page-not-found', route, pageId: pageId! }
-  const instance = requestedInstanceId
+  const instance = (requestedInstanceId
     ? related.find((candidate) => candidate.desired.instance_id === requestedInstanceId || candidate.id === requestedInstanceId)
       ?? primaryInstance(related)
-    : primaryInstance(related)
+    : primaryInstance(related)) ?? related[0]!
   return {
     kind: 'ready',
     plugin: match.plugin,
@@ -344,4 +363,39 @@ export function pluginUIAssetURL(pluginId: string, version: string | undefined, 
   if (!safe || !canonicalVersion) return undefined
   const encoded = safe.split('/').map((part) => encodeURIComponent(part)).join('/')
   return `/api/plugin-ui/assets/${encodeURIComponent(pluginId)}/${encodeURIComponent(canonicalVersion)}/${encoded}`
+}
+
+export interface DriverDeviceUIResolution {
+  plugin: PluginCatalogView
+  contribution: PluginCatalogDriverView
+  sections: PluginUISection[]
+}
+
+function isDriverDeviceSection(section: PluginUISection): boolean {
+  if (!DEVICE_SECTION_TYPE_SET.has(section.type)) return false
+  return section.source === DEVICE_SECTION_SOURCE[section.type as typeof PLUGIN_UI_DEVICE_SECTION_TYPES[number]]
+}
+
+/**
+ * Resolve a device adapter to its installed, verified Driver contribution.
+ *
+ * `DeviceView.adapter` is the backend's registered adapter fact; the manifest contract
+ * requires `contributes.drivers[].id` to equal that adapter name. Ambiguous matches fail
+ * closed instead of guessing which plugin should own the device page.
+ */
+export function resolveDriverDeviceUI(
+  plugins: PluginCatalogView[], adapter: string,
+): DriverDeviceUIResolution | undefined {
+  const adapterID = adapter.trim()
+  if (!adapterID) return undefined
+  const matches: DriverDeviceUIResolution[] = []
+  for (const plugin of plugins) {
+    if (plugin.kind !== 'driver' || !plugin.verified) continue
+    for (const contribution of plugin.contributes.drivers ?? []) {
+      if (contribution.id !== adapterID) continue
+      const sections = (contribution.ui?.device?.sections ?? []).filter(isDriverDeviceSection)
+      if (sections.length > 0) matches.push({ plugin, contribution, sections })
+    }
+  }
+  return matches.length === 1 ? matches[0] : undefined
 }

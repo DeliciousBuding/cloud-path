@@ -2,11 +2,11 @@
 //
 // The main view never renders raw JSON. JSON remains available only in an
 // advanced details block as a fallback for diagnostics.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { FormEvent } from 'react'
-import { Braces, Save } from 'lucide-react'
-import { Button, Checkbox, Select, TextField } from '@/components/ui'
+import type { ComponentProps, FormEvent } from 'react'
+import { Braces, Plus, Save, X } from 'lucide-react'
+import { Button, Checkbox, IconButton, Input, Select, Textarea, TextField } from '@/components/ui'
 import { PluginErrorNote } from '@/components/plugin/PluginFacts'
 import { useUpdateInstance } from '@/hooks/usePlugins'
 import { safeConfigEntries } from '@/lib/plugins'
@@ -36,12 +36,14 @@ function getPath(config: Record<string, string>, key: string): unknown {
   return current
 }
 
-function typedFieldValue(field: PluginUIField, value: string): unknown {
-  if (value === '') return undefined
-  if (field.type === 'boolean') return value === 'true'
-  if (field.type === 'number' || field.type === 'integer') return Number(value)
-  if (field.enum) return field.enum.find((option) => String(option) === value) ?? value
-  return value
+function typedFieldValue(field: PluginUIField, value: unknown): unknown {
+  if (field.type === 'array') return Array.isArray(value) ? value : []
+  const text = typeof value === 'string' ? value : value === undefined || value === null ? '' : String(value)
+  if (text === '') return undefined
+  if (field.type === 'boolean') return text === 'true'
+  if (field.type === 'number' || field.type === 'integer') return Number(text)
+  if (field.enum) return field.enum.find((option) => String(option) === text) ?? text
+  return text
 }
 
 /**
@@ -75,28 +77,125 @@ function setPath(config: Record<string, string>, key: string, value: unknown, t:
   return { ...config, [root]: JSON.stringify(rootValue) }
 }
 
-function fieldValue(config: Record<string, string>, field: PluginUIField): string {
+function fieldValue(config: Record<string, string>, field: PluginUIField): unknown {
   const value = getPath(config, field.key)
-  if (value === undefined || value === null) return field.default === undefined ? '' : String(field.default)
-  return String(value)
+  if (value === undefined || value === null) return field.default
+  return value
 }
 
-function validateField(field: PluginUIField, value: string, t: (key: string, options?: Record<string, unknown>) => string): string | undefined {
-  if (field.required && value.trim() === '') return t('config.required')
-  if (value === '') return undefined
+function validateField(field: PluginUIField, value: unknown, t: (key: string, options?: Record<string, unknown>) => string): string | undefined {
+  if (field.type === 'array') {
+    const items = Array.isArray(value) ? value : []
+    if (field.required && items.length === 0) return t('config.required')
+    if (field.minItems !== undefined && items.length < field.minItems) return t('config.minItems', { value: field.minItems })
+    if (field.maxItems !== undefined && items.length > field.maxItems) return t('config.maxItems', { value: field.maxItems })
+    for (const item of items) {
+      const record = isRecord(item) ? item : {}
+      for (const itemField of field.itemFields ?? []) {
+        const itemError = validateField(itemField, record[itemField.key], t)
+        if (itemError) return `${itemField.label || itemField.key}：${itemError}`
+      }
+    }
+    return undefined
+  }
+  const textValue = typeof value === 'string' ? value : value === undefined || value === null ? '' : String(value)
+  if (field.required && textValue.trim() === '') return t('config.required')
+  if (textValue === '') return undefined
   if (field.type === 'number' || field.type === 'integer') {
-    const number = Number(value)
+    const number = Number(textValue)
     if (!Number.isFinite(number)) return t('config.invalidNumber')
     if (field.type === 'integer' && !Number.isInteger(number)) return t('config.invalidInteger')
     if (field.minimum !== undefined && number < field.minimum) return t('config.minimum', { value: field.minimum })
     if (field.maximum !== undefined && number > field.maximum) return t('config.maximum', { value: field.maximum })
   }
   if (field.pattern) {
-    try { if (!new RegExp(field.pattern).test(value)) return t('config.invalidPattern') }
+    try { if (!new RegExp(field.pattern).test(textValue)) return t('config.invalidPattern') }
     catch { return t('config.invalidPatternRule') }
   }
-  if (field.enum && !field.enum.some((option) => String(option) === value)) return t('config.invalidOption')
+  if (field.enum && !field.enum.some((option) => String(option) === textValue)) return t('config.invalidOption')
   return undefined
+}
+
+function TextareaField({ label, hint, error, ...rest }: {
+  label: string
+  hint?: string
+  error?: string
+} & Omit<ComponentProps<typeof Textarea>, 'error'>) {
+  const id = useId()
+  const message = error || hint
+  const messageId = message ? `${id}-message` : undefined
+  return <div className="min-w-0">
+    <label htmlFor={id} className="mb-1.5 block text-compact font-medium text-ink-2">{label}</label>
+    <Textarea id={id} error={Boolean(error)} aria-invalid={error ? true : undefined}
+      aria-describedby={messageId} {...rest} />
+    {message && <p id={messageId} className={error ? 'mt-1.5 text-meta text-bad' : 'mt-1.5 text-meta leading-relaxed text-ink-3'}>{message}</p>}
+  </div>
+}
+
+function emptyArrayItem(fields: PluginUIField[]): Record<string, unknown> {
+  return Object.fromEntries(fields.map((field) => [field.key, field.default ?? (field.type === 'boolean' ? false : '')]))
+}
+
+function ArrayField({ field, value, disabled, error, onChange }: {
+  field: PluginUIField
+  value: unknown
+  disabled: boolean
+  error?: string
+  onChange: (value: unknown[]) => void
+}) {
+  const { t } = useTranslation('plugin')
+  const items = Array.isArray(value) ? value : []
+  const itemFields = field.itemFields ?? []
+  const message = error || field.description
+  const updateItem = (index: number, key: string, next: unknown) => {
+    onChange(items.map((item, current) => current === index && isRecord(item) ? { ...item, [key]: next } : item))
+  }
+  return <div className="min-w-0 sm:col-span-2">
+    <div className="mb-2 flex items-center justify-between gap-3">
+      <label className="text-compact font-medium text-ink-2">{field.label || field.key}{field.required ? ' *' : ''}</label>
+      <Button type="button" variant="ghost" size="sm" disabled={disabled}
+        onClick={() => onChange([...items, emptyArrayItem(itemFields)])}><Plus size={13} />{t('config.addItem')}</Button>
+    </div>
+    {message && <p className={error ? 'mb-2 text-meta text-bad' : 'mb-2 text-meta leading-relaxed text-ink-3'}>{message}</p>}
+    {items.length === 0
+      ? <p className="rounded-tile bg-surface-2 px-3.5 py-3 text-meta text-ink-3">{t('config.noItems')}</p>
+      : <div className="space-y-3">{items.map((item, index) => {
+        const record = isRecord(item) ? item : {}
+        return <div key={index} className="rounded-tile border border-hairline p-3.5">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="text-meta font-medium text-ink-2">{t('config.item', { index: index + 1 })}</p>
+            <IconButton type="button" label={t('config.removeItem', { index: index + 1 })} size="sm" disabled={disabled}
+              onClick={() => onChange(items.filter((_, current) => current !== index))}><X size={13} /></IconButton>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {itemFields.map((itemField) => {
+              const itemValue = record[itemField.key]
+              const textValue = typeof itemValue === 'string' ? itemValue : itemValue === undefined || itemValue === null ? '' : String(itemValue)
+              if (itemField.type === 'boolean') return <label key={itemField.key} className="flex min-h-touch items-center gap-2 self-end text-body text-ink-2">
+                <Checkbox checked={itemValue === true || itemValue === 'true'} disabled={disabled}
+                  onChange={(event) => updateItem(index, itemField.key, event.target.checked)} />
+                <span>{itemField.label || itemField.key}</span>
+              </label>
+              if (itemField.enum?.length || itemField.type === 'select') return <label key={itemField.key} className="min-w-0 text-compact font-medium text-ink-2">
+                <span className="mb-1.5 block">{itemField.label || itemField.key}{itemField.required ? ' *' : ''}</span>
+                <Select className="w-full" value={textValue} disabled={disabled} required={itemField.required}
+                  onChange={(event) => updateItem(index, itemField.key, event.target.value)}>
+                  <option value="">{t('config.select')}</option>
+                  {(itemField.enum ?? []).map((option) => <option key={String(option)} value={String(option)}>{itemField.values?.[String(option)] ?? String(option)}</option>)}
+                </Select>
+              </label>
+              return <label key={itemField.key} className="min-w-0 text-compact font-medium text-ink-2">
+                <span className="mb-1.5 block">{itemField.label || itemField.key}{itemField.required ? ' *' : ''}</span>
+                <Input className="w-full" disabled={disabled} required={itemField.required}
+                  type={itemField.type === 'number' || itemField.type === 'integer' ? 'number' : 'text'}
+                  value={textValue} placeholder={itemField.placeholder}
+                  onChange={(event) => updateItem(index, itemField.key, event.target.value)} />
+              </label>
+            })}
+          </div>
+        </div>
+      })}</div>}
+  </div>
 }
 
 export function PluginConfigForm({ instance, section, readOnly }: {
@@ -106,14 +205,14 @@ export function PluginConfigForm({ instance, section, readOnly }: {
 }) {
   const { t } = useTranslation('plugin')
   const fields = useMemo(() => section.fields ?? [], [section.fields])
-  const [values, setValues] = useState<Record<string, string>>({})
+  const [values, setValues] = useState<Record<string, unknown>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState<unknown>(null)
   const update = useUpdateInstance()
   const config = useMemo(() => instance.desired.config ?? {}, [instance.desired.config])
 
   useEffect(() => {
-    const next: Record<string, string> = {}
+    const next: Record<string, unknown> = {}
     for (const field of fields) next[field.key] = fieldValue(config, field)
     setValues(next)
     setErrors({})
@@ -133,14 +232,14 @@ export function PluginConfigForm({ instance, section, readOnly }: {
     event.preventDefault()
     const nextErrors: Record<string, string> = {}
     for (const field of fields) {
-      const message = validateField(field, values[field.key] ?? '', t)
+      const message = validateField(field, values[field.key], t)
       if (message) nextErrors[field.key] = message
     }
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) return
     let nextConfig = { ...config }
     try {
-      for (const field of fields) nextConfig = setPath(nextConfig, field.key, typedFieldValue(field, values[field.key] ?? ''), t)
+      for (const field of fields) nextConfig = setPath(nextConfig, field.key, typedFieldValue(field, values[field.key]), t)
       setError(null)
       await update.mutateAsync({ id: instance.id, body: { config: nextConfig } })
     } catch (cause) {
@@ -152,34 +251,52 @@ export function PluginConfigForm({ instance, section, readOnly }: {
     {readOnly && <p className="rounded-tile bg-ink-3/10 px-3.5 py-3 text-body text-ink-2">{t('config.readOnly')}</p>}
     <div className="grid gap-4 sm:grid-cols-2">
       {fields.map((field) => {
-        const value = values[field.key] ?? ''
+        const value = values[field.key]
+        const textValue = typeof value === 'string' ? value : value === undefined || value === null ? '' : String(value)
         const common = {
           label: field.label || field.key,
           hint: field.description,
           error: errors[field.key],
           disabled: readOnly || update.isPending,
         }
+        const message = common.error || field.description
+        const messageId = message ? `${field.key}-message` : undefined
+        if (field.type === 'array') {
+          return <ArrayField key={field.key} field={field} value={value} disabled={common.disabled} error={common.error}
+            onChange={(next) => setValues((current) => ({ ...current, [field.key]: next }))} />
+        }
         if (field.type === 'boolean') {
-          return <label key={field.key} className="flex min-h-touch items-center gap-2 self-end text-body text-ink-2">
-            <Checkbox checked={value === 'true'} disabled={common.disabled}
-              onChange={(event) => setValues((current) => ({ ...current, [field.key]: String(event.target.checked) }))} />
-            <span>{common.label}</span>
-          </label>
+          return <div key={field.key} className="min-w-0 self-end">
+            <label className="flex min-h-touch items-center gap-2 text-body text-ink-2">
+              <Checkbox checked={value === true || value === 'true'} disabled={common.disabled} aria-describedby={messageId}
+                onChange={(event) => setValues((current) => ({ ...current, [field.key]: String(event.target.checked) }))} />
+              <span>{common.label}</span>
+            </label>
+            {message && <p id={messageId} className={common.error ? 'mt-1.5 text-meta text-bad' : 'mt-1.5 text-meta leading-relaxed text-ink-3'}>{message}</p>}
+          </div>
         }
         if (field.enum?.length || field.type === 'select') {
           return <label key={field.key} className="min-w-0 text-compact font-medium text-ink-2">
             <span className="mb-1.5 block">{common.label}{field.required ? ' *' : ''}</span>
-            <Select className="w-full" value={value} disabled={common.disabled}
-              aria-invalid={common.error ? true : undefined}
+            <Select className="w-full" value={textValue} disabled={common.disabled} required={field.required}
+              aria-invalid={common.error ? true : undefined} aria-describedby={messageId}
               onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))}>
               <option value="">{t('config.select')}</option>
-              {(field.enum ?? []).map((option) => <option key={String(option)} value={String(option)}>{String(option)}</option>)}
+              {(field.enum ?? []).map((option) => <option key={String(option)} value={String(option)}>{field.values?.[String(option)] ?? String(option)}</option>)}
             </Select>
-            {common.error && <span className="mt-1.5 block text-meta text-bad">{common.error}</span>}
+            {message && <p id={messageId} className={common.error ? 'mt-1.5 text-meta text-bad' : 'mt-1.5 text-meta leading-relaxed text-ink-3'}>{message}</p>}
           </label>
         }
-        return <TextField key={field.key} {...common} type={field.type === 'number' || field.type === 'integer' ? 'number' : 'text'}
-          step={field.type === 'integer' ? 1 : 'any'} value={value}
+        if (field.type === 'textarea') {
+          return <TextareaField key={field.key} label={common.label} hint={field.description} error={common.error}
+            disabled={common.disabled} required={field.required} value={textValue} rows={4}
+            autoComplete="off" spellCheck={false}
+            placeholder={field.secret ? t('config.secretPlaceholder') : field.placeholder}
+            onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))} />
+        }
+        return <TextField key={field.key} {...common} required={field.required}
+          type={field.type === 'number' || field.type === 'integer' ? 'number' : 'text'}
+          step={field.type === 'integer' ? 1 : 'any'} value={textValue}
           autoComplete="off" spellCheck={false}
           placeholder={field.secret ? t('config.secretPlaceholder') : field.placeholder}
           onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))} />
