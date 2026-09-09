@@ -400,7 +400,7 @@ func (h *AppHost) reconcile(ctx context.Context) error {
 		if running && run.row.Revision == r.Revision {
 			// desired 无变化，但实际态可能已失活（共享进程被连带杀死、
 			// 插件进程崩溃后流断开等）。reconcile 必须自愈：否则 failed
-			// 实例永远躺着（2026-09-05 jp1 生产实测：box-prod failed 后
+			// 实例永远躺着（2026-09-05 生产环境实测：box-prod failed 后
 			// 90 分钟无人重启，窗口照开但 job/事件全部丢弃）。
 			alive := false
 			if inst, err := h.rt.GetInstance(key.tenantStr(), key.instanceID); err == nil {
@@ -461,7 +461,7 @@ func (h *AppHost) stopInstance(key appInstKey) {
 		return
 	}
 	// 共享进程还有兄弟实例：只拆本实例会话。绝不能发 Shutdown RPC——
-	// 2026-09-05 jp1 生产实测：删除兄弟实例触发进程退出，同进程的
+	// 2026-09-05 生产环境实测：删除兄弟实例触发进程退出，同进程的
 	// box-prod 被连带杀死 → state=failed。
 	if err := h.rt.StopInstanceStreamOnly(key.tenantStr(), key.instanceID); err != nil {
 		h.logger.Warn("apphost stop instance (stream only)", "instance", key.instanceID, "tenant", key.tenantID, "err", err)

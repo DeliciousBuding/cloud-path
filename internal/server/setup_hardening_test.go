@@ -44,7 +44,7 @@ func doSetup(h http.Handler, remote string, headers map[string]string) *httptest
 	return rec
 }
 
-// loopbackProxies 是 jp1 现网形态的 trusted proxies 配置（nginx 与 server 同机）。
+// loopbackProxies 是 生产反代形态的 trusted proxies 配置（nginx 与 server 同机）。
 func loopbackProxies(t *testing.T) *auth.TrustedProxies {
 	t.Helper()
 	tp, err := auth.ParseTrustedProxies([]string{"127.0.0.1"})
@@ -96,7 +96,7 @@ func TestSetupRejectsForgedLoopbackForwarding(t *testing.T) {
 	}
 }
 
-// TestSetupRejectsTrustedProxyPublicClient 锁定 jp1 现网形态
+// TestSetupRejectsTrustedProxyPublicClient 锁定 生产反代形态
 // （CLOUDPATH_TRUSTED_PROXIES=127.0.0.1 + 同机 nginx）：公网访客必须被挡。
 func TestSetupRejectsTrustedProxyPublicClient(t *testing.T) {
 	// 1) nginx 如实追加真实客户端 IP。
