@@ -4,11 +4,12 @@
 
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import Overview from '@/pages/Overview'
 import { installFetch, stubResponse } from '@/test/http'
 import { renderWithProviders, resetStores } from '@/test/render'
 import { useLive } from '@/store/ws'
+import { i18n } from '@/i18n'
 import { normalizeOverview, overviewAlerts, overviewStats } from '@/lib/overview'
 import type { OverviewView } from '@/lib/types'
 
@@ -53,6 +54,7 @@ function route(overview: OverviewView | null, status = 200, devices: unknown[] =
 }
 
 beforeEach(() => { resetStores() })
+afterEach(() => { void i18n.changeLanguage('zh-CN') })
 
 describe('概览：有数据', () => {
   it('首屏先给整体状态，再用一组紧凑指标补充事实', async () => {
@@ -71,6 +73,17 @@ describe('概览：有数据', () => {
     for (const word of ['Schema', 'Descriptor', 'Capability', 'Adapter', 'ACK', 'JSON', '契约', '回执', '收敛', '快照', 'server', 'cookie', 'SQLite', 'WebSocket']) {
       expect(text).not.toContain(word)
     }
+  })
+
+  it('英文 locale 下主状态与指标使用英文资源', async () => {
+    await i18n.changeLanguage('en-US')
+    route(FULL)
+    renderWithProviders(<Overview />)
+    expect(await screen.findByText('Current status')).toBeInTheDocument()
+    expect(await screen.findByText('Devices online')).toBeInTheDocument()
+    expect(screen.getByText('Gateways online')).toBeInTheDocument()
+    expect(screen.getByText('Apps healthy')).toBeInTheDocument()
+    expect(screen.getByText('Failed operations')).toBeInTheDocument()
   })
 
   it('需要关注栏只给聚合主行与去向：失败明细的单一证据家是活动页，概览不复述 ledger', async () => {

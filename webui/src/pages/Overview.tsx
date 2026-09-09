@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import {
   Activity, AlertTriangle, ArrowDown, ArrowRight, CheckCircle2, Cpu, History, Inbox,
   RefreshCw, WifiOff,
@@ -21,15 +22,16 @@ import { useDevices } from '@/hooks/useDevices'
 import { useEdges } from '@/hooks/useEdges'
 import { useOverview } from '@/hooks/useOverview'
 import { useLive } from '@/store/ws'
+import { i18n } from '@/i18n'
 
 function fmtUptime(seconds: unknown): string | null {
   if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) return null
-  if (seconds < 60) return '服务刚刚启动'
+  if (seconds < 60) return i18n.t('uptime.starting', { ns: 'overview' })
   const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `服务已运行 ${minutes} 分钟`
+  if (minutes < 60) return i18n.t('uptime.minutes', { ns: 'overview', count: minutes })
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `服务已运行 ${hours} 小时`
-  return `服务已运行 ${Math.floor(hours / 24)} 天`
+  if (hours < 24) return i18n.t('uptime.hours', { ns: 'overview', count: hours })
+  return i18n.t('uptime.days', { ns: 'overview', count: Math.floor(hours / 24) })
 }
 
 /**
@@ -39,7 +41,8 @@ function fmtUptime(seconds: unknown): string | null {
  * 只使用设备和网关列表的真实字段降级，任何数字都不在前端编造。
  */
 export default function Overview() {
-  usePageTitle('概览')
+  const { t } = useTranslation('overview')
+  usePageTitle(t('title'))
   useNow()
 
   const { data, loading, isFetching, refetch } = useOverview()
@@ -59,11 +62,14 @@ export default function Overview() {
   const stats: OverviewStat[] | null = data
     ? overviewStats(data).map((s) => ({
       ...s,
-      label: s.key === 'plugins' ? '应用正常' : s.key === 'commands' ? '失败操作' : s.label,
-      emptyHint: s.key === 'devices' ? '等待网关接入设备'
-        : s.key === 'edges' ? '尚未有网关注册'
-          : s.key === 'plugins' ? '还没有应用'
-            : s.key === 'commands' ? '24 小时内没有失败或超时' : s.emptyHint,
+      label: s.key === 'devices' ? t('stats.devices')
+        : s.key === 'edges' ? t('stats.edges')
+          : s.key === 'plugins' ? t('stats.plugins')
+            : t('stats.commands'),
+      emptyHint: s.key === 'devices' ? t('empty.devices')
+        : s.key === 'edges' ? t('empty.edges')
+          : s.key === 'plugins' ? t('empty.plugins')
+            : t('empty.commands'),
     }))
     : null
 
@@ -72,15 +78,15 @@ export default function Overview() {
   // 首帧仍在读取聚合状态时，不用空列表提前渲染 0/0；列表通道失败或聚合失败后才降级。
   const fallbackStats: OverviewStat[] = !serverOk && !loading ? [
     ...(devOk ? [{
-      key: 'devices' as const, label: '在线设备',
+      key: 'devices' as const, label: t('stats.devices'),
       online: devices.filter((d) => d.online).length, total: devices.length,
-      emptyHint: '等待网关接入设备',
+      emptyHint: t('empty.devices'),
       tone: (devices.length === 0 ? 'idle' : devices.some((d) => d.online) ? 'ok' : 'bad') as Tone,
     }] : []),
     ...(edgesOk ? [{
-      key: 'edges' as const, label: '在线网关',
+      key: 'edges' as const, label: t('stats.edges'),
       online: edges.online, total: edges.list.length,
-      emptyHint: '尚未有网关注册',
+      emptyHint: t('empty.edges'),
       tone: (edges.list.length === 0 ? 'idle' : edges.online === 0 ? 'bad' : 'ok') as Tone,
     }] : []),
   ] : []
@@ -89,16 +95,14 @@ export default function Overview() {
   const alerts: OverviewAlert[] = data
     ? overviewAlerts(data).map((a) => ({
       ...a,
-      title: a.id === 'edges-offline' ? '网关连接中断'
-        : a.id === 'devices-offline' ? '部分设备离线'
-          : a.id === 'commands-failed' ? '有操作未完成'
-            : a.id === 'plugins-gap' ? '应用尚未就绪' : a.title,
-      hint: a.id === 'edges-offline'
-        ? '检查网关电源和网络；设备会在网关恢复后继续更新。'
-        : a.id === 'devices-offline' ? '查看最后在线时间，确认设备供电和连接。'
-          : a.id === 'commands-failed' ? '查看失败原因和发生时间，必要时重新操作。'
-            : a.id === 'plugins-gap' ? '确认运行位置是否在线；应用会在条件恢复后继续应用设置。'
-              : a.hint,
+      title: a.id === 'edges-offline' ? t('alerts.edgesOfflineTitle')
+        : a.id === 'devices-offline' ? t('alerts.devicesOfflineTitle')
+          : a.id === 'commands-failed' ? t('alerts.commandsFailedTitle')
+            : a.id === 'plugins-gap' ? t('alerts.pluginsGapTitle') : a.title,
+      hint: a.id === 'edges-offline' ? t('alerts.edgesOfflineHint')
+        : a.id === 'devices-offline' ? t('alerts.devicesOfflineHint')
+          : a.id === 'commands-failed' ? t('alerts.commandsFailedHint')
+            : a.id === 'plugins-gap' ? t('alerts.pluginsGapHint') : a.hint,
     }))
     : []
 
@@ -108,13 +112,15 @@ export default function Overview() {
       return {
         id: `dev-offline-${d.id}`, tone: 'warn', count: 1,
         to: `/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`,
-        title: `${deviceShortName(d)} 离线`, hint: '查看最后在线时间，确认设备供电和连接。',
+        title: t('fallback.deviceOfflineTitle', { name: deviceShortName(d) }),
+        hint: t('fallback.deviceOfflineHint'),
       }
     }),
     ...edges.list.filter((e) => !e.online).map((e): OverviewAlert => ({
       id: `edge-offline-${e.edge_id}`, tone: 'bad', count: 1,
       to: `/edges/${encodeURIComponent(e.edge_id)}`,
-      title: `网关 ${e.edge_id} 离线`, hint: '检查网关电源和网络。',
+      title: t('fallback.edgeOfflineTitle', { id: e.edge_id }),
+      hint: t('fallback.edgeOfflineHint'),
     })),
   ] : []
 
@@ -127,40 +133,40 @@ export default function Overview() {
   const partial = !serverOk && !loading && hasStats
 
   let nowTone: Tone = 'idle'
-  let nowTitle = '正在读取状态'
-  let nowDetail = '正在获取设备与网关的最新状态。'
+  let nowTitle = t('now.loadingTitle')
+  let nowDetail = t('now.loadingDetail')
   let NowIcon = Activity
 
   if (!hasStats && !stillLoading) {
     nowTone = 'bad'
-    nowTitle = '状态暂时不可用'
-    nowDetail = '设备与网关状态没有加载出来。请重新加载；下方运行记录仍会独立加载。'
+    nowTitle = t('now.unavailableTitle')
+    nowDetail = t('now.unavailableDetail')
     NowIcon = WifiOff
   } else if (hasStats && attention > 0) {
     nowTone = attentionRows.some((a) => a.tone === 'bad') ? 'bad' : 'warn'
-    nowTitle = `有 ${attention} 项需要处理`
-    nowDetail = '先从下方「需要关注」开始，每一项都能直接前往对应页面。'
+    nowTitle = t('now.attentionTitle', { count: attention })
+    nowDetail = t('now.attentionDetail')
     NowIcon = AlertTriangle
   } else if (hasStats && (deviceStat?.total ?? 0) === 0) {
     nowTone = 'idle'
-    nowTitle = '等待设备接入'
-    nowDetail = '先接入并启动网关，设备上线后这里会显示最新状态。'
+    nowTitle = t('now.waitingTitle')
+    nowDetail = t('now.waitingDetail')
     NowIcon = Inbox
   } else if (hasStats) {
     nowTone = 'ok'
-    nowTitle = '运行正常'
-    nowDetail = '设备、网关和应用没有需要立即处理的异常。'
+    nowTitle = t('now.healthyTitle')
+    nowDetail = t('now.healthyDetail')
     NowIcon = CheckCircle2
   }
 
   const subtitle = data?.server_time
-    ? `更新于 ${timeAgo(data.server_time)}`
-    : fmtUptime(health?.uptime_s) ?? (health ? '服务状态正常' : '设备与网关的最新状态')
+    ? t('subtitleUpdated', { time: timeAgo(data.server_time) })
+    : fmtUptime(health?.uptime_s) ?? (health ? t('serviceHealthy') : t('latestStatus'))
 
   return (
     <>
       <PageHeader
-        title="概览"
+        title={t('title')}
         subtitle={subtitle}
         actions={
           <button
@@ -169,7 +175,7 @@ export default function Overview() {
             onClick={() => { void refetch(); void refetchDevices() }}
             disabled={isFetching}
           >
-            {isFetching ? <Spinner size={13} /> : <RefreshCw size={13} />} 刷新
+            {isFetching ? <Spinner size={13} /> : <RefreshCw size={13} />} {t('refresh')}
           </button>
         }
       />
@@ -181,7 +187,7 @@ export default function Overview() {
       >
         <div className={cn(hasStats && 'lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(22rem,1fr)]')}>
           <div className="p-4 sm:p-6">
-            <p className="text-[12px] font-medium text-ink-3">现在怎样</p>
+            <p className="text-[12px] font-medium text-ink-3">{t('now.section')}</p>
             <div className="mt-3 flex items-start gap-3">
               <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9', TONE_CLS[nowTone])}>
                 <NowIcon size={18} strokeWidth={2} />
@@ -197,37 +203,37 @@ export default function Overview() {
             <div className="mt-4 flex flex-wrap items-center gap-2">
               {!hasStats && !stillLoading ? (
                 <button type="button" className="btn btn-primary" onClick={() => { void refetch(); void refetchDevices() }} disabled={isFetching}>
-                  {isFetching ? <Spinner size={13} /> : <RefreshCw size={13} />} 重新加载
+                  {isFetching ? <Spinner size={13} /> : <RefreshCw size={13} />} {t('reload')}
                 </button>
               ) : attention > 0 ? (
-                <a href="#attention" className="btn btn-primary">查看需要处理 <ArrowDown size={14} /></a>
+                <a href="#attention" className="btn btn-primary">{t('actions.viewAttention')} <ArrowDown size={14} /></a>
               ) : (deviceStat?.total ?? 0) === 0 && hasStats ? (
-                <Link to="/edges" className="btn btn-primary">前往网关 <ArrowRight size={14} /></Link>
+                <Link to="/edges" className="btn btn-primary">{t('actions.goEdges')} <ArrowRight size={14} /></Link>
               ) : hasStats ? (
-                <Link to="/devices" className="btn btn-primary">查看设备 <ArrowRight size={14} /></Link>
+                <Link to="/devices" className="btn btn-primary">{t('actions.viewDevices')} <ArrowRight size={14} /></Link>
               ) : null}
             </div>
 
             {partial && (
               <p className="mt-4 flex flex-wrap items-center gap-1.5 text-[12px] text-ink-3">
                 <AlertTriangle size={12} className="shrink-0 text-warn" />
-                部分状态暂不可用，当前显示设备和网关的最新结果。
-                <button type="button" className="link" onClick={() => void refetch()}>重新加载</button>
+                {t('partial.message')}
+                <button type="button" className="link" onClick={() => void refetch()}>{t('partial.reload')}</button>
               </p>
             )}
           </div>
 
           {hasStats && (
             <div className="border-t border-hairline bg-surface-2/60 p-4 sm:p-5 lg:border-l lg:border-t-0">
-              <p className="text-[12px] font-medium text-ink-3">关键状态</p>
+              <p className="text-[12px] font-medium text-ink-3">{t('keyStatus')}</p>
               <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
                 {shownStats?.map((s) => {
                   const value = s.key === 'commands' ? s.online : `${s.online}/${s.total}`
                   const hint = s.key === 'devices' || s.key === 'edges'
-                    ? s.total === 0 ? s.emptyHint : `${Math.max(0, s.total - s.online)} 台未在线`
+                    ? s.total === 0 ? s.emptyHint : t('hints.offlineDevices', { count: Math.max(0, s.total - s.online) })
                     : s.key === 'plugins'
-                      ? s.total === 0 ? s.emptyHint : s.online === s.total ? '全部正常' : `${s.total - s.online} 个未运行`
-                      : s.online === 0 ? '没有失败或超时' : '24 小时内需要查看'
+                      ? s.total === 0 ? s.emptyHint : s.online === s.total ? t('hints.allHealthy') : t('hints.pluginsNotRunning', { count: s.total - s.online })
+                      : s.online === 0 ? t('hints.noFailures') : t('hints.checkFailures')
                   return (
                     <div key={s.key} className="min-w-0 border-b border-hairline pb-2 last:border-b-0">
                       <div className="flex items-center justify-between gap-2">
@@ -255,29 +261,33 @@ export default function Overview() {
             <section id="attention" className="card scroll-mt-28 overflow-hidden">
               <div className="flex items-center justify-between gap-3 border-b border-hairline px-4 py-3.5 sm:px-5">
                 <div className="min-w-0">
-                  <p className="text-[12px] text-ink-3">下一步</p>
+                  <p className="text-[12px] text-ink-3">{t('attention.section')}</p>
                   <h2 className="mt-0.5 flex items-center gap-1.5 text-[15px] font-semibold tracking-[-0.01em]">
-                    <AlertTriangle size={14} className="text-warn" /> 需要关注
+                    <AlertTriangle size={14} className="text-warn" /> {t('attention.title')}
                   </h2>
                 </div>
-                {attention > 0 && <Badge tone="warn">{attentionCategories} 类 · {attention} 项</Badge>}
+                {attention > 0 && (
+                  <Badge tone="warn">
+                    {t('attention.badge', { count: attention, categories: attentionCategories, items: attention })}
+                  </Badge>
+                )}
               </div>
 
               {attentionRows.length === 0 ? (
                 !hasStats && !stillLoading ? (
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-4 sm:px-5">
                     <AlertTriangle size={16} className="shrink-0 text-warn" />
-                    <p className="min-w-0 flex-1 text-sm text-ink-2">状态不可用，暂时无法判断是否需要处理。</p>
+                    <p className="min-w-0 flex-1 text-sm text-ink-2">{t('attention.unavailable')}</p>
                     <button type="button" className="link shrink-0 text-xs" onClick={() => { void refetch(); void refetchDevices() }}>
-                      重新检查
+                      {t('attention.recheck')}
                     </button>
                   </div>
                 ) : (
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-4 sm:px-5">
                     <CheckCircle2 size={16} className="shrink-0 text-ok" />
-                    <p className="min-w-0 flex-1 text-sm text-ink-2">当前没有需要处理的异常。</p>
+                    <p className="min-w-0 flex-1 text-sm text-ink-2">{t('attention.clear')}</p>
                     <Link to="/activity" className="link flex min-h-11 shrink-0 items-center gap-0.5 text-xs">
-                      查看运行记录 <ArrowRight size={12} />
+                      {t('attention.viewActivity')} <ArrowRight size={12} />
                     </Link>
                   </div>
                 )
@@ -292,10 +302,12 @@ export default function Overview() {
                         <span className={cn('h-2 w-2 shrink-0 rounded-full',
                           a.tone === 'bad' ? 'bg-bad' : a.tone === 'warn' ? 'bg-warn' : 'bg-ink-3')} />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">{a.title}{a.count > 1 ? ` · ${a.count} 项` : ''}</span>
+                          <span className="block truncate text-sm font-medium">
+                            {a.title}{a.count > 1 ? t('attention.itemCount', { count: a.count }) : ''}
+                          </span>
                           <span className="mt-0.5 hidden truncate text-[12px] text-ink-3 sm:block">{a.hint}</span>
                         </span>
-                        <span className="shrink-0 text-xs font-medium text-accent">去处理</span>
+                        <span className="shrink-0 text-xs font-medium text-accent">{t('attention.action')}</span>
                         <ArrowRight size={13} className="shrink-0 text-ink-3 transition-transform group-hover:translate-x-0.5" />
                       </Link>
                     </li>
@@ -306,10 +318,10 @@ export default function Overview() {
 
             {hasStats && (
               <Panel
-                title={<span className="flex items-center gap-1.5"><Cpu size={14} />设备状态</span>}
+                title={<span className="flex items-center gap-1.5"><Cpu size={14} />{t('devices.title')}</span>}
                 right={
                   <Link to="/devices" className="link flex min-h-11 items-center gap-0.5 text-xs">
-                    查看全部设备 <ArrowRight size={12} />
+                    {t('devices.viewAll')} <ArrowRight size={12} />
                   </Link>
                 }
               >
@@ -319,18 +331,18 @@ export default function Overview() {
                   <ErrorState
                     plain compact
                     icon={<WifiOff size={20} />}
-                    title="设备状态暂时不可用"
-                    hint="上方状态仍然可用。请稍后重新加载设备列表。"
+                    title={t('devices.errorTitle')}
+                    hint={t('devices.errorHint')}
                     onRetry={refetchDevices}
-                    retryLabel="重新加载设备"
+                    retryLabel={t('devices.retry')}
                   />
                 ) : devices.length === 0 ? (
                   <EmptyState
                     plain compact
                     icon={<Inbox size={24} />}
-                    title="还没有设备接入"
-                    hint="启动网关并完成设备接入后，设备会自动出现在这里。"
-                    action={<Link to="/edges" className="btn btn-ghost">前往网关 <ArrowRight size={13} /></Link>}
+                    title={t('devices.emptyTitle')}
+                    hint={t('devices.emptyHint')}
+                    action={<Link to="/edges" className="btn btn-ghost">{t('devices.goEdges')} <ArrowRight size={13} /></Link>}
                   />
                 ) : (
                   <ul className="m-0 list-none p-0">
@@ -340,17 +352,17 @@ export default function Overview() {
                 )}
                 {devices.length > 8 && (
                   <Link to="/devices" className="link mt-3 flex min-h-11 items-center gap-0.5 border-t border-hairline pt-3 text-xs">
-                    另有 {devices.length - 8} 台 · 查看全部 <ArrowRight size={12} />
+                    {t('devices.more', { count: devices.length - 8 })} <ArrowRight size={12} />
                   </Link>
                 )}
               </Panel>
             )}
 
             <Panel
-              title={<span className="flex items-center gap-1.5"><Activity size={14} />最近运行记录</span>}
+              title={<span className="flex items-center gap-1.5"><Activity size={14} />{t('activity.title')}</span>}
               right={
                 <Link to="/activity" className="link flex min-h-11 items-center gap-0.5 text-xs">
-                  查看全部 <ArrowRight size={12} />
+                  {t('activity.viewAll')} <ArrowRight size={12} />
                 </Link>
               }
             >
@@ -361,12 +373,12 @@ export default function Overview() {
                   <EmptyState
                     plain compact
                     icon={<History size={24} />}
-                    title="暂无运行记录"
-                    hint="设备事件或操作结果会显示在这里。"
-                    action={<Link to="/devices" className="btn btn-ghost">查看设备 <ArrowRight size={13} /></Link>}
+                    title={t('activity.emptyTitle')}
+                    hint={t('activity.emptyHint')}
+                    action={<Link to="/devices" className="btn btn-ghost">{t('activity.viewDevices')} <ArrowRight size={13} /></Link>}
                   />
                 ) : (
-                  <p className="py-8 text-center text-sm text-ink-3">运行记录暂时不可用，恢复后会自动出现。</p>
+                  <p className="py-8 text-center text-sm text-ink-3">{t('activity.unavailable')}</p>
                 )
               ) : (
                 <EventFeed events={feed} limit={10} />

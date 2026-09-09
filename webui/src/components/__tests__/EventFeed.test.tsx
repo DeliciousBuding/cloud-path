@@ -1,11 +1,14 @@
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { EventFeed, commandDisplayMeta, commandFailureInfo, eventDisplayLabel } from '@/components/EventFeed'
 import { renderWithProviders } from '@/test/render'
 import type { EventView } from '@/lib/types'
+import { i18n } from '@/i18n'
 
 const ev = (id: number, ts: number): EventView => ({ id, ts, type: 'device-booted', device_id: 'e/d', payload: '' })
+
+afterEach(() => { void i18n.changeLanguage('zh-CN') })
 
 describe('EventFeed day 分组', () => {
   const now = Math.floor(Date.now() / 1000)
@@ -35,6 +38,22 @@ describe('机器名中文优先展示名', () => {
     expect(screen.getByText('设备舱门已打开')).toBeInTheDocument()
     expect(screen.getByTitle(`原始类型：${machineName}`)).toBeInTheDocument()
     expect(screen.queryByText(machineName)).toBeNull()
+  })
+
+  it('英文 locale 下使用英文展示词典与详情入口', async () => {
+    await i18n.changeLanguage('en-US')
+    expect(eventDisplayLabel('Pillbox Remind')).toBe('Pillbox reminder')
+    expect(commandDisplayMeta('read-register').label).toBe('Read register')
+    expect(commandFailureInfo('device busy')).toEqual({
+      message: 'The device is busy', next: 'Wait for the device to become idle, then retry',
+    })
+    renderWithProviders(<EventFeed events={[{
+      ...ev(1, Math.floor(Date.now() / 1000)),
+      type: 'Device Compartment Opened',
+      payload: '{"value":1}',
+    }]} limit={10} />)
+    expect(screen.getByText('Device compartment opened')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'View event details' })).toBeInTheDocument()
   })
 
   it('覆盖用户可见的英文事件与操作机器名', () => {

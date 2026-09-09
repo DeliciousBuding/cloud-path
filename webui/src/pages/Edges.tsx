@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { Network, WifiOff } from 'lucide-react'
 import { Badge, EmptyState, ErrorState, PageHeader, Panel, Segmented } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
@@ -16,7 +17,8 @@ import { fmtDateTime } from '@/lib/format'
  * 只是语义色转灰并给出「不影响其他网关」的系统级说明 —— 一台掉线不牵连其他台的呈现。
  */
 export default function Edges() {
-  usePageTitle('网关')
+  const { t } = useTranslation('edges')
+  usePageTitle(t('title'))
 
   const { list: edges, online, loading: edgeLoading, error, refetch } = useEdges()
   const { list: devices } = useDevices()
@@ -25,27 +27,27 @@ export default function Edges() {
   const facts = useMemo(() => sortEdgeFacts(edgeFacts(edges, devices)), [edges, devices])
   const shown = useMemo(() => filterEdgeFacts(facts, filter), [facts, filter])
   const offlineCount = facts.filter((f) => !f.edge.online).length
-  const subtitle = edgeLoading ? '正在加载网关状态…'
-    : error ? '网关状态暂不可用'
-      : edges.length === 0 ? '还没有网关注册'
-        : offlineCount > 0 ? `${online} 台在线 · ${offlineCount} 台离线（设备暂停更新）`
-          : `${online} 台在线 · 全部在线`
+  const subtitle = edgeLoading ? t('list.subtitleLoading')
+    : error ? t('list.subtitleError')
+      : edges.length === 0 ? t('list.subtitleEmpty')
+        : offlineCount > 0 ? t('list.subtitlePartial', { online, offline: offlineCount })
+          : t('list.subtitleAllOnline', { online })
 
   return (
     <>
       <PageHeader
-        title="网关"
+        title={t('title')}
         subtitle={subtitle}
         actions={
           edges.length > 0 ? (
             <Segmented
-              label="在线状态筛选"
+              label={t('list.filterLabel')}
               value={filter}
               onChange={setFilter}
               options={[
-                { value: 'all', label: `全部 ${edges.length}` },
-                { value: 'online', label: `在线 ${online}` },
-                { value: 'offline', label: `离线 ${offlineCount}` },
+                { value: 'all', label: t('list.filterAll', { count: edges.length }) },
+                { value: 'online', label: t('list.filterOnline', { count: online }) },
+                { value: 'offline', label: t('list.filterOffline', { count: offlineCount }) },
               ]}
             />
           ) : undefined
@@ -55,18 +57,16 @@ export default function Edges() {
       {edgeLoading ? (
         <Panel><RowSkeleton rows={3} /></Panel>
       ) : error ? (
-        <ErrorState icon={<WifiOff size={20} />} title="网关列表加载失败"
-          hint="暂时无法加载网关列表。这不表示没有网关接入，请检查服务是否正常后重试。"
+        <ErrorState icon={<WifiOff size={20} />} title={t('list.loadErrorTitle')}
+          hint={t('list.loadErrorHint')}
           onRetry={refetch} />
       ) : edges.length === 0 ? (
-        <EmptyState icon={<Network size={24} />} title="还没有网关"
-          hint="启动网关后，网关会自动出现在这里；离线网关也会保留记录。" />
+        <EmptyState icon={<Network size={24} />} title={t('list.emptyTitle')}
+          hint={t('list.emptyHint')} />
       ) : shown.length === 0 ? (
         <EmptyState icon={<Network size={24} />}
-          title={filter === 'online' ? '当前没有在线的网关' : '当前没有离线的网关'}
-          hint={filter === 'online'
-            ? '全部网关都已离线。检查各网关和网络后会自动重连。'
-            : '所有网关都在线。'} />
+          title={filter === 'online' ? t('list.emptyOnlineTitle') : t('list.emptyOfflineTitle')}
+          hint={filter === 'online' ? t('list.emptyOnlineHint') : t('list.emptyOfflineHint')} />
       ) : (
         <>
         {/* 全宽行而非卡片网格：网关少时卡片会把内容困在窄轨里留下大片空白
@@ -85,57 +85,62 @@ const ROW_COLS = 'lg:grid-cols-[minmax(0,1.4fr)_4.5rem_5rem_minmax(0,1.2fr)_10.5
 
 /** 列表表头（仅桌面；窄屏每行自带列名） */
 function EdgeRowHead() {
+  const { t } = useTranslation('edges')
   return (
     <li aria-hidden className={`hidden gap-x-4 px-4 pb-2 text-[11px] font-medium text-ink-3 lg:grid ${ROW_COLS}`}>
-      <span>网关</span><span>状态</span><span>版本</span><span>设备</span>
-      <span className="text-right">最近上报</span><span />
+      <span>{t('list.columns.gateway')}</span><span>{t('list.columns.status')}</span>
+      <span>{t('list.columns.version')}</span><span>{t('list.columns.devices')}</span>
+      <span className="text-right">{t('list.columns.lastReport')}</span><span />
     </li>
   )
 }
 
 function EdgeRow({ f }: { f: EdgeFacts }) {
+  const { t } = useTranslation('edges')
   const e = f.edge
+  const offlineNote = e.online ? '' : t('list.offlineNote')
   return (
     <li className={`grid gap-x-4 gap-y-1.5 border-b border-hairline px-4 py-2.5 last:border-b-0 ${ROW_COLS}`}>
       {/* 网关 ID 是运维标识：mono；点击进详情 */}
       <div className="flex min-w-0 items-center gap-2">
         <Link to={`/edges/${encodeURIComponent(e.edge_id)}`}
           className="inline-flex min-h-11 min-w-0 items-center truncate font-mono text-[13px] font-medium no-underline hover:text-accent sm:min-h-0"
-          title={`${e.edge_id} · 查看详情`}>
+          title={t('list.viewTitle', { id: e.edge_id })}>
           {e.edge_id}
         </Link>
       </div>
       <div className="hidden lg:block">
-        <Badge tone={e.online ? 'ok' : 'idle'}>{e.online ? '在线' : '离线'}</Badge>
+        <Badge tone={e.online ? 'ok' : 'idle'}>{e.online ? t('detail.statusOnline') : t('detail.statusOffline')}</Badge>
       </div>
-      <div className="hidden min-w-0 truncate font-mono text-[11px] text-ink-2 lg:block" title={`版本 ${e.version || '未知'}`}>
-        {e.version || '未知'}
+      <div className="hidden min-w-0 truncate font-mono text-[11px] text-ink-2 lg:block"
+        title={t('list.versionTitle', { version: e.version || t('list.unknownVersion') })}>
+        {e.version || t('list.unknownVersion')}
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
         <span className="shrink-0 lg:hidden">
-          <Badge tone={e.online ? 'ok' : 'idle'}>{e.online ? '在线' : '离线'}</Badge>
+          <Badge tone={e.online ? 'ok' : 'idle'}>{e.online ? t('detail.statusOnline') : t('detail.statusOffline')}</Badge>
         </span>
         {f.devices.length === 0 ? (
-          <span className="text-[12px] text-ink-3">还没有接入设备</span>
+          <span className="text-[12px] text-ink-3">{t('list.noDevices')}</span>
         ) : (
           <span className="num shrink-0 text-[12px] text-ink-2"
-            title={`${f.devices.length} 台设备 · ${f.onlineDevices} 台在线${e.online ? '' : '（网关离线，设备暂停更新）'}`}>
-            {f.devices.length} 台设备 · {f.onlineDevices} 在线
+            title={t('list.devicesTitle', { total: f.devices.length, online: f.onlineDevices, offline: offlineNote })}>
+            {t('list.devicesSummary', { total: f.devices.length, online: f.onlineDevices })}
             {f.devices.length > f.onlineDevices && (
-              <span className="text-warn"> · {f.devices.length - f.onlineDevices} 台离线</span>
+              <span className="text-warn">{t('list.devicesOffline', { count: f.devices.length - f.onlineDevices })}</span>
             )}
           </span>
         )}
       </div>
       <div className="num min-w-0 truncate text-left font-mono text-[11px] text-ink-3 lg:text-right"
-        title={f.lastReport ? fmtDateTime(f.lastReport) : '从未更新'}>
-        <span className="lg:hidden">最近上报 </span>
-        {f.lastReport ? fmtDateTime(f.lastReport) : '从未更新'}
+        title={f.lastReport ? fmtDateTime(f.lastReport) : t('list.neverUpdated')}>
+        <span className="lg:hidden">{t('list.columns.lastReport')} </span>
+        {f.lastReport ? fmtDateTime(f.lastReport) : t('list.neverUpdated')}
       </div>
       <Link to={`/edges/${encodeURIComponent(e.edge_id)}`}
         className="link hidden justify-self-end text-[12px] lg:block"
-        aria-label={`查看网关 ${e.edge_id}`}>
-        查看
+        aria-label={t('list.viewAria', { id: e.edge_id })}>
+        {t('list.view')}
       </Link>
     </li>
   )
