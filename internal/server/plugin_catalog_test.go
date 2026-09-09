@@ -105,6 +105,9 @@ func TestPluginsAPIFromProjection(t *testing.T) {
 // 上报后 Drift/Stale 由真实 revision 与上报时间计算，绝不因 desired enabled 虚报健康。
 func TestPluginInstancesDesiredObservedSeparation(t *testing.T) {
 	srv, _, _, mem, a, _ := setupPluginPlane(t)
+	seedInstallations(t, srv, mem, a, "e1", []api.PluginInstallationStatusData{{
+		PluginID: "p1", Version: "1.0.0", Kind: "Driver", Protocol: 1,
+	}})
 	if rec := servePlugin(t, srv, http.MethodPost, "/api/plugin-instances",
 		`{"edge_id":"e1","instance_id":"box1","plugin_id":"p1","version":"1.0.0","enabled":true}`,
 		a, "tenant-a", string(api.RoleOperator)); rec.Code != http.StatusOK {
@@ -179,6 +182,9 @@ func TestPluginInstancesDesiredObservedSeparation(t *testing.T) {
 // 与疑似凭据必须在 API 响应前被脱敏。
 func TestPluginInstanceDetailSanitized(t *testing.T) {
 	srv, _, _, mem, a, _ := setupPluginPlane(t)
+	seedInstallations(t, srv, mem, a, "e1", []api.PluginInstallationStatusData{{
+		PluginID: "p1", Version: "1.0.0", Kind: "Driver", Protocol: 1,
+	}})
 	if rec := servePlugin(t, srv, http.MethodPost, "/api/plugin-instances",
 		`{"edge_id":"e1","instance_id":"box1","plugin_id":"p1","version":"1.0.0"}`,
 		a, "tenant-a", string(api.RoleOperator)); rec.Code != http.StatusOK {

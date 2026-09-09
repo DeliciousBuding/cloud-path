@@ -1109,12 +1109,9 @@ func (e *appEffectExecutor) Execute(ctx context.Context, effect appruntime.Effec
 			"schedule", effect.CancelJob.ScheduleID)
 		return nil
 	case appruntime.EffectSendNotification:
-		// 通知通道（Connector/Notification）属生态扩展阶段：现在如实记录，
-		// 不伪造「已通知」。
-		e.host.logger.Warn("app notification (通道未建，仅记录)",
-			"instance", effect.PluginInstanceID, "title", effect.SendNotification.Title,
-			"severity", effect.SendNotification.Severity)
-		return nil
+		// 通知通道（Connector/Notification）尚未实现：显式 fail-closed，
+		// 不把未发送伪装成成功。
+		return fmt.Errorf("%w: send_notification for instance %q: notification channel is not configured", appruntime.ErrEffectNotImplemented, effect.PluginInstanceID)
 	default:
 		return fmt.Errorf("apphost: unhandled effect kind %q", effect.Kind)
 	}

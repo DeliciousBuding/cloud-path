@@ -132,6 +132,9 @@ func TestPluginVersionDriftAfterAppliedAck(t *testing.T) {
 		t.Helper()
 		writeEnv(t, edge, api.Envelope{V: api.Version, Type: api.MsgPluginStatus, Ts: time.Now().Unix(),
 			Data: rawData(t, api.PluginStatusData{BootID: "version-drift-boot", Sequence: sequence,
+				Installations: []api.PluginInstallationStatusData{{
+					PluginID: "io.github.acme.driver", Version: version, Kind: "Driver", Protocol: 1,
+				}},
 				ObservedInstances: []api.PluginObservedInstanceData{
 					{InstanceID: "driver1", PluginID: "io.github.acme.driver", Version: version, HostOnline: true, State: "HEALTHY", Health: "HEALTHY"},
 					{InstanceID: "stable", PluginID: "io.github.acme.driver", Version: "0.2.2", HostOnline: true, State: "HEALTHY", Health: "HEALTHY"},

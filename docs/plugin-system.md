@@ -7,9 +7,9 @@ CloudPath 是**设备无关**的插件化平台：核心（`internal/*`）不识
 
 | 类型 | 运行位置 | 职责 |
 |------|----------|------|
-| **Driver** | Edge | 设备发现、连接、协议解析、能力映射、设备动作；"如何接一台设备"的插件 |
-| **Control** | Server | 业务流程扩展、租户级逻辑、命令授权 |
-| **UI 贡献** | WebUI | 非独立可执行插件；通过 Manifest 提交声明式导航/表单/页面 Schema |
+| **Driver** | Edge | 设备发现、连接、协议解析、能力映射、设备动作；“如何接一台设备”的插件 |
+| **Application** | Server | 业务对象、Capability 绑定、规则、任务、领域 API |
+| **Connector** | Edge 或 Server | MQTT/Webhook/外部平台/通知/数据出口 |
 
 ## 2. Driver 插件（核心）
 
@@ -23,12 +23,14 @@ CloudPath 是**设备无关**的插件化平台：核心（`internal/*`）不识
 
 ## 3. 契约（Manifest）
 
-插件通过 `plugin.yaml`（Manifest）声明自身：
+插件通过仓库根 `plugin.yaml`（Manifest）声明自身。当前 schema 的顶层字段是
+`apiVersion`、`kind`、`id`、`version`、`protocol`、`entrypoint`，并可声明
+`compatibility`、`permissions`、`capabilities`、`requirements`、`contributes`；完整字段以
+[`spec/plugin-manifest.schema.json`](../spec/plugin-manifest.schema.json) 为准。
 
-- 身份 / 作者 / 版本
-- 能力与命令白名单（= 适配器 `SupportedCommands()`，唯一事实源）
-- Entity 映射（如 `clock`、`alarm`、`compartment-1..3`）
-- 本地 secret 声明（运行期明文解析，仓库绝不落 secret）
+- `kind ∈ Driver|Application|Connector`；不再使用 `CloudPathPlugin` 或 `metadata` 包装。
+- 能力与命令白名单来自 `Describe` / 适配器声明，Manifest 只声明安装、权限、兼容和贡献身份。
+- 本地 secret 只写名称，运行期明文解析，仓库绝不落 secret。
 
 命令合法性以**适配器 `SupportedCommands()`** 为唯一事实源；server 与前端不另建清单。
 
@@ -41,8 +43,8 @@ CloudPath 是**设备无关**的插件化平台：核心（`internal/*`）不识
 
 STC-B Driver 已拆为独立仓库 `cloud-path-driver-stcb`（进程内参考形态已移除），只依赖公开 SDK，不 import `internal/**`。更细的插件架构：
 - `docs/architecture/how-to-build-driver.md`（新增 Driver 的完整操作入口）
-- `docs/architecture/0001-capability-centered-plugins.md`
-- `docs/architecture/0002-github-plugin-discovery.md`
+- `docs/architecture/adr/0001-capability-centered-plugins.md`
+- `docs/architecture/adr/0002-github-plugin-discovery.md`
 
 ## 参考
 

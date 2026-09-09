@@ -24,8 +24,7 @@ function obs(capability: string, property: string, value: unknown, extra: Partia
   return { capability, property, value, ...extra }
 }
 
-/** GAP-2 的 commands 是 schema 未定义的宽容扩展，冻结类型里没有它；测试用 unknown 桥接，
- *  不去改 lib/types.ts 的契约类型（改契约需三处同步，不在本 lane 范围）。 */
+/** `commands` 是 schema 未定义的宽容扩展，契约类型里没有它；测试用 `unknown` 桥接，不改契约类型。 */
 function withRootCommands(commands: unknown[]): DeviceDescriptor {
   return { ...makeDescriptor({ entities: [] }), commands } as unknown as DeviceDescriptor
 }
@@ -131,7 +130,7 @@ describe('Capability 引用解析与索引', () => {
     expect(flat.spec?.properties?.relative?.unit).toBe('%')
   })
 
-  it('resolveCapability：全 ID / 去版本 ID / 裸名都命中，未收录返回 undefined', () => {
+  it('resolveCapability：全 ID / 去版本 ID / 裸名都命中，暂无详情返回 undefined', () => {
     expect(resolveCapability(CAP_TEMPERATURE, idx)?.metadata.title).toBe('温度')
     expect(resolveCapability('cloudpath.dev/capability/temperature', idx)?.metadata.title).toBe('温度')
     expect(resolveCapability('cloudpath.dev/capability/temperature@99', idx)?.metadata.title).toBe('温度')
@@ -144,7 +143,7 @@ describe('Capability 引用解析与索引', () => {
   it('capabilityLabel：文档 title > 平台通用词汇 > humanize，无引用给「未声明」', () => {
     expect(capabilityLabel(CAP_TEMPERATURE, idx)).toBe('温度')
     expect(capabilityLabel(UNKNOWN_CAP, idx)).toBe('Mystery')
-    // 未收录但属通用硬件名词 → 平台词汇层命中（不再甩英文 humanize）
+    // 暂无详情但属通用硬件名词 → 平台词汇层命中（不再甩英文 humanize）
     expect(capabilityLabel(CAP_CLOCK, idx)).toBe('时钟')
     expect(capabilityLabel(undefined, idx)).toBe('未声明')
   })
@@ -318,7 +317,7 @@ describe('值格式化与语义色', () => {
     expect(toneFromHint(undefined)).toBeUndefined()
   })
 
-  it('presentationOf 只读声明，未收录返回 undefined', () => {
+  it('presentationOf 只读声明，暂无详情返回 undefined', () => {
     expect(presentationOf(CAP_TEMPERATURE, idx)?.primaryProperty).toBe('current')
     expect(presentationOf(UNKNOWN_CAP, idx)).toBeUndefined()
   })
@@ -336,7 +335,7 @@ describe('commandActions：命令集只来自声明', () => {
     expect(byCmd.factory_reset).toMatchObject({ label: '恢复出厂', variant: 'danger', confirmText: '确认恢复出厂？设备侧配置将被清空。' })
   })
 
-  it('GAP-1：action 未声明 command → cmd 回落 action key；inputSchema 原样保留而不生成参数默认值', () => {
+  it('action 未声明 command → cmd 回落 action key；inputSchema 原样保留而不生成参数默认值', () => {
     const pulse = commandActions({ descriptor: d, index: idx }).actions.find((a) => a.cmd === 'pulse')
     expect(pulse).toMatchObject({ label: '点动', needsInput: true, inputMaxLength: 64,
       inputSchema: { type: 'object', properties: { ms: { type: 'integer' }, note: { type: 'string' } } },
@@ -344,10 +343,19 @@ describe('commandActions：命令集只来自声明', () => {
     expect(pulse?.inputPlaceholder).toBeUndefined()
   })
 
+  it('空对象 schema 视为无参数操作，不再渲染一个没有字段的空表单', () => {
+    const i = indexCapabilities([{ metadata: { id: CAP_RELAY, version: 1 }, spec: { actions: { custom: { inputSchema: {} } } } }])
+    const a = commandActions({ descriptor: d, index: i }).actions.find((v) => v.cmd === 'custom')
+    expect(a?.needsInput).toBeUndefined()
+    expect(a?.inputSchema).toBeUndefined()
+    const rootAction = commandActions({ descriptor: withRootCommands([{ cmd: 'custom', inputSchema: {} }]) }).actions[0]
+    expect(rootAction?.needsInput).toBeUndefined()
+  })
+
   it.each([
-    {}, { type: 'object', required: ['offset'] }, { type: 'string', minLength: 1 },
+    { type: 'object', required: ['offset'] }, { type: 'string', minLength: 1 },
     { type: 'array', items: { type: 'integer' } }, { oneOf: [{ type: 'number' }, { type: 'boolean' }] },
-  ])('所有声明 schema 都需要输入，不能因缺少 properties 被当作无参按钮：%j', (schema) => {
+  ])('非空声明 schema 都需要输入，不能因缺少 properties 被当作无参按钮：%j', (schema) => {
     const i = indexCapabilities([{ metadata: { id: CAP_RELAY, version: 1 }, spec: { actions: { custom: { inputSchema: schema } } } }])
     const a = commandActions({ descriptor: d, index: i }).actions.find((v) => v.cmd === 'custom')
     expect(a).toMatchObject({ needsInput: true, inputSchema: schema })
@@ -358,7 +366,7 @@ describe('commandActions：命令集只来自声明', () => {
     expect(rootAction?.inputSchema).toBe(schema)
   })
 
-  it('GAP-2：Descriptor 顶层 commands 扩展（对象与裸字符串都接受），破坏性动作自动生成确认文案', () => {
+  it('Descriptor 顶层 commands 扩展（对象与裸字符串都接受），破坏性动作自动生成确认文案', () => {
     const set = commandActions({ descriptor: makeDescriptorWithRootCommands(), index: idx })
     expect(set.source).toBe('descriptor')
     expect(set.actions[0]).toMatchObject({ cmd: 'reboot', label: '重启设备', variant: 'danger' })
@@ -368,7 +376,7 @@ describe('commandActions：命令集只来自声明', () => {
     expect(set.actions[1]?.variant).toBeUndefined()
   })
 
-  it('Descriptor 无可下发动作时回落适配器白名单（后端事实源），source=adapter', () => {
+  it('Descriptor 无可下发动作时回落设备支持的操作（后端事实源），source=adapter', () => {
     const noActions = makeDescriptor({ entities: [] })
     const set = commandActions({ descriptor: noActions, index: idx, adapterCommands: ['raw', 'query_state'] })
     expect(set.source).toBe('adapter')
@@ -376,7 +384,7 @@ describe('commandActions：命令集只来自声明', () => {
     expect(set.actions[1]?.label).toBe('Query State')
   })
 
-  it('既无声明也无白名单 → 空命令集 source=none（UI 显示等待声明）', () => {
+  it('既无声明也无白名单 → 空命令集 source=none（UI 显示等待同步）', () => {
     expect(commandActions({ descriptor: null, index: idx })).toEqual({ actions: [], source: 'none' })
     expect(commandActions({ descriptor: makeDescriptor({ entities: [] }), index: EMPTY_INDEX }).source).toBe('none')
   })
@@ -408,7 +416,7 @@ describe('摘要与通用回落（Descriptor 缺席时不白屏）', () => {
     expect(rawRows(undefined)).toEqual([])
   })
 
-  it('eventDecl：只采纳 Capability 声明的事件标题与语义色，未收录返回 undefined', () => {
+  it('eventDecl：只采纳 Capability 声明的事件标题与语义色，暂无详情返回 undefined', () => {
     expect(eventDecl('device.clock.drift', idx)).toEqual({
       title: '时钟漂移', description: '偏差超过阈值', tone: 'warn',
     })
@@ -427,7 +435,7 @@ describe('commandDecl（跨设备命令声明查找）', () => {
     expect(commandDecl('pulse', idx)).toEqual({ title: '点动', description: '按毫秒脉冲' })
   })
 
-  it('未收录命令 / 空索引返回 undefined，交由上层回落词典与 humanize', () => {
+  it('暂无详情命令 / 空索引返回 undefined，交由上层回落词典与 humanize', () => {
     expect(commandDecl('not_declared_anywhere', idx)).toBeUndefined()
     expect(commandDecl('relay_on', EMPTY_INDEX)).toBeUndefined()
     expect(commandDecl('', idx)).toBeUndefined()

@@ -16,6 +16,16 @@ import type {
  * ① 稳定错误码 → 文案
  * ------------------------------------------------------------------ */
 
+/** 当前运行时位置规则对应的稳定码；机器码只进入技术详情，不作主文案。 */
+const PLUGIN_RUNTIME_ERR_CODES = {
+  HostMismatch: 'plugin_instance_host_mismatch',
+  KindUnsupported: 'plugin_instance_kind_unsupported',
+  KindUnavailable: 'plugin_instance_kind_unavailable',
+} as const
+
+type PluginRuntimeErrCode = typeof PLUGIN_RUNTIME_ERR_CODES[keyof typeof PLUGIN_RUNTIME_ERR_CODES]
+type MappedPluginErrCode = PluginErrCode | PluginRuntimeErrCode
+
 export interface PluginErrorCopy {
   /** 一行标题（说清「发生了什么」） */
   title: string
@@ -23,52 +33,67 @@ export interface PluginErrorCopy {
   hint: string
   tone: Tone
   /** 命中的稳定码；undefined = 服务端未给码（只报状态，不猜业务规则） */
-  code?: PluginErrCode
+  code?: MappedPluginErrCode
   /** 该错误是否要求「显式确认权限扩大」后重试（对应 confirm_permissions） */
   needsPermissionConfirm: boolean
   /** 是否可原样重试（同一 payload） */
   retryable: boolean
 }
 
-const ERR_COPY: Record<PluginErrCode, Omit<PluginErrorCopy, 'code'>> = {
+const ERR_COPY: Record<MappedPluginErrCode, Omit<PluginErrorCopy, 'code'>> = {
   [PluginErr.NotFound]: {
-    title: '实例不存在',
-    hint: '该插件实例可能已被删除，或不属于当前租户。刷新列表后重试。',
+    title: '没有找到这个运行实例',
+    hint: '它可能已被删除，或不属于当前组织。请返回列表刷新后再试。',
     tone: 'idle', needsPermissionConfirm: false, retryable: false,
   },
   [PluginErr.Conflict]: {
-    title: '实例已存在或版本冲突',
-    hint: '同一边缘节点上已有同名实例，或期望态版本与当前记录冲突。改用另一个实例 ID，或先更新既有实例。',
+    title: '无法保存：名称或版本冲突',
+    hint: '同一个网关里已经有同名项目，或版本与现有记录不一致。请换一个名称，或先更新已有项目。',
     tone: 'warn', needsPermissionConfirm: false, retryable: false,
   },
   [PluginErr.Quota]: {
-    title: '超出租户配额',
-    hint: '当前租户的插件实例数已达上限，本次写入未生效（未产生新 revision）。请先删除不用的实例，或联系管理员调整配额。',
+    title: '已经达到数量上限',
+    hint: '当前组织可添加的项目数量已达上限，本次保存未生效。请先删除不用的项目，或联系管理员提高上限。',
     tone: 'warn', needsPermissionConfirm: false, retryable: false,
   },
   [PluginErr.PermissionConfirm]: {
-    title: '需要确认权限扩大',
-    hint: '本次变更会授予插件更多权限。请在下方逐项核对新增权限后显式勾选确认，再重新提交。',
+    title: '需要你同意新增权限',
+    hint: '这次修改会让插件获得更多权限。请核对下方权限并勾选确认，再重新提交。',
     tone: 'warn', needsPermissionConfirm: true, retryable: true,
   },
   [PluginErr.EdgeOffline]: {
-    title: '目标边缘节点离线',
-    hint: '期望态已可写入，但该边缘节点当前不在线，无法立即应用。边缘节点重连后会自动收敛到最新快照。',
+    title: '目标网关当前离线',
+    hint: '设置可以保存，但该网关暂时无法应用。网关重新连接后会自动同步最新设置。',
     tone: 'warn', needsPermissionConfirm: false, retryable: true,
   },
   [PluginErr.SecretForbidden]: {
-    title: 'Secret handle 不可用',
-    hint: '引用的 secret handle 未授权给本租户或已吊销。请改用已授权的 handle 名（UI 只显示 handle，不显示明文）。',
+    title: '找不到可用的密钥',
+    hint: '这个密钥不存在、没有授权或已失效。请改用已授权的密钥名称；界面只显示名称，不显示明文。',
     tone: 'bad', needsPermissionConfirm: false, retryable: false,
   },
   [PluginErr.InvalidConfig]: {
-    title: '配置不合法',
-    hint: '配置项未通过服务端校验（键名、长度或取值范围）。请修正后重新提交。',
+    title: '设置内容有误',
+    hint: '部分设置不符合要求，例如名称、长度或取值范围有误。请修改后重新提交。',
     tone: 'bad', needsPermissionConfirm: false, retryable: false,
+  },
+  [PLUGIN_RUNTIME_ERR_CODES.HostMismatch]: {
+    title: '运行位置与插件类型不匹配',
+    hint: '驱动程序只能运行在网关，应用插件只能运行在中心服务。新建时请选择正确运行位置；已有实例若位置不对，请删除后在正确位置重新创建。',
+    tone: 'warn', needsPermissionConfirm: false, retryable: false,
+  },
+  [PLUGIN_RUNTIME_ERR_CODES.KindUnsupported]: {
+    title: '暂不支持这种插件类型',
+    hint: '连接器目前没有可用运行时，选择网关或中心服务都不能创建实例。请确认插件类型是否正确，或等待支持后再试。',
+    tone: 'warn', needsPermissionConfirm: false, retryable: false,
+  },
+  [PLUGIN_RUNTIME_ERR_CODES.KindUnavailable]: {
+    title: '暂时无法确认插件类型',
+    hint: '请确认插件已经安装到目标运行位置并完成同步，然后刷新重试；如果已安装仍失败，请联系管理员检查插件安装信息。',
+    tone: 'warn', needsPermissionConfirm: false, retryable: true,
   },
 }
 
-const KNOWN = new Set<string>(Object.values(PluginErr))
+const KNOWN = new Set<string>(Object.keys(ERR_COPY))
 
 /**
  * 把任意写操作异常映射成可呈现文案。
@@ -77,19 +102,19 @@ const KNOWN = new Set<string>(Object.values(PluginErr))
  */
 export function pluginErrorCopy(e: unknown): PluginErrorCopy {
   if (e instanceof ApiError && e.code && KNOWN.has(e.code)) {
-    return { ...ERR_COPY[e.code as PluginErrCode], code: e.code as PluginErrCode }
+    return { ...ERR_COPY[e.code as MappedPluginErrCode], code: e.code as MappedPluginErrCode }
   }
   if (e instanceof ApiError) {
     if (e.status === 401) {
       return {
-        title: '登录已失效', hint: '请重新登录后再操作插件实例。',
+        title: '登录已失效', hint: '请重新登录后再操作。',
         tone: 'warn', needsPermissionConfirm: false, retryable: true,
       }
     }
     if (e.status === 403) {
       return {
         title: '权限不足',
-        hint: '当前角色不能修改插件实例（需要 operator 或 admin）。可继续查看期望态与实际态。',
+        hint: '当前账号不能修改这个项目，但仍可查看保存的设置和运行情况。',
         tone: 'warn', needsPermissionConfirm: false, retryable: false,
       }
     }
@@ -101,14 +126,14 @@ export function pluginErrorCopy(e: unknown): PluginErrorCopy {
       }
     }
     return {
-      title: `请求失败（HTTP ${e.status}）`,
-      hint: '服务端拒绝了本次写入，期望态未改变。稍后重试；若持续失败请查看服务端日志。',
+      title: `保存失败（HTTP ${e.status}）`,
+      hint: '平台没有保存这次修改，原设置保持不变。请稍后重试；如果仍然失败，请联系管理员。',
       tone: 'bad', needsPermissionConfirm: false, retryable: true,
     }
   }
   return {
-    title: '无法连接 server',
-    hint: '网络不可达或服务未启动。本次写入未提交，期望态保持不变。',
+    title: '无法连接平台',
+    hint: '网络不可达或平台暂时不可用。本次保存未提交，原设置保持不变。',
     tone: 'bad', needsPermissionConfirm: false, retryable: true,
   }
 }
@@ -133,48 +158,48 @@ export interface SyncState {
  */
 export function syncState(v: PluginInstanceView): SyncState {
   const serverHosted = v.edge_id === 'server'
-  const host = serverHosted ? '应用宿主' : '边缘节点'
+  const host = serverHosted ? '中心服务' : '网关'
   if (!v.has_observed) {
     return {
       key: 'unreported',
-      label: host + '未上报',
+      label: host + '尚未上报',
       tone: 'idle',
       hint: serverHosted
-        ? '应用宿主尚未上报实际态。启用只是期望，当前是否运行以应用数据区为准。'
+        ? '还没有收到这个应用的运行状态。保存的启用设置不代表它正在运行，请查看应用数据。'
         : v.edge_online
-        ? '期望态已下发，但该边缘节点还没有回过实际态。不能据此判断插件是否在运行。'
-        : '边缘节点离线，尚未回过实际态。边缘节点重连并应用快照后这里才会出现运行事实。',
+        ? '设置已保存，但还没有收到这个网关的运行状态，不能据此判断它是否正在运行。'
+        : '网关当前离线，暂时没有运行状态。重新连接后会自动更新。',
     }
   }
   if (v.stale) {
     return {
       key: 'stale',
-      label: '实际态已过期',
+      label: '运行状态已过期',
       tone: 'warn',
-      hint: host + '的上报已超过新鲜期，下面的实际态是历史事实，不代表当前运行状况。',
+      hint: host + '收到的运行状态已超过有效期，当前显示的是上次状态，不代表现在的运行情况。',
     }
   }
   if (v.drift) {
     return {
       key: 'drift',
-      label: '期望与实际不一致',
+      label: '期望状态与实际状态不一致',
       tone: 'warn',
-      hint: `期望修订版 ${v.desired_revision}，${host}已应用 ${v.applied_revision}。可触发一次重新下发让${host}重新收敛。`,
+      hint: `${host}还没有应用最新设置。可以重新同步一次。`,
     }
   }
   if (v.applied_revision < v.desired_revision) {
     return {
       key: 'pending',
-      label: '等待' + host + '应用',
+      label: '等待' + host + '应用设置',
       tone: 'accent',
-      hint: `期望修订版 ${v.desired_revision} 已提交，${host}当前应用到 ${v.applied_revision}`,
+      hint: `最新设置已保存，正在等待${host}应用。`,
     }
   }
   return {
     key: 'synced',
-    label: '已收敛',
+    label: '已同步',
     tone: 'ok',
-    hint: `${host}已应用期望修订版 ${v.applied_revision}`,
+    hint: `${host}已应用当前设置。`,
   }
 }
 
@@ -200,7 +225,7 @@ const STATE_META: Record<string, { label: string; tone: Tone }> = {
 }
 
 /** observed.detail 的已知机器标记 → 人话（其余是 server 脱敏摘要，原样呈现） */
-const HOST_DETAIL_LABEL: Record<string, string> = { 'server-apphost': '中心服务应用宿主' }
+const HOST_DETAIL_LABEL: Record<string, string> = { 'server-apphost': '中心服务' }
 export function hostDetailLabel(detail?: string): string | undefined {
   if (!detail) return undefined
   return HOST_DETAIL_LABEL[detail] ?? detail
@@ -230,11 +255,11 @@ export function trustMeta(mode: string | undefined, verified: boolean): { label:
 }
 
 export const ISOLATION_LABELS: Record<string, string> = {
-  shared: '共享进程',
-  'per-instance': '实例独立进程',
-  none: '无隔离',
-  process: '独立进程',
-  container: '容器',
+  shared: '共享运行',
+  'per-instance': '独立运行',
+  none: '不隔离',
+  process: '独立运行',
+  container: '独立运行',
 }
 
 export function isolationLabel(isolation: string | undefined): string {
@@ -259,7 +284,7 @@ const PERM_GROUPS: { key: keyof PluginPermissionsData; group: string; tone: Tone
   { key: 'hardware', group: '硬件', tone: 'warn' },
   { key: 'network', group: '网络', tone: 'warn' },
   { key: 'filesystem', group: '文件系统', tone: 'warn' },
-  { key: 'secrets', group: 'Secret', tone: 'bad' },
+  { key: 'secrets', group: '密钥', tone: 'bad' },
 ]
 
 /** 只列出**声明了**的权限组；未声明的组不出现（不塞「无」占位，避免满屏 badge） */
@@ -298,6 +323,36 @@ export function safeConfigEntries(
       return { key, value: isSecret ? secretHandleName(value) : String(value ?? ''), isSecret }
     })
 }
+/** 插件在界面上的名称：优先使用插件提供的功能标题，机器标识只留在技术详情。 */
+export function pluginDisplayName(catalog?: PluginCatalogView): string {
+  const contributions = [
+    ...(catalog?.contributes?.drivers ?? []),
+    ...(catalog?.contributes?.applications ?? []),
+    ...(catalog?.contributes?.connectors ?? []),
+  ]
+  const title = contributions.find((x) => x.title?.trim())?.title?.trim()
+  return title || catalog?.id || '插件信息未提供'
+}
+
+const PERMISSION_ITEM_LABELS: Record<string, string> = {
+  'hardware:uart': '访问串口',
+  'hardware:gpio': '控制输入输出端口',
+  'hardware:i2c': '访问 I2C 设备',
+  'hardware:spi': '访问 SPI 设备',
+  'hardware:usb': '访问 USB 设备',
+  'network:outbound': '访问网络',
+  'network:inbound': '接受网络连接',
+  'network:http': '访问网页服务',
+  'filesystem:read': '读取文件',
+  'filesystem:write': '写入文件',
+}
+
+/** 权限项的人话标签；未知项原样保留，避免猜业务含义。 */
+export function permissionItemLabel(group: keyof PluginPermissionsData, item: string): string {
+  if (group === 'secrets') return `使用密钥 ${item}`
+  return PERMISSION_ITEM_LABELS[`${group}:${item}`] ?? item
+}
+
 /* ------------------------------------------------------------------ *
  * ④ 列表载荷的宽容归一化（防白屏）
  * ------------------------------------------------------------------ */
@@ -318,7 +373,8 @@ function bool(v: unknown): boolean {
 export function normalizeInstance(raw: unknown): PluginInstanceView | null {
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
-  const d = (o.desired && typeof o.desired === 'object' ? o.desired : {}) as Record<string, unknown>
+  if (!o.desired || typeof o.desired !== 'object' || Array.isArray(o.desired)) return null
+  const d = o.desired as Record<string, unknown>
   const id = str(o.id)
   if (!id) return null
   const obs = o.observed && typeof o.observed === 'object'
@@ -374,6 +430,15 @@ export function normalizeInstances(raw: unknown): PluginInstanceView[] {
   return out.sort((a, b) => a.id.localeCompare(b.id))
 }
 
+export type PluginKind = 'application' | 'driver' | 'connector' | 'unknown'
+
+/** 后端插件 kind 可能是 Driver/Application/Connector；界面统一用稳定小写值。 */
+export function normalizePluginKind(kind: string | undefined): PluginKind {
+  const value = (kind ?? '').trim().toLowerCase()
+  if (value === 'application' || value === 'driver' || value === 'connector') return value
+  return 'unknown'
+}
+
 /** GET /api/plugins 的宽容归一化 */
 export function normalizeCatalog(raw: unknown): PluginCatalogView[] {
   const list = Array.isArray(raw)
@@ -385,7 +450,10 @@ export function normalizeCatalog(raw: unknown): PluginCatalogView[] {
     if (!item || typeof item !== 'object') continue
     const o = item as Record<string, unknown>
     if (!str(o.id)) continue
-    out.push(o as unknown as PluginCatalogView)
+    out.push({
+      ...(o as unknown as PluginCatalogView),
+      kind: normalizePluginKind(str(o.kind)),
+    })
   }
   return out.sort((a, b) => a.id.localeCompare(b.id))
 }

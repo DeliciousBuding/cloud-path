@@ -1,6 +1,6 @@
 // 登录态状态机（store/auth.ts）：契约探针 GET /api/auth/me 的三种结局 →
 //   200 in / 401 out / 其它（BE-AUTH 未就绪、断网）open（放行，不把全站锁死）。
-// 以及数据层 401 的全局收敛与登出清理。
+// 以及数据层 401 的全局同步与登出清理。
 import { beforeEach, describe, expect, it } from 'vitest'
 import { authReady, logout, markUnauthenticated, refreshAuth, useAuth } from '@/store/auth'
 import { getToken, setToken } from '@/lib/api'
@@ -42,7 +42,7 @@ describe('refreshAuth：me 探针 → 登录态', () => {
     expect(useAuth.getState().status).toBe('in')
   })
 
-  it('已判定为 in 后收到 401 → 收敛为 out（会话过期）', async () => {
+  it('已判定为 in 后收到 401 → 同步为 out（会话过期）', async () => {
     useAuth.setState({ status: 'in', user })
     installFetch(() => stubResponse(401, { error: '会话已过期' }))
     await refreshAuth()
@@ -50,7 +50,7 @@ describe('refreshAuth：me 探针 → 登录态', () => {
   })
 })
 
-describe('数据层 401 收敛与登出', () => {
+describe('数据层 401 同步与登出', () => {
   it('markUnauthenticated 置 out 且幂等', () => {
     useAuth.setState({ status: 'open', user: null })
     markUnauthenticated()

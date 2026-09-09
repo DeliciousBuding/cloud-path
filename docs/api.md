@@ -115,7 +115,7 @@
 - 契约变更随 `docs/design.md` 实现偏差记录同步；WS envelope `v` 字段独立演进（`protocol.md`）。
 - 旧客户端（仅服务令牌）在账号模式下继续可用（令牌等价 admin）。
 
-## 5. 插件控制面与聚合读面（v0.1）
+## 5. 插件控制面与聚合读面
 
 > desired/observed 同步语义 SSOT：[architecture/control-plane-sync.md](architecture/control-plane-sync.md)；
 > WS 侧 desired/status/ack 消息见 [protocol.md](protocol.md)。
@@ -189,6 +189,14 @@ WebUI 首屏一次性聚合。所有计数来自真实 Edge 上报与 Server 权
 4. 同租户 `instance_id` 重复 → `409 plugin_instance_conflict`。
 5. `reconcile` 时目标 Edge 离线或发送队列满 → `409 plugin_edge_offline`（期望态已保存，
    Edge 重连后自动收敛）。
+
+**当前运行时位置规则（写面 fail-closed）**：
+
+- `Driver` 只能绑定真实 Edge；中心服务宿主（`edge_id=server`）上的创建或更新会被拒绝。
+- `Application` 只能绑定中心服务宿主（`edge_id=server`）；真实 Edge 上的创建或更新会被拒绝。
+- `Connector` 当前没有运行时，真实 Edge 和中心服务宿主都拒绝。
+- 目标宿主尚未安装/上报该插件，或 manifest `kind` 无法解析时同样拒绝；不猜测类型、不放行。
+- `PATCH` 不改变实例的 `edge_id`。已有实例若与当前规则冲突，应先删除，再在正确的运行位置重新创建。
 
 ### 5.5 Application Data Plane（D1，viewer 只读）
 
@@ -287,11 +295,14 @@ jobs 响应新增 `job_descriptors`：每项含 `id`、`title`、`input_schema_j
 | `plugin_permission_confirmation_required` | 403 | 权限扩大未显式确认（非 admin） |
 | `plugin_instance_not_found` | 404 | 实例不存在或跨租户 |
 | `plugin_instance_conflict` | 409 | `instance_id` 已存在 |
+| `plugin_instance_host_mismatch` | 409 | 插件类型与目标运行位置不匹配（Driver 非 Edge；Application 非 `server`） |
+| `plugin_instance_kind_unsupported` | 409 | Connector 当前没有运行时 |
+| `plugin_instance_kind_unavailable` | 409 | 目标宿主未安装/未上报插件，或 manifest `kind` 无法解析（fail-closed） |
 | `plugin_edge_offline` | 409 | reconcile 时目标 Edge 离线 / 发送队列满 |
 | `plugin_quota_exceeded` | 429 | 租户插件实例配额已满 |
 | `plugin_store_unavailable` | 503 / 500 | 插件存储未接线（503）或写入失败（500） |
 
-### 5.7 已知边界（v0.1 接受）
+### 5.7 已知边界（当前接受）
 
 - **令牌会话无实时通道**：用租户服务令牌登录的 WebUI 只有 REST（Authorization header）。
   浏览器 `WebSocket` 无法携带自定义 header，而账号模式下 `/ws` 以会话 cookie 鉴权，因此令牌会话

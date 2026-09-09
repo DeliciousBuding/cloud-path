@@ -1,9 +1,9 @@
 // 测试夹具 SSOT：形状严格对齐冻结契约
 //   spec/descriptor.schema.json   ($id cloudpath.dev/descriptor/v1)
 //   spec/capability.schema.json   ($id cloudpath.dev/capability/v1alpha1)
-// 另外收纳两类「后端缺口」样本（契约宽容/后端尚未产出），用来验证前端归一化，而不是去改后端：
-//   GAP-1 Capability action 未声明 command → 前端必须回落 action key
-//   GAP-2 Descriptor 顶层 commands 扩展字段 → schema 未定义，前端允许消费
+// 另外收纳两类兼容样本（前端归一化，不改后端）：
+//   Capability action 未声明 command → 前端回落 action key
+//   Descriptor 顶层 commands 扩展字段 → schema 未定义，前端宽容消费
 // 夹具里的设备语义（温度/继电器/时钟）只是样本数据，组件与断言都不认识这些名字。
 import type { CapabilityDoc, DeviceDescriptor, DeviceView } from '@/lib/types'
 
@@ -37,7 +37,7 @@ export const capRelay: CapabilityDoc = {
     actions: {
       close: { title: '闭合', command: 'relay_on', primary: true, description: '接通负载' },
       open: { title: '断开', command: 'relay_off' },
-      // GAP-1：没有 command 字段 → cmd 回落 action key `pulse`；inputSchema → 需要参数
+      // 没有 command 字段 → cmd 回落 action key `pulse`；inputSchema → 需要参数
       pulse: {
         title: '点动',
         description: '按毫秒脉冲',
@@ -120,7 +120,7 @@ export function makeDescriptor(over: Partial<DeviceDescriptor> = {}): DeviceDesc
   }
 }
 
-/** GAP-2：Descriptor 顶层声明命令（schema 未定义该扩展字段，前端按宽容扩展消费） */
+/** Descriptor 顶层声明命令（schema 未定义该扩展字段，前端按宽容扩展消费） */
 export function makeDescriptorWithRootCommands(): DeviceDescriptor {
   const d = makeDescriptor({ entities: [] })
   return {

@@ -47,7 +47,7 @@ export function StatusBadge({ status }: { status?: DeviceStatus }) {
   return <Badge tone={meta.tone}>{meta.label}</Badge>
 }
 
-export function JsonBlock({ value, className, maxHeight = 'max-h-56', label = '原始 JSON（通用回落视图）' }: {
+export function JsonBlock({ value, className, maxHeight = 'max-h-56', label = '完整数据' }: {
   value: unknown; className?: string; maxHeight?: string; label?: string
 }) {
   let text: string
@@ -62,7 +62,7 @@ export function JsonBlock({ value, className, maxHeight = 'max-h-56', label = '�
       tabIndex={0} role="group" aria-label={label}
       className={cn('num overflow-auto rounded-lg bg-surface-2 p-3 font-mono text-[11px] leading-relaxed text-ink-2',
         maxHeight, className)}
-      title="通用 JSON 视图（未收录结构的回落）"
+      title="完整数据视图"
     >{text}</pre>
   )
 }
@@ -84,14 +84,14 @@ function columnsOf(rows: Record<string, unknown>[]): string[] {
 }
 
 /** 通用表格：数组型观测（对象数组或标量数组）都能渲染，列名来自数据本身 */
-export function GenericTable({ value, className, label = '数据表（通用视图）' }: {
+export function GenericTable({ value, className, label = '数据表' }: {
   value: unknown[]; className?: string; label?: string
 }) {
   const rows = value.map((v) => (v && typeof v === 'object' && !Array.isArray(v)
     ? (v as Record<string, unknown>)
     : { value: v }))
   const cols = columnsOf(rows)
-  if (!cols.length) return <p className="py-3 text-center text-xs text-ink-3">空集合</p>
+  if (!cols.length) return <p className="py-3 text-center text-xs text-ink-3">暂无内容</p>
   return (
     // 390px：表格只在自身容器内横向滚动（overflow-x-auto），不把横向溢出推给 body；
     // 容器可聚焦并带名称，键盘/读屏用户才能进入这块滚动区。
@@ -125,7 +125,7 @@ export function GenericTable({ value, className, label = '数据表（通用视�
 }
 
 function ScalarChips({ value }: { value: unknown[] }) {
-  if (!value.length) return <p className="py-2 text-center text-xs text-ink-3">空集合</p>
+  if (!value.length) return <p className="py-2 text-center text-xs text-ink-3">暂无内容</p>
   return (
     <div className="flex flex-wrap gap-1.5">
       {value.map((v, i) => (
@@ -207,12 +207,12 @@ export function ValueWidget({ obs, idx = EMPTY_INDEX, emphasis = false, classNam
           </dl>
         )
       }
-      return <JsonBlock value={value} maxHeight="max-h-40" label={`${propertyLabel(obs.property, obs.capability, idx)} 原始 JSON`} />
+      return <JsonBlock value={value} maxHeight="max-h-40" label={`${propertyLabel(obs.property, obs.capability, idx)} 完整数据`} />
     }
   }
 
   if (widget === 'json') {
-    return <JsonBlock value={value} maxHeight="max-h-40" label={`${propertyLabel(obs.property, obs.capability, idx)} 原始 JSON`} />
+    return <JsonBlock value={value} maxHeight="max-h-40" label={`${propertyLabel(obs.property, obs.capability, idx)} 完整数据`} />
   }
 
   if (widget === 'boolean' || widget === 'badge') {
@@ -248,7 +248,7 @@ export function ObservationTable({ observations, idx = EMPTY_INDEX }: {
   observations: Observation[]
   idx?: CapabilityIndex
 }) {
-  if (!observations.length) return <p className="py-3 text-center text-xs text-ink-3">还没有观测值</p>
+  if (!observations.length) return <p className="py-3 text-center text-xs text-ink-3">还没有数据</p>
   return (
     <dl className="space-y-2.5">
       {observations.map((o) => {
@@ -260,7 +260,7 @@ export function ObservationTable({ observations, idx = EMPTY_INDEX }: {
               <span className="truncate" title={`${capabilityLabel(o.capability, idx)} · ${o.property}`}>
                 {propertyLabel(o.property, o.capability, idx)}
               </span>
-              {!known && <Badge tone="idle" className="shrink-0">未收录</Badge>}
+              {!known && <Badge tone="idle" className="shrink-0">暂无详情</Badge>}
             </dt>
             <dd className="min-w-0 shrink-0 text-right">
               <ValueWidget obs={o} idx={idx} />
@@ -322,7 +322,7 @@ export function StateRow({ entity, idx = EMPTY_INDEX, nowSec, series }: {
             {entityTitle(entity)}
           </span>
           <QualityDot q={q} />
-          {stale && <Badge tone="warn" className="shrink-0">未更新</Badge>}
+          {stale && <Badge tone="warn" className="shrink-0">已过期</Badge>}
         </span>
         {pts && pts.length >= 2 && (
           // Sparkline 自身是 w-full：宽度由外层固定槽给，避免与内部类冲突撑破行
@@ -366,7 +366,7 @@ export function StateMatrix({ descriptor, idx = EMPTY_INDEX, categories, nowSec,
     .map((category) => ({ category, entities: descriptor.entities.filter((e) => e.category === category) }))
     .filter((g) => g.entities.length > 0)
   if (!groups.length) {
-    return <p className="py-6 text-center text-sm text-ink-3">设备声明里没有可呈现的观测项</p>
+    return <p className="py-6 text-center text-sm text-ink-3">设备信息中没有可显示的数据</p>
   }
   return (
     <div className={cn('space-y-5', className)}>
@@ -400,7 +400,7 @@ export function ObsValue({ obs, idx = EMPTY_INDEX, tone = 'idle', size = 'tile',
   if (!obs) {
     return (
       <span className={cn(shell, 'text-[12px] text-ink-3', className)}>
-        {size === 'row' ? '暂无数据' : '等待观测'}
+        {size === 'row' ? '暂无数据' : '等待数据'}
       </span>
     )
   }
@@ -470,7 +470,7 @@ export function StateTile({ entity, idx = EMPTY_INDEX, nowSec, series }: {
           {entityTitle(entity)}
         </span>
         <QualityDot q={q} />
-        {stale && <Badge tone="warn" className="shrink-0">未更新</Badge>}
+        {stale && <Badge tone="warn" className="shrink-0">已过期</Badge>}
       </div>
       <div className="mt-1.5 flex min-w-0 items-center justify-between gap-2">
         <ObsValue obs={primary} idx={idx} tone={tone} />
@@ -537,7 +537,7 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
   const set = new Set<string>()
   for (const e of descriptor.entities) for (const c of e.capabilities) if (c) set.add(c)
   const refs = [...set]
-  if (!refs.length) return <p className="py-6 text-center text-sm text-ink-3">设备声明里没有列出能力</p>
+  if (!refs.length) return <p className="py-6 text-center text-sm text-ink-3">设备信息中没有可显示的功能</p>
   return (
     <ul className={cn('m-0 list-none divide-y divide-hairline p-0', className)}>
       {refs.map((ref) => {
@@ -552,7 +552,7 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
             <details className="py-2.5">
               <summary className="flex cursor-pointer select-none flex-wrap items-center gap-x-3 gap-y-1">
                 <span className="min-w-0 truncate text-[13px] font-medium">{capabilityLabel(ref, idx)}</span>
-                {!doc && <Badge tone="idle" className="shrink-0">未收录</Badge>}
+                {!doc && <Badge tone="idle" className="shrink-0">暂无详情</Badge>}
                 <span className="num min-w-0 truncate font-mono text-[11px] text-ink-3" title={ref}>{ref}</span>
                 <span className="num ml-auto shrink-0 text-[12px] text-ink-3">
                   {props.length} 属性 · {actions.length} 动作 · {events.length} 事件
@@ -560,12 +560,13 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
               </summary>
               <div className="mt-2.5 space-y-3 pl-0.5">
                 {props.length > 0 && (
-                  <div className="overflow-x-auto">
+                  <div tabIndex={0} role="region"
+                    aria-label={`${capabilityLabel(ref, idx)} 字段`} className="overflow-x-auto">
                     <table className="w-full border-collapse text-left text-xs">
                       <thead>
                         <tr className="text-[12px] text-ink-3">
                           <th className="px-1 pb-1 font-medium">属性</th>
-                          <th className="px-1 pb-1 font-medium">机器名</th>
+                          <th className="px-1 pb-1 font-medium">字段标识</th>
                           <th className="px-1 pb-1 font-medium">类型</th>
                           <th className="px-1 pb-1 font-medium">单位</th>
                           <th className="px-1 pb-1 font-medium">访问</th>
@@ -608,10 +609,12 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
                 )}
                 {doc && (
                   <details>
-                    <summary className="cursor-pointer select-none text-[12px] text-ink-3 transition-colors hover:text-ink-2">
-                      Schema JSON（v{parsed.version ?? doc.metadata?.version ?? '—'}）
+                    <summary
+                      title={`版本 ${parsed.version ?? doc.metadata?.version ?? '—'}`}
+                      className="cursor-pointer select-none text-[12px] text-ink-3 transition-colors hover:text-ink-2">
+                      数据结构
                     </summary>
-                    <JsonBlock className="mt-1.5" value={doc.spec} maxHeight="max-h-48" label={`${ref} schema JSON`} />
+                    <JsonBlock className="mt-1.5" value={doc.spec} maxHeight="max-h-48" label={`${ref} 完整数据`} />
                   </details>
                 )}
               </div>
@@ -629,14 +632,14 @@ export function EntityInventory({ descriptor, className }: {
   className?: string
 }) {
   return (
-    <div className={cn('overflow-x-auto', className)}>
+    <div tabIndex={0} role="region" aria-label="设备对象清单" className={cn('overflow-x-auto', className)}>
       <table className="w-full border-collapse text-left text-xs">
         <thead>
           <tr className="text-[12px] text-ink-3">
             <th className="px-1 pb-1.5 font-medium">实体</th>
-            <th className="px-1 pb-1.5 font-medium">entity_id</th>
+            <th className="px-1 pb-1.5 font-medium">实体编号</th>
             <th className="px-1 pb-1.5 font-medium">分类</th>
-            <th className="px-1 pb-1.5 font-medium">Capability 引用</th>
+            <th className="px-1 pb-1.5 font-medium">功能标识</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-hairline">
@@ -665,7 +668,7 @@ export function EntityInventory({ descriptor, className }: {
 }
 
 /** legacy raw（诊断面）→ 通用视图：标量成键值行，数组成表格/胶囊，对象成 JSON */
-export function RawView({ raw, title = '上报字段（通用视图）', className }: {
+export function RawView({ raw, title = '设备数据', className }: {
   raw: DeviceRaw | undefined
   title?: string
   className?: string
@@ -674,7 +677,7 @@ export function RawView({ raw, title = '上报字段（通用视图）', classNa
   if (!rows.length) {
     return (
       <Panel className={className} title={title}>
-        <p className="py-4 text-center text-sm text-ink-3">等待设备上报…</p>
+        <p className="py-4 text-center text-sm text-ink-3">等待设备同步…</p>
       </Panel>
     )
   }
@@ -704,13 +707,13 @@ export function RawView({ raw, title = '上报字段（通用视图）', classNa
             ? (r.value.every(isScalar)
               ? <ScalarChips value={r.value} />
               : <GenericTable value={r.value} label={`${r.label} 数据表`} />)
-            : <JsonBlock value={r.value} maxHeight="max-h-40" label={`${r.label} 原始 JSON`} />}
+            : <JsonBlock value={r.value} maxHeight="max-h-40" label={`${r.label} 完整数据`} />}
         </div>
       ))}
       <p className="mt-3 flex items-center gap-1 border-t border-hairline pt-2 text-[12px] text-ink-3">
         <Boxes size={11} />
         <span className={cn('truncate', TONE_TEXT_CLS.idle)}>
-          该设备未上报能力声明，此处按上报字段通用渲染
+          该设备尚未同步功能信息，此处按已接收的数据显示
         </span>
       </p>
     </Panel>

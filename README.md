@@ -24,7 +24,8 @@ CloudPath 把「插上一台设备 → 上云看到它 → 远程控制它」做
 - **云原生 · 边云协同**：中心控制面（Server）是 **期望态 / 租户 / 审计的唯一权威**；边缘代理（Edge）是
   **观测态的唯一权威**并保存最后成功 applied 快照。边缘自治：断网继续运行，重连仅应用最终快照、不回放中间副作用。
 - **设备无关 · 插件驱动**：核心（`internal/*`）不识别任何具体硬件；新设备 = 一个 Driver 插件。
-- **分布式 Hub-Spoke**：多边缘节点 + 单中心控制面，天然中心-边缘拓扑，可横向扩展。
+- **分布式 Hub-Spoke**：多边缘节点 + 单中心控制面，天然中心-边缘拓扑；当前为单 Server 部署，
+  多 Server 横向扩展仍属目标态。
 - **设备身份** = `(tenant_id, edge_id, device_id)`；线上传输键 `<edge_id>/<device_id>`。
 - **全链路实时**：edge → server → 浏览器全程 WebSocket；REST 只承担历史查询与管理操作。
 - **单二进制 · 零 CGO**：WebUI `go:embed` 进 server；SQLite 用 `modernc.org/sqlite`，交叉编译 Linux/arm64 无需工具链。
@@ -58,13 +59,13 @@ CloudPath 把「插上一台设备 → 上云看到它 → 远程控制它」做
 | **Application** | Server | 业务对象、绑定、规则、任务、领域 API | 直接访问串口或 Core 数据库 |
 | **Connector** | Edge 或 Server | MQTT / Webhook / 外部平台 / 通知 / 数据出口 | 定义核心设备模型 |
 
-UI 贡献不是独立的可执行插件类型：插件通过 Manifest 提交声明式导航、表单与页面 Schema。
+UI 贡献不是独立的可执行插件类型：当前由 Descriptor/Capability schema 驱动通用设备视图与命令表单；任意页面 Schema 属于目标态。
 
 插件源码入口与 Core 参考材料：
 
 | 位置 | 形态 | 说明 |
 |---|---|---|
-| [cloud-path-driver-stcb](https://github.com/DeliciousBuding/cloud-path-driver-stcb) | **独立 Driver Plugin** | STC-B 参考驱动；经 GitHub discover/install 由 Plugin Host 运行（v0.1.0） |
+| [cloud-path-driver-stcb](https://github.com/DeliciousBuding/cloud-path-driver-stcb) | **独立 Driver Plugin** | STC-B 参考驱动；经 GitHub discover/install 由 Plugin Host 运行（已发布） |
 | [cloud-path-app-scheduled-compartment](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment) | **独立 Application Plugin** | 定时隔间应用的现役源码、配置与发布说明 |
 | [cloud-path-app-button-indicator](https://github.com/DeliciousBuding/cloud-path-app-button-indicator) | **独立 Application Plugin** | 按键指示应用的现役源码、配置与发布说明 |
 | [cloud-path-app-environment-guard](https://github.com/DeliciousBuding/cloud-path-app-environment-guard) | **独立 Application Plugin** | 环境监护应用的现役源码、配置与发布说明 |
@@ -339,14 +340,14 @@ L1 内网/反代（`-allowed-origins` + 建议令牌 + TLS）→ L2 公网（令
   + RBAC（`admin > operator > viewer`）+ **租户令牌**（`cp_` 前缀，scope 为
   `read|write|admin|edge` 的非空子集；明文只返回一次，库中只存 SHA-256 与短前缀）。
 
-**Secret 边界（v0.1 的关键设计）**：
+**Secret 边界（当前关键设计）**：
 
 - **Server 只见 `secret://<name>` handle**，配置与审计里出现的都是 handle，不是值；
 - **明文只存在于目标 Edge 本地**：由本地 provider 按 `<root>/<tenant>/<instance>/<name>`
   解析（[internal/secrethandle](internal/secrethandle/secrethandle.go)），不缓存、不落日志、
   不跨租户/实例读取；handle 名严格校验，无法编码路径或平台技巧；
 - 插件必须在 manifest `permissions.secrets` 里**显式声明**才能解析对应 handle，未声明即 fail-closed；
-- v0.1 **不做中心 Secret Store**：Server 不保存、不转发任何明文。
+- 当前**不做中心 Secret Store**：Server 不保存、不转发任何明文。
 
 **输入与资源防护**：命令白名单由适配器声明；`args` ≤64 字节且不含换行/NUL；
 `edge_id` 形状校验；设备归属校验（edge 只能上报自己注册过的键）；请求体
@@ -430,11 +431,11 @@ cloud-path/
 
 ---
 
-## 当前真实能力 vs 尚未实现
+## 当前真实能力与边界
 
 > 目标态不冒充当前态。下表以基线代码与本机实测为准；不确定的一律指向 [docs/](docs/)。
 
-**已实现（可依赖）**
+**当前实现（IMPLEMENTED；不等同真板 VERIFIED）**
 
 - 单二进制 server（内嵌 WebUI）+ edge + 插件 CLI；全链路 WebSocket 实时链路；
   命令闭环（pending→sent→ok/failed/timeout）与事件/命令 SQLite 持久化、保留期清理。
@@ -444,34 +445,44 @@ cloud-path/
 - 设备监督（拔插退避重开）、离线事件有界缓冲与重连回放、断线指数退避重连、
   重启后从 SQLite 水合（一律先标离线，等 edge 重新上报）。
 - 参考 Driver `stcb` 已拆为独立 Driver Plugin [`cloud-path-driver-stcb`](https://github.com/DeliciousBuding/cloud-path-driver-stcb)
-  （v0.1.0 发布，Driver Protocol v1；Core 生产二进制不再 blank import STC-B，经 GitHub discover/install 由 Edge 的 Plugin Host 运行）。
+  （Driver Protocol v1；Core 生产二进制不再 blank import STC-B，经 GitHub discover/install 由 Edge 的 Plugin Host 运行）。
 - 内置参考演示适配器 `demo`（无硬件，`ping/set/dump/noop`，server/edge 双端同源注册，`/api/adapters` 与白名单同一事实源）。
 - Application 插件在[独立仓库](docs/architecture/repository-strategy.md)维护；
   Core 示例与拆仓生成器仅保留作参考 / 历史 bootstrap，不作为现役应用更新源。
 - 外部 Driver Plugin Host：desired-state + `plugins.lock` 监督插件进程；
   Registry CLI 的 search/inspect/install/enable/disable/update/remove/host 与信任锚校验。
+- 外部 Driver 多实例多设备映射与实例串口注入：每个 `(driver, device_id)` 独立逻辑实例，
+  `ConfigureInstance` 与 `OpenDevice` 携带同一设备的 `port/baud/name/extra`；协议级回归测试覆盖
+  三设备隔离、命令路由、故障隔离与重连（`internal/edge/external_driver_fleet_test.go`）。
 - 插件控制面全链路：Server desired 权威（写面 REST + 9 个稳定错误码 + RBAC/配额/审计/WS
   同链路推送）→ Edge reconcile（单调 revision、幂等 ack、离线跑 last-applied、重连只收敛最终
   快照）→ observed 上报投影（脱敏）→ UI desired/observed 双栏诚实呈现（drift/stale/last-ack）。
 - `GET /api/overview` 聚合读面与 WebUI Overview/Activity/Plugins 产品信息架构；
-  账号密码登录（会话 cookie，实时通道跟随登录态）与 390px 窄屏视觉守卫测试。
+  账号密码登录（会话 cookie，实时通道跟随登录态）。
 - `secret://<name>` handle 边界（本地 provider、租户/实例隔离、未声明 fail-closed；明文 secret
   永不进 Server DB / WS / 审计 / 日志 / UI）。
 - WebUI：概览/设备/详情/活动/插件（目录·实例·desired/observed）/边缘/设置 + 管理页
-  （用户、令牌、一次性令牌明文面板），浅色/深色双主题与 390px 窄屏收口。
+  （用户、令牌、一次性令牌明文面板），浅色/深色双主题。
 - 发布工程：全平台构建矩阵、架构断言门禁、CI（Linux+Windows）、Release + checksums、
   systemd/nginx 部署物料与 SOP。
 
-**尚未实现 / 目标态（不要当现状使用）**
+### 真板 E2E 缺口
 
-- **外部 Driver 的多实例多设备映射与插件实例串口配置注入**：单 Driver ID → 单实例单设备的
-  桥接已可用；把一个 Driver 插件扩展到「多实例 → 多设备」、并把插件实例的 `port` 与
-  Edge 设备配置稳定接线，仍是待收尾项（真板 E2E 前完成）。
+- 多实例多设备映射与插件实例串口注入已有实现和协议级回归测试，但尚未完成同一外部 Driver
+  驱动多块真板、覆盖拔插/重连/命令 ACK 的现场 E2E。模拟插件测试、CI 绿或单板历史验收都不能替代
+  这项证据。
+- 现有 STC-B 单板链路可用于回归；新结论必须附真板日志、命令 ACK 与设备事件，不用代码存在推断硬件完成。
+- **身份链边界**：命令/事件当前只保证 `entity_id` 全局唯一，`(device_key, entity_id)` 尚未贯穿绑定与路由；
+  同租户同型号多板若复用 `entity_id`，实体绑定/事件路由可能不确定。当前可用边界是单板，或由 Driver 保证
+  `entity_id` 全局唯一；多板链路在协议与真板证据补齐前不写成 VERIFIED。
+
+### 尚未实现 / 目标态（不要当现状使用）
+
 - **令牌会话的实时通道**：用租户服务令牌登录的 WebUI 只有 REST，无 `/ws` 实时推送
-  （浏览器 WebSocket 无法携带自定义 header）；账号密码会话功能完整。v0.1 接受此限制，UI 诚实呈现。
-- **中心 Secret Store**：v0.1 明确不做（见上）；secret 一律 `secret://<name>` handle + Edge 本地
+  （浏览器 WebSocket 无法携带自定义 header）；账号密码会话功能完整。当前接受此限制，UI 诚实呈现。
+- **中心 Secret Store**：当前明确不做（见上）；secret 一律 `secret://<name>` handle + Edge 本地
   provider 解析，未来可替换 Vault/KMS 而不改 desired 协议。
-- MQTT/Modbus 等协议接入、远程 OTA 编排、时序聚合与业务分析（P2–P4 规划，见
+- MQTT/Modbus 等协议接入、远程 OTA 编排、时序聚合与业务分析（目标态规划，见
   [docs/architecture.md](docs/architecture.md)）。
 
 ---
@@ -480,7 +491,8 @@ cloud-path/
 
 | 文档 | 内容 |
 |---|---|
-| [docs/design.md](docs/design.md) | 技术 SSOT：技术栈、进程模型、存储、前端、安全、测试 |
+| [docs/design.md](docs/design.md) | 技术 SSOT：技术栈、进程模型、存储、行为契约、安全、测试 |
+| [webui/DESIGN.md](webui/DESIGN.md) | WebUI 呈现、排版、布局与交互 SSOT |
 | [docs/architecture.md](docs/architecture.md) | 架构总览与「当前实现 vs 目标态」 |
 | [docs/protocol.md](docs/protocol.md) | Edge ↔ Server 线上协议契约（信封、消息、DTO） |
 | [docs/api.md](docs/api.md) | REST/WS 契约、鉴权三级模型、限流与安全头 |

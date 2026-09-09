@@ -106,9 +106,9 @@ export function useCreateInstance() {
   return useMutation({
     mutationFn: (body: PluginInstanceCreateRequest) => api.createPluginInstance(body),
     // onSuccess 的第二个参数就是 mutationFn 收到的 variables，用它兜住响应缺 id 的情况
-    onSuccess: (r, body) => {
-      invalidate(r?.id || `${body.edge_id}/${body.instance_id}`)
-      toast.ok('期望态已提交', `修订版 ${r?.revision ?? '—'}；实际态要等运行宿主上报后才会出现`)
+    onSuccess: (_r, body) => {
+      invalidate(_r?.id || `${body.edge_id}/${body.instance_id}`)
+      toast.ok('设置已保存', '已保存你的设置；收到运行状态后，这里会显示实际结果。')
     },
   })
 }
@@ -118,9 +118,9 @@ export function useUpdateInstance() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: PluginInstanceUpdateRequest }) =>
       api.updatePluginInstance(id, body),
-    onSuccess: (r, vars) => {
+    onSuccess: (_r, vars) => {
       invalidate(vars.id)
-      toast.ok('期望态已更新', `修订版 ${r?.revision ?? '—'}；运行宿主应用后这里才会变成已收敛`)
+      toast.ok('设置已更新', '已保存你的修改；收到运行状态后，这里会显示实际结果。')
     },
   })
 }
@@ -132,7 +132,7 @@ export function useDeleteInstance() {
       api.deletePluginInstance(id, body),
     onSuccess: (_r, vars) => {
       invalidate(vars.id)
-      toast.ok('实例已删除', '期望态已移除；运行宿主会在下一次快照同步时停止该实例')
+      toast.ok('实例已删除', '设置已移除；网关更新后会停止这个项目。')
     },
   })
 }
@@ -142,9 +142,9 @@ export function useReconcileInstance() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body?: PluginInstanceActionRequest }) =>
       api.reconcilePluginInstance(id, body),
-    onSuccess: (r, vars) => {
+    onSuccess: (_r, vars) => {
       invalidate(vars.id)
-      toast.ok('已触发重新下发', `期望修订版 ${r?.revision ?? '—'} 已重新下发，等待运行宿主回执`)
+      toast.ok('已请求重新应用', '最新设置已重新发送，正在等待运行状态更新。')
     },
   })
 }

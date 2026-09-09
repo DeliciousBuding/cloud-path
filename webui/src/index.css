@@ -16,7 +16,7 @@
  * 子集外的罕见字才回落系统黑体。
  * weight 纪律（Vercel design.md）：regular 400 / medium 500 / semibold 600，标题不超 600；
  *   正文基底 450（CJK/暗画布光学墨度平价，可变轴真实实例，见 body 规则）。
- * 字距纪律：负字距是拉丁刻度，全仓统一 CJK 安全上限 -0.01em（-0.025em 档禁用，design-system 测试守卫）；
+ * 字距纪律：负字距是拉丁刻度，全仓统一 CJK 安全上限 -0.01em（-0.025em 档禁用）；
  *   mono 等宽面恒零字距——负字距会破坏等宽网格。 */
 @font-face {
   font-family: "Geist";
@@ -113,7 +113,7 @@ body {
 .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum", "palt"; }
 
 /* 纯拉丁数字的 display 刻度（KPI / 观测大数字）：等宽数字 + Geist 数字负字距。
- * -0.02em 是拉丁刻度，唯一出口是本类（内容恒为数字与单位）；CJK 文本负字距止于 -0.01em（守卫）。 */
+ * -0.02em 是拉丁刻度，唯一出口是本类（内容恒为数字与单位）；CJK 文本负字距止于 -0.01em。 */
 .metric { font-variant-numeric: tabular-nums; font-feature-settings: "tnum", "palt"; letter-spacing: -0.02em; }
 
 /* 卡片 */
@@ -124,7 +124,6 @@ body {
   box-shadow: var(--shadow-card);
   transition: box-shadow .25s ease, transform .25s ease, background-color .3s ease;
 }
-.card-lift:hover { box-shadow: var(--shadow-lift); transform: translateY(-2px); }
 
 /* 页面进入（仅一次性连贯动效；循环/脉冲/玻璃拟态已按 Vercel「default to stillness」与「拒 glass」移除） */
 @keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
@@ -143,6 +142,7 @@ body {
   transition: all .18s ease;
 }
 .btn:active { transform: scale(.97); }
+@media (pointer: coarse) { .btn { min-height: 44px; } }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn-primary { background: var(--color-accent); color: var(--color-accent-ink); }
 .btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
@@ -226,7 +226,6 @@ p { text-wrap: pretty; }
     transition-duration: .001ms !important;
     scroll-behavior: auto !important;
   }
-  .card-lift:hover { transform: none; }
 }
 
 

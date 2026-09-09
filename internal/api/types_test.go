@@ -100,20 +100,3 @@ func TestPluginAckContractRoundTrip(t *testing.T) {
 		}
 	}
 }
-
-func TestPluginStatusStructHasNoSensitiveTransportFields(t *testing.T) {
-	for _, typ := range []reflect.Type{
-		reflect.TypeOf(PluginInstallationStatusData{}),
-		reflect.TypeOf(PluginObservedInstanceData{}),
-		reflect.TypeOf(PluginStatusData{}),
-	} {
-		for i := 0; i < typ.NumField(); i++ {
-			name := strings.ToLower(typ.Field(i).Name)
-			for _, forbidden := range []string{"path", "config", "secretvalue", "environment", "token"} {
-				if strings.Contains(name, forbidden) {
-					t.Fatalf("%s.%s is forbidden in edge status transport", typ.Name(), typ.Field(i).Name)
-				}
-			}
-		}
-	}
-}

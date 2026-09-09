@@ -8,11 +8,30 @@ const VALID: Validation = { state: 'valid' }
 const UNKNOWN: Validation = { state: 'unknown' }
 const COMBINATORS = ['oneOf', 'anyOf', 'allOf'] as const
 const TYPE_NAMES: Record<string, string> = { object: '对象', array: '数组', string: '文本', number: '数值', integer: '整数', boolean: '布尔值', null: '空值' }
+const FIELD_LABEL: Record<string, string> = {
+  notes: '音符序列', frequency_hz: '频率 (Hz)', duration_ms: '时长 (ms)', gap_ms: '音符间隔 (ms)',
+}
 const TYPES = Object.keys(TYPE_NAMES)
 const ANNOTATIONS = new Set(['title', 'description', 'default', 'examples', '$schema', '$id', '$comment', '$defs', 'definitions', 'readOnly', 'writeOnly', 'deprecated'])
 
 function object(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v)
+}
+
+/** 空对象/纯注释 schema 不构成参数输入；无字段、无组合、无必填项的 object 也是无参数操作。 */
+export function commandHasInput(schema?: Schema): boolean {
+  if (!schema || !object(schema)) return false
+  if (Object.keys(schema).filter((key) => !ANNOTATIONS.has(key)).length === 0) return false
+  if (schema.type !== 'object') return true
+
+  const properties = object(schema.properties) ? schema.properties : null
+  if (properties && Object.keys(properties).length > 0) return true
+  if (COMBINATORS.some((key) => schemaList(schema[key]))) return true
+  if (Array.isArray(schema.required) && schema.required.length > 0) return true
+  if ('patternProperties' in schema) return true
+  if ('additionalProperties' in schema && schema.additionalProperties !== false) return true
+  if (count(schema.minProperties) || count(schema.maxProperties)) return true
+  return false
 }
 function number(v: unknown): v is number {
   return typeof v === 'number' && Number.isFinite(v)
@@ -91,7 +110,7 @@ function propertyLabel(key: string, schema: unknown): string {
   for (const label of [schema.title, schema.description]) {
     if (typeof label === 'string' && label.trim()) return label
   }
-  return key
+  return FIELD_LABEL[key] ?? key
 }
 
 function validate(value: unknown, schema: unknown, at = '参数'): Validation {
@@ -104,7 +123,7 @@ function validate(value: unknown, schema: unknown, at = '参数'): Validation {
   if (declaredTypes && !declaredTypes.some((t) => matchesType(value, t))) {
     return fail('需要' + declaredTypes.map((type) => TYPE_NAMES[type]).join('或') + '类型')
   }
-  if (Array.isArray(schema.enum) && !schema.enum.some((v) => equal(value, v))) return fail('请选择声明的枚举值')
+  if (Array.isArray(schema.enum) && !schema.enum.some((v) => equal(value, v))) return fail('请选择允许的值')
   if (Object.hasOwn(schema, 'const') && !equal(value, schema.const)) return fail('必须等于 ' + JSON.stringify(schema.const))
   if (number(value)) {
     if (number(schema.minimum) && value < schema.minimum) return fail('不能小于 ' + schema.minimum)
@@ -155,7 +174,7 @@ function validate(value: unknown, schema: unknown, at = '参数'): Validation {
         if (result.state === 'invalid') return result
         if (result.state === 'unknown') uncertain = true
       } else if (Object.hasOwn(schema, 'additionalProperties') && !('patternProperties' in schema)) {
-        if (schema.additionalProperties === false) return fail('未声明的参数 ' + key)
+        if (schema.additionalProperties === false) return fail('不支持的参数 ' + key)
         const result = validate(value[key], schema.additionalProperties, child)
         if (result.state === 'invalid') return result
         if (result.state === 'unknown') uncertain = true
@@ -173,16 +192,23 @@ function validate(value: unknown, schema: unknown, at = '参数'): Validation {
       if (failure) return failure
       if (matches !== results.length) uncertain = true
     } else if (keyword === 'anyOf') {
-      if (possible === 0) return fail('至少满足一个参数方案（anyOf）')
+      if (possible === 0) return fail('请至少选择一种设置方式')
       if (matches === 0) uncertain = true
     } else {
-      if (matches > 1) return fail('只能满足一个参数方案（oneOf），当前至少匹配 ' + matches + ' 个')
-      if (possible === 0) return fail('未满足任何参数方案（oneOf）')
+      if (matches > 1) return fail('请只选择一种设置方式')
+      if (possible === 0) return fail('请选择一种设置方式')
       // 未知方案既不算匹配，也不算失败；只在所有可能性都不合法时拒绝。
       if (matches !== 1 || possible !== 1) uncertain = true
     }
   }
   return uncertain ? UNKNOWN : VALID
+}
+
+/** 用户可见文案：机器单位的传输错误只用于内部校验，不直接展示给普通用户。 */
+export function commandArgsErrorCopy(error?: string): string | undefined {
+  if (!error) return undefined
+  if (/\d+ 字节，超过 \d+ 字节上限/.test(error)) return '内容太长，请减少输入内容'
+  return error
 }
 
 /** JSON 语法 + 已知 schema 约束 + 未改变的传输门禁。没有 schema 的原始参数不强制 JSON。 */
@@ -193,7 +219,7 @@ export function commandArgsError(args: string, schema?: Schema, maxBytes?: numbe
 
 /** JSON/schema validation only; each action transport owns its byte/control-character limits. */
 export function schemaArgsError(args: string, schema: Schema): string | undefined {
-  if (!args.trim()) return '请填写 JSON 参数'
+  if (!args.trim()) return '请填写参数'
   let value: unknown
   try {
     value = JSON.parse(args, (_key, v: unknown) => {
@@ -201,7 +227,7 @@ export function schemaArgsError(args: string, schema: Schema): string | undefine
       return v
     })
   } catch {
-    return 'JSON 格式无效，请检查括号、引号和数值'
+    return '参数格式无效，请检查括号、引号和数值'
   }
   const result = validate(value, schema)
   return result.state === 'invalid' ? result.error : undefined
@@ -212,9 +238,25 @@ export interface CommandField {
   label: string
   description?: string
   required: boolean
-  type: 'string' | 'number' | 'integer' | 'boolean' | 'enum'
+  type: 'string' | 'number' | 'integer' | 'boolean' | 'enum' | 'array' | 'object-rows'
   schema: Schema
   choices?: unknown[]
+  itemType?: 'string' | 'number' | 'integer'
+  fields?: CommandField[]
+  examples?: unknown[]
+  minItems?: number
+  maxItems?: number
+}
+
+export interface CommandFormChoice {
+  key: string
+  label: string
+  fields: CommandField[]
+}
+
+export interface CommandForm {
+  fields: CommandField[]
+  choices?: CommandFormChoice[]
 }
 
 function containsCombinator(schema: unknown): boolean {
@@ -234,12 +276,70 @@ export function commandFields(schema: Schema): CommandField[] | null {
   for (const [key, prop] of entries) {
     if (!object(prop)) return null
     const choices = Array.isArray(prop.enum) && prop.enum.length > 0 && prop.enum.every((v) => v === null || ['string', 'boolean', 'number'].includes(typeof v)) ? prop.enum : undefined
-    const type = choices ? 'enum' : prop.type
-    if (type !== 'string' && type !== 'number' && type !== 'integer' && type !== 'boolean' && type !== 'enum') return null
+    let type: CommandField['type'] = choices ? 'enum' : prop.type as CommandField['type']
+    let itemType: CommandField['itemType']
+    let nestedFields: CommandField[] | undefined
+    if (type === 'array') {
+      const items = object(prop.items) ? prop.items : null
+      if (items?.type === 'object') {
+        const nested = commandFields(items)
+        if (!nested) return null
+        type = 'object-rows'
+        nestedFields = nested
+      } else {
+        const candidate = items?.type
+        if (candidate !== 'string' && candidate !== 'number' && candidate !== 'integer') return null
+        itemType = candidate
+      }
+    } else if (type !== 'string' && type !== 'number' && type !== 'integer' && type !== 'boolean' && type !== 'enum') return null
     const title = typeof prop.title === 'string' && prop.title.trim() ? prop.title : undefined
     const description = typeof prop.description === 'string' && prop.description.trim() ? prop.description : undefined
     fields.push({ key, label: propertyLabel(key, prop), description: title && description !== title ? description : undefined,
-      required: Array.isArray(schema.required) && schema.required.includes(key), type, schema: prop, choices })
+      required: Array.isArray(schema.required) && schema.required.includes(key), type, schema: prop, choices,
+      itemType, fields: nestedFields, examples: Array.isArray(prop.examples) ? prop.examples : undefined,
+      minItems: count(prop.minItems) ? prop.minItems : undefined, maxItems: count(prop.maxItems) ? prop.maxItems : undefined })
   }
   return fields
+}
+
+function branchFields(root: Schema, branch: Schema): CommandField[] | null {
+  const rootProperties = object(root.properties) ? root.properties : {}
+  const branchProperties = object(branch.properties) ? branch.properties : {}
+  const rootRequired = Array.isArray(root.required) ? root.required.filter((key): key is string => typeof key === 'string') : []
+  const branchRequired = Array.isArray(branch.required) ? branch.required.filter((key): key is string => typeof key === 'string') : []
+  const keys = new Set([...rootRequired, ...branchRequired, ...Object.keys(branchProperties)])
+  if (keys.size === 0) Object.keys(rootProperties).forEach((key) => keys.add(key))
+  const properties = Object.fromEntries([...keys]
+    .filter((key) => Object.hasOwn(rootProperties, key) || Object.hasOwn(branchProperties, key))
+    .map((key) => [key, Object.hasOwn(branchProperties, key) ? branchProperties[key] : rootProperties[key]]))
+  const required = [...new Set([...rootRequired, ...branchRequired])]
+  const merged: Schema = { ...root, ...branch, properties, required }
+  for (const key of COMBINATORS) delete merged[key]
+  return commandFields(merged)
+}
+
+function branchLabel(root: Schema, branch: Schema, index: number): string {
+  if (typeof branch.title === 'string' && branch.title.trim()) return branch.title
+  const required = Array.isArray(branch.required) ? branch.required.filter((key): key is string => typeof key === 'string') : []
+  const properties = object(root.properties) ? root.properties : {}
+  const labels = required.map((key) => propertyLabel(key, properties[key]))
+  return labels.length > 0 ? labels.join(' / ') : '方式 ' + (index + 1)
+}
+
+/** 普通参数表单：支持平铺字段与根级 oneOf 的“设置方式”选择；其余复杂结构保留 JSON 回落。 */
+export function commandForm(schema: Schema): CommandForm | null {
+  const branches = schema.oneOf
+  const hasOtherCombinator = Object.hasOwn(schema, 'anyOf') || Object.hasOwn(schema, 'allOf')
+  if (Array.isArray(branches) && branches.length > 0 && !hasOtherCombinator) {
+    const choices: CommandFormChoice[] = []
+    for (const [index, branch] of branches.entries()) {
+      if (!object(branch)) return null
+      const fields = branchFields(schema, branch)
+      if (!fields || fields.length === 0) return null
+      choices.push({ key: String(index), label: branchLabel(schema, branch, index), fields })
+    }
+    return { fields: [], choices }
+  }
+  const fields = commandFields(schema)
+  return fields ? { fields } : null
 }

@@ -52,6 +52,7 @@ export function timeAgo(ts: number): string {
 }
 
 export function fmtUptime(sec: number): string {
+  if (!Number.isFinite(sec) || sec < 0) return '—'
   if (sec < 60) return `${sec} 秒`
   if (sec < 3600) return `${Math.floor(sec / 60)} 分钟`
   if (sec < 86400) return `${Math.floor(sec / 3600)} 小时 ${Math.floor((sec % 3600) / 60)} 分`
@@ -156,7 +157,12 @@ export function cmdMeta(
   if (a) return { label: a.label, hint: a.hint ?? '' }
   const decl = idx ? commandDecl(cmd, idx) : undefined
   if (decl?.title) return { label: decl.title, hint: decl.description ?? '' }
-  return { label: commandLabel(cmd), hint: '' }
+  const friendly: Record<string, string> = {
+    tone: '播放音调',
+    tone_sequence: '播放音序',
+    isp: '进入下载模式',
+  }
+  return { label: friendly[cmd] ?? commandLabel(cmd), hint: '' }
 }
 
 /** 命令生命周期状态 → 徽标语义（平台级状态机，非设备语义） */
@@ -202,9 +208,9 @@ export function roleLabel(role: string): string {
  * 已收紧的部署说成裸奔。未知形态回落原值，不猜语义——与 roleLabel 同一纪律。
  */
 const AUTH_MODE_LABELS: Record<string, string> = {
-  account: '账号鉴权：全部接口需登录',
-  token: '共享令牌（legacy）：读开放，写需令牌或本机回环',
-  open: '未启用：读开放，写仅限本机回环',
+  account: '需要账号登录',
+  token: '使用访问令牌：可查看，修改需令牌或本机操作',
+  open: '无需登录：可查看，修改仅限本机',
 }
 
 export function authModeLabel(mode?: string): string {
@@ -233,7 +239,7 @@ export function argsError(args: string, max = 64): string | undefined {
   if (/[\r\n\0]/.test(args)) return '参数不能包含换行或控制字符'
   const bytes = new TextEncoder().encode(args).length
   const limit = argsMaxBytes(max)
-  if (bytes > limit) return '参数 ' + bytes + ' UTF-8 字节，超过 ' + limit + ' 字节上限'
+  if (bytes > limit) return '参数 ' + bytes + ' 字节，超过 ' + limit + ' 字节上限'
   return undefined
 }
 
@@ -245,17 +251,17 @@ export function argsError(args: string, max = 64): string | undefined {
 export function commandErrorCopy(e: unknown): string {
   if (e instanceof ApiError) {
     switch (e.status) {
-      case 400: return '命令或参数不被接受：不在适配器白名单内，或参数超长 / 含控制字符'
-      case 401: return '登录已失效，请重新登录后再下发命令'
-      case 403: return '权限不足：当前角色不能下发命令（需要 operator 或 admin）'
-      case 404: return '设备不存在，或不属于当前租户'
-      case 409: return '目标设备所在的边缘节点离线，命令无法下发'
-      case 429: return e.retryAfter ? `下发过于频繁，请 ${e.retryAfter} 秒后重试` : '下发过于频繁，请稍后重试'
-      case 503: return '服务端存储不可用或边缘队列已满，请稍后重试'
-      default: return `下发失败（HTTP ${e.status}）`
+      case 400: return '操作或参数不被接受：设备不支持，或参数过长、包含无效字符'
+      case 401: return '登录已失效，请重新登录后再执行操作'
+      case 403: return '当前账号没有执行操作的权限'
+      case 404: return '设备不存在，或不属于当前组织'
+      case 409: return '设备所在网关离线，操作暂时无法执行'
+      case 429: return e.retryAfter ? `操作过于频繁，请 ${e.retryAfter} 秒后重试` : '操作过于频繁，请稍后重试'
+      case 503: return '服务暂时不可用或网关忙碌，请稍后重试'
+      default: return `操作失败（HTTP ${e.status}）`
     }
   }
-  return e instanceof Error && e.message ? e.message : '无法连接 server（服务未启动或网络不可达）'
+  return e instanceof Error && e.message ? e.message : '无法连接服务（服务未启动或网络不可达）'
 }
 
 /** 桶宽候选（秒）：从数据跨度自动选，保证 ≤ want 个桶且桶宽是人话单位 */

@@ -9,7 +9,8 @@ import type { ReactNode } from 'react'
 import { KeyRound, Lock, ShieldCheck, ShieldAlert } from 'lucide-react'
 import { Badge, KeyValue } from '@/components/ui'
 import {
-  permissionGroups, pluginErrorCopy, safeConfigEntries, secretHandleName, shortDigest, trustMeta,
+  permissionGroups, permissionItemLabel, pluginDisplayName, pluginErrorCopy, safeConfigEntries,
+  secretHandleName, shortDigest, trustMeta,
 } from '@/lib/plugins'
 import { fmtDateTime } from '@/lib/format'
 import type { PluginCatalogView, PluginInstanceView, PluginPermissionsData } from '@/lib/types'
@@ -24,7 +25,10 @@ export function PluginErrorNote({ error, className }: { error: unknown; classNam
       <p className="text-[13px] font-semibold break-words">{copy.title}</p>
       <p className="mt-0.5 text-[12px] leading-relaxed break-words opacity-90">{copy.hint}</p>
       {copy.code && (
-        <p className="num mt-1.5 text-[12px] opacity-70">错误码 {copy.code}</p>
+        <details className="mt-2 min-w-0">
+          <summary className="cursor-pointer text-[12px] opacity-80">技术详情</summary>
+          <p className="num mt-1 break-all text-[12px] opacity-70">错误码 {copy.code}</p>
+        </details>
       )}
     </div>
   )
@@ -56,7 +60,7 @@ export function PermissionList({ permissions, emptyHint }: {
             {g.items.map((item) => (
               <li key={item} className="min-w-0 max-w-full">
                 <Badge tone={g.tone} className="max-w-full">
-                  <span className="min-w-0 truncate break-all">{item}</span>
+                  <span className="min-w-0 truncate break-all">{permissionItemLabel(g.key, item)}</span>
                 </Badge>
               </li>
             ))}
@@ -87,7 +91,7 @@ export function SecretRefList({ refs }: { refs: string[] | undefined }) {
         ))}
       </ul>
       <p className="mt-1.5 text-[12px] leading-relaxed text-ink-3">
-        只显示引用名。明文只在运行宿主的密钥提供方与插件进程内存中，管理界面拿不到。
+        这里只显示密钥名称，不会显示密钥内容。
       </p>
     </div>
   )
@@ -112,49 +116,66 @@ export function ConfigTable({ config }: { config: Record<string, string> | undef
   )
 }
 
-/** Version / Edge / Trust / Health / Revision / Last ACK 一览 */
+/** 基本信息与技术详情一览 */
 export function InstanceFacts({ v, catalog }: { v: PluginInstanceView; catalog?: PluginCatalogView }) {
   const trust = catalog ? trustMeta(undefined, catalog.verified) : null
   const rows: { k: string; node: ReactNode }[] = [
-    { k: '实例 ID', node: <span className="num min-w-0 truncate font-mono" title={v.id}>{v.id}</span> },
-    { k: '插件', node: <span className="num min-w-0 truncate font-mono" title={v.desired.plugin_id}>{v.desired.plugin_id || '—'}</span> },
+    { k: '插件', node: <span className="min-w-0 truncate" title={pluginDisplayName(catalog)}>{pluginDisplayName(catalog)}</span> },
     ...(v.edge_id === 'server' ? [{ k: '运行位置', node: '中心服务' }] : [
-      { k: '边缘节点', node: <span className="num min-w-0 truncate font-mono" title={v.edge_id}>{v.edge_id || '—'}</span> },
-      { k: '边缘节点在线', node: v.edge_online ? '是' : '否' },
+      { k: '运行位置', node: <span className="num min-w-0 truncate font-mono" title={v.edge_id}>网关 {v.edge_id || '—'}</span> },
+      { k: '网关状态', node: v.edge_online ? '在线' : '离线' },
     ]),
     { k: '期望版本', node: v.desired.version || '—' },
     { k: '实际版本', node: v.has_observed ? (v.observed?.version || '未给出') : '未上报' },
-    { k: '期望修订版', node: String(v.desired_revision) },
-    { k: '已应用修订版', node: String(v.applied_revision) },
-    { k: '最后回执', node: v.last_ack_at ? fmtDateTime(v.last_ack_at) : '尚无回执' },
   ]
   return (
     <dl className="m-0 space-y-2.5">
       {rows.map((r) => <KeyValue key={r.k} k={r.k} v={r.node} />)}
       <div className="flex min-w-0 items-baseline justify-between gap-2 border-t border-hairline pt-2.5">
-        <dt className="shrink-0 text-[13px] text-ink-2">信任目录</dt>
+        <dt className="shrink-0 text-[13px] text-ink-2">来源验证</dt>
         <dd className="min-w-0 truncate text-right">
           {trust
             ? <Badge tone={trust.tone}>{trust.label}</Badge>
-            : <span className="text-[12px] text-ink-3">目录未提供</span>}
+            : <span className="text-[12px] text-ink-3">未提供</span>}
         </dd>
       </div>
-      {catalog && (
-        <div className="flex min-w-0 items-baseline justify-between gap-2">
-          <dt className="shrink-0 text-[13px] text-ink-2">Digest</dt>
-          <dd className="num min-w-0 truncate text-right text-[12px] text-ink-2" title={catalog.digest}>
-            {shortDigest(catalog.digest)}
-          </dd>
+      <details className="min-w-0 border-t border-hairline pt-2.5 text-xs text-ink-2">
+        <summary className="cursor-pointer">技术详情</summary>
+        <div className="mt-2 space-y-1.5">
+          <div className="flex min-w-0 items-baseline justify-between gap-2">
+            <dt className="shrink-0">实例 ID</dt>
+            <dd className="num min-w-0 truncate text-right font-mono" title={v.id}>{v.id}</dd>
+          </div>
+          <div className="flex min-w-0 items-baseline justify-between gap-2">
+            <dt className="shrink-0">插件标识</dt>
+            <dd className="num min-w-0 truncate text-right font-mono" title={v.desired.plugin_id}>{v.desired.plugin_id || '—'}</dd>
+          </div>
+          <div className="flex min-w-0 items-baseline justify-between gap-2">
+            <dt className="shrink-0">设置版本</dt>
+            <dd className="num min-w-0 truncate text-right">{v.desired_revision}</dd>
+          </div>
+          <div className="flex min-w-0 items-baseline justify-between gap-2">
+            <dt className="shrink-0">运行状态版本</dt>
+            <dd className="num min-w-0 truncate text-right">{v.applied_revision}</dd>
+          </div>
+          <div className="flex min-w-0 items-baseline justify-between gap-2">
+            <dt className="shrink-0">最近更新</dt>
+            <dd className="num min-w-0 truncate text-right">{v.last_ack_at ? fmtDateTime(v.last_ack_at) : '尚未同步'}</dd>
+          </div>
+          {catalog && (
+            <div className="flex min-w-0 items-baseline justify-between gap-2">
+              <dt className="shrink-0">安装摘要</dt>
+              <dd className="num min-w-0 truncate text-right" title={catalog.digest}>{shortDigest(catalog.digest)}</dd>
+            </div>
+          )}
+          {catalog?.compatibility && (
+            <div className="flex min-w-0 items-baseline justify-between gap-2">
+              <dt className="shrink-0">兼容性</dt>
+              <dd className="min-w-0 truncate text-right" title={catalog.compatibility}>{catalog.compatibility}</dd>
+            </div>
+          )}
         </div>
-      )}
-      {catalog?.compatibility && (
-        <div className="flex min-w-0 items-baseline justify-between gap-2">
-          <dt className="shrink-0 text-[13px] text-ink-2">兼容性</dt>
-          <dd className="min-w-0 truncate text-right text-[12px]" title={catalog.compatibility}>
-            {catalog.compatibility}
-          </dd>
-        </div>
-      )}
+      </details>
     </dl>
   )
 }

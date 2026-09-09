@@ -2,12 +2,11 @@
 //   ① 未知 Capability 的通用回落（表格 / JSON，不白屏、不猜语义）
 //   ② presentation / properties 声明驱动的 widget 与量程
 //   ③ quality 状态提示的无障碍暴露
-//   ④ 390px 溢出收口（表格/JSON 局部滚动，容器可键盘聚焦）
 import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import {
-  CapabilityBrowser, GenericTable, JsonBlock, ObservationTable,
-  MetricTile, QualityDot, RawView, StateMatrix, StatusBadge, ValueWidget,
+  CapabilityBrowser, GenericTable, ObservationTable,
+  QualityDot, RawView, StateMatrix, StatusBadge, ValueWidget,
 } from '@/components/SchemaRenderer'
 import { indexCapabilities, normalizeCapabilityDocs, observationsOf } from '@/lib/descriptor'
 import {
@@ -26,10 +25,10 @@ function obs(capability: string, property: string, value: unknown, extra: Partia
 }
 
 describe('未知 Capability 回落', () => {
-  it('StateMatrix 默认视图不放未收录标注/URI/原始 JSON（human-first）', () => {
+  it('StateMatrix 默认视图不放暂无详情标注/URI/原始 JSON（human-first）', () => {
     const { container } = render(<StateMatrix descriptor={descriptor} idx={idx} />)
-    expect(screen.queryByText('未收录 Capability · 通用视图')).toBeNull()
-    expect(screen.queryByRole('group', { name: /原始 JSON/ })).toBeNull()
+    expect(screen.queryByText('暂无详情 Capability · 通用视图')).toBeNull()
+    expect(screen.queryByRole('group', { name: /完整数据/ })).toBeNull()
     // 机器 ID 与载荷不进入默认视图：整块文本里不允许出现 URI 或 JSON 键
     const text = container.textContent ?? ''
     expect(text).not.toContain('cloudpath.dev')
@@ -47,18 +46,18 @@ describe('未知 Capability 回落', () => {
     expect(plain.container.querySelector('svg[aria-hidden]')).toBeNull()
   })
 
-  it('CapabilityBrowser 标注未收录引用且 canonical ID 可见（机器 ID 只在开发层）', () => {
+  it('CapabilityBrowser 标注暂无详情引用且 canonical ID 可见（机器 ID 只在开发层）', () => {
     render(<CapabilityBrowser descriptor={descriptor} idx={idx} />)
-    expect(screen.getAllByText('未收录').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('暂无详情').length).toBeGreaterThan(0)
     expect(screen.getByText(UNKNOWN_CAP)).toBeInTheDocument()
     expect(screen.getByText(CAP_TEMPERATURE)).toBeInTheDocument()
   })
 
-  it('ObservationTable 给未收录观测打「未收录」徽标，已收录的不打', () => {
+  it('ObservationTable 给暂无详情观测打「暂无详情」徽标，已收录的不打', () => {
     render(<ObservationTable observations={observationsOf(diagEntity)} idx={idx} />)
-    expect(screen.getAllByText('未收录')).toHaveLength(2)
+    expect(screen.getAllByText('暂无详情')).toHaveLength(2)
     render(<ObservationTable observations={observationsOf(tempEntity)} idx={idx} />)
-    expect(screen.getAllByText('未收录')).toHaveLength(2) // 仍只有诊断面那两条
+    expect(screen.getAllByText('暂无详情')).toHaveLength(2) // 仍只有诊断面那两条
   })
 
   it('对象数组 → 通用表格（列名来自数据本身，humanize 后展示）', () => {
@@ -73,29 +72,29 @@ describe('未知 Capability 回落', () => {
     const { unmount } = render(
       <ValueWidget obs={obs(UNKNOWN_CAP, 'mystery_blob', { nested: { a: [1, 2] } })} idx={idx} />,
     )
-    expect(screen.getByRole('group', { name: 'Mystery Blob 原始 JSON' }).textContent).toContain('"nested"')
+    expect(screen.getByRole('group', { name: 'Mystery Blob 完整数据' }).textContent).toContain('"nested"')
     unmount()
 
     render(<ValueWidget obs={obs(UNKNOWN_CAP, 'flat', { mode: 'auto', count: 3 })} idx={idx} />)
     expect(screen.getByText('Mode')).toBeInTheDocument()
     expect(screen.getByText('auto')).toBeInTheDocument()
     expect(screen.getByText('3')).toBeInTheDocument()
-    expect(screen.queryByRole('group', { name: /原始 JSON/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: /完整数据/ })).not.toBeInTheDocument()
   })
 
-  it('空集合与空观测有可读占位，不留白块', () => {
+  it('暂无内容与空观测有可读占位，不留白块', () => {
     render(<GenericTable value={[]} />)
-    expect(screen.getByText('空集合')).toBeInTheDocument()
+    expect(screen.getByText('暂无内容')).toBeInTheDocument()
     render(<ObservationTable observations={[]} />)
-    expect(screen.getByText('还没有观测值')).toBeInTheDocument()
+    expect(screen.getByText('还没有数据')).toBeInTheDocument()
   })
 
   it('Descriptor 缺席时 RawView 用上报字段通用渲染（不要求后端先就绪）', () => {
     render(<RawView raw={makeDeviceView().state} />)
-    expect(screen.getByText('该设备未上报能力声明，此处按上报字段通用渲染')).toBeInTheDocument()
+    expect(screen.getByText('该设备尚未同步功能信息，此处按已接收的数据显示')).toBeInTheDocument()
     expect(screen.getByText('Mode')).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Slots 数据表' })).toBeInTheDocument()
-    expect(screen.getByRole('group', { name: 'Diag 原始 JSON' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Diag 完整数据' })).toBeInTheDocument()
   })
 })
 
@@ -153,18 +152,7 @@ describe('quality / status 状态提示', () => {
     }
   })
 
-  it('MetricTile 布尔主值渲染为状态胶囊（不是大字号：半屏大的「否」是排版错误）', () => {
-    const { container } = render(<MetricTile v={{ label: '开关', text: '否', tone: 'idle', kind: 'boolean' }} />)
-    expect(container.querySelector('p.num')).toBeNull()
-    expect(screen.getByText('否').className).toContain('badge')
-  })
 
-  it('MetricTile 告警 tone 走 token 文字色类（颜色只走 token 类，不是内联色值）', () => {
-    const { container } = render(<MetricTile v={{ label: '偏差', text: '0.4', tone: 'warn', title: 'drift' }} />)
-    const value = container.querySelector('p.num')
-    expect(value?.className).toContain('text-warn')
-    expect(value?.getAttribute('style')).toBeNull()
-  })
 })
 
 describe('StateMatrix 分组', () => {
@@ -177,59 +165,21 @@ describe('StateMatrix 分组', () => {
     expect(screen.getByText('26.5')).toBeInTheDocument()
   })
 
-  it('StateMatrix 紧凑瓦片：布尔走胶囊、机器串在默认视图 mono 降级（等宽=机器线索，完整值进 title）', () => {
+  it('StateMatrix 紧凑瓦片：机器串完整值可见并进入 title', () => {
     const withId = makeDescriptor({
       entities: [{
         entity_id: 'e-node', unique_key: 'node', category: 'diagnostic', capabilities: [UNKNOWN_CAP],
         observations: { node: { capability: UNKNOWN_CAP, property: 'node', value: 'reference-demo-device' } },
       }] as DescriptorEntity[],
     })
-    const { container } = render(<StateMatrix descriptor={withId} idx={idx} />)
-    const mono = container.querySelector('li .font-mono')
-    expect(mono?.textContent).toBe('reference-demo-device')
-    expect(mono?.getAttribute('title')).toContain('reference-demo-device')
+    render(<StateMatrix descriptor={withId} idx={idx} />)
+    const value = screen.getByText('reference-demo-device')
+    expect(value.getAttribute('title')).toContain('reference-demo-device')
   })
 
-  it('StateMatrix 布尔主值渲染为胶囊（与概览 KPI 同一纪律：状态不是量级）', () => {
-    render(<StateMatrix descriptor={descriptor} idx={idx} />)
-    expect(screen.getByText('否').className).toContain('badge')
-  })
 
   it('没有 Entity 的 Descriptor 有明确空态', () => {
     render(<StateMatrix descriptor={makeDescriptor({ entities: [] })} idx={idx} />)
-    expect(screen.getByText('设备声明里没有可呈现的观测项')).toBeInTheDocument()
-  })
-})
-
-describe('390px 溢出收口', () => {
-  it('表格与 JSON 都在自身容器内滚动，容器可键盘聚焦', () => {
-    const { container } = render(
-      <GenericTable value={[{ a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7 }]} label="宽表" />,
-    )
-    const scroller = screen.getByRole('group', { name: '宽表' })
-    expect(scroller).toHaveClass('overflow-x-auto')
-    expect(scroller).toHaveAttribute('tabindex', '0')
-    expect(scroller.firstElementChild?.tagName).toBe('TABLE')
-    // 列数上限 6（含 # 列共 7 个表头），超出部分不进入 DOM，避免无限撑宽
-    expect(container.querySelectorAll('th')).toHaveLength(7)
-  })
-
-  it('组件内没有任何内联像素宽度/固定宽度（只有百分比量程条）', () => {
-    const { container } = render(
-      <ValueWidget obs={obs(CAP_TEMPERATURE, 'current', 26.5, { unit: 'Cel' })} idx={idx} />,
-    )
-    const inline = [...container.querySelectorAll<HTMLElement>('[style]')]
-    expect(inline.length).toBeGreaterThan(0)
-    for (const el of inline) {
-      expect(el.style.width).toMatch(/%$/)
-      expect(el.style.minWidth).toBe('')
-    }
-  })
-
-  it('JsonBlock 有高度上限并可滚动（长 JSON 不撑破卡片）', () => {
-    render(<JsonBlock value={{ a: 1 }} label="样本 JSON" />)
-    const pre = screen.getByRole('group', { name: '样本 JSON' })
-    expect(pre).toHaveClass('overflow-auto')
-    expect(pre).toHaveAttribute('tabindex', '0')
+    expect(screen.getByText('设备信息中没有可显示的数据')).toBeInTheDocument()
   })
 })

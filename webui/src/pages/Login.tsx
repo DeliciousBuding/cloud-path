@@ -89,21 +89,21 @@ export default function Login() {
   async function onTokenSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const v = token.trim()
-    if (!v) { setTokenError('请输入服务令牌'); return }
+    if (!v) { setTokenError('请输入访问令牌'); return }
     setTokenBusy(true)
     setTokenError('')
     setToken(v)
     try {
       // 令牌模式的判据同样是 me：任意字符串打 healthz 一律不算登录
       const user = await confirmSession()
-      toast.ok('令牌已生效', user?.name || user?.username || undefined)
+      toast.ok('访问令牌已生效', user?.name || user?.username || undefined)
       navigate('/', { replace: true })
     } catch (err) {
       setToken('') // 复核失败即回滚，不在本机留下无效凭据
       const copy = loginErrorCopy(err)
       setTokenError(copy.unreachable
         ? copy.message
-        : '令牌被拒绝：无效、已吊销或权限不足（服务令牌需由管理员在「管理 → 服务令牌」中签发）')
+        : '访问令牌被拒绝：无效、已吊销或权限不足（访问令牌需由管理员在「管理 → 访问令牌」中签发）')
       setTokenBusy(false)
     }
   }
@@ -111,7 +111,7 @@ export default function Login() {
   return (
     <AuthCard
       title="登录 Cloudpath"
-      subtitle="通用 IoT 设备接入与管理平台"
+      subtitle="通用设备接入与管理平台"
       footer={<Link to="/setup" className="link">首次部署？运行设置向导</Link>}
     >
       <form onSubmit={onSubmit} noValidate className="space-y-4">
@@ -176,31 +176,31 @@ export default function Login() {
           className="flex w-full items-center gap-1.5 text-xs font-medium text-ink-2 transition-colors hover:text-ink"
         >
           <KeyRound size={13} className="shrink-0" />
-          使用服务令牌登录（API / 机器客户端）
+          使用访问令牌登录（命令行或自动化工具）
           <ChevronDown size={13} className={cn('ml-auto shrink-0 transition-transform', tokenOpen && 'rotate-180')} />
         </button>
 
         {tokenOpen && (
           <form id="token-signin" onSubmit={onTokenSubmit} noValidate className="mt-3.5 space-y-3 fade-up">
             <TextField
-              label="服务令牌"
+              label="访问令牌"
               type="password"
-              placeholder="粘贴管理员签发的令牌"
+              placeholder="粘贴管理员签发的访问令牌"
               autoComplete="off"
               spellCheck={false}
               value={token}
               error={tokenError}
-              hint="令牌仅保存在本机浏览器，用于接口与实时通道鉴权；明文不会被再次显示"
+              hint="访问令牌仅保存在本机浏览器，用于连接平台和自动化工具；明文不会再次显示"
               disabled={tokenBusy}
               onChange={(e) => { setTokenInput(e.target.value); setTokenError('') }}
             />
             <Button type="submit" variant="ghost" lg disabled={tokenBusy} className="w-full">
               {tokenBusy && <Spinner size={14} />}
-              {tokenBusy ? '校验中…' : '用令牌登录'}
+              {tokenBusy ? '校验中…' : '用访问令牌登录'}
             </Button>
             {getToken() && (
               <p className="text-[12px] text-ink-3">
-                本机已保存一个令牌；提交新令牌会覆盖它。
+                本机已保存一个访问令牌；提交新令牌会覆盖它。
               </p>
             )}
           </form>

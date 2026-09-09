@@ -18,6 +18,7 @@ import (
 	"github.com/DeliciousBuding/cloud-path/internal/auth"
 	"github.com/DeliciousBuding/cloud-path/internal/plugincatalog"
 	"github.com/DeliciousBuding/cloud-path/internal/plugincontrol"
+	"github.com/DeliciousBuding/cloud-path/internal/pluginhost"
 	"github.com/DeliciousBuding/cloud-path/internal/secrethandle"
 	"github.com/DeliciousBuding/cloud-path/internal/server/storeport"
 	"github.com/DeliciousBuding/cloud-path/internal/tenantpolicy"
@@ -43,6 +44,13 @@ const (
 // pluginErrStoreUnavailable 是 PluginStore 未接线时的稳定码（不在契约错误码表内，
 // 因为它表示部署缺陷而非用户错误；前端按 message 呈现即可）。
 const pluginErrStoreUnavailable = "plugin_store_unavailable"
+
+// 插件实例宿主校验的稳定错误码。前端按码呈现；服务端不依赖 STC-B 等具体设备语义。
+const (
+	pluginErrKindUnavailable = "plugin_instance_kind_unavailable"
+	pluginErrHostMismatch    = "plugin_instance_host_mismatch"
+	pluginErrKindUnsupported = "plugin_instance_kind_unsupported"
+)
 
 // credentialKeyWords 是「键名形似凭据」的判定词表：这些键的值必须是 secret://<name>
 // handle，明文一律拒绝（tenant-security-policy §2.2：Server 永不接收明文）。
@@ -256,6 +264,10 @@ func (s *Server) handleCreatePluginInstance(w http.ResponseWriter, r *http.Reque
 			http.StatusConflict, "instance_id %q 已存在于本租户 edge %q", instanceID, dupEdge))
 		return
 	}
+	if werr := s.validatePluginInstanceHost(ctx.tenantID, ctx.tenantSlug, edgeID, pluginID); werr != nil {
+		s.writePluginError(w, r, ctx, werr)
+		return
+	}
 	if reasons := createEscalationReasons(refs); len(reasons) > 0 &&
 		!req.ConfirmPermissions && !ctx.isAdmin {
 		s.writePluginError(w, r, ctx, newPluginWriteError(api.PluginErrPermissionConfirm,
@@ -325,6 +337,10 @@ func (s *Server) handleUpdatePluginInstance(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		s.writePluginError(w, r, ctx, &pluginWriteError{code: api.PluginErrNotFound,
 			status: http.StatusNotFound, message: "plugin instance not found"})
+		return
+	}
+	if werr := s.validatePluginInstanceHost(ctx.tenantID, ctx.tenantSlug, row.EdgeID, row.PluginID); werr != nil {
+		s.writePluginError(w, r, ctx, werr)
 		return
 	}
 	next := row
@@ -571,6 +587,69 @@ func mapStoreError(err error, id string) *pluginWriteError {
 		return &pluginWriteError{code: pluginErrStoreUnavailable,
 			status: http.StatusInternalServerError, message: "plugin store write failed"}
 	}
+}
+
+// validatePluginInstanceHost 解析目标插件 manifest kind，并按当前运行时宿主规则
+// fail-closed。Driver 只允许真实 Edge，Application 只允许伪 edge server；
+// Connector 尚无运行时，一律拒绝。任何 kind 无法解析的情况也不放行。
+func (s *Server) validatePluginInstanceHost(tenantID int64, tenantSlug, edgeID, pluginID string) *pluginWriteError {
+	kind, werr := s.resolvePluginInstanceKind(tenantID, tenantSlug, edgeID, pluginID)
+	if werr != nil {
+		return werr
+	}
+	if err := plugincontrol.ValidateInstanceHost(kind, edgeID == AppHostEdgeID); err != nil {
+		if errors.Is(err, pluginhost.ErrConnectorUnsupported) {
+			return newPluginWriteError(pluginErrKindUnsupported, http.StatusConflict,
+				"插件 %q 的 kind 为 Connector，当前运行时未实现，不能创建或更新实例", pluginID)
+		}
+		return newPluginWriteError(pluginErrHostMismatch, http.StatusConflict,
+			"插件 %q 的 kind %s 与目标宿主 %q 不匹配", pluginID, kind.String(), edgeID)
+	}
+	return nil
+}
+
+// resolvePluginInstanceKind 只使用现有事实源：真实 Edge 用 plugin_status 的安装物
+// 投影（其 Kind 来自 manifest）；Server 用 AppHost 的 plugins.lock + plugin.yaml。
+func (s *Server) resolvePluginInstanceKind(tenantID int64, tenantSlug, edgeID, pluginID string) (pluginhost.Kind, *pluginWriteError) {
+	if edgeID == AppHostEdgeID {
+		if s.appHost == nil || !s.appHost.cfg.Enabled {
+			return 0, newPluginWriteError(pluginErrKindUnavailable, http.StatusConflict,
+				"无法解析 Server 宿主上插件 %q 的 manifest kind（AppHost 未启用，fail-closed）", pluginID)
+		}
+		kind, err := plugincontrol.InstalledPluginKind(s.appHost.cfg.PluginsDir, s.appHost.cfg.LockPath, pluginID)
+		if err != nil {
+			slog.Debug("plugin instance: server manifest kind unavailable", "plugin_id", pluginID)
+			return 0, newPluginWriteError(pluginErrKindUnavailable, http.StatusConflict,
+				"无法解析 Server 宿主上插件 %q 的 manifest kind（请先安装到 AppHost，fail-closed）", pluginID)
+		}
+		return kind, nil
+	}
+
+	p := s.plugin
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	t, err := p.ensureLoadedLocked(tenantID, tenantSlug)
+	if err != nil || t == nil {
+		return 0, &pluginWriteError{code: pluginErrStoreUnavailable,
+			status: http.StatusInternalServerError, message: "plugin store unavailable"}
+	}
+	ep := t.edges[edgeID]
+	if ep == nil {
+		return 0, newPluginWriteError(pluginErrKindUnavailable, http.StatusConflict,
+			"目标 Edge %q 尚未上报插件 %q 的安装信息，无法解析 manifest kind（fail-closed）", edgeID, pluginID)
+	}
+	in, ok := ep.installations[pluginID]
+	if !ok {
+		return 0, newPluginWriteError(pluginErrKindUnavailable, http.StatusConflict,
+			"目标 Edge %q 尚未上报插件 %q 的安装信息，无法解析 manifest kind（fail-closed）", edgeID, pluginID)
+	}
+	kind, err := pluginhost.ParseKind(in.Kind)
+	if err != nil {
+		slog.Debug("plugin instance: edge manifest kind unavailable", "plugin_id", pluginID, "edge", edgeID)
+		return 0, newPluginWriteError(pluginErrKindUnavailable, http.StatusConflict,
+			"目标 Edge %q 上报的插件 %q kind 非法，无法解析 manifest kind（fail-closed）", edgeID, pluginID)
+	}
+	return kind, nil
 }
 
 // edgeOwnerSlug 返回 edge 已绑定的租户 slug（在线连接优先，其次内存 sticky 绑定）；

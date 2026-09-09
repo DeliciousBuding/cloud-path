@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { commandArgsError, commandFields, unsupportedSchemaKeywords } from '../command-schema'
+import { commandArgsError, commandFields, commandForm, unsupportedSchemaKeywords } from '../command-schema'
 
 const objectSchema = {
   type: 'object', required: ['level', 'enabled'], additionalProperties: false,
@@ -31,7 +31,7 @@ describe('命令参数 JSON 与类型契约', () => {
     expect(commandArgsError('{}', objectSchema)).toContain('缺少必填参数 level')
     expect(commandArgsError('{"level":0}', objectSchema)).toContain('缺少必填参数 enabled')
     expect(commandArgsError('{"level":0,"enabled":"false"}', objectSchema)).toContain('类型')
-    expect(commandArgsError('{"level":0,"enabled":false,"extra":1}', objectSchema)).toContain('未声明的参数 extra')
+    expect(commandArgsError('{"level":0,"enabled":false,"extra":1}', objectSchema)).toContain('不支持的参数 extra')
     expect(commandArgsError('{"level":0,"enabled":false}', objectSchema)).toBeUndefined()
   })
   it('required 不依赖 properties，原型属性也不能冒充已填写参数', () => {
@@ -60,7 +60,7 @@ describe('数值、字符串、数组与对象的声明边界', () => {
     expect(commandArgsError(invalid, schema)).toBeDefined()
   })
   it('enum / const 保持 JSON 类型，结构值比较不受对象键顺序影响', () => {
-    expect(commandArgsError('0', { enum: ['0', false] })).toContain('枚举')
+    expect(commandArgsError('0', { enum: ['0', false] })).toContain('请选择允许的值')
     expect(commandArgsError('false', { enum: ['0', false] })).toBeUndefined()
     expect(commandArgsError('{"b":2,"a":1}', { const: { a: 1, b: 2 } })).toBeUndefined()
     expect(commandArgsError('[]', { const: {} })).toContain('必须等于')
@@ -70,7 +70,7 @@ describe('数值、字符串、数组与对象的声明边界', () => {
     const schema = { type: 'object', required: ['rows'], properties: {
       rows: { type: 'array', minItems: 1, items: { type: 'object', required: ['n'], properties: { n: { type: 'integer', minimum: 1 } } } },
     } }
-    expect(commandFields(schema)).toBeNull()
+    expect(commandFields(schema)?.[0]).toMatchObject({ key: 'rows', type: 'object-rows', minItems: 1, fields: [{ key: 'n', type: 'integer', required: true }] })
     expect(commandArgsError('{"rows":[{}]}', schema)).toContain('rows[0]：缺少必填参数 n')
     expect(commandArgsError('{"rows":[{"n":0}]}', schema)).toContain('不能小于 1')
     expect(commandArgsError('{"rows":[{"n":1}]}', schema)).toBeUndefined()
@@ -83,7 +83,7 @@ describe('数值、字符串、数组与对象的声明边界', () => {
   })
   it('JSON 的逻辑字符约束与原始 UTF-8 传输长度是两道独立门禁', () => {
     expect(commandArgsError('"😀"', { type: 'string', maxLength: 1 })).toBeUndefined()
-    expect(commandArgsError(JSON.stringify('汉'.repeat(21)), { type: 'string', maxLength: 30 })).toContain('65 UTF-8 字节')
+    expect(commandArgsError(JSON.stringify('汉'.repeat(21)), { type: 'string', maxLength: 30 })).toContain('65 字节')
     expect(commandArgsError('{\n"n":1}', { type: 'object' })).toContain('换行')
     expect(commandArgsError('"\\n"', { type: 'string', maxLength: 1 })).toBeUndefined()
   })
@@ -156,13 +156,13 @@ const displaySchema = {
   }, oneOf: [{ required: ['digits'] }, { required: ['codes'] }, { required: ['mode'] }],
 }
 
-describe('组合参数方案', () => {
+describe('组合参数组合', () => {
   it('LED oneOf 只接受一个方案，缺省和双参数都不能下发', () => {
     for (const value of [{ mask: 0 }, { mask: 255 }, { pattern: 0 }, { pattern: 9 }]) {
       expect(commandArgsError(JSON.stringify(value), ledSchema)).toBeUndefined()
     }
-    expect(commandArgsError('{}', ledSchema)).toContain('oneOf')
-    expect(commandArgsError('{"mask":1,"pattern":2}', ledSchema)).toContain('oneOf')
+    expect(commandArgsError('{}', ledSchema)).toContain('请选择一种设置方式')
+    expect(commandArgsError('{"mask":1,"pattern":2}', ledSchema)).toContain('请只选择一种设置方式')
     for (const value of [{ mask: -1 }, { mask: 256 }, { mask: 1.5 }, { mask: '1' }, { pattern: 10 }]) {
       expect(commandArgsError(JSON.stringify(value), ledSchema)).toBeDefined()
     }
@@ -175,7 +175,7 @@ describe('组合参数方案', () => {
     for (const value of [{}, { ...digits, ...codes }, { ...digits, ...mode }, { ...codes, ...mode }]) {
       const args = JSON.stringify(value)
       expect(new TextEncoder().encode(args).length).toBeLessThanOrEqual(64)
-      expect(commandArgsError(args, displaySchema)).toContain('oneOf')
+      expect(commandArgsError(args, displaySchema)).toContain('选择一种设置方式')
     }
     for (const value of [{ digits: Array(7).fill(0) }, { digits: Array(9).fill(0) },
       { digits: Array(8).fill(10) }, { codes: Array(8).fill(26) }, { codes: Array(8).fill(0.5) }, { mode: 'other' }]) {
@@ -218,10 +218,10 @@ describe('组合参数方案', () => {
     expect(new TextEncoder().encode(raw)).toHaveLength(64)
     expect(commandArgsError(raw, ledSchema)).toBeUndefined()
     expect(commandArgsError(raw + ' ', ledSchema, 1024)).toContain('64 字节上限')
-    expect(commandArgsError('{', ledSchema)).toContain('JSON 格式无效')
+    expect(commandArgsError('{', ledSchema)).toContain('参数格式无效')
     expect(commandArgsError('{\n"mask":0}', ledSchema)).toContain('换行')
-    expect(commandArgsError(JSON.stringify('汉'.repeat(21)), { anyOf: [{ type: 'string' }, false] })).toContain('65 UTF-8 字节')
-    expect(commandArgsError('{}', { ...ledSchema, default: { mask: 0 } })).toContain('oneOf')
+    expect(commandArgsError(JSON.stringify('汉'.repeat(21)), { anyOf: [{ type: 'string' }, false] })).toContain('65 字节')
+    expect(commandArgsError('{}', { ...ledSchema, default: { mask: 0 } })).toContain('请选择一种设置方式')
     expect(ledSchema).toEqual(before)
   })
 })
@@ -246,15 +246,15 @@ describe('组合中的未知约束不冒充匹配或不匹配', () => {
     expect(commandArgsError('["apple"]', { oneOf: [{ items: { format: 'email' } }, true] })).toBeUndefined()
     expect(commandArgsError('{"v":"apple"}', { oneOf: [{ additionalProperties: { $ref: '#/$defs/value' } }, true] })).toBeUndefined()
     // 未出现的属性不参与校验；这里两个方案都确定通过，应拒绝。
-    expect(commandArgsError('{}', properties)).toContain('oneOf')
+    expect(commandArgsError('{}', properties)).toContain('选择一种设置方式')
   })
   it('已确定的失败和匹配数仍然生效，未知约束不能遮蔽它们', () => {
     const unknown = { $ref: '#/$defs/value' }
-    expect(commandArgsError('0', { oneOf: [true, true, unknown] })).toContain('oneOf')
-    expect(commandArgsError('0', { anyOf: [false, { type: 'string', ...unknown }] })).toContain('anyOf')
+    expect(commandArgsError('0', { oneOf: [true, true, unknown] })).toContain('选择一种设置方式')
+    expect(commandArgsError('0', { anyOf: [false, { type: 'string', ...unknown }] })).toContain('请至少选择一种设置方式')
     expect(commandArgsError('0', { allOf: [false, unknown] })).toBeDefined()
     // anyOf 有一个确定匹配即可确定通过，即使另一个方案未知。
-    expect(commandArgsError('0', { oneOf: [{ anyOf: [true, unknown] }, true] })).toContain('oneOf')
+    expect(commandArgsError('0', { oneOf: [{ anyOf: [true, unknown] }, true] })).toContain('选择一种设置方式')
     // allOf 有一个确定失败即可确定失败，不把它误算为可能匹配。
     expect(commandArgsError('0', { oneOf: [{ allOf: [false, unknown] }, true] })).toBeUndefined()
   })
@@ -274,5 +274,47 @@ describe('组合中的未知约束不冒充匹配或不匹配', () => {
     expect(commandFields(ledSchema)).toBeNull()
     expect(commandFields(displaySchema)).toBeNull()
     expect(commandFields(flat)).not.toBeNull()
+  })
+})
+
+describe('普通参数表单模型', () => {
+  it('平铺对象直接生成字段，数组字段生成可读输入', () => {
+    const form = commandForm({
+      type: 'object', required: ['digits'],
+      properties: {
+        digits: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 9 }, minItems: 8, maxItems: 8, title: '8 位数字' },
+      },
+    })
+    expect(form?.choices).toBeUndefined()
+    expect(form?.fields).toHaveLength(1)
+    expect(form?.fields[0]).toMatchObject({ key: 'digits', type: 'array', itemType: 'integer', minItems: 8, maxItems: 8, required: true })
+  })
+
+  it('根级 oneOf 生成设置方式，每个方式只包含自己的字段', () => {
+    const form = commandForm({
+      type: 'object',
+      properties: {
+        mask: { type: 'integer', title: '灯位掩码' },
+        pattern: { type: 'integer', title: '兼容档' },
+      },
+      oneOf: [{ required: ['mask'] }, { required: ['pattern'] }],
+    })
+    expect(form?.choices?.map((choice) => choice.label)).toEqual(['灯位掩码', '兼容档'])
+    expect(form?.choices?.[0]?.fields.map((field) => field.key)).toEqual(['mask'])
+    expect(form?.choices?.[1]?.fields.map((field) => field.key)).toEqual(['pattern'])
+  })
+
+  it('数码管三选一保留数组和枚举字段，不退回 JSON', () => {
+    const form = commandForm({
+      type: 'object',
+      properties: {
+        digits: { type: 'array', items: { type: 'integer' }, minItems: 8, maxItems: 8, title: '8 位数字' },
+        codes: { type: 'array', items: { type: 'integer' }, minItems: 8, maxItems: 8, title: '8 位字形码' },
+        mode: { type: 'string', enum: ['clock'], title: '恢复时钟' },
+      },
+      oneOf: [{ required: ['digits'] }, { required: ['codes'] }, { required: ['mode'] }],
+    })
+    expect(form?.choices).toHaveLength(3)
+    expect(form?.choices?.map((choice) => choice.fields[0]?.type)).toEqual(['array', 'array', 'enum'])
   })
 })

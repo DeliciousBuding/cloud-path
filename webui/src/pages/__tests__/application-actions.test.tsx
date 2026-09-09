@@ -38,7 +38,7 @@ describe('应用操作的授权、生命周期与明确用户意图', () => {
     expect(actionRequests(http)).toEqual([{ args_json: '{"count":2}', idempotency_key: expect.any(String) }])
     expect(new TextEncoder().encode(actionRequests(http)[0].idempotency_key).length).toBeLessThanOrEqual(128)
     expect(screen.getByText('执行结果')).toBeVisible()
-    expect(screen.getByText(/物理命令 ACK 请在应用记录中核对/)).toBeVisible()
+    expect(screen.getByText(/设备执行结果请在应用记录中核对/)).toBeVisible()
     expect(screen.queryByText('板端成功')).not.toBeInTheDocument()
     await waitFor(() => expect(http.to('/app-a/records')).toHaveLength(2))
   })
@@ -50,7 +50,7 @@ describe('应用操作的授权、生命周期与明确用户意图', () => {
     const http = installFetch((url) => actionResponse(url))
     renderWithProviders(<ApplicationPlane instanceID="app-a" />)
     expect(await screen.findByText('更新计数')).toBeVisible()
-    expect(screen.getByText(/只读权限/)).toBeVisible()
+    expect(screen.getByText(/当前账号只能查看，不能执行操作/)).toBeVisible()
     expect(screen.queryByRole('button', { name: /执行|重试同一/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
     expect(actionRequests(http)).toHaveLength(0)
@@ -138,8 +138,8 @@ describe('参数与不可信执行结果', () => {
     const user = userEvent.setup()
     renderWithProviders(<ApplicationPlane instanceID="app-a" />)
     await ready()
-    await user.click(screen.getByRole('button', { name: '更新计数 编辑 JSON' }))
-    const input = screen.getByRole('textbox', { name: '更新计数 JSON 参数' })
+    await user.click(screen.getByRole('button', { name: '更新计数 手动填写参数' }))
+    const input = screen.getByRole('textbox', { name: '更新计数 高级参数' })
     for (const value of ['[]', 'null', '{bad', JSON.stringify({ count: 2, note: '字'.repeat(1500) })]) {
       fireEvent.change(input, { target: { value } })
       expect(execute()).toBeDisabled()
@@ -161,7 +161,7 @@ describe('参数与不可信执行结果', () => {
     renderWithProviders(<ApplicationPlane instanceID="app-a" />)
     expect(await screen.findByText('操作参数声明无效，暂不能执行。')).toBeVisible()
     expect(screen.queryByRole('button', { name: '执行「损坏声明」' })).not.toBeInTheDocument()
-    expect(screen.getByText(/完整校验以插件为准/)).toHaveTextContent('$ref')
+    expect(screen.getByText(/最终结果由插件确认/)).toHaveTextContent('$ref')
   })
 
   it('结果按结构化纯文本呈现，HTML/脚本/链接不执行，不猜业务成功', async () => {
@@ -189,7 +189,7 @@ describe('参数与不可信执行结果', () => {
     const { container } = renderWithProviders(<ApplicationPlane instanceID="app-a" />)
     fireEvent.click(await screen.findByRole('button', { name: '执行「刷新记录」' }))
     expect(await screen.findByText('操作已受理')).toBeVisible()
-    expect(screen.getByText(result_json ? '应用返回的结果不是 JSON，请查看原文。' : '应用未返回结果内容，请查看应用记录。')).toBeVisible()
+    expect(screen.getByText(result_json ? '应用返回的内容无法直接展示，请查看原文。' : '应用未返回结果内容，请查看应用记录。')).toBeVisible()
     if (result_json) {
       fireEvent.click(screen.getByText('查看结果原文'))
       expect(screen.getByRole('group', { name: '执行结果原文' })).toHaveTextContent(result_json)

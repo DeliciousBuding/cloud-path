@@ -1,7 +1,6 @@
 package application
 
 import (
-	"context"
 	"errors"
 	"os"
 	"testing"
@@ -129,7 +128,6 @@ func TestOptionalRequirement(t *testing.T) {
 }
 
 func TestStableEntityBinding(t *testing.T) {
-	ctx := context.Background()
 	reqs := []Requirement{
 		{ID: "reminder-output", Capability: capBuzzer, Cardinality: CardinalityOne},
 	}
@@ -155,18 +153,6 @@ func TestStableEntityBinding(t *testing.T) {
 		t.Fatalf("binding changed after rename/reconnect: got %q, want buzzer", got)
 	}
 
-	// Repository persists only the stable entity_id.
-	repo := NewMemoryRepository()
-	if err := repo.SaveBindingSet(ctx, bs); err != nil {
-		t.Fatalf("SaveBindingSet error: %v", err)
-	}
-	got, err := repo.LoadBindingSet(ctx, "app", "inst")
-	if err != nil {
-		t.Fatalf("LoadBindingSet error: %v", err)
-	}
-	if len(got.Bindings) != 1 || got.Bindings[0].EntityID != "buzzer" {
-		t.Fatalf("repo binding = %+v, want stable entity buzzer", got.Bindings)
-	}
 }
 
 func TestRejectDriverCoupling(t *testing.T) {

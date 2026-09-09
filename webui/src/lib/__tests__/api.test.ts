@@ -1,5 +1,5 @@
-// REST 客户端契约测试：冻结路径、鉴权头、401 全局收敛、Schema 面缺席（404/405/501/网络断）→ null。
-// 「端点不存在」不是错误而是常态（后端 A1 未就绪），UI 必须走通用回落而不是弹错误。
+// REST 客户端契约测试：冻结路径、鉴权头、401 全局同步、Schema 面缺席（404/405/501）→ null。
+// 网关/网络故障必须保持错误态；只有「端点不存在」才能走通用回落。
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, api, getToken, setToken, wsUrl } from '@/lib/api'
 import { useAuth } from '@/store/auth'
@@ -25,7 +25,7 @@ describe('鉴权接缝', () => {
     expect(useAuth.getState().status).toBe('out')
   })
 
-  it('公开端点（/api/auth/me）401 是页面语义，不触发全局收敛', async () => {
+  it('公开端点（/api/auth/me）401 是页面语义，不触发全局同步', async () => {
     installFetch(() => stubResponse(401, { error: '未登录' }))
     useAuth.setState({ status: 'loading', user: null })
     await expect(api.me()).rejects.toBeInstanceOf(ApiError)
@@ -41,21 +41,26 @@ describe('鉴权接缝', () => {
 
   it('fetch 抛错（server 不可达）→ 可读的中文错误，不泄漏堆栈', async () => {
     installFetch(() => { throw new TypeError('Failed to fetch') })
-    await expect(api.devices()).rejects.toThrow('无法连接 server（服务未启动或网络不可达）')
+    await expect(api.devices()).rejects.toThrow('无法连接服务（服务未启动或网络不可达）')
   })
 })
 
 describe('Wave2 Schema 面：端点缺席时返回 null（通用回落）', () => {
-  it.each([404, 405, 501, 502])('%i → descriptors/capabilities/deviceDescriptor 全部 null', async (status) => {
+  it.each([404, 405, 501])('%i → descriptors/capabilities/deviceDescriptor 全部 null', async (status) => {
     installFetch(() => stubResponse(status, { error: 'nope' }))
     expect(await api.descriptors()).toBeNull()
     expect(await api.capabilities()).toBeNull()
     expect(await api.deviceDescriptor('edge-1', 'dev-9')).toBeNull()
   })
 
-  it('网络不可达同样按缺席处理（返回 null，不抛错刷屏）', async () => {
+  it.each([502, 503, 504])('%i 是网关故障，必须抛出 ApiError（不得伪装端点缺席）', async (status) => {
+    installFetch(() => stubResponse(status, { error: 'gateway down' }))
+    await expect(api.descriptors()).rejects.toMatchObject({ status })
+  })
+
+  it('网络不可达是真实连接错误，必须抛出而不是返回 null', async () => {
     installFetch(() => { throw new TypeError('Failed to fetch') })
-    expect(await api.descriptors()).toBeNull()
+    await expect(api.descriptors()).rejects.toThrow('无法连接服务（服务未启动或网络不可达）')
   })
 
   it('Schema 面 500 是真故障，必须抛出（与「缺席」区分）', async () => {
@@ -100,9 +105,10 @@ describe('命令下发（冻结契约 POST /api/devices/{edge}/{dev}/commands）
 })
 
 describe('wsUrl', () => {
-  it('按当前页面协议选择 ws/wss 并带上令牌', () => {
+  it('始终使用干净的 /ws；本机 legacy token 只走 REST Authorization，不进 URL', () => {
     setToken('tok/1')
-    expect(wsUrl()).toBe(`ws://${location.host}/ws?token=${encodeURIComponent('tok/1')}`)
+    expect(wsUrl()).toBe(`ws://${location.host}/ws`)
+    expect(wsUrl()).not.toContain('tok')
     setToken('')
     expect(wsUrl()).toBe(`ws://${location.host}/ws`)
   })

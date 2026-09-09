@@ -62,7 +62,7 @@ export default function Devices() {
           <span className="relative min-w-0 flex-1">
             <Search size={14} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3" />
             <input
-              id="dev-search" type="search" value={q} placeholder="按名称、ID、边缘节点或适配器搜索"
+              id="dev-search" type="search" value={q} placeholder="按名称、编号、网关或设备类型搜索"
               onChange={(e) => setQ(e.target.value)}
               className="input input-search max-w-full"
             />
@@ -78,11 +78,11 @@ export default function Devices() {
       ) : error ? (
         // 接口失败 ≠ 没有设备：必须分开说，否则用户会以为集群是空的
         <ErrorState icon={<WifiOff size={20} />} title="设备列表加载失败"
-          hint="拿不到 GET /api/devices。这不代表没有设备接入，请检查 server 是否可达后重试。"
+          hint="暂时无法加载设备列表。这不表示没有设备已接入，请检查服务是否正常后重试。"
           onRetry={refetch} />
       ) : list.length === 0 ? (
         <EmptyState icon={<Inbox size={24} />} title="还没有设备接入"
-          hint="在边缘主机上配置 edge.yaml 并启动 cloudpath-edge，设备会自动注册到这里。" />
+          hint="启动网关并完成设备接入后，设备会自动出现在这里。" />
       ) : shown.length === 0 ? (
         <EmptyState icon={<SearchX size={24} />} title="没有匹配的设备"
           hint={q ? `没有设备匹配「${q}」。试试只搜名称的一部分，或清除筛选条件。` : '当前筛选条件下没有设备，换一个状态试试。'} />
@@ -99,7 +99,7 @@ export default function Devices() {
           )}
           <p className="flex items-center gap-1.5 border-t border-hairline px-4 py-2.5 text-[12px] text-ink-3">
             <Cpu size={11} className="shrink-0" />
-            关键读数取自设备主动上报声明里的主观测；「等待声明」表示设备尚未上报自己的能力声明。
+            关键数据来自设备上报；「等待同步」表示设备还没有上报可显示的数据。
           </p>
         </Panel>
       )}

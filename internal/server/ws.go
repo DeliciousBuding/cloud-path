@@ -322,10 +322,10 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 			delete(s.edgeCapabilities, hello.EdgeID)
 		}
 		s.mu.Unlock()
-		if current { // 只有仍是注册连接时才标离线（被重连挤掉的旧连接不清新状态）
+		if current { // 只有仍是注册连接时才标离线并广播下线（被重连挤掉的旧连接不得覆盖新连接状态）
 			s.markEdgeOffline(link)
+			s.broadcastAs(api.Envelope{V: api.Version, Type: api.MsgEdgeDown, Device: hello.EdgeID, Ts: time.Now().Unix(), Data: edgeData}, link.tenant)
 		}
-		s.broadcastAs(api.Envelope{V: api.Version, Type: api.MsgEdgeDown, Device: hello.EdgeID, Ts: time.Now().Unix(), Data: edgeData}, link.tenant)
 		slog.Info("edge disconnected", "edge", hello.EdgeID, "was_current", current, "tenant", tenant)
 	}()
 
@@ -446,7 +446,7 @@ func (s *Server) handleEdgeWS(w http.ResponseWriter, r *http.Request) {
 			s.broadcast(api.Envelope{V: api.Version, Type: api.MsgDescriptor, Device: msg.Device,
 				Ts: time.Now().Unix(), Data: data})
 		case api.MsgCapabilities:
-			s.handleCapabilitiesMsg(hello.EdgeID, &msg)
+			s.handleCapabilitiesMsg(hello.EdgeID, link.tenant, &msg)
 		case api.MsgPluginStatus:
 			// 身份只取自已鉴权 link（tenant/edge），payload 不自报身份。
 			s.handlePluginStatusMsg(link, &msg)
@@ -470,10 +470,14 @@ const (
 
 // handleCapabilitiesMsg 接收 Edge 上报的 Capability 文档全量快照（覆盖式）。
 //
+// tenant 来自已鉴权 Edge link，和文档一起写入内存快照；读取时按 principal 租户过滤。
 // 设备无关：只按 capability.schema.json 校验并存储，不解释任何硬件语义；非法文档
 // 单条跳过并记 warn，不让一个坏插件拖垮整批。不向浏览器广播——前端消费路径是
 // GET /api/capabilities（与 /api/descriptors 随行字段），保持单一事实源。
-func (s *Server) handleCapabilitiesMsg(edgeID string, msg *api.Envelope) {
+func (s *Server) handleCapabilitiesMsg(edgeID, tenant string, msg *api.Envelope) {
+	if tenant == "" {
+		tenant = defaultTenantSlug
+	}
 	var data api.CapabilitiesData
 	if err := json.Unmarshal(msg.Data, &data); err != nil {
 		slog.Warn("edge bad capabilities payload", "edge", edgeID, "err", err)
@@ -530,10 +534,11 @@ func (s *Server) handleCapabilitiesMsg(edgeID string, msg *api.Envelope) {
 	if len(kept) == 0 {
 		delete(s.edgeCapabilities, edgeID)
 	} else {
-		s.edgeCapabilities[edgeID] = kept
+		s.edgeCapabilities[edgeID] = edgeCapabilitySet{tenant: tenant, sources: kept}
 	}
 	s.mu.Unlock()
-	slog.Info("edge capabilities received", "edge", edgeID, "sources", len(kept), "capabilities", total)
+	slog.Info("edge capabilities received", "edge", edgeID, "tenant", tenant,
+		"sources", len(kept), "capabilities", total)
 }
 
 // inProcessCapabilityIDs 返回 Server 进程内已注册适配器自带的 Capability ID 集合。

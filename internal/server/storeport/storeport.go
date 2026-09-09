@@ -1,29 +1,24 @@
-// Package storeport 是 Server lane 对插件控制面持久化的本地端口（依赖倒置接缝）。
+// Package storeport defines the persistence port used by the server-side plugin
+// control plane.
 //
-// 契约来源：.local/plan/v0.1-completion.md §3（Store lane 在 internal/store 提供同签名方法）。
-// merge 时由 Captain 用一个薄适配器把 *store.Store 接到本接口：现成适配器见
-// adapter_sqlite.go（默认被 build tag 排除，Store v7/v8 合并后删掉 tag 行即可编译）。
+// The package intentionally does not import internal/store. Production wiring
+// adapts a concrete store implementation to PluginStore, while NewMemory provides
+// an in-process implementation for tests and development.
 //
-// 本包刻意**不 import internal/store**：STORE 与 SERVER 两条 lane 并行开发时，
-// Server 侧必须能独立编译与测试。测试与开发态用 NewMemory() 的进程内实现。
-//
-// # 接线指引（Captain，唯一一处）
-//
-// Store v7/v8 合并后，在 cmd/cloudpath-server/main.go 的 server.New(server.Config{...})
-// 里加一行 `PluginStore: <adapter>`，adapter 是 internal/store → 本接口的薄映射：
-// 逐个方法转发，并把 store 的行类型与本包行类型互转（字段一一同名，见下），
-// 同时把 store 的配额/冲突/未找到错误映射到本包的 ErrQuota / ErrConflict /
-// ErrNotFound / ErrTenantMismatch（Server 据 errors.Is 产出 api.PluginErr* 稳定码）。
-// 未接线时 Server 行为是安全降级：插件写 API 503、WS plugin_* 按旧协议忽略、读面真实为空。
-//
-// 实现方必须满足的语义不变量：
-//   - 所有读写按 tenantID 作用域；任何 upsert 不得修改既有行的 tenant_id；
-//   - Create/Update/Delete 在同一写事务内更新期望态并把 tenant/edge desired revision +1，
-//     返回新 revision；失败不得留下半状态；
-//   - 配额超限必须整体失败（不写入、不增 revision），返回 ErrQuota；
-//   - 删除期望态不删除审计；purge=false 时必须保留 observed 投影与实例私有数据；
-//     purge=true 时同一事务清除该实例 observed 投影、领域记录和定时任务；
-//   - 只存 secret://<name> handle 名与非敏感标量，绝不存明文 secret。
+// Implementations must preserve these semantics:
+//   - all reads and writes are tenant-scoped; an upsert must never change an
+//     existing row's tenant_id;
+//   - Create/Update/Delete update desired state and increment the tenant/edge
+//     desired revision in the same transaction, returning the new revision;
+//     failures must not leave partial state;
+//   - quota exhaustion fails the whole operation without writing or incrementing
+//     the revision and returns ErrQuota;
+//   - deleting desired state does not delete audit data; purge=false preserves
+//     the observed projection and instance-private data, while purge=true removes
+//     that instance's observed projection, domain records and scheduled tasks in
+//     the same transaction;
+//   - only secret://<name> handles and non-sensitive scalars are stored; plaintext
+//     secrets are never persisted.
 package storeport
 
 import (
@@ -45,7 +40,7 @@ var (
 	ErrTenantMismatch = errors.New("storeport: row owned by another tenant")
 )
 
-// PluginInstanceRow 是 Server 权威期望态行（§3 逐字对齐）。
+// PluginInstanceRow is the authoritative desired-state row for a plugin instance.
 // ConfigJSON 是 map[string]string 的 JSON，值只含非敏感标量或 secret://<name> handle；
 // SecretRefs 是 JSON []string，只含 handle 名。
 type PluginInstanceRow struct {
@@ -63,7 +58,7 @@ type PluginInstanceRow struct {
 	UpdatedAt  int64
 }
 
-// PluginEdgeRevisionRow 是每个 tenant/edge 的 revision 与 applied 投影（§3 逐字对齐）。
+// PluginEdgeRevisionRow is the revision and applied projection for a tenant/edge.
 type PluginEdgeRevisionRow struct {
 	TenantID        int64
 	EdgeID          string
@@ -75,9 +70,9 @@ type PluginEdgeRevisionRow struct {
 	LastAckAt       int64
 }
 
-// PluginObservationRow 是 Edge 上报的实例实际态投影行。
-// §3 只给了方法名未展开字段：本包按 api.PluginObservedInstanceData + 作用域/时间定义，
-// 适配器负责与 store 行互映射。
+// PluginObservationRow is the observed-state projection reported by an edge.
+// Its fields mirror api.PluginObservedInstanceData plus scope and timestamp
+// coordinates; adapters map between this type and concrete store rows.
 type PluginObservationRow struct {
 	TenantID     int64
 	EdgeID       string
@@ -113,8 +108,7 @@ type PluginInstallationRow struct {
 	ReportedAt        int64
 }
 
-// TenantPolicyRow 是租户保留期/配额行。§3 未展开字段：本包按
-// docs/architecture/tenant-security-policy.md §3/§4 的资源清单定义。
+// TenantPolicyRow 是租户保留期/配额行。字段按租户安全策略的资源清单定义；
 // 任何 <=0 的字段表示 NULL/继承 Server 默认值（绝不用 0 表示无限）。
 type TenantPolicyRow struct {
 	TenantID              int64
@@ -133,8 +127,8 @@ type TenantPolicyRow struct {
 	UpdatedAt             int64
 }
 
-// PluginStore 是 Server lane 消费的插件控制面持久化端口（§3 全部方法，签名逐字对齐）。
-// *store.Store 经适配器满足本接口；nil 表示 API-only 形态，调用方必须判空降级。
+// PluginStore is the persistence port consumed by the server-side plugin control plane.
+// A nil value means the API-only deployment; callers must handle it by degrading safely.
 type PluginStore interface {
 	// ---- 插件期望态（Server 权威）----
 	ListPluginInstancesTenant(tenantID int64) ([]PluginInstanceRow, error)

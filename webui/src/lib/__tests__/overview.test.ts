@@ -23,8 +23,8 @@ describe('overview failure window', () => {
   it('labels both the count and its empty state as the last 24 hours', () => {
     const o = overview()
     expect(commandStat(o)).toEqual({
-      key: 'commands', label: '近24小时失败命令', online: 0, total: -1,
-      emptyHint: '近24小时没有失败或超时的命令', tone: 'ok',
+      key: 'commands', label: '近24小时失败操作', online: 0, total: -1,
+      emptyHint: '近24小时没有失败或超时的操作', tone: 'ok',
     })
     expect(commandAlert(o)).toBeUndefined()
   })
@@ -36,7 +36,7 @@ describe('overview failure window', () => {
     })
     expect(commandStat(o)).toMatchObject({ online: 2107, tone: 'bad' })
     expect(commandAlert(o)).toMatchObject({
-      count: 2107, title: '近24小时 2107 条命令失败或超时',
+      count: 2107, title: '近24小时 2107 条操作失败或超时',
     })
   })
 
@@ -47,11 +47,11 @@ describe('overview failure window', () => {
     })
     const alert = commandAlert(o)
     expect(alert).toMatchObject({
-      count: 1, to: '/activity', title: '近24小时 1 条命令失败或超时',
+      count: 1, to: '/activity', title: '近24小时 1 条操作失败或超时',
     })
-    expect(alert?.hint).toContain('查看失败或超时记录及回执')
+    expect(alert?.hint).toContain('查看失败或超时记录及处理结果')
     expect(alert?.hint).toContain('发生时间')
-    expect(alert?.hint).toContain('全部历史记录')
+    expect(alert?.hint).toContain('全部历史')
     expect(alert?.hint).not.toMatch(/重发|重试|重新下发/)
   })
 

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
-import { useQuery } from '@tanstack/react-query'
-import {Activity, ArrowRight, Braces, Command, Grid3x3, History, LayoutDashboard, Radio, RadioTower, Sparkles, Terminal, Zap} from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {Activity, ArrowRight, Braces, Command, Grid3x3, History, LayoutDashboard, RadioTower, Sparkles, Zap} from 'lucide-react'
 import {
   BackLink, Badge, EmptyState, ErrorState, KeyValue, Panel, Segmented, StatusDot, TabBar, TabPanel,
 } from '@/components/ui'
@@ -25,17 +25,42 @@ import {
 } from '@/lib/descriptor'
 import type { SummaryValue } from '@/lib/descriptor'
 import { eventLabel, fmtDateTime, mergeEvents, optionLabel, payloadLabel, timeAgo } from '@/lib/format'
+
+const STATE_VALUE_LABEL: Record<string, string> = {
+  free: '空闲', busy: '忙碌', idle: '空闲', running: '运行中', stopped: '已停止',
+  on: '已开启', off: '已关闭', clock: '时钟模式',
+}
+
+function displayStateValue(value: unknown): string {
+  return typeof value === 'string' && STATE_VALUE_LABEL[value] ? STATE_VALUE_LABEL[value] : formatValue(value)
+}
+
+function descriptorErrorCopy(status: number | null): { title: string; hint: string } {
+  if (status === 504) return {
+    title: '设备功能读取超时',
+    hint: '读取设备功能超时，暂时无法显示操作与功能信息。请稍后重试。',
+  }
+  if (status === 502 || status === 503) return {
+    title: '设备功能暂时不可用',
+    hint: '设备功能服务暂时不可用，暂时无法显示操作与功能信息。请稍后重试。',
+  }
+  return {
+    title: '设备功能加载失败',
+    hint: '暂时无法加载设备功能与操作信息，请检查服务后重试。',
+  }
+}
 import { isStaleObs } from '@/components/SchemaRenderer'
 import { usePageTitle } from '@/hooks/usePageTitle'
 
-type Tab = 'overview' | 'state' | 'controls' | 'events' | 'capabilities' | 'diagnostics'
+type Tab = 'overview' | 'controls' | 'events' | 'advanced'
+type AdvancedView = 'state' | 'capabilities' | 'diagnostics'
 
 /**
- * 设备详情（Schema 驱动，六分区职责正交）：
- *   概览（人看）/ 实时状态（运维看）/ 控制（操作）/ 事件（时间线）/ 能力（开发者）/ 诊断（排障）
+ * 设备详情（Schema 驱动，四分区职责正交）：
+ *   概览（人看）/ 设备操作（执行）/ 记录（时间线）/ 高级（状态、功能与诊断）
  *
  * human-first：默认视图只有展示名 + 当前值 + 单位 + 状态 + 新鲜度；
- * 机器 ID / Capability URI / raw JSON 只出现在「能力」Inspector 与「诊断」页（按需展开）。
+ * 机器 ID / Capability URI / raw JSON 只出现在「高级」里的功能与诊断区（按需展开）。
  * 页面不认识任何设备字段名：一切由 Descriptor + Capability 声明推导，缺席走通用回落。
  */
 export default function DeviceDetail() {
@@ -45,12 +70,29 @@ export default function DeviceDetail() {
   const nowSec = Math.floor(now.getTime() / 1000)
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedTab = searchParams.get('tab')
-  const tab: Tab = (['overview', 'state', 'controls', 'events', 'capabilities', 'diagnostics'] as const)
-    .find((value) => value === requestedTab) ?? 'overview'
+  const requestedView = searchParams.get('view')
+  const legacyAdvanced: AdvancedView | undefined = requestedTab === 'state' ? 'state'
+    : requestedTab === 'capabilities' ? 'capabilities'
+      : requestedTab === 'diagnostics' ? 'diagnostics' : undefined
+  const isAdvancedView = (value: string | null): value is AdvancedView =>
+    value === 'state' || value === 'capabilities' || value === 'diagnostics'
+  const tab: Tab = (['overview', 'controls', 'events', 'advanced'] as const)
+    .find((value) => value === requestedTab) ?? (legacyAdvanced ? 'advanced' : 'overview')
+  const advancedView: AdvancedView = isAdvancedView(requestedView) ? requestedView : legacyAdvanced ?? 'diagnostics'
   const setTab = (value: Tab) => setSearchParams((previous) => {
     const next = new URLSearchParams(previous)
-    if (value === 'overview') next.delete('tab')
-    else next.set('tab', value)
+    if (value === 'overview') {
+      next.delete('tab'); next.delete('view')
+    } else if (value === 'advanced') {
+      next.set('tab', 'advanced'); next.set('view', advancedView)
+    } else {
+      next.set('tab', value); next.delete('view')
+    }
+    return next
+  })
+  const setAdvancedView = (value: AdvancedView) => setSearchParams((previous) => {
+    const next = new URLSearchParams(previous)
+    next.set('tab', 'advanced'); next.set('view', value)
     return next
   })
   const [kindFilter, setKindFilter] = useState('')
@@ -83,10 +125,25 @@ export default function DeviceDetail() {
     return a?.commands ?? []
   }, [adapters, d?.adapter])
 
-  const { descriptor, capabilities, source, commands } = useDeviceDescriptor(
+  const {
+    descriptor, capabilities, source, commands,
+    error: descriptorError, errorStatus: descriptorErrorStatus,
+  } = useDeviceDescriptor(
     key, decodeURIComponent(edgeId), decodeURIComponent(deviceId),
     { device: d ?? null, adapterCommands },
   )
+  const queryClient = useQueryClient()
+  const [descriptorRetrying, setDescriptorRetrying] = useState(false)
+  const descriptorFailed = !descriptor && (source === 'error' || descriptorError != null)
+  const descriptorFailure = descriptorErrorCopy(descriptorErrorStatus)
+  const retryDescriptor = () => {
+    setDescriptorRetrying(true)
+    void Promise.all([
+      queryClient.refetchQueries({ queryKey: ['descriptors'] }),
+      queryClient.refetchQueries({ queryKey: ['descriptor', key] }),
+      queryClient.refetchQueries({ queryKey: ['capabilities'] }),
+    ]).catch(() => {}).finally(() => setDescriptorRetrying(false))
+  }
 
   /** 控制页的执行器实体：只读现状与命令区并排（观测值与命令输入分离） */
   const actuators = useMemo(
@@ -102,8 +159,10 @@ export default function DeviceDetail() {
   /** 概览 KPI：Descriptor 主观测推导；缺席时回落 raw 标量（通用，不写设备特例） */
   const tiles = useMemo<SummaryValue[]>(() => {
     if (descriptor) return metricTiles(descriptor, capabilities, 4)
+      .map((tile) => ({ ...tile, text: displayStateValue(tile.text) }))
     const raw = summarizeRaw(d?.state)
     return [raw.primary, ...raw.chips].filter((x): x is SummaryValue => Boolean(x)).slice(0, 4)
+      .map((tile) => ({ ...tile, text: displayStateValue(tile.text) }))
   }, [d, descriptor, capabilities])
 
   const capRefs = useMemo(() => {
@@ -183,10 +242,10 @@ export default function DeviceDetail() {
           <Panel><RowSkeleton rows={5} /></Panel>
         ) : isNotFound(devError) ? (
           <EmptyState icon={<RadioTower size={24} />} title="设备未注册"
-            hint={`没有找到 ${key}。设备接入后会自动注册；请检查 edge 配置与连接。`} />
+            hint={`没有找到 ${key}。设备接入后会自动注册；请检查接入配置与连接。`} />
         ) : (
           <ErrorState icon={<RadioTower size={20} />} title="设备信息加载失败"
-            hint={`拿不到 ${key} 的详情。这不代表设备不存在，请检查 server 是否可达后重试。`}
+            hint={`暂时无法加载这台设备的详情。这不表示设备不存在，请检查服务是否正常后重试。`}
             onRetry={() => { void refetch() }} />
         )}
       </>
@@ -195,11 +254,9 @@ export default function DeviceDetail() {
 
   const tabs: TabItem<Tab>[] = [
     { value: 'overview', label: '概览', icon: <LayoutDashboard size={13} /> },
-    { value: 'state', label: '实时状态', icon: <Radio size={13} /> },
-    { value: 'controls', label: '控制', icon: <Command size={13} /> },
-    { value: 'events', label: `事件 ${events.length || ''}`.trim(), icon: <History size={13} /> },
-    { value: 'capabilities', label: `能力 ${capRefs.length || ''}`.trim(), icon: <Sparkles size={13} /> },
-    { value: 'diagnostics', label: '诊断', icon: <Braces size={13} /> },
+    { value: 'controls', label: '设备操作', icon: <Command size={13} /> },
+    { value: 'events', label: '记录', count: events.length, icon: <History size={13} /> },
+    { value: 'advanced', label: '高级', icon: <Braces size={13} /> },
   ]
 
   return (
@@ -211,23 +268,9 @@ export default function DeviceDetail() {
         <h1 className="min-w-0 max-w-full truncate text-[24px] font-semibold tracking-[-0.01em]" title={d.id}>
           {d.name || deviceId}
         </h1>
-        {d.adapter && (
-          <span className="min-w-0 truncate font-mono text-[11px] text-ink-3" title={`适配器 ${d.adapter}`}>{d.adapter}</span>
-        )}
         {descriptor
           ? <StatusBadge status={descriptor.status} />
           : <Badge tone={d.online ? 'ok' : 'idle'}>{d.online ? '在线' : '离线'}</Badge>}
-        {d.port && (
-          <span className="flex min-w-0 items-center gap-1 truncate font-mono text-[11px] text-ink-3" title={`串口 ${d.port}`}>
-            <Terminal size={11} className="shrink-0" />{d.port}
-          </span>
-        )}
-        <Link to={`/edges/${encodeURIComponent(d.edge_id)}`}
-          className="flex min-w-0 max-w-full items-center gap-1 text-[12px] text-ink-3 no-underline transition-colors hover:text-accent"
-          title={`边缘节点 ${d.edge_id}`}>
-          <RadioTower size={11} className="shrink-0" />
-          <span className="min-w-0 truncate">{d.edge_id}</span>
-        </Link>
         <span className="num ml-auto truncate font-mono text-[11px] text-ink-3" title={`设备键 ${d.id}`}>
           {d.online ? `更新于 ${timeAgo(d.updated_at)}` : `最后见 ${timeAgo(d.last_seen)}`}
         </span>
@@ -236,6 +279,29 @@ export default function DeviceDetail() {
       <div className="mb-5">
         <TabBar items={tabs} value={tab} onChange={setTab} label="设备详情分区" />
       </div>
+
+      {descriptorFailed && (
+        <div className="mb-5">
+          <ErrorState compact icon={<Sparkles size={20} />}
+            title={descriptorFailure.title} hint={descriptorFailure.hint}
+            onRetry={retryDescriptor} retrying={descriptorRetrying} />
+        </div>
+      )}
+
+      {tab === 'advanced' && (
+        <div className="mb-5">
+          <Segmented
+            label="高级视图"
+            options={[
+              { value: 'state' as AdvancedView, label: '状态与趋势' },
+              { value: 'capabilities' as AdvancedView, label: '设备功能' },
+              { value: 'diagnostics' as AdvancedView, label: '诊断' },
+            ]}
+            value={advancedView}
+            onChange={setAdvancedView}
+          />
+        </div>
+      )}
 
       {tab === 'overview' && (
         <TabPanel value={tab}>
@@ -250,16 +316,12 @@ export default function DeviceDetail() {
               </p>
             )}
             {/* 事实横条：KPI 之后立即回答「这台设备健康吗」；KV 多列铺满通栏，不搁浅在窄轨 */}
-            <Panel title="设备状况">
-              <dl className="grid gap-x-10 gap-y-2.5 sm:grid-cols-2 xl:grid-cols-4">
-                <KeyValue k="在线" v={d.online ? '是' : '否'} />
-                <KeyValue k="边缘节点" v={d.edge_id || '—'} mono />
-                <KeyValue k="适配器" v={d.adapter || '—'} mono />
-                {d.port && <KeyValue k="串口" v={d.port} mono />}
+            <Panel title="设备摘要">
+              <dl className="grid gap-x-10 gap-y-2.5 sm:grid-cols-2 xl:grid-cols-3">
                 <KeyValue k={d.online ? '最近更新' : '最后见'}
                   v={<span className="num">{fmtDateTime(d.online ? d.updated_at : d.last_seen)}</span>} />
-                <KeyValue k="声明能力" v={descriptor ? `${capRefs.length} 种` : '无 Descriptor'} />
-                <KeyValue k="可下发命令" v={`${commands.actions.length} 条`} />
+                <KeyValue k="设备功能" v={descriptorFailed ? '加载失败' : descriptor ? `${capRefs.length} 种` : '尚未同步'} />
+                <KeyValue k="可执行操作" v={descriptorFailed ? '加载失败' : `${commands.actions.length} 项`} />
               </dl>
             </Panel>
             {/* 双 ledger 互为 peer：等高互不牵制，空洞无处产生；概览只看最近 8 条，全部历史在各自页 */}
@@ -269,11 +331,11 @@ export default function DeviceDetail() {
                 right={
                   <button type="button" onClick={() => setTab('events')}
                     className="link flex items-center gap-0.5 text-xs">
-                    全部事件 <ArrowRight size={12} />
+                    查看记录 <ArrowRight size={12} />
                   </button>
                 }>
                 {events.length === 0
-                  ? <p className="py-6 text-center text-sm text-ink-3">还没有事件上报</p>
+                  ? <p className="py-6 text-center text-sm text-ink-3">还没有事件</p>
                   : <EventFeed events={events} showDevice={false} limit={8} />}
               </Panel>
               <CommandHistory deviceId={key} actions={commands.actions} limit={8} />
@@ -282,7 +344,7 @@ export default function DeviceDetail() {
         </TabPanel>
       )}
 
-      {tab === 'state' && (
+      {tab === 'advanced' && advancedView === 'state' && (
         <TabPanel value={tab}>
           <div className="min-w-0">
             {/* 连接态一行说清；绝对新鲜度在页头只说一次 */}
@@ -290,7 +352,7 @@ export default function DeviceDetail() {
               <span className="flex items-center gap-2">
                 <StatusDot online={d.online} />
                 <span className="text-[12px] font-medium text-ink-2">{d.online ? '实时' : '离线'}</span>
-                {!d.online && <Badge tone="warn">展示最后一次上报的内容</Badge>}
+                {!d.online && <Badge tone="warn">展示最后一次更新的数据</Badge>}
               </span>
                 <Segmented
                   label="状态视图"
@@ -305,10 +367,10 @@ export default function DeviceDetail() {
               </div>
               {stateView === 'rows' && (descriptor
                 ? <StateMatrix descriptor={descriptor} idx={capabilities} nowSec={nowSec} series={series} />
-                : <RawView raw={d.state} title="上报字段（通用视图）" />)}
+                : <RawView raw={d.state} title="设备数据（通用视图）" />)}
               {stateView === 'table' && (descriptor
                 ? <StateTable descriptor={descriptor} idx={capabilities} nowSec={nowSec} />
-                : <RawView raw={d.state} title="上报字段（通用视图）" />)}
+                : <RawView raw={d.state} title="设备数据（通用视图）" />)}
               {stateView === 'trend' && (
                 <div>
                   <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -331,7 +393,7 @@ export default function DeviceDetail() {
                   </div>
                   {seriesKeys.length === 0 ? (
                     <p className="py-8 text-center text-xs text-ink-3">
-                      暂无趋势数据，设备上报数值后会自动开始采样
+                      暂无趋势数据，设备更新数值后会自动开始采样
                     </p>
                   ) : (
                     <div className="grid gap-2.5 md:grid-cols-2 2xl:grid-cols-3">
@@ -372,15 +434,19 @@ export default function DeviceDetail() {
           <div className="min-w-0 space-y-5">
             {/* 观测值与命令输入分离：只读现状与命令区并排，避免「看着像已执行」 */}
             <div className="grid items-start gap-5 lg:grid-cols-3">
-              <ActionPanel deviceId={key} set={commands} adapterName={d.adapter} className="lg:col-span-2" />
+              {descriptorFailed
+                ? <Panel title="设备操作" className="lg:col-span-2">
+                  <p className="py-4 text-center text-sm text-ink-3">设备功能加载失败，操作列表暂不可用。</p>
+                </Panel>
+                : <ActionPanel deviceId={key} set={commands} className="lg:col-span-2" />}
               {actuators.length > 0 && (
-                <Panel title={<span className="flex items-center gap-1.5"><Zap size={14} />当前状态（只读）</span>}>
+                <Panel title={<span className="flex items-center gap-1.5"><Zap size={14} />执行器状态</span>}>
                   <dl className="space-y-2.5">
                     {actuators.map((e) => {
                     const o = primaryObservation(e, capabilities)
                     const v = !o ? '暂无数据'
                       : widgetFor(o, capabilities) === 'timestamp' ? formatTimestamp(o.value)
-                        : `${formatValue(o.value)}${o.unit ? ` ${o.unit}` : ''}`
+                        : `${displayStateValue(o.value)}${o.unit ? ` ${unitLabel(o.unit) ?? o.unit}` : ''}`
                     return <KeyValue key={e.unique_key} k={entityTitle(e)} v={v} />
                   })}
                   </dl>
@@ -412,7 +478,7 @@ export default function DeviceDetail() {
               ? <RowSkeleton rows={5} />
               : shownEvents.length === 0
                 ? <EmptyState icon={<History size={24} />} title="还没有事件"
-                  hint="该设备上报事件后会出现在这里；也可以去活动页看全部设备的记录。" />
+                  hint="该设备产生事件后会出现在这里；也可以去活动页看全部设备的记录。" />
                 : (
                   <>
                     <EventFeed events={shownEvents} showDevice={false} limit={30} dayGrouped />
@@ -427,25 +493,29 @@ export default function DeviceDetail() {
         </TabPanel>
       )}
 
-      {tab === 'capabilities' && (
+      {tab === 'advanced' && advancedView === 'capabilities' && (
         <TabPanel value={tab}>
-          {!descriptor ? (
-            <EmptyState icon={<Sparkles size={24} />} title="该设备还没有上报能力声明"
-              hint="没有声明就不知道它具备哪些能力，因此这里不猜。命令集此时回落到后端适配器白名单（见「控制」分区）。" />
+          {descriptorFailed ? (
+            <Panel title={<span className="flex items-center gap-1.5"><Sparkles size={14} />设备功能</span>}>
+              <p className="py-4 text-center text-sm text-ink-3">设备功能加载失败，暂时无法显示功能列表。</p>
+            </Panel>
+          ) : !descriptor ? (
+            <EmptyState icon={<Sparkles size={24} />} title="该设备还没有同步设备功能"
+              hint="设备同步功能信息后，这里会显示它支持的功能与操作。" />
           ) : (
             <Panel
-              title={<span className="flex items-center gap-1.5"><Sparkles size={14} />声明的能力</span>}
-              right={<span className="num text-[12px] text-ink-3">{capRefs.length} 种 · catalog 收录 {capabilities.docs.length} 份</span>}>
+              title={<span className="flex items-center gap-1.5"><Sparkles size={14} />设备功能</span>}
+              right={<span className="num text-[12px] text-ink-3">{capRefs.length} 种 · 已同步 {capabilities.docs.length} 份</span>}>
               <CapabilityBrowser descriptor={descriptor} idx={capabilities} />
               <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
-                点击行展开 Inspector（属性/动作/事件/schema）；显示名优先取声明的中文标题。
+                点击一行查看详细说明；名称优先使用设备提供的中文名称。
               </p>
             </Panel>
           )}
         </TabPanel>
       )}
 
-      {tab === 'diagnostics' && (
+      {tab === 'advanced' && advancedView === 'diagnostics' && (
         <TabPanel value={tab}>
           <div className="space-y-5">
             <Panel
@@ -455,38 +525,38 @@ export default function DeviceDetail() {
               </span>}>
               <div className="grid gap-5 md:grid-cols-2">
                 <dl className="min-w-0 space-y-2.5">
-                  <KeyValue k="设备键" v={d.id} mono />
-                  <KeyValue k="边缘节点" v={d.edge_id || '—'} mono />
-                  <KeyValue k="适配器" v={d.adapter || '—'} mono />
+                  <KeyValue k="设备编号" v={d.id} mono />
+                  <KeyValue k="网关" v={d.edge_id || '—'} mono />
+                  <KeyValue k="设备类型" v={d.adapter || '—'} mono />
                   <KeyValue k="串口" v={d.port || '—'} mono />
                   <KeyValue k="在线" v={d.online ? '是' : '否'} />
                   <KeyValue k="最后更新" v={<span className="num">{fmtDateTime(d.updated_at)}</span>} />
                   <KeyValue k="最后见" v={<span className="num">{fmtDateTime(d.last_seen)}</span>} />
-                  <KeyValue k="Descriptor 来源" v={source} mono />
+                  <KeyValue k="设备说明来源" v={descriptorFailed ? '加载失败' : source} mono={!descriptorFailed} />
                   {descriptor?.manufacturer && <KeyValue k="厂商" v={descriptor.manufacturer} />}
                   {descriptor?.model && <KeyValue k="型号" v={descriptor.model} />}
                   {descriptor?.external_id && <KeyValue k="外部 ID" v={descriptor.external_id} mono />}
                 </dl>
-                <JsonBlock value={d.state ?? {}} label="状态原始 JSON（适配器上报的原始语义）" />
+                <JsonBlock value={d.state ?? {}} label="原始状态数据" />
               </div>
               {descriptor && (
                 <details className="mt-3">
                   <summary className="cursor-pointer select-none text-[12px] text-ink-3 transition-colors hover:text-ink-2">
-                    Descriptor 原始 JSON
+                    设备说明原始数据
                   </summary>
-                  <JsonBlock className="mt-1.5" value={descriptor} maxHeight="max-h-56" label="Descriptor 原始 JSON" />
+                  <JsonBlock className="mt-1.5" value={descriptor} maxHeight="max-h-56" label="设备说明原始数据" />
                 </details>
               )}
               <p className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-0.5 border-t border-hairline pt-3 text-[12px] text-ink-3">
                 <Grid3x3 size={11} className="shrink-0" />
-                Entity {descriptor ? descriptor.entities.length : 0} 个 ·
-                Capability 引用 {capRefs.length} 种 ·
-                catalog 收录 {capabilities.docs.length} 份 ·
+                设备对象 {descriptor ? descriptor.entities.length : 0} 个 ·
+                设备功能 {capRefs.length} 种 ·
+                已同步 {capabilities.docs.length} 份 ·
                 数值序列 {seriesKeys.length} 条
               </p>
             </Panel>
             {descriptor && (
-              <Panel title={<span className="flex items-center gap-1.5"><Grid3x3 size={14} />Entity 清单（机器原文）</span>}>
+              <Panel title={<span className="flex items-center gap-1.5"><Grid3x3 size={14} />设备对象（技术详情）</span>}>
                 <EntityInventory descriptor={descriptor} />
               </Panel>
             )}
@@ -505,9 +575,9 @@ function StateTable({ descriptor, idx, nowSec }: {
 }) {
   const rows = descriptor.entities.flatMap((e) =>
     observationsOf(e).map((o) => ({ e, o })))
-  if (!rows.length) return <p className="py-6 text-center text-sm text-ink-3">Descriptor 未声明观测</p>
+  if (!rows.length) return <p className="py-6 text-center text-sm text-ink-3">设备信息中没有可显示的数据</p>
   return (
-    <div className="card overflow-x-auto">
+    <div className="card overflow-x-auto" tabIndex={0} role="region" aria-label="设备状态表">
       <table className="w-full border-collapse text-left text-xs">
         <thead>
           <tr className="border-b border-hairline text-[12px] text-ink-3">
@@ -526,7 +596,7 @@ function StateTable({ descriptor, idx, nowSec }: {
                 {propertyLabel(o.property, o.capability, idx)}
               </td>
               <td className="num px-3 py-1.5 text-right font-medium">
-                {widgetFor(o, idx) === 'timestamp' ? formatTimestamp(o.value) : formatValue(o.value)}
+                {widgetFor(o, idx) === 'timestamp' ? formatTimestamp(o.value) : displayStateValue(o.value)}
                 {o.unit && <span className="ml-0.5 font-normal text-ink-3">{unitLabel(o.unit)}</span>}
               </td>
               <td className="px-3 py-1.5">
@@ -537,7 +607,7 @@ function StateTable({ descriptor, idx, nowSec }: {
               <td className="num whitespace-nowrap px-3 py-1.5 text-right font-mono text-[11px] text-ink-3">
                 {o.received_at ? formatTimestamp(o.received_at) : '—'}
                 {o.received_at && isStaleObs(o, nowSec) && (
-                  <Badge tone="warn" className="ml-1"> stale</Badge>
+                  <Badge tone="warn" className="ml-1">已过期</Badge>
                 )}
               </td>
             </tr>

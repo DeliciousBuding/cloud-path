@@ -17,11 +17,11 @@ export default function Admin() {
   if (!admin) {
     return (
       <>
-        <PageHeader title="管理" subtitle="用户与服务令牌" />
+        <PageHeader title="管理" subtitle="用户与访问令牌" />
         <EmptyState
           icon={<ShieldAlert size={24} />}
           title="需要管理员权限"
-          hint="当前身份不是 admin。用户与服务令牌管理只对本租户管理员可见；如需权限请联系管理员调整角色。"
+          hint="只有管理员可以管理用户和访问令牌。如需权限，请联系管理员调整你的角色。"
         />
       </>
     )
@@ -29,7 +29,7 @@ export default function Admin() {
 
   return (
     <>
-      <PageHeader title="管理" subtitle="本租户的用户、角色与服务令牌" />
+      <PageHeader title="管理" subtitle="本组织的用户、角色和访问令牌" />
       <div className="grid items-start gap-5 xl:grid-cols-2">
         <UserManager />
         <TokenManager />

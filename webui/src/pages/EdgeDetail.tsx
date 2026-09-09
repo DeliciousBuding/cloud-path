@@ -28,7 +28,7 @@ export default function EdgeDetail() {
 
   const facts = useMemo(() => edgeFacts(edges, devices), [edges, devices])
   const f = facts.find((x) => x.edge.edge_id === id)
-  usePageTitle(f ? `边缘节点 ${f.edge.edge_id}` : '边缘节点')
+  usePageTitle(f ? `网关 ${f.edge.edge_id}` : '网关')
 
   const { data: evHist, isLoading: evLoading } = useQuery({
     queryKey: ['edge-events', id],
@@ -45,7 +45,7 @@ export default function EdgeDetail() {
   if (edgeLoading) {
     return (
       <>
-        <BackLink to="/edges" label="边缘节点" />
+        <BackLink to="/edges" label="网关" />
         <Panel><RowSkeleton rows={4} /></Panel>
       </>
     )
@@ -54,14 +54,14 @@ export default function EdgeDetail() {
   if (!f) {
     return (
       <>
-        <BackLink to="/edges" label="边缘节点" />
+        <BackLink to="/edges" label="网关" />
         {edgeError ? (
-          <ErrorState icon={<Network size={20} />} title="边缘节点信息加载失败"
-            hint={`拿不到节点列表（GET /api/edges），因此无法确认 ${id} 是否存在。请检查 server 是否可达后重试。`}
+          <ErrorState icon={<Network size={20} />} title="网关信息加载失败"
+            hint={`暂时无法加载网关列表，因此不能确认 ${id} 是否存在。请检查服务是否正常后重试。`}
             onRetry={refetch} />
         ) : (
-        <EmptyState icon={<Network size={24} />} title="边缘节点不存在"
-          hint={`没有找到 ${id}。节点接入后会自动注册；若它曾长期离线且从未注册设备，可能不在记录里。`} />
+        <EmptyState icon={<Network size={24} />} title="网关不存在"
+          hint={`没有找到 ${id}。网关接入后会自动出现；若它曾长期离线且从未接入设备，可能不在记录里。`} />
         )}
       </>
     )
@@ -70,9 +70,9 @@ export default function EdgeDetail() {
   const e = f.edge
   return (
     <>
-      <BackLink to="/edges" label="边缘节点" />
+      <BackLink to="/edges" label="网关" />
 
-      <header className="mb-7 flex flex-wrap items-center gap-3 fade-up">
+      <header className="mb-7 flex flex-wrap items-center gap-3">
         <StatusDot online={e.online} />
         <h1 className="min-w-0 max-w-full truncate font-mono text-[24px] font-semibold" title={e.edge_id}>
           {e.edge_id}
@@ -89,36 +89,33 @@ export default function EdgeDetail() {
       </header>
 
       {!e.online && (
-        <div className="banner mb-5 rounded-lg fade-up" role="status">
-          该节点当前离线：名下设备暂停上报，已下发命令会排队等它重连。其他在线节点不受影响。
+        <div className="banner mb-5 rounded-lg" role="status">
+          这个网关当前离线：下属设备暂停更新，已发送的操作会排队等待重连。其他在线网关不受影响。
         </div>
       )}
 
       <div className="grid items-start gap-5 lg:grid-cols-3">
-        <Panel title={<span className="flex items-center gap-1.5"><Server size={14} />节点信息</span>}>
+        <Panel title={<span className="flex items-center gap-1.5"><Server size={14} />网关信息</span>}>
           <dl className="space-y-2.5">
-            <KeyValue k="节点 ID" v={e.edge_id} mono />
-            <KeyValue k="在线" v={e.online ? '是' : '否'} />
+            <KeyValue k="网关编号" v={e.edge_id} mono />
             <KeyValue k="版本" v={e.version || '未知'} mono />
-            <KeyValue k={e.online ? '连接于' : '最后在线'}
-              v={<span className="num font-mono">{e.connected_at ? fmtDateTime(e.connected_at) : '—'}</span>} />
-            <KeyValue k="最近上报"
-              v={<span className="num font-mono">{f.lastReport ? fmtDateTime(f.lastReport) : '从未上报'}</span>} />
-            <KeyValue k="所辖设备" v={`${f.devices.length} 台 · ${f.onlineDevices} 台在线`} />
-            <KeyValue k="接入时声明" v={`${f.declared.length} 台`} />
+            <KeyValue k="最近更新"
+              v={<span className="num font-mono">{f.lastReport ? fmtDateTime(f.lastReport) : '从未更新'}</span>} />
+            <KeyValue k="接入设备" v={`${f.devices.length} 台 · ${f.onlineDevices} 台在线`} />
+            <KeyValue k="已发现设备" v={`${f.declared.length} 台`} />
           </dl>
           {f.declared.length !== f.devices.length && (
             <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
-              声明设备数与当前实际归属不一致：可能设备在节点重启后未再被发现，或有设备被移到别的节点。
+              已发现设备数与当前连接数不一致：可能设备在网关重启后未再被发现，或设备已移到其他网关。
             </p>
           )}
         </Panel>
 
         <Panel className="lg:col-span-2"
-          title={<span className="flex items-center gap-1.5"><Cpu size={14} />所辖设备</span>}
+          title={<span className="flex items-center gap-1.5"><Cpu size={14} />接入设备</span>}
           right={<span className="text-[12px] text-ink-3">{f.onlineDevices}/{f.devices.length} 在线</span>}>
           {f.devices.length === 0 ? (
-            <p className="py-8 text-center text-sm text-ink-3">该节点还没有注册设备</p>
+            <p className="py-8 text-center text-sm text-ink-3">该网关还没有接入设备。启动网关并接入设备后会自动显示在这里。</p>
           ) : (
             <ul className="divide-y divide-hairline">
               {f.devices.map((d) => {
@@ -129,14 +126,15 @@ export default function EdgeDetail() {
                     <Link to={`/devices/${encodeURIComponent(e.edge_id)}/${encodeURIComponent(dev)}`}
                       className="min-w-0 flex-1 no-underline">
                       <span className="block truncate text-[13px] font-medium hover:text-accent" title={deviceLabel(d)}>
+                        <span className="sr-only">{d.online ? '在线，' : '离线，'}</span>
                         {deviceLabel(d)}
                       </span>
                       <span className="num block truncate font-mono text-[11px] text-ink-3" title={d.id}>
-                        {d.adapter || '未知适配器'}{d.port ? ` · ${d.port}` : ''}
+                        {d.adapter || '未知设备类型'}{d.port ? ` · ${d.port}` : ''}
                       </span>
                     </Link>
                     <span className="num shrink-0 font-mono text-[11px] text-ink-3"
-                      title={d.online ? '最近更新' : '最后见'}>
+                      title={d.online ? '最近更新' : '最后在线'}>
                       {(d.online ? d.updated_at : d.last_seen)
                         ? fmtDateTime(d.online ? d.updated_at : d.last_seen) : '—'}
                     </span>
@@ -148,18 +146,18 @@ export default function EdgeDetail() {
         </Panel>
 
         <Panel className="lg:col-span-3"
-          title={<span className="flex items-center gap-1.5"><History size={14} />该节点近期事件</span>}
+          title={<span className="flex items-center gap-1.5"><History size={14} />该网关近期运行记录</span>}
           right={<span className="num text-[12px] text-ink-3">{events.length} 条</span>}>
           {evLoading && events.length === 0 ? (
             <RowSkeleton rows={5} />
           ) : events.length === 0 ? (
-            <p className="py-8 text-center text-sm text-ink-3">该节点还没有事件记录</p>
+            <p className="py-8 text-center text-sm text-ink-3">该网关还没有运行记录。设备状态变化或操作结果会显示在这里。</p>
           ) : (
             <>
               <EventFeed events={events} limit={20} dayGrouped />
               {events.length > 20 && (
                 <Link to="/activity" className="link mt-3 flex items-center gap-0.5 border-t border-hairline pt-3 text-xs">
-                  另有 {events.length - 20} 条 · 去活动页查看 <ArrowRight size={12} />
+                  另有 {events.length - 20} 条 · 去运行记录查看 <ArrowRight size={12} />
                 </Link>
               )}
             </>

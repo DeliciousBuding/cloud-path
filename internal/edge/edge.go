@@ -667,6 +667,8 @@ func (e *Edge) capabilitySources() []api.CapabilitySource {
 	return out
 }
 
+const unsupportedCommandCode = "unsupported_command"
+
 // onCommand 执行 server 下行命令并回执 ack。
 func (e *Edge) onCommand(env api.Envelope) {
 	var cmd api.CommandData
@@ -684,13 +686,19 @@ func (e *Edge) onCommand(env api.Envelope) {
 		ack("failed", "unknown device")
 		return
 	}
-	slog.Info("executing command", "device", env.Device, "cmd", cmd.Cmd, "cmd_id", cmd.CommandID)
 	base := e.ctx
 	if base == nil {
 		base = context.Background()
 	}
 	ctx, cancel := context.WithTimeout(base, 15*time.Second)
 	defer cancel()
+	if !sup.supports(cmd.Cmd) {
+		detail := SanitizeDetail(fmt.Sprintf("%s: 不支持的命令 %q", unsupportedCommandCode, cmd.Cmd))
+		slog.Warn("command rejected by adapter whitelist", "device", env.Device, "cmd", cmd.Cmd, "cmd_id", cmd.CommandID)
+		ack("failed", detail)
+		return
+	}
+	slog.Info("executing command", "device", env.Device, "cmd", cmd.Cmd, "cmd_id", cmd.CommandID)
 	result, err := sup.sendForReport(ctx, device.Command{ID: cmd.CommandID, Cmd: cmd.Cmd, Args: cmd.Args})
 	if err != nil {
 		// 失败路径：错误文本可能带本机路径/凭据形态，出网前统一脱敏。

@@ -29,6 +29,13 @@ func setupPluginSync(t *testing.T) (*store.Store, *Server, *httptest.Server, *st
 	a := ensureTenantSlug(t, st, "tenant-a")
 	b := ensureTenantSlug(t, st, "tenant-b")
 	mem := storeport.NewMemory()
+	if err := mem.UpsertPluginInstallations(a, "e1", []api.PluginInstallationStatusData{
+		{PluginID: "io.github.acme.driver", Version: "0.1.0", Kind: "Driver", Protocol: 1},
+		{PluginID: "p1", Version: "1.0.0", Kind: "Driver", Protocol: 1,
+			Permissions: api.PluginPermissionsData{Secrets: []string{"api_token"}}},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	srv := New(Config{Store: st, Version: "test", RequireAuth: true, PluginStore: mem})
 	ts := httptest.NewServer(srv.Routes())
 	t.Cleanup(func() { ts.Close(); srv.CloseAll(); time.Sleep(50 * time.Millisecond) })
@@ -432,10 +439,15 @@ func TestPluginStatusRejectedFromEvictedLink(t *testing.T) {
 // TestPluginStatusCrossTenantFailClosed 锁定暗卷 3：tenant-b 伪造 tenant-a 的 edge id
 // 被 hello 阶段拒绝；b 用自己 edge 上报只写入 b 的投影，a 的投影与连接不受影响。
 func TestPluginStatusCrossTenantFailClosed(t *testing.T) {
-	st, srv, ts, _, a, b := setupPluginSync(t)
+	st, srv, ts, mem, a, b := setupPluginSync(t)
 	adminA := issueTenantToken(t, st, a, `["admin"]`)
 	edgeA := issueTenantToken(t, st, a, `["edge"]`)
 	edgeB := issueTenantToken(t, st, b, `["edge"]`)
+	if err := mem.UpsertPluginInstallations(a, "ea", []api.PluginInstallationStatusData{{
+		PluginID: "io.github.acme.driver", Version: "0.1.0", Kind: "Driver", Protocol: 1,
+	}}); err != nil {
+		t.Fatal(err)
+	}
 	if rev := createInstance(t, ts, adminA, "ea", "boxA"); rev != 1 {
 		t.Fatalf("revision = %d", rev)
 	}

@@ -49,7 +49,7 @@ describe('应用数据读取和通用展示', () => {
     expect(screen.getByText('计数')).toBeVisible()
     expect(screen.getByText('否')).toBeVisible()
     expect(screen.getByText('每天 08:30')).toBeVisible()
-    expect(screen.getByText(/调度时间不代表执行成功/)).toBeVisible()
+    expect(screen.getByText(/排定时间不代表已经执行成功/)).toBeVisible()
     expect(container.querySelector('pre')).toBeNull()
     expect(screen.getByText('custom_key')).toBeVisible()
     expect(container.textContent).not.toContain('数据项 1')
@@ -130,20 +130,20 @@ describe('应用数据读取和通用展示', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('无效分类失败后仍可清除筛选，不被错误状态锁住', async () => {
-    const http = installFetch((url) => new URL(url, 'http://localhost').searchParams.get('record_type') === 'invalid/type'
+  it('服务端拒绝分类筛选后仍可清除筛选，不被错误状态锁住', async () => {
+    const http = installFetch((url) => new URL(url, 'http://localhost').searchParams.get('record_type') === 'sample'
       ? stubResponse(400, { error: 'invalid record_type' }) : appResponse(url))
     const user = userEvent.setup()
     renderWithProviders(<ApplicationPlane instanceID="app-a" />)
     await screen.findByText('已保存内容')
     await user.click(screen.getByText('筛选记录'))
-    await user.type(screen.getByLabelText('分类标识'), 'invalid/type')
+    await user.selectOptions(screen.getByLabelText('分类'), 'sample')
     await user.click(screen.getByRole('button', { name: '筛选' }))
     expect(await screen.findByText('筛选条件无效')).toBeVisible()
     await user.click(screen.getByRole('button', { name: '清除筛选' }))
     expect(await screen.findByText('已保存内容')).toBeVisible()
-    expect(screen.getByLabelText('分类标识')).toHaveValue('')
-    expect(http.to('/records?').some((c) => c.url.includes('record_type=invalid%2Ftype'))).toBe(true)
+    expect(screen.getByLabelText('分类')).toHaveValue('')
+    expect(http.to('/records?').some((c) => c.url.includes('record_type=sample'))).toBe(true)
   })
 
   it('任意 JSON 类型与损坏内容不会使页面崩溃，也不会执行应用文字', async () => {
@@ -175,7 +175,7 @@ describe('应用数据读取和通用展示', () => {
     renderWithProviders(<Switcher />)
     await screen.findByText('甲的第 0 项')
     await user.click(screen.getByText('筛选记录'))
-    await user.type(screen.getByLabelText('分类标识'), 'sample')
+    await user.type(screen.getByLabelText('分类'), 'sample')
     await user.click(screen.getByRole('button', { name: '筛选' }))
     await waitFor(() => expect(screen.getByRole('button', { name: '下一页' })).toBeEnabled())
     await user.click(screen.getByRole('button', { name: '下一页' }))
@@ -184,7 +184,7 @@ describe('应用数据读取和通用展示', () => {
     expect(await screen.findByText('只属于乙')).toBeVisible()
     expect(screen.queryByText('甲的第二页')).not.toBeInTheDocument()
     expect(screen.getByText('第 1 页')).toBeVisible()
-    expect(screen.getByLabelText('分类标识')).toHaveValue('')
+    expect(screen.getByLabelText('分类')).toHaveValue('')
     expect(http.to('/app-b/records')[0]?.url).toBe('/api/plugin-instances/app-b/records?limit=20&offset=0')
   })
 
@@ -195,7 +195,7 @@ describe('应用数据读取和通用展示', () => {
     expect(await screen.findByText('应用未运行')).toBeVisible()
     expect(screen.getByText('已保存内容')).toBeVisible()
     expect(screen.getByText('计划 1')).toBeVisible()
-    expect(screen.getByText('暂无运行期任务')).toBeVisible()
+    expect(screen.getByText('暂无临时任务')).toBeVisible()
     act(() => useLive.setState({ status: 'closed' }))
     expect(screen.getByText(/实时更新已断开/)).toBeVisible()
     running = true
@@ -228,18 +228,18 @@ describe('插件实例详情的应用入口', () => {
     const http = installFetch((url) => appResponse(url, { instance }))
     const { container } = renderDetail(controlID)
     expect(await screen.findByText('已保存内容')).toBeVisible()
-    expect(screen.getByText(/当前账号为只读/)).toBeVisible()
+    expect(screen.getByText(/当前账号只能查看，不能修改这个项目/)).toBeVisible()
     expect(screen.queryByRole('button', { name: /停用|启用|删除|编辑|重新下发/ })).not.toBeInTheDocument()
-    expect(screen.queryByText('边缘节点离线')).not.toBeInTheDocument()
+    expect(screen.queryByText('网关离线')).not.toBeInTheDocument()
     expect(container.querySelector('a[href="/edges/server"]')).toBeNull()
     expect(http.to('/app-a/records')[0]?.url).toBe('/api/plugin-instances/app-a/records?limit=20&offset=0')
     expect(http.calls.every((c) => c.method === 'GET')).toBe(true)
     expect(screen.getByText('app_config')).not.toBeVisible()
     expect(screen.getByText('{"example_input":"input-1"}')).not.toBeVisible()
-    await userEvent.setup().click(screen.getByText('配置与技术信息'))
-    expect(screen.getByText('共享进程')).toBeVisible()
+    await userEvent.setup().click(screen.getByText('详细信息'))
+    expect(screen.getByText('共享运行')).toBeVisible()
     expect(screen.getByText('运行位置')).toBeVisible()
-    expect(screen.getByText('应用宿主上报')).toBeVisible()
+    expect(screen.getAllByText('中心服务').length).toBeGreaterThan(0)
   })
 
   it.each([200, 503])('目录为空或不可用（%s）时，服务端宿主仍有应用读面', async (status) => {
@@ -247,9 +247,9 @@ describe('插件实例详情的应用入口', () => {
     installFetch((url) => url === '/api/plugins' ? stubResponse(status, { plugins: [] }) : appResponse(url, { instance }))
     renderDetail(instance.id)
     expect(await screen.findByText('已保存内容')).toBeVisible()
-    expect(screen.queryByText('边缘节点未上报')).not.toBeInTheDocument()
-    expect(screen.queryByText('边缘节点离线')).not.toBeInTheDocument()
-    expect(screen.getAllByText('应用宿主未上报').length).toBeGreaterThan(0)
+    expect(screen.queryByText('网关未上报')).not.toBeInTheDocument()
+    expect(screen.queryByText('网关离线')).not.toBeInTheDocument()
+    expect(screen.getAllByText('中心服务尚未上报').length).toBeGreaterThan(0)
   })
 
   it.each(['server/app-a', 'app-a'])('写控制保留服务端键 %s，期望停用不伪造应用已停止', async (controlID) => {
@@ -272,8 +272,8 @@ describe('插件实例详情的应用入口', () => {
     expect(writes[0].url).toBe('/api/plugin-instances/' + encodeURIComponent(controlID))
     expect(writes[0].body).toEqual({ enabled: false })
     expect(useToasts.getState().items).toEqual([expect.objectContaining({
-      title: '期望态已更新',
-      detail: '修订版 2；运行宿主应用后这里才会变成已收敛',
+      title: '设置已更新',
+      detail: '已保存你的修改；收到运行状态后，这里会显示实际结果。',
       tone: 'ok',
     })])
     expect(screen.getByText('应用运行中')).toBeVisible()

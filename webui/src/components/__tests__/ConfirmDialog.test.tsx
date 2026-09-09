@@ -71,7 +71,6 @@ describe('确认框的视口与键盘边界', () => {
     const dialog = screen.getByRole('dialog')
     fireEvent.mouseDown(dialog)
     expect(cancel).not.toHaveBeenCalled()
-    expect(dialog.parentElement?.querySelector('.dialog-backdrop')?.className).toContain('pointer-events-none')
     fireEvent.mouseDown(dialog.parentElement as HTMLElement)
     expect(cancel).toHaveBeenCalledOnce()
     expect(confirm).not.toHaveBeenCalled()

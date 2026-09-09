@@ -5,11 +5,12 @@
 //   2. REST 单设备载荷里内联的 Descriptor（后端若把 descriptor 挂在 DeviceView 上）
 //   3. GET /api/devices/{edge}/{dev}/descriptor
 //   4. GET /api/descriptors（批量；列表页共享一次请求）
-// 全部缺席 → descriptor=null，UI 走「通用值渲染」回落（不报错、不空白）。
+// 仅 404/405/501 属于缺席 → descriptor=null，UI 走「通用值渲染」回落；
+// 502/503/504 或网络故障属于真实错误 → error/errorStatus 必须上抛给 UI。
 // Capability catalog（presentation / actions 事实源）同理：GET /api/capabilities + 随 Descriptor 一并返回的 capabilities。
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { ApiError, api } from '@/lib/api'
 import { useLive } from '@/store/ws'
 import {
   EMPTY_INDEX, commandActions, indexCapabilities, normalizeCapabilityDocs,
@@ -18,7 +19,7 @@ import {
 import type { CapabilityIndex, CommandSet } from '@/lib/descriptor'
 import type { DeviceDescriptor, DeviceView } from '@/lib/types'
 
-export type DescriptorSource = 'ws' | 'inline' | 'rest' | 'bulk' | 'none'
+export type DescriptorSource = 'ws' | 'inline' | 'rest' | 'bulk' | 'none' | 'error'
 
 export interface DescriptorResult {
   descriptor: DeviceDescriptor | null
@@ -26,6 +27,10 @@ export interface DescriptorResult {
   /** Descriptor 从哪条通道来（UI 上标注「Schema 驱动 / 通用回落」用） */
   source: DescriptorSource
   loading: boolean
+  /** Descriptor/Capability 读取的真实故障；404/405/501 缺席时为 null。 */
+  error: unknown | null
+  /** ApiError 的 HTTP 状态码，便于调用方区分错误态文案。 */
+  errorStatus: number | null
   /** 命令集：Capability actions / Descriptor commands 优先，回落适配器白名单 */
   commands: CommandSet
 }
@@ -112,8 +117,16 @@ export function useDeviceDescriptor(
 
   const descriptor = live ?? inline ?? singleSplit.descriptor ?? bulkHit ?? null
 
+  // Descriptor 已有事实源时，批量探测失败不覆盖成功结果；Capability catalog 失败仍要上报，
+  // 因为它会影响动作/展示声明。没有 Descriptor 时，任何非缺席失败都阻止“无操作”假象。
+  const error = descriptor
+    ? (catalog.error ?? null)
+    : (bulk.error ?? single.error ?? catalog.error ?? null)
+  const errorStatus = error instanceof ApiError ? error.status : null
+
   const source: DescriptorSource =
-    live ? 'ws' : inline ? 'inline' : singleSplit.descriptor ? 'rest' : bulkHit ? 'bulk' : 'none'
+    live ? 'ws' : inline ? 'inline' : singleSplit.descriptor ? 'rest' : bulkHit ? 'bulk'
+      : error ? 'error' : 'none'
 
   const capabilities = useMemo(() => {
     const docs = [...catalogDocs, ...bulkDocs, ...normalizeCapabilityDocs(singleSplit.docs)]
@@ -121,16 +134,18 @@ export function useDeviceDescriptor(
   }, [catalogDocs, bulkDocs, singleSplit.docs])
 
   const commands = useMemo(
-    () => commandActions({
-      descriptor, index: capabilities, adapterCommands: opts.adapterCommands,
-    }),
+    () => (!descriptor && error)
+      ? { actions: [], source: 'none' } as CommandSet
+      : commandActions({
+        descriptor, index: capabilities, adapterCommands: opts.adapterCommands,
+      }),
     // adapterCommands 来自上层 useMemo 的稳定数组引用
-    [descriptor, capabilities, opts.adapterCommands],
+    [descriptor, capabilities, opts.adapterCommands, error],
   )
 
   const loading = !descriptor && (bulk.isLoading || single.isLoading || catalog.isLoading)
 
-  return { descriptor, capabilities, source, loading, commands }
+  return { descriptor, capabilities, source, loading, error, errorStatus, commands }
 }
 
 /** 只要 Capability catalog（无设备上下文，例如事件/命令标签的通用推导） */

@@ -277,6 +277,10 @@ func (e Effect) Validate() error {
 	return errors.Join(errs...)
 }
 
+// ErrEffectNotImplemented means a validated effect is recognized by the
+// protocol but has no Core implementation yet.
+var ErrEffectNotImplemented = errors.New("appruntime: effect not implemented")
+
 // ErrUnknownEffect is returned when an SDK effect variant is outside the
 // whitelist.
 var ErrUnknownEffect = errors.New("appruntime: unknown application effect")

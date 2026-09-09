@@ -1,23 +1,52 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Activity, Boxes, Check, Cpu, Database, KeyRound, LogOut, Network, Plug, Server, UserRound, Wifi,
+  Activity, AlertCircle, Boxes, Check, Cpu, Database, KeyRound, LogOut, Network, Plug, Server,
+  UserRound, Wifi,
 } from 'lucide-react'
 import { PageHeader, Panel, StatTile, Badge, KeyValue } from '@/components/ui'
-import { api, getToken, setToken, wsUrl } from '@/lib/api'
+import { api, getToken, setToken } from '@/lib/api'
 import { authModeLabel, cmdMeta, fmtDateTime, fmtUptime, roleLabel } from '@/lib/format'
 import { useLive, reconnectLive } from '@/store/ws'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { logout, useAuth } from '@/store/auth'
 import { toast } from '@/store/toast'
 
-export default function Settings() {
-  usePageTitle('系统')
+function InlineError({ title, hint, onRetry, retrying }: {
+  title: string
+  hint: string
+  onRetry?: () => void
+  retrying?: boolean
+}) {
+  return (
+    <div role="alert" className="rounded-lg bg-bad/10 px-3.5 py-3 text-bad">
+      <p className="flex items-start gap-2 text-[13px] font-semibold">
+        <AlertCircle size={14} className="mt-0.5 shrink-0" />
+        <span>{title}</span>
+      </p>
+      <p className="mt-1 text-[12px] leading-relaxed opacity-90">{hint}</p>
+      {onRetry && (
+        <button type="button" className="btn btn-ghost mt-2.5" onClick={onRetry} disabled={retrying}>
+          {retrying ? '重试中…' : '重试'}
+        </button>
+      )}
+    </div>
+  )
+}
 
-  const { data: health, isFetching } = useQuery({ queryKey: ['health'], queryFn: api.health, refetchInterval: 10000 })
-  const { data: stats } = useQuery({ queryKey: ['stats'], queryFn: api.stats, refetchInterval: 15000 })
-  const { data: adapters } = useQuery({ queryKey: ['adapters'], queryFn: api.adapters, staleTime: 5 * 60_000 })
+export default function Settings() {
+  usePageTitle('设置')
+
+  const {
+    data: health, isFetching, isError: healthError, refetch: refetchHealth,
+  } = useQuery({ queryKey: ['health'], queryFn: api.health, refetchInterval: 10000 })
+  const { data: stats, isError: statsError, refetch: refetchStats } = useQuery({
+    queryKey: ['stats'], queryFn: api.stats, refetchInterval: 15000,
+  })
+  const { data: adapters, isError: adaptersError, refetch: refetchAdapters } = useQuery({
+    queryKey: ['adapters'], queryFn: api.adapters, staleTime: 5 * 60_000,
+  })
   const status = useLive((s) => s.status)
   const authStatus = useAuth((s) => s.status)
   const user = useAuth((s) => s.user)
@@ -36,45 +65,31 @@ export default function Settings() {
     setToken(tok.trim())
     setSaved(true)
     setTimeout(() => setSaved(false), 1500)
-    reconnectLive() // 令牌变更立即重连生效
-    toast.ok('令牌已保存', '实时通道已用新令牌重连')
+    reconnectLive()
+    toast.ok('访问令牌已保存', '页面会使用新的访问令牌重新连接')
   }
+
+  const liveLabel = status === 'open' ? '已连接' : status === 'connecting' ? '连接中' : '已断开'
+  const liveHint = status === 'open'
+    ? '页面会自动更新状态和运行记录。'
+    : status === 'connecting'
+      ? '正在建立实时更新；期间仍会定时刷新。'
+      : '实时更新暂时断开；页面仍会定时刷新，也可以手动重连。'
 
   return (
     <>
-      <PageHeader title="系统" subtitle="服务状态、账号、存储、适配器与本机令牌" />
+      <PageHeader title="设置" subtitle="账号、访问令牌和高级诊断" />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatTile icon={<Server size={13} />} label="服务版本"
-          value={<span className="font-mono font-medium tracking-normal break-words">{health?.version ?? '—'}</span>} />
-        <StatTile icon={<Activity size={13} />} label="运行时长" value={health ? fmtUptime(health.uptime_s) : '—'} />
-        <StatTile icon={<Cpu size={13} />} label="设备在线"
-          value={<>{health?.devices_online ?? 0}<span className="text-ink-3">/{health?.devices_total ?? 0}</span></>} />
-        <StatTile icon={<Network size={13} />} label="边缘在线" value={health?.edges_online ?? 0} />
-      </div>
+      <p className="mb-5 max-w-[62ch] text-sm leading-relaxed text-ink-2">
+        账号和访问令牌可以直接在这里设置。平台运行情况、记录统计和设备连接方式在下方「高级诊断」中查看。
+      </p>
 
-      <div className="mt-6 grid items-start gap-5 lg:grid-cols-2">
-        <Panel title={<span className="flex items-center gap-1.5"><Wifi size={14} />实时连接</span>}
-          right={<Badge tone={status === 'open' ? 'ok' : status === 'connecting' ? 'warn' : 'bad'}>
-            {status === 'open' ? '已连接' : status === 'connecting' ? '连接中' : '已断开'}
-          </Badge>}>
-          <dl className="space-y-2.5">
-            <KeyValue k="WS 端点" v={wsUrl()} mono />
-            <KeyValue k="服务健康" v={isFetching ? '检查中…' : health?.ok ? '正常' : '异常'} />
-            <KeyValue k="自动重连" v="断线后自动重试（1–15 秒）" />
-            <KeyValue k="鉴权" v={authModeLabel(stats?.auth_mode)} />
-          </dl>
-          <button type="button" className="btn btn-ghost mt-4"
-            onClick={() => { reconnectLive(); toast.info('正在重连…') }}>
-            重新连接
-          </button>
-        </Panel>
-
+      <div className="grid items-start gap-5 lg:grid-cols-2">
         <Panel title={<span className="flex items-center gap-1.5"><UserRound size={14} />账号</span>}
           right={authStatus === 'in'
             ? <Badge tone="ok">已登录</Badge>
             : authStatus === 'open'
-              ? <Badge tone="idle">开放访问</Badge>
+              ? <Badge tone="idle">无需登录</Badge>
               : <Badge tone="warn">未登录</Badge>}>
           {authStatus === 'in' && user ? (
             <>
@@ -82,40 +97,41 @@ export default function Settings() {
                 <KeyValue k="用户名" v={<span className="min-w-0 truncate font-mono" title={user.username}>{user.username}</span>} />
                 <KeyValue k="姓名" v={<span className="min-w-0 truncate" title={user.name}>{user.name || '—'}</span>} />
                 <KeyValue k="角色" v={roleLabel(user.role)} />
-                <KeyValue k="租户" v={<span className="min-w-0 truncate font-mono" title={user.tenant_slug}>{user.tenant_slug || '—'}</span>} />
+                <KeyValue k="组织" v={<span className="min-w-0 truncate font-mono" title={user.tenant_slug}>{user.tenant_slug || '—'}</span>} />
               </dl>
               <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
-                登录态由浏览器会话承载；共用机器请记得登出。
+                登录状态保存在这台设备的浏览器中。共用电脑请记得退出登录。
               </p>
-              <button type="button" className="btn btn-danger-ghost mt-3" disabled={signingOut}
-                onClick={() => void signOut()}>
-                <LogOut size={13} /> {signingOut ? '登出中…' : '登出'}
-              </button>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" className="btn btn-danger-ghost" disabled={signingOut}
+                  onClick={() => void signOut()}>
+                  <LogOut size={13} /> {signingOut ? '退出中…' : '退出登录'}
+                </button>
+                {user.role === 'admin' && <Link to="/admin" className="btn btn-ghost no-underline">管理用户和访问令牌</Link>}
+              </div>
             </>
           ) : (
             <p className="text-xs leading-relaxed text-ink-2">
               {authStatus === 'open'
-                ? '当前是开放访问（GET /api/auth/me 不可用），说明 server 还没启用账号鉴权或尚未初始化。启用后这里会显示登录账号。'
-                : '尚未登录。受保护的数据接口会返回 401，请先到登录页用账号密码登录。'}
+                ? '当前无需登录即可查看。需要修改设置时，请使用本机操作或联系管理员。'
+                : '尚未登录。请先到登录页用账号密码登录。'}
             </p>
           )}
         </Panel>
 
-        <Panel title={<span className="flex items-center gap-1.5"><KeyRound size={14} />本机令牌（可选）</span>}>
+        <Panel title={<span className="flex items-center gap-1.5"><KeyRound size={14} />访问令牌（可选）</span>}>
           <p className="mb-3 text-xs leading-relaxed text-ink-2">
-            账号模式下浏览器靠<strong>会话 cookie</strong> 鉴权，这里通常<strong>不需要填任何东西</strong>。
-            仅两种情况需要本机令牌：server 以 legacy 共享令牌
-            （<code className="rounded bg-ink-3/10 px-1 font-mono">CLOUDPATH_TOKEN</code>）运行时，
-            或你在用服务令牌做 API / 机器客户端接入。令牌只保存在本机浏览器 localStorage。
+            账号登录时通常<strong>不需要填写</strong>。只有在你收到访问令牌，或自动化工具需要连接时再填写。
+            令牌只保存在这台设备的浏览器中。
           </p>
-          <div className="flex gap-2">
-            <label className="sr-only" htmlFor="token">接入令牌</label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <label className="sr-only" htmlFor="token">访问令牌</label>
             <input
               id="token"
               type="password"
               value={tok}
               onChange={(e) => setTok(e.target.value)}
-              placeholder="留空 = 用会话 cookie（账号模式默认）"
+              placeholder="留空即使用当前登录状态"
               autoComplete="off"
               className="min-w-0 flex-1 rounded-full border border-hairline bg-surface-2 px-3.5 py-2 text-sm outline-none transition-colors focus:border-accent"
             />
@@ -125,60 +141,125 @@ export default function Settings() {
           </div>
         </Panel>
 
-        <Panel title={<span className="flex items-center gap-1.5"><Database size={14} />存储</span>}
-          right={<span className="text-[12px] text-ink-3">SQLite</span>}>
-          <dl className="space-y-2.5">
-            <KeyValue k="事件总数" v={<span className="num">{stats?.events ?? '—'}</span>} />
-            <KeyValue k="命令总数" v={<span className="num">{stats?.commands ?? '—'}</span>} />
-            <KeyValue k="注册设备" v={<span className="num">{stats?.devices ?? '—'}</span>} />
-            <KeyValue k="最早事件" v={<span className="font-mono">{stats?.oldest_event ? fmtDateTime(stats.oldest_event) : '—'}</span>} />
-            <KeyValue k="保留期" v={`${stats?.retention_days ?? '—'} 天（超期自动清理）`} />
-            <KeyValue k="Schema 版本" v={<span className="font-mono">v{stats?.schema_version ?? '—'}</span>} />
-          </dl>
-        </Panel>
-
-        <Panel title={<span className="flex items-center gap-1.5"><Plug size={14} />设备适配器</span>}
-          right={<span className="text-[12px] text-ink-3">{adapters?.adapters.length ?? 0} 个已注册</span>}>
-          {!(adapters?.adapters.length) ? (
-            <p className="py-4 text-center text-sm text-ink-3">加载适配器清单…</p>
-          ) : (
-            <div className="space-y-4">
-              {adapters.adapters.map((a) => (
-                <div key={a.name}>
-                  {/* 390px：适配器名来自后端注册，长名字必须可截断 */}
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="num min-w-0 truncate font-mono text-[13px] font-semibold" title={a.name}>{a.name}</span>
-                    <span className="shrink-0 text-[12px] text-ink-3">{a.commands.length} 条命令</span>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {a.commands.map((c) => (
-                      <span key={c} className="badge max-w-full bg-ink-3/10 text-ink-2" title={`${c} → ${cmdMeta(c).hint || '—'}`}>
-                        <span className="min-w-0 truncate">{cmdMeta(c).label}</span>
-                        <span className="num ml-1 min-w-0 truncate font-mono text-[11px] text-ink-3">{c}</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              <p className="border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
-                命令白名单由适配器声明，server 拒绝白名单外的命令；前端命令面板自动跟随。
-              </p>
-            </div>
-          )}
-        </Panel>
-
         <Panel title={<span className="flex items-center gap-1.5"><Boxes size={14} />关于</span>} className="lg:col-span-2">
           <p className="max-w-[62ch] text-sm leading-relaxed text-ink-2">
-            <span className="font-semibold text-ink">Cloudpath（云径）</span> 是通用 IoT 接入与管理平台：
-            边缘代理把本地串口设备聚合上云，中心服务统一监控、下发命令并持久化事件，
-            管理台通过 WebSocket 实时可视化。核心不绑定任何具体硬件或行业语义，
-            设备语义由适配器插件提供。
+            <span className="font-semibold text-ink">Cloudpath（云径）</span> 是设备接入与管理平台。
+            网关负责连接本地设备，平台集中显示状态、执行操作并保存记录。
+            平台不绑定具体硬件或行业，设备功能由应用或插件提供。
           </p>
           <p className="mt-4 border-t border-hairline pt-4 text-xs leading-relaxed text-ink-3">
-            Go · chi · WebSocket · SQLite（纯 Go，零 CGO） · React 19 · Vite · Tailwind 4 · 单二进制发布（前端内嵌）
+            Cloudpath（云径） · 设备接入与管理平台
           </p>
         </Panel>
       </div>
+
+      <details className="mt-6 rounded-xl border border-hairline bg-surface p-4">
+        <summary className="cursor-pointer text-sm font-medium text-ink-2">高级诊断</summary>
+        <p className="mt-1 max-w-[62ch] text-xs leading-relaxed text-ink-3">
+          平台运行情况、记录统计和设备连接方式。普通使用不需要修改这里。
+        </p>
+
+        <div className="mt-5 space-y-6">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <StatTile icon={<Server size={13} />} label="平台版本"
+              value={<span className="font-mono font-medium tracking-normal break-words">{health?.version ?? '—'}</span>} />
+            <StatTile icon={<Activity size={13} />} label="已运行"
+              value={health ? fmtUptime(health.uptime_s) : '—'} />
+            <StatTile icon={<Cpu size={13} />} label="设备在线"
+              value={health ? <>{health.devices_online}<span className="text-ink-3">/{health.devices_total}</span></> : '—'} />
+            <StatTile icon={<Network size={13} />} label="网关在线" value={health ? health.edges_online : '—'} />
+          </div>
+
+          <div className="grid items-start gap-5 lg:grid-cols-2">
+            <Panel title={<span className="flex items-center gap-1.5"><Wifi size={14} />实时更新</span>}
+              right={<Badge tone={status === 'open' ? 'ok' : status === 'connecting' ? 'warn' : 'bad'}>
+                {liveLabel}
+              </Badge>}>
+              {healthError ? (
+                <InlineError title="平台状态暂时不可用"
+                  hint="页面其他内容仍可使用。请稍后重试，或重新连接实时更新。"
+                  onRetry={() => { void refetchHealth(); reconnectLive() }} retrying={isFetching} />
+              ) : (
+                <>
+                  <dl className="space-y-2.5">
+                    <KeyValue k="更新状态" v={liveLabel} />
+                    <KeyValue k="平台状态" v={isFetching && !health ? '检查中…' : health?.ok ? '正常' : '需要检查'} />
+                    <KeyValue k="使用权限" v={stats ? authModeLabel(stats.auth_mode) : '正在读取…'} />
+                  </dl>
+                  <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">{liveHint}</p>
+                </>
+              )}
+              <button type="button" className="btn btn-ghost mt-4"
+                onClick={() => { reconnectLive(); void refetchHealth(); toast.info('正在重新连接…') }}>
+                重新连接
+              </button>
+            </Panel>
+
+            <Panel title={<span className="flex items-center gap-1.5"><Database size={14} />记录与保留</span>}
+              right={<span className="text-[12px] text-ink-3">自动清理</span>}>
+              {statsError ? (
+                <InlineError title="记录统计暂时不可用" hint="请稍后重试；已经保存的记录不会因此删除。"
+                  onRetry={() => void refetchStats()} />
+              ) : !stats ? (
+                <p className="py-4 text-center text-sm text-ink-3">正在读取记录统计…</p>
+              ) : (
+                <>
+                  <dl className="space-y-2.5">
+                    <KeyValue k="运行记录总数" v={<span className="num">{stats.events}</span>} />
+                    <KeyValue k="操作记录总数" v={<span className="num">{stats.commands}</span>} />
+                    <KeyValue k="已接入设备" v={<span className="num">{stats.devices}</span>} />
+                    <KeyValue k="最早运行记录" v={stats.oldest_event ? fmtDateTime(stats.oldest_event) : '尚无记录'} />
+                    <KeyValue k="自动保留" v={`${stats.retention_days} 天`} />
+                  </dl>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3">
+                    <Link to="/activity" className="link text-[12px]">查看运行记录</Link>
+                    <details className="text-[12px] text-ink-3">
+                      <summary className="cursor-pointer">技术详情</summary>
+                      <p className="mt-1">记录格式版本：v{stats.schema_version}</p>
+                    </details>
+                  </div>
+                </>
+              )}
+            </Panel>
+
+            <Panel title={<span className="flex items-center gap-1.5"><Plug size={14} />设备接入</span>}
+              right={<span className="text-[12px] text-ink-3">{adapters ? `${adapters.adapters.length} 个已登记` : '—'}</span>}>
+              {adaptersError ? (
+                <InlineError title="设备接入信息暂时不可用" hint="请稍后重试；已经接入的设备不会受影响。"
+                  onRetry={() => void refetchAdapters()} />
+              ) : !adapters ? (
+                <p className="py-4 text-center text-sm text-ink-3">正在加载设备接入信息…</p>
+              ) : adapters.adapters.length === 0 ? (
+                <p className="py-4 text-center text-sm text-ink-3">还没有设备接入方式。设备连接后会显示在这里。</p>
+              ) : (
+                <div className="space-y-4">
+                  {adapters.adapters.map((a) => (
+                    <div key={a.name}>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="num min-w-0 truncate font-mono text-[13px] font-semibold" title={a.name}>{a.name}</span>
+                        <span className="shrink-0 text-[12px] text-ink-3">{a.commands.length} 个操作</span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {a.commands.map((c) => (
+                          <span key={c} className="badge max-w-full bg-ink-3/10 text-ink-2" title={c}>
+                            <span className="min-w-0 truncate">{cmdMeta(c).label}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3">
+                    <p className="max-w-[42ch] text-[12px] leading-relaxed text-ink-3">
+                      这里显示设备可以执行的操作。没有权限时，操作会被拒绝。
+                    </p>
+                    <Link to="/devices" className="link text-[12px]">查看已接入设备</Link>
+                  </div>
+                </div>
+              )}
+            </Panel>
+          </div>
+        </div>
+      </details>
     </>
   )
 }

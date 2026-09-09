@@ -1,4 +1,4 @@
-// 认证页（Login / Setup）：真实账号鉴权、错误语义、凭据卫生、跳转，以及路由守卫收敛。
+// 认证页（Login / Setup）：真实账号鉴权、错误语义、凭据卫生、跳转，以及路由守卫同步。
 //
 // 这一组用例的存在理由就是 P0 缺陷 D3：旧登录页把「任意字符串塞进 localStorage + 打一次
 // 无需鉴权的 /healthz」当成登录成功，公网上表现为「登录进去了但整站 401、没有数据」。
@@ -34,7 +34,7 @@ function renderPage(page: ReactElement, route: string) {
 
 /** /healthz 永远 200：它是公开端点，可达与否**不得**影响登录结论。
  *  healthOverride 用来造「setup 前已有边缘接入」的现场——完成页要不要提示边缘会被断开，
- *  取决于这份快照。 */
+ *  取决于这份配置。 */
 type Router = (url: string) => ReturnType<typeof stubResponse>
 function routeWith(auth: Router, healthOverride: Partial<typeof health> = {}) {
   return installFetch((url) => (url === '/healthz'
@@ -146,7 +146,7 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
     await user.click(screen.getByRole('button', { name: '登录' }))
     const alert = await screen.findByRole('alert')
     // 服务端已经认了这套凭据：文案必须指向会话没落地，而不是让人重输正确密码
-    expect(alert).toHaveTextContent('账号和密码是对的，但会话没有建立')
+    expect(alert).toHaveTextContent('账号和密码是对的，但登录状态没有保存成功')
     expect(alert.textContent).not.toContain('用户名或密码错误')
     expect(screen.queryByRole('heading', { name: '首页占位' })).not.toBeInTheDocument()
     expect(useAuth.getState().status).not.toBe('in')
@@ -190,7 +190,7 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
     await user.type(screen.getByLabelText('用户名'), 'admin')
     await user.type(screen.getByLabelText('密码'), 'pw')
     await user.click(screen.getByRole('button', { name: '登录' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('无法连接 server')
+    expect(await screen.findByRole('alert')).toHaveTextContent('无法连接服务')
   })
 
   it('本地必填校验：缺字段就地报错且不发请求', async () => {
@@ -214,27 +214,27 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
     expect(screen.getByLabelText('密码')).toHaveAttribute('type', 'password')
   })
 
-  it('服务令牌是默认折叠的次要入口，展开后才有输入框', async () => {
+  it('访问令牌是默认折叠的次要入口，展开后才有输入框', async () => {
     const user = userEvent.setup()
     routeWith(() => stubResponse(404, {}))
     renderPage(<Login />, '/login')
-    const toggle = screen.getByRole('button', { name: /使用服务令牌登录/ })
+    const toggle = screen.getByRole('button', { name: /使用访问令牌登录/ })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByLabelText('服务令牌')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('访问令牌')).not.toBeInTheDocument()
     await user.click(toggle)
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByLabelText('服务令牌')).toBeInTheDocument()
+    expect(screen.getByLabelText('访问令牌')).toBeInTheDocument()
   })
 
-  it('服务令牌任意字符串 + healthz 200 → 仍然失败并回滚（不留无效凭据）', async () => {
+  it('访问令牌任意字符串 + healthz 200 → 仍然失败并回滚（不留无效凭据）', async () => {
     const user = userEvent.setup()
     const healthSpy = vi.spyOn(api, 'health')
     routeWith((url) => (url === '/api/auth/me'
       ? stubResponse(401, { error: 'not authenticated' }) : stubResponse(200, health)))
     renderPage(<Login />, '/login')
-    await user.click(screen.getByRole('button', { name: /使用服务令牌登录/ }))
-    await user.type(screen.getByLabelText('服务令牌'), 'literally-anything')
-    await user.click(screen.getByRole('button', { name: '用令牌登录' }))
+    await user.click(screen.getByRole('button', { name: /使用访问令牌登录/ }))
+    await user.type(screen.getByLabelText('访问令牌'), 'literally-anything')
+    await user.click(screen.getByRole('button', { name: '用访问令牌登录' }))
 
     expect(await screen.findByText(/令牌被拒绝/)).toBeInTheDocument()
     expect(healthSpy).not.toHaveBeenCalled()
@@ -247,7 +247,7 @@ describe('Setup：真实创建首个账号', () => {
   it('第一步探测连通性；已登录时直接给「进入管理台」', async () => {
     routeWith((url) => (url === '/api/auth/me' ? stubResponse(200, { user: admin }) : stubResponse(404, {})))
     renderPage(<Setup />, '/setup')
-    expect(await screen.findByText('server 已连接')).toBeInTheDocument()
+    expect(await screen.findByText(/服务已连接/)).toBeInTheDocument()
     expect(screen.getByText('你已经登录了，无需再初始化。')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /进入管理台/ })).toBeInTheDocument()
   })
@@ -256,12 +256,12 @@ describe('Setup：真实创建首个账号', () => {
     const user = userEvent.setup()
     installFetch(() => { throw new TypeError('Failed to fetch') })
     renderPage(<Setup />, '/setup')
-    expect(await screen.findByText('无法连接 server')).toBeInTheDocument()
+    expect(await screen.findByText('无法连接服务')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /下一步/ })).toBeDisabled()
 
     routeWith((url) => (url === '/api/auth/me' ? stubResponse(401, {}) : stubResponse(404, {})))
     await user.click(screen.getByRole('button', { name: /重试/ }))
-    expect(await screen.findByText('server 已连接')).toBeInTheDocument()
+    expect(await screen.findByText(/服务已连接/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /下一步/ })).toBeEnabled()
   })
 
@@ -316,11 +316,11 @@ describe('Setup：真实创建首个账号', () => {
 
     expect(await screen.findByText('设置完成')).toBeInTheDocument()
     // 说清后果 + 给出可执行的恢复路径（在哪建令牌、勾哪个 scope、写进哪个字段、还要重启）
-    expect(screen.getByText(/边缘节点现在会被断开/)).toBeInTheDocument()
-    expect(screen.getByText(/edge 作用域的服务令牌/)).toBeInTheDocument()
-    expect(screen.getByText(/管理 → 服务令牌/)).toBeInTheDocument()
+    expect(screen.getByText(/网关现在会被断开/)).toBeInTheDocument()
+    expect(screen.getByText(/「网关」范围的访问令牌/)).toBeInTheDocument()
+    expect(screen.getByText(/管理 → 访问令牌/)).toBeInTheDocument()
     expect(screen.getByText(/token:/)).toBeInTheDocument()
-    expect(screen.getByText(/重启边缘/)).toBeInTheDocument()
+    expect(screen.getByText(/重新启动网关/)).toBeInTheDocument()
     // 仍然报喜：这不是错误态，完成页的主结论没被警告盖掉
     expect(screen.getByRole('button', { name: '进入管理台' })).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
@@ -344,7 +344,7 @@ describe('Setup：真实创建首个账号', () => {
     await user.click(screen.getByRole('button', { name: /创建账号并继续/ }))
 
     expect(await screen.findByText('设置完成')).toBeInTheDocument()
-    expect(screen.queryByText(/边缘节点现在会被断开/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/网关现在会被断开/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '进入管理台' })).toBeInTheDocument()
   })
 
@@ -401,7 +401,7 @@ describe('Setup：真实创建首个账号', () => {
     await user.click(screen.getByRole('button', { name: /创建账号并继续/ }))
 
     const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('请联系管理员为你创建账号')
+    expect(alert).toHaveTextContent('请联系管理员创建账号')
     expect(alert.textContent).not.toContain('setup 需要回环来源或一次性 setup token')
     expect(within(alert).getByRole('link', { name: /去登录页/ })).toHaveAttribute('href', '/login')
   })
@@ -420,7 +420,7 @@ describe('Setup：真实创建首个账号', () => {
     await user.type(screen.getByLabelText('确认密码'), 'pw')
     await user.click(screen.getByRole('button', { name: /创建账号并继续/ }))
     const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('已经初始化过了')
+    expect(alert).toHaveTextContent('系统已经完成初始化')
     expect(within(alert).getByRole('link', { name: /去登录页/ })).toBeInTheDocument()
   })
 })
@@ -439,7 +439,7 @@ describe('路由守卫：me 是登录态唯一事实源', () => {
     )
   }
 
-  it('me→401 → 访问受保护路由被收敛到 /login', async () => {
+  it('me→401 → 访问受保护路由被同步到 /login', async () => {
     installFetch((url) => {
       if (url === '/api/auth/me') return stubResponse(401, { error: 'not authenticated' })
       if (url === '/healthz') return stubResponse(200, health)
@@ -450,7 +450,7 @@ describe('路由守卫：me 是登录态唯一事实源', () => {
     expect(useAuth.getState().status).toBe('out')
   })
 
-  it('受保护端点 401 也会全局收敛（markUnauthenticated），把用户送回 /login', async () => {
+  it('受保护端点 401 也会全局同步（markUnauthenticated），把用户送回 /login', async () => {
     // 会话在使用过程中失效：首帧 me→200 放行，随后受保护端点 401，此后 me 也 401。
     // 若不这样安排，App 会在跳转后重新探测 me 并（正确地）把用户送回首页。
     let meCalls = 0

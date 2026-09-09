@@ -22,7 +22,7 @@ import { usePageTitle } from '@/hooks/usePageTitle'
 
 type Phase = 'checking' | 'ok' | 'fail'
 
-const STEPS = ['连接 server', '创建管理员账号', '完成']
+const STEPS = ['连接服务', '创建管理员账号', '完成']
 
 /** 与服务端一致的上限（本地先拦一次，省一个来回；最终判定仍在服务端） */
 const MAX_USERNAME = 64
@@ -48,8 +48,8 @@ export default function Setup() {
       const h = await api.health()
       setHealth(h)
       setPhase('ok')
-    } catch (err) {
-      setProbeError(err instanceof Error ? err.message : '无法连接 server')
+    } catch {
+      setProbeError('暂时无法连接服务。')
       setPhase('fail')
       return
     }
@@ -162,13 +162,13 @@ export default function Setup() {
         <div className="space-y-4">
           {phase === 'checking' && (
             <p className="flex items-center gap-2 text-sm text-ink-2">
-              <Spinner /> 正在检测 server 连接…
+              <Spinner /> 正在检测服务连接…
             </p>
           )}
           {phase === 'ok' && health && (
             <div className="rounded-lg bg-ok/10 p-4">
               <p className="flex items-center gap-2 text-sm font-medium text-ok">
-                <Check size={15} strokeWidth={2.5} /> server 已连接
+                <Check size={15} strokeWidth={2.5} /> 服务已连接
               </p>
               <p className="mt-1 text-xs break-words text-ink-2">版本 <span className="font-mono">{health.version}</span></p>
               {alreadyIn && (
@@ -180,9 +180,9 @@ export default function Setup() {
           )}
           {phase === 'fail' && (
             <div className="rounded-lg bg-bad/10 p-4">
-              <p className="text-sm font-medium text-bad">无法连接 server</p>
+              <p className="text-sm font-medium text-bad">无法连接服务</p>
               <p className="mt-1 break-words text-xs text-ink-2">{probeError}</p>
-              <p className="mt-1 text-xs text-ink-3">请确认中心服务已启动，且本页面与 server 同源。</p>
+              <p className="mt-1 text-xs text-ink-3">请确认服务已启动，并让本页面与服务使用同一地址。</p>
             </div>
           )}
           <div className="flex gap-2">
@@ -208,8 +208,8 @@ export default function Setup() {
             <p className="flex items-start gap-2 text-[12px] leading-relaxed text-ink-2">
               <ShieldAlert size={14} className="mt-0.5 shrink-0 text-warn" />
               <span>
-                这里创建的是<span className="font-semibold text-ink">首个管理员账号</span>，创建成功后实例立即进入全鉴权模式，其他账号需由管理员在
-                「管理 → 用户」中创建。首次设置只允许从服务器本机（回环地址）进行，或携带一次性 setup token。
+                这里创建的是<span className="font-semibold text-ink">首个管理员账号</span>，创建成功后系统将只允许已登录的账号访问，其他账号需由管理员在
+                「管理 → 用户」中创建。首次设置只能在运行服务的电脑上操作，或携带一次性设置凭证。
               </span>
             </p>
           </div>
@@ -297,7 +297,7 @@ export default function Setup() {
             <p className="text-[15px] font-semibold">设置完成</p>
             <p className="mt-1 text-[13px] leading-relaxed break-words text-ink-2">
               管理员账号 <span className="font-mono font-medium text-ink">{createdUser || username}</span> 已创建，
-              并且你已经登录。实例现在处于全鉴权模式。
+              并且你已经登录。系统现在只允许已登录的账号访问。
             </p>
           </div>
 
@@ -312,15 +312,22 @@ export default function Setup() {
               那时还没进账号模式，边缘能连上，正是「会被断开」的准确信号。 */}
           {hasConnectedFleet && (
             <div className="rounded-lg bg-surface-2 p-3.5 text-left">
-              <p className="flex items-start gap-2 text-[12px] leading-relaxed text-ink-2">
+              <div className="flex items-start gap-2 text-[12px] leading-relaxed text-ink-2">
                 <ShieldAlert size={14} className="mt-0.5 shrink-0 text-warn" />
-                <span>
-                  已接入的<span className="font-semibold text-ink">边缘节点现在会被断开</span>：全鉴权下 edge
-                  必须携带 <span className="font-semibold text-ink">edge 作用域的服务令牌</span>。恢复步骤：进管理台 →
-                  「管理 → 服务令牌」新建一个勾选 <span className="num font-mono">edge</span> 的令牌
-                  （明文只显示一次），填进该边缘配置的 <span className="num font-mono">token:</span> 字段，再重启边缘。
-                </span>
-              </p>
+                <div className="min-w-0">
+                  已接入的<span className="font-semibold text-ink">网关现在会被断开</span>：启用账号验证后，网关
+                  必须携带 <span className="font-semibold text-ink">「网关」范围的访问令牌</span>。
+                  <details className="mt-2">
+                    <summary className="cursor-pointer select-none font-medium text-ink-2">
+                      查看网关恢复步骤（技术人员）
+                    </summary>
+                    <p className="mt-1.5">
+                      进管理台 → 「管理 → 访问令牌」新建一个勾选「网关」权限的令牌（明文只显示一次），
+                      填进该网关配置的 <span className="num font-mono">token:</span> 字段，再重新启动网关。
+                    </p>
+                  </details>
+                </div>
+              </div>
             </div>
           )}
           <Button lg className="w-full" onClick={() => navigate('/', { replace: true })}>

@@ -100,12 +100,13 @@ export function ConfirmDialog({
       {/* 遮罩：颜色走 token 混色，不写死 rgba */}
       <div className="dialog-backdrop pointer-events-none fixed inset-0" aria-hidden />
       <div
-        ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={titleId + '-body'} tabIndex={-1}
+        ref={dialogRef} role="dialog" aria-modal="true" aria-busy={busy}
+        aria-labelledby={titleId} aria-describedby={titleId + '-body'} tabIndex={-1}
         className="card dialog relative max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto p-6 fade-up"
       >
         <div className="flex items-start gap-3.5">
           <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-full', iconCls)}>
-            <Icon size={18} />
+            <Icon aria-hidden="true" size={18} />
           </span>
           <div className="min-w-0 flex-1">
             <h2 id={titleId} className="text-[15px] font-semibold tracking-[-0.01em] break-words">{title}</h2>

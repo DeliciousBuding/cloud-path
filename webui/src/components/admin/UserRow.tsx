@@ -6,12 +6,17 @@ import { Badge, Button, KeyValue, TextField } from '@/components/ui'
 import { ErrorNote } from './ErrorNote'
 import { CheckRow, SelectField } from './fields'
 import { useUpdateUser } from '@/hooks/useAdmin'
-import { adminErrorMessage, ROLE_OPTIONS, roleOption } from '@/lib/admin'
+import { adminErrorMessage, ROLE_OPTIONS } from '@/lib/admin'
 import { roleLabel } from '@/lib/format'
 import { toast } from '@/store/toast'
 import type { Role, UserView } from '@/lib/types'
 
 const ROLE_FIELD_OPTIONS = ROLE_OPTIONS.map((r) => ({ value: r.value, label: r.label }))
+const ROLE_HINTS: Record<Role, string> = {
+  viewer: '只能查看设备状态和记录。',
+  operator: '可以查看并执行设备操作。',
+  admin: '可以管理用户和访问令牌。',
+}
 
 type Mode = 'idle' | 'edit' | 'reset'
 
@@ -75,10 +80,13 @@ export function UserRow({ user: u }: { user: UserView }) {
         </div>
       </div>
 
-      <dl className="mt-3 space-y-2">
-        <KeyValue k="用户 ID" v={<span className="font-mono">{u.id}</span>} />
-        <KeyValue k="租户" v={u.tenant_slug} mono />
-      </dl>
+      <details className="mt-3 text-xs text-ink-2">
+        <summary className="cursor-pointer">技术详情</summary>
+        <dl className="mt-2 space-y-2">
+          <KeyValue k="账号标识" v={<span className="font-mono">{u.id}</span>} />
+          <KeyValue k="所属组织" v={u.tenant_slug} mono />
+        </dl>
+      </details>
 
       {mode === 'idle' && (
         <div className="mt-3 flex flex-wrap gap-2 border-t border-hairline pt-3">
@@ -93,9 +101,9 @@ export function UserRow({ user: u }: { user: UserView }) {
           <TextField label="名称" value={name} error={nameErr} autoComplete="off"
             onChange={(ev) => setName(ev.target.value)} />
           <SelectField label="角色" value={role} options={ROLE_FIELD_OPTIONS}
-            hint={roleOption(role)?.hint} onChange={(v) => setRole(v as Role)} />
+            hint={ROLE_HINTS[role]} onChange={(v) => setRole(v as Role)} />
           <CheckRow label="禁用该账号" tone="danger" checked={disabled} onChange={setDisabled}
-            hint="禁用后立即撤销该用户的全部会话；最后一个可用 admin 不允许被禁用或降级（服务端会拒绝）" />
+            hint="禁用后该账号会立即退出。最后一个管理员账号不能被禁用或降级。" />
           {update.isError && <ErrorNote message={adminErrorMessage(update.error)} />}
           <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={update.isPending} aria-label={`保存用户 ${u.username} 的修改`}>
@@ -114,7 +122,7 @@ export function UserRow({ user: u }: { user: UserView }) {
             重置后该用户的全部会话会被撤销，必须用新密码重新登录。此操作不可撤销。
           </p>
           <TextField label="新密码" type="password" value={password} error={passwordErr}
-            autoComplete="new-password" hint="新密码只发往服务端，不会保存在本机浏览器"
+            autoComplete="new-password" hint="新密码不会保存在这台设备的浏览器中"
             onChange={(ev) => setPassword(ev.target.value)} />
           <CheckRow label={`确认重置 ${u.username} 的密码`} tone="danger" checked={confirmed}
             onChange={setConfirmed} hint="勾选后「确认重置密码」才可提交" />

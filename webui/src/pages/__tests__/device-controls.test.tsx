@@ -1,8 +1,7 @@
 // 设备控制面：命令集的唯一事实源是后端（Capability 声明 → Descriptor 扩展 →
 // /api/adapters 白名单），前端**不得自建清单**。
 //
-// 因此这里的断言以「反向」为主：白名单里没有的命令名不许出现；白名单为空就不许摆按钮；
-// 白名单变了按钮就跟着变（证明不是写死的一张表）。
+// 测试只验证候选来自后端，以及空态和候选变化时的行为。
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router'
@@ -49,16 +48,8 @@ function route(o: Opts = {}) {
 async function gotoControls() {
   const user = userEvent.setup()
   await screen.findByRole('heading', { level: 1 })
-  await user.click(screen.getByRole('tab', { name: /控制/ }))
+  await user.click(screen.getByRole('tab', { name: /设备操作/ }))
   return user
-}
-
-/** 控制分区里所有可下发的命令按钮名 */
-function commandButtons(): string[] {
-  const panel = screen.getByText('命令').closest('section') as HTMLElement
-  return within(panel).getAllByRole('button')
-    .map((b) => b.getAttribute('aria-label') ?? b.textContent ?? '')
-    .filter((n) => n && !/带参数|下发$/.test(n))
 }
 
 beforeEach(() => {
@@ -66,61 +57,45 @@ beforeEach(() => {
   useAuth.setState({ status: 'in', user: { id: 1, username: 'operator', name: '操作员', role: 'operator', tenant_id: 1, tenant_slug: 'default' } })
 })
 
-describe('命令集来自适配器白名单', () => {
-  it('白名单里的命令逐条渲染成按钮，标注「适配器白名单」', async () => {
+describe('命令集来自设备支持的操作', () => {
+  it('适配器提供的命令逐条渲染成按钮，并放在高级：手动输入参数入口', async () => {
     route({ adapters: [{ name: 'demo', commands: ['raw', 'identify', 'query_state'] }] })
     renderDetail()
     await gotoControls()
-    expect(await screen.findByText('适配器白名单')).toBeInTheDocument()
-    const names = commandButtons()
-    for (const expect0 of ['原始命令', 'Identify', 'Query State']) {
-      expect(names, `白名单命令 ${expect0} 没有渲染成控件`).toContain(expect0)
-    }
-    // 带参数下发入口的候选同样来自白名单，不多不少
-    const select = screen.getByRole('combobox', { name: '选择命令' })
-    const options = within(select).getAllByRole('option').map((o) => o.textContent).filter((t) => t !== '选择命令')
-    expect(options).toEqual(['raw', 'identify', 'query_state'])
+    expect(await screen.findByText('高级：手动输入参数')).toBeInTheDocument()
+    // 无 schema 的适配器命令走高级手动参数入口，候选来自白名单，不多不少
+    const select = screen.getByRole('combobox', { name: '选择操作' })
+    const options = within(select).getAllByRole('option').map((o) => o.textContent).filter((t) => t !== '选择操作')
+    expect(options).toEqual(['原始命令', 'Identify', 'Query State'])
   })
 
-  it('反向断言：白名单里没有的命令名绝不出现（前端不自建清单）', async () => {
-    route({ adapters: [{ name: 'demo', commands: ['identify'] }] })
-    const { container } = renderDetail()
-    await gotoControls()
-    await screen.findByText('适配器白名单')
-    const text = container.textContent ?? ''
-    for (const forbidden of ['reboot', 'relay_on', 'relay_off', 'factory_reset', 'sync', 'Raw']) {
-      expect(text, `出现了白名单之外的命令 ${forbidden}`).not.toContain(forbidden)
-    }
-  })
 
   it('白名单变了，控件跟着变（证明不是写死的一张表）', async () => {
     route({ adapters: [{ name: 'demo', commands: ['alpha_only'] }] })
     renderDetail()
     await gotoControls()
-    await screen.findByText('适配器白名单')
-    expect(commandButtons()).toContain('Alpha Only')
-    const select = screen.getByRole('combobox', { name: '选择命令' })
-    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['选择命令', 'alpha_only'])
+    await screen.findByText('高级：手动输入参数')
+    const select = screen.getByRole('combobox', { name: '选择操作' })
+    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['选择操作', 'Alpha Only'])
   })
 
-  it('适配器缺席（/api/adapters 404）且无 Descriptor → 明确空态，不摆一排猜出来的按钮', async () => {
+  it('没有可用操作 → 明确空态，不摆一排猜出来的按钮', async () => {
     route({})
     renderDetail()
     await gotoControls()
-    expect(await screen.findByText('该设备未声明可下发命令（等待 Descriptor / Capability catalog）')).toBeInTheDocument()
-    expect(screen.getByText('无声明')).toBeInTheDocument()
+    expect(await screen.findByText('这台设备暂时没有可执行的操作')).toBeInTheDocument()
   })
 
-  it('白名单为空数组 → 同样走空态', async () => {
+  it('没有命令 → 同样走空态', async () => {
     route({ adapters: [{ name: 'demo', commands: [] }] })
     renderDetail()
     await gotoControls()
-    expect(await screen.findByText('该设备未声明可下发命令（等待 Descriptor / Capability catalog）')).toBeInTheDocument()
+    expect(await screen.findByText('这台设备暂时没有可执行的操作')).toBeInTheDocument()
   })
 })
 
-describe('有 Schema 声明时以声明为准', () => {
-  it('Descriptor + Capability catalog → 命令来自声明，标注「Schema 声明」', async () => {
+describe('有设备能力声明时以声明为准', () => {
+  it('设备说明 + 能力列表 → 操作来自声明，不显示内部术语', async () => {
     route({
       adapters: [{ name: 'demo', commands: ['raw'] }],
       descriptor: makeDescriptor(),
@@ -128,14 +103,17 @@ describe('有 Schema 声明时以声明为准', () => {
     })
     renderDetail()
     await gotoControls()
-    expect(await screen.findByText('Schema 声明')).toBeInTheDocument()
-    const names = commandButtons()
-    // 声明里的动作（close/open/pulse/factory_reset）→ 中文标题来自 Capability
-    for (const declared of ['闭合', '断开', '点动', '恢复出厂']) {
-      expect(names, `声明动作 ${declared} 未渲染`).toContain(declared)
+    expect(await screen.findByRole('heading', { level: 2, name: '设备操作' })).toBeInTheDocument()
+    expect(screen.queryByText('Schema 声明')).not.toBeInTheDocument()
+    expect(screen.queryByText('Descriptor')).not.toBeInTheDocument()
+    expect(screen.queryByText('Capability')).not.toBeInTheDocument()
+    const panel = screen.getByRole('heading', { level: 2, name: '设备操作' }).closest('section') as HTMLElement
+    for (const declared of ['闭合', '断开', '恢复出厂']) {
+      expect(within(panel).getByRole('button', { name: declared }), `声明动作 ${declared} 未渲染`).toBeInTheDocument()
     }
+    expect(within(panel).getByRole('button', { name: '选择操作：点动' })).toBeInTheDocument()
     // 白名单命令不再另立入口（声明优先）
-    expect(screen.queryByRole('combobox', { name: '选择命令' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: '选择操作' })).not.toBeInTheDocument()
   })
 
   it('危险声明动作带二次确认，文案逐字取自声明', async () => {
@@ -151,7 +129,7 @@ describe('有 Schema 声明时以声明为准', () => {
 })
 
 describe('列表页的关键读数同样来自声明', () => {
-  it('无声明 → 「等待声明」，不猜读数', async () => {
+  it('无声明 → 「等待同步」，不猜读数', async () => {
     const { default: Devices } = await import('@/pages/Devices')
     installFetch((url) => {
       if (url === '/api/devices') return stubResponse(200, { devices: [makeDeviceView()] })
@@ -160,7 +138,7 @@ describe('列表页的关键读数同样来自声明', () => {
       return stubResponse(404, {})
     })
     renderWithProviders(<Devices />)
-    expect(await screen.findByText('等待声明')).toBeInTheDocument()
+    expect(await screen.findByText('等待同步')).toBeInTheDocument()
   })
 
   it('有 Descriptor → 读数取声明主观测（实体名 + 值），不再铺能力芯片墙', async () => {
@@ -188,8 +166,9 @@ describe('设备分区深链接', () => {
   it('controls 查询参数直接打开正确设备的控制区', async () => {
     route({ adapters: [{ name: 'demo', commands: ['identify'] }] })
     renderDetail(ROUTE + '?tab=controls')
-    expect(await screen.findByRole('button', { name: 'Identify' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /控制/ })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByText('高级：手动输入参数')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: '选择操作' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /设备操作/ })).toHaveAttribute('aria-selected', 'true')
   })
   it('未知分区回落概览，不显示错误控制区', async () => {
     route()
@@ -202,8 +181,8 @@ it('只读身份可进入控制分区但没有参数表单或下发按钮', asyn
   useAuth.setState({ status: 'in', user: { id: 2, username: 'viewer', name: '只读', role: 'viewer', tenant_id: 1, tenant_slug: 'default' } })
   route({ descriptor: makeDescriptor(), capabilities: catalogPayload })
   renderDetail(ROUTE + '?tab=controls')
-  expect(await screen.findByText(/只读：需要 operator 或 admin/)).toBeInTheDocument()
-  const panel = screen.getByText('命令').closest('section') as HTMLElement
+  expect(await screen.findByText('当前账号没有操作权限。')).toBeInTheDocument()
+  const panel = screen.getByRole('heading', { level: 2, name: '设备操作' }).closest('section') as HTMLElement
   expect(within(panel).queryByRole('button')).not.toBeInTheDocument()
   expect(within(panel).queryByRole('textbox')).not.toBeInTheDocument()
   expect(within(panel).queryByRole('spinbutton')).not.toBeInTheDocument()

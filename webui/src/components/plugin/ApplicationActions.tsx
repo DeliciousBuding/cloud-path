@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react'
 import { SchemaActionInput } from '@/components/command/SchemaActionInput'
 import { StructuredValue } from '@/components/StructuredValue'
 import { useApplicationAction } from '@/hooks/useApplicationAction'
-import { APP_ACTION_MAX_BYTES, appActionError, appActionScope, appJobArgsError, appJobSchema, manualAppJobs } from '@/lib/application-actions'
+import { appActionError, appActionScope, appJobArgsError, appJobSchema, manualAppJobs } from '@/lib/application-actions'
 import type { AppJobsView, AppJobView } from '@/lib/types'
 import { useAuth } from '@/store/auth'
 
@@ -13,7 +13,7 @@ function ActionResult({ json }: { json: string }) {
   try { value = JSON.parse(json) } catch { valid = false }
   return <div className="mt-3 min-w-0 space-y-3">
     {valid ? <StructuredValue value={value} /> : <p className="text-sm text-ink-2">{json
-      ? '应用返回的结果不是 JSON，请查看原文。' : '应用未返回结果内容，请查看应用记录。'}</p>}
+      ? '应用返回的内容无法直接展示，请查看原文。' : '应用未返回结果内容，请查看应用记录。'}</p>}
     {json && <details className="min-w-0">
       <summary className="cursor-pointer text-xs text-ink-2">查看结果原文</summary>
       <pre tabIndex={0} role="group" aria-label="执行结果原文"
@@ -28,19 +28,19 @@ function ActionForm({ instanceID, job, scope, schema, enabled }: {
   const { mutation, request, run, edit } = useApplicationAction(instanceID, job, schema, scope, enabled)
   const title = job.title?.trim() || job.id
   return <>
-    <SchemaActionInput action={{ label: title, inputSchema: schema, inputPlaceholder: '填写 JSON 对象' }}
+    <SchemaActionInput action={{ label: title, inputSchema: schema, inputPlaceholder: '按应用要求填写参数' }}
       validate={(args) => appJobArgsError(args, schema)} emptyArgs="{}"
-      description={<>JSON 对象，≤{APP_ACTION_MAX_BYTES} UTF-8 字节。完整业务校验由插件负责。</>}
+      description="按应用要求填写参数。"
       emptyHint="填写参数后可执行。" validationSource="插件" disabled={!enabled || mutation.isPending} onEdit={edit}
       renderSubmit={(args, error) => <button type="button" className="btn btn-primary shrink-0"
         aria-label={(mutation.isError ? '重试' : mutation.isSuccess ? '再次执行' : '执行') + '「' + title + '」'}
         aria-busy={mutation.isPending} disabled={!enabled || Boolean(error) || mutation.isPending} onClick={() => run(args)}>
         {mutation.isPending && <Loader2 size={14} className="animate-spin" />}
-        {mutation.isPending ? '等待执行结果…' : mutation.isError ? '重试同一请求' : mutation.isSuccess ? '再次执行' : '执行操作'}
+        {mutation.isPending ? '等待执行结果…' : mutation.isError ? '再次尝试' : mutation.isSuccess ? '再次执行' : '执行操作'}
       </button>} />
     {mutation.isError && <div className="mt-3 min-w-0 space-y-2 rounded-lg border border-hairline p-3">
       <p role="alert" className="break-words text-sm text-bad">{appActionError(mutation.error)}</p>
-      <p className="text-xs leading-relaxed text-ink-2">不会自动重试。请先查看应用记录；重试将沿用同一请求标识，编辑参数会创建新请求。</p>
+      <p className="text-xs leading-relaxed text-ink-2">不会自动重试。请先查看应用记录；再次执行会沿用上次内容，修改参数后再执行会作为一次新的操作。</p>
       {mutation.error instanceof Error && mutation.error.message && <details className="min-w-0">
         <summary className="cursor-pointer text-xs text-ink-2">错误详情</summary>
         <p className="mt-2 whitespace-pre-wrap break-words text-xs text-ink-2 [overflow-wrap:anywhere]">{mutation.error.message}</p>
@@ -48,7 +48,7 @@ function ActionForm({ instanceID, job, scope, schema, enabled }: {
     </div>}
     {mutation.isSuccess && <div className="mt-3 min-w-0 rounded-lg border border-hairline p-4">
       <p role="status" className="text-sm font-medium">操作已受理</p>
-      <p className="mt-1 text-xs leading-relaxed text-ink-3">以下为应用返回的执行结果，不代表物理设备已执行成功。物理命令 ACK 请在应用记录中核对。</p>
+      <p className="mt-1 text-xs leading-relaxed text-ink-3">以下为应用返回的结果，不一定代表设备已经执行。设备执行结果请在应用记录中核对。</p>
       <h4 className="mt-4 text-sm font-medium">执行结果</h4>
       <ActionResult json={mutation.data.result_json} />
     </div>}
@@ -78,8 +78,8 @@ export function ApplicationActions({ instanceID, jobs, running, lifecycleKey }: 
   const scope = useAuth((state) => appActionScope(state, instanceID))
   const actions = manualAppJobs(jobs?.instance_id === instanceID ? jobs.job_descriptors : undefined)
   return <div className="min-w-0">
-    <p className="mb-3 text-xs leading-relaxed text-ink-3">这里只展示应用声明的用户操作。后台周期任务自动调度，不提供手动执行入口。</p>
-    {!scope && <p className="mb-3 text-sm text-ink-2">只读权限：可查看操作说明；执行需要 operator 或 admin。</p>}
+    <p className="mb-3 text-xs leading-relaxed text-ink-3">这里显示可以手动执行的操作。后台定时任务会自动运行。</p>
+    {!scope && <p className="mb-3 text-sm text-ink-2">当前账号只能查看，不能执行操作。</p>}
     {running !== true && <p className="mb-3 text-sm text-ink-2">{running === false
       ? '应用已停止，不能执行操作。' : '应用运行状态尚未确认，不能执行操作。'}</p>}
     {actions.length ? <div className="divide-y divide-hairline">{actions.map((job) => <Action

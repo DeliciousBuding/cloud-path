@@ -129,9 +129,9 @@ type Server struct {
 	browsers    map[*browserConn]struct{}
 	cmdHits     map[string][]time.Time      // 命令限流滑窗：device key → 命中时刻
 	descriptors map[string]model.Descriptor // 最近一次 edge 上报的 Descriptor（device key → desc）
-	// edgeCapabilities 是各 Edge 上报的 Capability 文档（edge_id → 声明者列表，全量覆盖）。
-	// 外部 Driver 的能力说明只存在于 Edge 侧插件进程，必须经此进入 /api/capabilities。
-	edgeCapabilities map[string][]api.CapabilitySource
+	// edgeCapabilities 是各 Edge 上报的 Capability 文档快照（edge_id → tenant + 声明者列表）。
+	// tenant 随已鉴权 Edge link 写入；外部 Driver 能力只存在于 Edge 侧插件进程。
+	edgeCapabilities map[string]edgeCapabilitySet
 	deviceTenants    map[string]string // device key → 租户 slug（缺省 default；REST 隔离用）
 	edgeTenants      map[string]string // edge_id → 租户 slug（首次绑定 sticky，REST/WS 隔离用）
 
@@ -147,6 +147,13 @@ type Server struct {
 	verifyPassword     func(hash, password string) bool // 登录密码校验（测试可注入）
 	dummyVerify        func(password string)            // 未知用户 dummy 校验（测试可注入）
 	appHost            *AppHost                         // Server 侧 Application Plugin Host（nil=未启用）
+}
+
+// edgeCapabilitySet 是一台 Edge 的 Capability 快照及其所属租户。
+// 使用 edge_id 作为外层键以保持现有断线清理语义；租户随写入显式绑定，读取时过滤。
+type edgeCapabilitySet struct {
+	tenant  string
+	sources []api.CapabilitySource
 }
 
 type edgeLink struct {
@@ -224,7 +231,7 @@ func New(cfg Config) *Server {
 		browsers:         map[*browserConn]struct{}{},
 		cmdHits:          map[string][]time.Time{},
 		descriptors:      map[string]model.Descriptor{},
-		edgeCapabilities: map[string][]api.CapabilitySource{},
+		edgeCapabilities: map[string]edgeCapabilitySet{},
 		deviceTenants:    map[string]string{},
 		edgeTenants:      map[string]string{},
 		loginLimiter:     auth.NewRateLimiter(cfg.loginRatePerMin()),
@@ -532,13 +539,33 @@ func (s *Server) descriptorFor(key string, v *api.DeviceView) (model.Descriptor,
 	return d, true
 }
 
-// capabilityCatalog 汇总 Capability 文档 catalog（去重、按 ID 排序）：
+// capabilityCatalog 汇总全部租户的 Capability 文档 catalog（去重、按 ID 排序）：
 //  1. Server 进程内已注册适配器自带的 catalog（平台参考实现）；
 //  2. 各在线 Edge 上报的外部 Driver 文档（按 edge_id 排序，确定性）。
 //
 // 同一 ID 两边都有时以进程内为准（平台契约优先，避免插件改写平台语义）。
 // 设备无关：这里只合并文档，不认识任何具体硬件。调用方**不得**持有 s.mu。
 func (s *Server) capabilityCatalog() []model.Capability {
+	return s.capabilityCatalogFiltered("", true)
+}
+
+// capabilityCatalogFor 返回指定租户可见的 Capability catalog：平台进程内文档始终共享，
+// Edge 上报文档只包含 tenant 匹配的在线 Edge。tenant 为空时只返回平台文档，避免无租户身份
+// 在账号模式下看到外部租户能力。
+func (s *Server) capabilityCatalogFor(tenant string) []model.Capability {
+	return s.capabilityCatalogFiltered(tenant, false)
+}
+
+// capabilityCatalogForRequest 按请求 principal 选择 catalog 作用域。无 principal 时沿用
+// 单租户开发态的全量语义；已认证 principal 必须按 TenantSlug 隔离 Edge 上报文档。
+func (s *Server) capabilityCatalogForRequest(r *http.Request) []model.Capability {
+	if p := auth.FromContext(r.Context()); p != nil {
+		return s.capabilityCatalogFor(p.TenantSlug)
+	}
+	return s.capabilityCatalog()
+}
+
+func (s *Server) capabilityCatalogFiltered(tenant string, allTenants bool) []model.Capability {
 	seen := map[string]bool{}
 	var out []model.Capability
 	for _, name := range device.Names() {
@@ -561,12 +588,15 @@ func (s *Server) capabilityCatalog() []model.Capability {
 
 	s.mu.RLock()
 	edgeIDs := make([]string, 0, len(s.edgeCapabilities))
-	for id := range s.edgeCapabilities {
+	for id, caps := range s.edgeCapabilities {
+		if !allTenants && caps.tenant != tenant {
+			continue
+		}
 		edgeIDs = append(edgeIDs, id)
 	}
 	sort.Strings(edgeIDs)
 	for _, id := range edgeIDs {
-		for _, src := range s.edgeCapabilities[id] {
+		for _, src := range s.edgeCapabilities[id].sources {
 			for _, c := range src.Capabilities {
 				if c.Metadata.ID == "" || seen[c.Metadata.ID] {
 					continue
@@ -1064,7 +1094,7 @@ func (s *Server) handleGetDevice(w http.ResponseWriter, r *http.Request) {
 // handleListDescriptors 返回当前租户可见的全部设备 Descriptor + 随行 Capability catalog。
 // 前端 useDescriptor 的批量探测直接消费本形状（descriptors + capabilities）。
 func (s *Server) handleListDescriptors(w http.ResponseWriter, r *http.Request) {
-	caps := s.capabilityCatalog()
+	caps := s.capabilityCatalogForRequest(r)
 	s.mu.RLock()
 	descs := make([]model.Descriptor, 0, len(s.devices))
 	for key, v := range s.devices {
@@ -1095,12 +1125,12 @@ func (s *Server) handleDeviceDescriptor(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "device not found"})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"descriptor": d, "capabilities": s.capabilityCatalog()})
+	writeJSON(w, http.StatusOK, map[string]any{"descriptor": d, "capabilities": s.capabilityCatalogForRequest(r)})
 }
 
-// handleCapabilities 返回全部已注册适配器的 Capability catalog（设备无关，租户不隔离）。
+// handleCapabilities 返回当前租户可见的 Capability catalog。
 func (s *Server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"capabilities": s.capabilityCatalog()})
+	writeJSON(w, http.StatusOK, map[string]any{"capabilities": s.capabilityCatalogForRequest(r)})
 }
 
 func (s *Server) handleListEdges(w http.ResponseWriter, r *http.Request) {

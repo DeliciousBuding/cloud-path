@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -31,6 +32,25 @@ func TestAppConfigBytes(t *testing.T) {
 	}
 	if appConfigBytes(`not-json`) != nil {
 		t.Fatal("非法 JSON 应返回 nil")
+	}
+}
+
+func TestSendNotificationEffectFailsNotImplemented(t *testing.T) {
+	exec := &appEffectExecutor{}
+	err := exec.Execute(context.Background(), appruntime.Effect{
+		Kind: appruntime.EffectSendNotification,
+		SendNotification: &appruntime.SendNotification{
+			Title: "reminder", Body: "take medicine", Severity: "info",
+		},
+	})
+	if err == nil {
+		t.Fatal("SendNotification must fail closed while no notification channel is implemented")
+	}
+	if !errors.Is(err, appruntime.ErrEffectNotImplemented) {
+		t.Fatalf("SendNotification error = %v, want ErrEffectNotImplemented", err)
+	}
+	if !strings.Contains(err.Error(), "send_notification") {
+		t.Fatalf("SendNotification error should name the unsupported effect: %v", err)
 	}
 }
 

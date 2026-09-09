@@ -9,6 +9,13 @@ import { fmtDateTime, timeAgo } from '@/lib/format'
 import { toast } from '@/store/toast'
 import type { TokenView } from '@/lib/types'
 
+const SCOPE_LABELS: Record<string, string> = {
+  read: '查看',
+  write: '操作',
+  admin: '管理',
+  edge: '网关接入',
+}
+
 export function TokenRow({ token: t }: { token: TokenView }) {
   const revoke = useRevokeToken()
   const [confirming, setConfirming] = useState(false)
@@ -37,16 +44,17 @@ export function TokenRow({ token: t }: { token: TokenView }) {
       {(t.scopes ?? []).length > 0 && (
         <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1">
           {(t.scopes ?? []).map((s) => (
-            <span key={s} className={s === 'admin' || s === 'edge' ? 'font-mono text-[12px] text-warn' : 'font-mono text-[12px] text-ink-2'}>
-              {s}
+            <span key={s} title={s}
+              className={s === 'admin' || s === 'edge' ? 'text-[12px] text-warn' : 'text-[12px] text-ink-2'}>
+              {SCOPE_LABELS[s] ?? '其他权限'}
             </span>
           ))}
         </div>
       )}
 
       <dl className="mt-3 space-y-2">
-        <KeyValue k="创建于" v={<span className="font-mono">{fmtDateTime(t.created_at)}</span>} />
-        <KeyValue k="最后使用" v={t.last_used_at ? timeAgo(t.last_used_at) : '从未使用'} />
+        <KeyValue k="创建时间" v={<span className="font-mono">{fmtDateTime(t.created_at)}</span>} />
+        <KeyValue k="最近使用" v={t.last_used_at ? timeAgo(t.last_used_at) : '从未使用'} />
         <KeyValue k="过期时间" v={t.expires_at ? <span className="font-mono">{fmtDateTime(t.expires_at)}</span> : '永不过期'} />
         {revoked && <KeyValue k="吊销于" v={<span className="font-mono">{fmtDateTime(t.revoked_at ?? 0)}</span>} />}
       </dl>
@@ -60,7 +68,7 @@ export function TokenRow({ token: t }: { token: TokenView }) {
       {!revoked && confirming && (
         <div className="mt-3 space-y-3 border-t border-hairline pt-3">
           <p className="text-xs leading-relaxed text-warn break-words">
-            确认吊销「{t.name}」？该令牌会立即失效且无法恢复，正在使用它的边缘代理或脚本会开始收到 401。
+            确认吊销「{t.name}」？该令牌会立即失效且无法恢复，正在使用它的网关或自动化工具将无法继续访问。
           </p>
           {revoke.isError && <ErrorNote message={adminErrorMessage(revoke.error)} />}
           <div className="flex flex-wrap gap-2">
@@ -76,7 +84,7 @@ export function TokenRow({ token: t }: { token: TokenView }) {
 
       {revoked && (
         <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3 break-words">
-          已吊销的令牌保留元数据用于审计，不能恢复；需要时请新建一个。
+          已吊销的令牌会保留基本信息，方便以后核对；不能恢复，需要时请新建一个。
         </p>
       )}
     </li>

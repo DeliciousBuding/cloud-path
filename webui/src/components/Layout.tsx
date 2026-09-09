@@ -23,15 +23,15 @@ import { logout, useAuth, useIsAdmin } from '@/store/auth'
  */
 const NAV = [
   { to: '/', label: '概览', icon: LayoutDashboard, end: true },
-  { to: '/edges', label: '边缘节点', icon: Network, end: false },
+  { to: '/edges', label: '网关', icon: Network, end: false },
   { to: '/devices', label: '设备', icon: Cpu, end: false },
   { to: '/plugins', label: '应用与插件', icon: Puzzle, end: false },
-  { to: '/activity', label: '活动', icon: Activity, end: false },
+  { to: '/activity', label: '运行记录', icon: Activity, end: false },
 ]
 
 const ADMIN_NAV = { to: '/admin', label: '管理', icon: ShieldCheck, end: false }
 
-const TAIL_NAV = [{ to: '/settings', label: '系统', icon: Settings, end: false }]
+const TAIL_NAV = [{ to: '/settings', label: '设置', icon: Settings, end: false }]
 
 function navCls(active: boolean): string {
   return cn(
@@ -73,7 +73,7 @@ function ConnPill() {
   const status = useLive((s) => s.status)
   const text = status === 'open' ? '已连接' : status === 'connecting' ? '连接中' : '已断开'
   return (
-    <span className="flex items-center gap-1.5 text-[12px] text-ink-2" title={`实时通道：${text}`}>
+    <span className="flex items-center gap-1.5 text-[12px] text-ink-2" title={`实时连接：${text}`}>
       <StatusDot online={status === 'open'} />
       {text}
     </span>
@@ -139,14 +139,14 @@ function SidebarFooter() {
         <ConnPill />
         <ThemeControl />
       </div>
-      {data && <p className="num font-mono text-[11px] text-ink-3">server {data.version}</p>}
+      {data && <p className="num font-mono text-[11px] text-ink-3">服务 {data.version}</p>}
     </div>
   )
 }
 
 /** 实时通道断开时的系统级提示条（重连由 store 自动进行）。
  *  连续失败要如实说出来：账号模式下 /ws 靠会话 cookie 鉴权，会话失效时页面若照常渲染
- *  就会变成「看着正常但没有实时数据」的假数据，因此这里给出失败次数并说明正在复核登录态。
+ *  就会变成「看着正常但没有实时数据」的假数据，因此这里给出失败次数并说明正在重新检查登录状态。
  *  层叠位置：桌面侧栏是 fixed z-40 w-60，横幅若全宽 sticky 会被侧栏盖住（且旧版
  *  lg:pl-64 与侧栏 w-60 不等宽，视觉错位）；故横幅排在侧栏/移动顶栏之后的文档流里，
  *  桌面用 lg:ml-60 让出侧栏宽度、lg:sticky 吸顶，移动端随内容流不吸顶。 */
@@ -158,11 +158,11 @@ function OfflineBanner() {
     <div className="banner z-30 lg:sticky lg:top-0 lg:ml-60" role="status">
       <WifiOff size={13} className="shrink-0" />
       <span className="min-w-0 break-words">
-        {status === 'connecting' ? '正在连接实时通道…' : '实时通道已断开，正在自动重连（页面数据仍会定时刷新）'}
+        {status === 'connecting' ? '正在恢复实时连接…' : '实时连接已断开，正在自动重连（页面数据仍会定时刷新）'}
       </span>
       {failures >= 3 && (
         <span className="num ml-auto shrink-0">
-          已连续失败 {failures} 次{failures >= 5 ? ' · 正在复核登录态' : ''}
+          已连续失败 {failures} 次{failures >= 5 ? ' · 正在重新检查登录状态' : ''}
         </span>
       )}
     </div>
@@ -171,6 +171,8 @@ function OfflineBanner() {
 
 export default function Layout() {
   const nav = useIsAdmin() ? [...NAV, ADMIN_NAV, ...TAIL_NAV] : [...NAV, ...TAIL_NAV]
+  const mobilePrimaryNav = nav.slice(0, 4)
+  const mobileMoreNav = nav.slice(4)
   return (
     <div className="min-h-screen">
       <a href="#main"
@@ -196,15 +198,41 @@ export default function Layout() {
 
       {/* 移动端顶栏 */}
       <header className="bg-surface sticky top-0 z-40 border-b border-hairline px-4 py-3 lg:hidden">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <Brand />
-          <ConnPill />
+          <div className="flex items-center gap-2">
+            <ConnPill />
+            <details className="relative">
+              <summary aria-label="更多导航与账号设置"
+                className="btn btn-ghost list-none cursor-pointer [&::-webkit-details-marker]:hidden">更多</summary>
+              <div className="absolute right-0 z-50 mt-2 w-64 rounded-xl border border-hairline bg-surface p-3 shadow-lg">
+                <AccountPill />
+                {mobileMoreNav.length > 0 && (
+                  <nav className="mt-3 border-t border-hairline pt-3" aria-label="更多导航">
+                    <div className="space-y-0.5">
+                      {mobileMoreNav.map(({ to, label, icon: Icon, end }) => (
+                        <NavLink key={to} to={to} end={end} title={label} className={({ isActive }) => navCls(isActive)}>
+                          <Icon size={15} strokeWidth={1.9} />
+                          {label}
+                        </NavLink>
+                      ))}
+                    </div>
+                  </nav>
+                )}
+                <div className="mt-3 border-t border-hairline pt-3"><ThemeControl /></div>
+              </div>
+            </details>
+          </div>
         </div>
-        <nav className="-mx-1 mt-3 flex gap-1 overflow-x-auto px-1 pb-0.5" aria-label="主导航">
-          {nav.map(({ to, label, icon: Icon, end }) => (
-            <NavLink key={to} to={to} end={end} title={label} className={({ isActive }) => navCls(isActive)}>
+        <nav className="mt-3 grid grid-cols-4 gap-1" aria-label="主导航">
+          {mobilePrimaryNav.map(({ to, label, icon: Icon, end }) => (
+            <NavLink key={to} to={to} end={end} title={label}
+              className={({ isActive }) => cn(
+                'flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-1.5 text-[11px] font-medium transition-colors',
+                isActive ? 'bg-accent/10 text-accent' : 'text-ink-2 hover:bg-ink-3/8 hover:text-ink',
+              )}>
               <Icon size={15} strokeWidth={1.9} />
-              <span className="whitespace-nowrap">{label}</span>
+              <span className="max-w-full truncate">{label}</span>
             </NavLink>
           ))}
         </nav>

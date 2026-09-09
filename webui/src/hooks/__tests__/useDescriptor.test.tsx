@@ -6,6 +6,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { ReactNode } from 'react'
 import { useCapabilityIndex, useDeviceDescriptor } from '@/hooks/useDescriptor'
+import { ApiError } from '@/lib/api'
 import { EMPTY_INDEX } from '@/lib/descriptor'
 import { useLive } from '@/store/ws'
 import { capRelay, capTemperature, makeDescriptor, makeDeviceView } from '@/test/fixtures'
@@ -26,7 +27,7 @@ const KEY = 'edge-1/dev-9'
 beforeEach(() => { resetStores() })
 
 describe('useDeviceDescriptor：来源优先级与回落', () => {
-  it('Schema 端点全 404（后端未就绪）→ descriptor null / source=none / 命令回落适配器白名单', async () => {
+  it('Schema 端点全 404（后端未就绪）→ descriptor null / source=none / 命令回落设备支持的操作', async () => {
     installFetch(() => stubResponse(404, { error: 'not found' }))
     const { result } = renderHook(
       () => useDeviceDescriptor(KEY, 'edge-1', 'dev-9', { adapterCommands: ['raw'] }),
@@ -37,6 +38,21 @@ describe('useDeviceDescriptor：来源优先级与回落', () => {
     expect(result.current.source).toBe('none')
     expect(result.current.capabilities).toBe(EMPTY_INDEX)
     expect(result.current.commands).toEqual({ actions: [{ cmd: 'raw', label: '原始命令' }], source: 'adapter' })
+  })
+
+  it('Schema 端点 502 → 真实错误态，不回落成“没有操作”', async () => {
+    installFetch(() => stubResponse(502, { error: 'bad gateway' }))
+    const { result } = renderHook(
+      () => useDeviceDescriptor(KEY, 'edge-1', 'dev-9', { adapterCommands: ['raw'] }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.error).not.toBeNull())
+    expect(result.current.error).toBeInstanceOf(ApiError)
+    expect(result.current.errorStatus).toBe(502)
+    expect(result.current.source).toBe('error')
+    expect(result.current.descriptor).toBeNull()
+    expect(result.current.commands).toEqual({ actions: [], source: 'none' })
+    expect(result.current.loading).toBe(false)
   })
 
   it('设备载荷内联 Descriptor → source=inline（无需额外请求）', async () => {

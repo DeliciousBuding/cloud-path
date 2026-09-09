@@ -1,5 +1,5 @@
 // 管理面 API 客户端契约（docs/api.md §3.2-3.3）：路径/方法/请求体冻结，
-// 凭据沿用同一层（same-origin cookie + 可选 Bearer），401 触发全局登出收敛，
+// 凭据沿用同一层（same-origin cookie + 可选 Bearer），401 触发全局登出同步，
 // 409 原样透出服务端人话，令牌明文只在创建响应里出现一次。
 import { beforeEach, describe, expect, it } from 'vitest'
 import { ApiError, api, setToken } from '@/lib/api'
@@ -65,14 +65,14 @@ describe('用户管理端点（§3.2）', () => {
       .rejects.toMatchObject({ status: 409, message: 'username 已存在' })
   })
 
-  it('401 触发全局登出收敛（路由守卫据此跳 /login）', async () => {
+  it('401 触发全局登出同步（路由守卫据此跳 /login）', async () => {
     installFetch(() => stubResponse(401, { error: 'authentication required' }))
     useAuth.setState({ status: 'in', user })
     await expect(api.users()).rejects.toMatchObject({ status: 401 })
     expect(useAuth.getState().status).toBe('out')
   })
 
-  it('403 是角色不足，不触发登出收敛（页面就地提示）', async () => {
+  it('403 是角色不足，不触发登出同步（页面就地提示）', async () => {
     installFetch(() => stubResponse(403, { error: 'permission denied' }))
     useAuth.setState({ status: 'in', user })
     await expect(api.users()).rejects.toMatchObject({ status: 403 })

@@ -1,6 +1,6 @@
 // 插件写面错误码与 desired/observed 呈现逻辑的行为断言。
 // 核心不是「文案好不好看」，而是三条硬不变量：
-//   ① 7 个稳定码各有独立、可执行的文案，且只有 PermissionConfirm 会要求显式确认权限；
+//   ① 10 个稳定码各有独立、可执行的文案，且只有 PermissionConfirm 会要求显式确认权限；
 //   ② 服务端没给码时不得把 message 当业务规则复述（只报状态）；
 //   ③ desired 永不被当成 observed —— has_observed=false / stale / drift 各有独立状态。
 import { describe, expect, it } from 'vitest'
@@ -9,10 +9,16 @@ import {
   healthMeta, permissionCount, permissionGroups, pluginErrorCopy, safeConfigEntries,
   hostDetailLabel, secretHandleName, stateMeta, syncState, trustMeta,
 } from '@/lib/plugins'
-import { PluginErr, PLUGIN_ERR_CODES } from '@/lib/types'
+import { PluginErr } from '@/lib/types'
 import type { PluginInstanceView } from '@/lib/types'
 
-const ALL_CODES = Object.values(PluginErr)
+const RUNTIME_CODES = [
+  'plugin_instance_host_mismatch',
+  'plugin_instance_kind_unsupported',
+  'plugin_instance_kind_unavailable',
+] as const
+
+const ALL_CODES = [...Object.values(PluginErr), ...RUNTIME_CODES]
 
 function err(status: number, code?: string, message = 'x'): ApiError {
   return new ApiError(status, message, undefined, code)
@@ -34,9 +40,9 @@ function instance(over: Partial<PluginInstanceView> = {}): PluginInstanceView {
 }
 
 describe('稳定错误码 → 文案', () => {
-  it('7 个码全部有映射，且文案互不相同（不留「未知错误」黑洞）', () => {
-    expect(ALL_CODES).toHaveLength(7)
-    expect(ALL_CODES.sort()).toEqual([...PLUGIN_ERR_CODES].sort())
+  it('10 个码全部有映射，且文案互不相同（不留「未知错误」黑洞）', () => {
+    expect(ALL_CODES).toHaveLength(10)
+    expect(Object.values(PluginErr)).toHaveLength(7)
     const titles = new Set<string>()
     for (const code of ALL_CODES) {
       const copy = pluginErrorCopy(err(400, code))
@@ -58,16 +64,48 @@ describe('稳定错误码 → 文案', () => {
     expect(pluginErrorCopy(err(400, PluginErr.PermissionConfirm)).hint).toMatch(/确认/)
   })
 
-  it('Edge 离线不得说成失败：说明重连后会自动收敛', () => {
+  it('运行位置不匹配时说明 Driver 走网关、Application 走中心服务，主文案不露机器码', () => {
+    const copy = pluginErrorCopy(err(409, 'plugin_instance_host_mismatch'))
+    expect(copy.code).toBe('plugin_instance_host_mismatch')
+    expect(copy.title).toMatch(/运行位置.*不匹配/)
+    expect(copy.hint).toMatch(/驱动程序.*网关/)
+    expect(copy.hint).toMatch(/应用插件.*中心服务/)
+    expect(copy.hint).toMatch(/选择.*运行位置/)
+    expect(`${copy.title} ${copy.hint}`).not.toMatch(/plugin_instance_host_mismatch/)
+    expect(copy.retryable).toBe(false)
+  })
+
+  it('Connector 无运行时必须如实拒绝，不把换宿主说成解法', () => {
+    const copy = pluginErrorCopy(err(409, 'plugin_instance_kind_unsupported'))
+    expect(copy.code).toBe('plugin_instance_kind_unsupported')
+    expect(copy.title).toMatch(/暂不支持/)
+    expect(copy.hint).toMatch(/连接器.*没有可用运行时/)
+    expect(copy.hint).toMatch(/选择网关或中心服务都不能/)
+    expect(`${copy.title} ${copy.hint}`).not.toMatch(/plugin_instance_kind_unsupported/)
+    expect(copy.retryable).toBe(false)
+  })
+
+  it('无法解析插件类型时提示确认安装与同步，不用成功态掩盖 fail-closed', () => {
+    const copy = pluginErrorCopy(err(409, 'plugin_instance_kind_unavailable'))
+    expect(copy.code).toBe('plugin_instance_kind_unavailable')
+    expect(copy.title).toMatch(/无法确认插件类型/)
+    expect(copy.hint).toMatch(/插件已经安装到目标运行位置/)
+    expect(copy.hint).toMatch(/完成同步/)
+    expect(copy.hint).toMatch(/刷新重试/)
+    expect(`${copy.title} ${copy.hint}`).not.toMatch(/plugin_instance_kind_unavailable/)
+    expect(copy.retryable).toBe(true)
+  })
+
+  it('Edge 离线不得说成失败：说明重连后会自动同步', () => {
     const copy = pluginErrorCopy(err(409, PluginErr.EdgeOffline))
-    expect(copy.hint).toMatch(/重连/)
+    expect(copy.hint).toMatch(/重新连接/)
     expect(copy.retryable).toBe(true)
   })
 
   it('secret 相关文案只谈 handle，不诱导填写明文', () => {
     const copy = pluginErrorCopy(err(403, PluginErr.SecretForbidden))
-    expect(copy.hint).toMatch(/handle/)
-    expect(copy.hint).toMatch(/不显示明文|只显示 handle/)
+    expect(copy.hint).toMatch(/密钥名称/)
+    expect(copy.hint).toMatch(/不显示明文|只显示名称/)
   })
 
   it('服务端未给码时只报状态，不复述服务端 message 当业务规则', () => {
@@ -94,9 +132,9 @@ describe('desired / observed 永远分别呈现', () => {
     expect(un.key).toBe('unreported')
     expect(un.label).toMatch(/未上报/)
     expect(un.tone).not.toBe('ok')
-    expect(un.hint).toMatch(/不能据此判断|尚未回过实际态/)
+    expect(un.hint).toMatch(/不能据此判断|尚未回过实际状态/)
     // desired.enabled=true 不得泄漏成「运行中/健康」
-    expect(un.label).not.toMatch(/运行中|健康|已收敛/)
+    expect(un.label).not.toMatch(/运行中|健康|已同步/)
   })
 
   it('未上报 + Edge 离线 → 说明重连后才会有事实（不承诺当前状态）', () => {
@@ -110,29 +148,28 @@ describe('desired / observed 永远分别呈现', () => {
     expect(s.key).toBe('stale')
     expect(s.label).toMatch(/过期/)
     expect(s.tone).toBe('warn')
-    expect(s.hint).toMatch(/历史事实/)
+    expect(s.hint).toMatch(/上次状态|当前显示/)
   })
 
-  it('drift=true → 独立「不一致」状态，并把两个 revision 都摊开给用户看', () => {
+  it('drift=true → 独立「不一致」状态，说明网关尚未应用最新设置', () => {
     const d = syncState(instance({ drift: true, desired_revision: 42, applied_revision: 41 }))
     expect(d.key).toBe('drift')
     expect(d.tone).toBe('warn')
-    expect(d.hint).toMatch(/42/)
-    expect(d.hint).toMatch(/41/)
-    expect(d.hint).toMatch(/重新下发/)
+    expect(d.hint).toMatch(/还没有应用最新设置/)
+    expect(d.hint).toMatch(/重新同步/)
   })
 
   it('stale 优先于 drift（过期数据谈一致性没有意义）', () => {
     expect(syncState(instance({ stale: true, drift: true })).key).toBe('stale')
   })
 
-  it('applied < desired 但未标 drift → 「等待边缘节点应用」，不是成功', () => {
+  it('applied < desired 但未标 drift → 「等待网关应用」，不是成功', () => {
     const p = syncState(instance({ applied_revision: 41, desired_revision: 42 }))
     expect(p.key).toBe('pending')
     expect(p.tone).not.toBe('ok')
   })
 
-  it('全部对齐才是「已收敛」', () => {
+  it('全部对齐才是「已同步」', () => {
     expect(syncState(instance()).key).toBe('synced')
   })
 })
@@ -146,7 +183,7 @@ describe('Edge 上报的运行态语义（规范大写名）', () => {
     expect(stateMeta('running').label).toBe('运行中')
     expect(stateMeta('stopping').label).toBe('停止中')
     expect(stateMeta('failed').tone).toBe('bad')
-    expect(hostDetailLabel('server-apphost')).toBe('中心服务应用宿主')
+    expect(hostDetailLabel('server-apphost')).toBe('中心服务')
     expect(healthMeta('DEGRADED').tone).toBe('warn')
     expect(healthMeta('UNKNOWN').tone).toBe('idle')
   })

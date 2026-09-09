@@ -1,72 +1,71 @@
-# Plugin System 目标设计
+# Plugin System 设计与运行时契约
 
-最后更新：2026-09-03
+最后更新：2026-09-09
+
+> 状态：Manifest、SDK 与进程运行时以当前代码、`spec/` 和
+> [how-to-build-driver.md](how-to-build-driver.md) 为准。本文说明多契约边界、控制面同步与故障语义；
+> 明确标注“目标态”的内容不得当成当前能力。
 
 ## 1. 统一平台，多个契约
 
-`cloudpath.plugin.yaml` 是统一入口，但插件根据贡献类型实现不同协议：
+插件仓库根目录的 `plugin.yaml` 是安装与信任的机器契约。Manifest 的 `kind` 决定贡献类型：
 
-| Contribution | Protocol | Host |
-|---|---|---|
-| `drivers` | Driver Protocol | Edge Plugin Host |
-| `applications` | Application Protocol 或 declarative-only | Server Plugin Host |
-| `connectors` | Connector Protocol | Edge/Server，由 Manifest 指定 |
-| `views` | 声明式 View Schema | WebUI Schema Renderer |
-| `transforms`（后期） | WASM Component/WIT | 受限 Runtime |
+| kind | Protocol | 默认宿主 | 当前状态 |
+|---|---|---|---|
+| `Driver` | Driver Protocol v1 | Edge Plugin Host | 已实现 |
+| `Application` | Application Protocol v1 | Server AppHost | 已实现 |
+| `Connector` | Connector Protocol | Edge 或 Server，由贡献声明决定 | 契约已定义，运行时待实现 |
+
+UI 贡献不是独立可执行插件类型，也不使用 `views` Manifest 字段；Core 通过
+Descriptor/Capability schema 渲染通用界面。Transform/WASM 属于后续目标态，不在当前 `kind` 枚举中。
 
 禁止把所有插件塞进一个 `DoEverything` RPC。
 
 ## 2. Manifest v1alpha1
 
+插件仓库根文件固定为 `plugin.yaml`。顶层字段必须符合
+[`spec/plugin-manifest.schema.json`](../../spec/plugin-manifest.schema.json)；`kind` 只能是
+`Driver`、`Application` 或 `Connector`。
+
 ```yaml
 apiVersion: plugins.cloudpath.dev/v1alpha1
-kind: CloudPathPlugin
-metadata:
-  id: io.github.deliciousbuding.cloud-path-driver-stcb
-  name: STC-B Driver
-  version: 0.1.0
-  description: Driver for the STC-B reference board
-  license: MIT
-  repository: https://github.com/DeliciousBuding/cloud-path-driver-stcb
+kind: Driver
+id: io.github.example.cloud-path-driver-example
+version: 0.1.0
+protocol: 1
+entrypoint: cloudpath-driver-example
 compatibility:
   core: ">=0.2.0 <0.4.0"
-  protocols:
-    driver: [1]
-runtime:
-  type: process
-  entrypoints:
-    windows-amd64: cloudpath-driver-stcb.exe
-    linux-amd64: cloudpath-driver-stcb
-    linux-arm64: cloudpath-driver-stcb
-  handshakeTimeout: 5s
-  shutdownTimeout: 5s
 permissions:
-  serial: { required: true }
-  network: { outbound: [] }
-  filesystem:
-    read: []
-    write: [plugin-data]
+  hardware: [serial]
+  network: []
+  filesystem: []
   secrets: []
+capabilities:
+  - io.github.example/capability/example@1
 contributes:
   drivers:
-    - id: stcb
-      configSchema: schemas/driver-config.json
+    - id: example-driver
+      title: Example Driver
       discovery: manual
-      capabilityCatalog: schemas/capabilities.yaml
-  views:
-    - id: device-overview
-      target: device
-      schema: views/device-overview.yaml
 ```
+
+`contributes` 是可选块；Driver、Application、Connector 分别使用
+`contributes.drivers`、`contributes.applications`、`contributes.connectors`。每个贡献的 `id`
+必须稳定且与插件 `id` 不同。`permissions` 的 `hardware` / `network` / `filesystem` / `secrets`
+都是字符串数组，不是对象。字段全集与约束以 schema 为准。
+
+新增 Driver 的复制模板、实现、测试和发布流程见
+[How to Build a New CloudPath Driver](how-to-build-driver.md)。
 
 ### 不可混用的版本
 
-- `metadata.version`：发布包 SemVer
-- `apiVersion`：Manifest 结构版本
-- `compatibility.core`：Core 产品兼容范围
-- `compatibility.protocols.*`：RPC 协议版本集合
-- Capability 尾部版本：数据语义版本
-- 配置 Schema 自己的 `schemaVersion`
+- `version`：插件发布包 SemVer。
+- `apiVersion`：Manifest 结构版本。
+- `protocol`：进程 RPC 协议版本（当前为正整数 `1`）。
+- `compatibility.core`：Core 产品兼容范围。
+- Capability 尾部版本：数据语义版本。
+- 配置 Schema 自己的 `schemaVersion`。
 
 ## 3. 运行时边界
 
@@ -105,29 +104,30 @@ Transport 生命周期与 Mapping Schema 分离；第一版可由同一插件同
 
 ## 4. 进程启动与握手
 
-不把 named pipe 写死为协议的一部分。推荐流程：
+当前实现使用进程启动握手和本地 RPC 传输；transport 可替换，不把 named pipe 写死为协议的一部分。流程：
 
 ```text
 Host 生成 launch_id + 随机一次性 cookie
   → 启动子进程并通过 env/handle 传入
   → Plugin 在 stdout 输出唯一 handshake 行
   → Host 验证 cookie、插件 ID、协议版本和地址
-  → 建立本地 gRPC
+  → 建立本地 RPC 传输（当前为长度前缀 JSON 帧）
   → 调用 Initialize / Describe / Health
 ```
 
 握手示意：
 
 ```text
-CP1|driver=1|tcp|127.0.0.1:49172|grpc|<launch-id>|<proof>
+CP1|<plugin-id>|driver=1|tcp|127.0.0.1:49172|grpc|<launch-id>|<proof>
 ```
 
 - Windows 初期默认 loopback TCP 随机端口，后续可增加 named pipe transport。
 - Linux/macOS 优先 Unix socket。
 - 测试使用 `bufconn` 或同等内存传输。
-- Cookie 是误启动防护，不等同安全沙箱；传输仍需限制在本机并绑定 launch identity。
+- 握手第 6 字段固定为 `grpc`，这是兼容标记；当前 SDK RPC 实际使用长度前缀 JSON 帧。
+- Cookie/proof 是误启动防护，不等同安全沙箱；传输仍需限制在本机并绑定 launch identity。
 
-## 5. Driver Protocol v1 草案
+## 5. Driver Protocol v1
 
 ```protobuf
 service DriverService {
@@ -163,7 +163,7 @@ Diagnostic
 - `Execute` 接收幂等键和 deadline；插件必须回报接受/拒绝，长任务通过 `CommandProgress` 更新。
 - 单消息、每秒消息数、日志速率和排队长度均有限制。
 
-## 6. Application Protocol v1 草案
+## 6. Application Protocol v1
 
 ```protobuf
 service ApplicationService {
@@ -179,18 +179,20 @@ service ApplicationService {
 }
 ```
 
-`ApplicationEffect` 只能表达 Core 允许的操作，例如创建领域记录、请求命令、计划任务和发送通知；不能返回任意 SQL 或系统命令。
+`ApplicationEffect` 只能表达 Core 允许的操作，例如创建领域记录、请求命令和计划任务；不能返回任意 SQL 或系统命令。
+协议仍识别 `SendNotification`，但 Core 当前没有通知通道，执行该 effect 会 fail-closed 返回 `not_implemented`，
+不得写成已实现。
 
-## 7. Schema-driven UI
+## 7. Schema-driven UI（当前为 Descriptor/Capability 子集）
 
-v1 允许的组件集合由 Core 维护：
+后续任意页面 Schema 的组件集合由 Core 维护（目标态）：
 
 ```text
 metric / gauge / status / badge / chart / timeline
 entity-list / table / form / command / markdown / json
 ```
 
-插件提供页面层级和布局、数据查询绑定、字段/单位/格式提示、命令表单 JSON Schema、条件可见性、空状态和本地化资源。
+当前已实现 Descriptor/Capability 驱动的设备视图、能力动作与命令表单；插件提供任意页面层级、查询绑定和布局属于后续目标态。
 
 插件不能提供内联脚本、任意 HTML、远程 JS URL、全局 CSS 覆盖或直接读取 cookie/localStorage。需要自定义 UI 时，后续采用独立 Origin 的 sandboxed iframe 和 scoped `postMessage` SDK；不直接采用共享 React runtime 的动态 Module Federation。
 
@@ -220,7 +222,7 @@ entity-list / table / form / command / markdown / json
 STOPPED / STARTING / HEALTHY / DEGRADED / CRASHED / BACKOFF / DISABLED
 ```
 
-Supervisor 负责 handshake timeout、gRPC health、stdout/stderr 结构化收集和敏感信息过滤、crash loop 检测、带 jitter 的指数退避、最大重启预算、优雅关闭和 orphan cleanup。Windows 使用 Job Object、Linux 使用 process group；同时记录 CPU、内存、句柄、消息率和重启次数。
+Supervisor 负责 handshake timeout、RPC Health、stdout/stderr 结构化收集和敏感信息过滤、crash loop 检测、带 jitter 的指数退避、最大重启预算、优雅关闭和 orphan cleanup。Windows 使用 Job Object、Linux 使用 process group；同时记录 CPU、内存、句柄、消息率和重启次数。
 
 ## 10. 安装、实例和进程
 
@@ -255,7 +257,7 @@ map 遍历顺序不是路由规则。插件级查询 `DriverClient(pluginID)` / 
 
 上层协议按收敛定义解析进程，不按插件 ID 匹配。AppHost 在把客户端交给 Application Runtime 之前，先核对该实例的进程快照处于启用态，且插件 ID 与版本等于本次期望值；进程面尚未收敛到期望版本时拒绝下发，避免把新版本的 `Initialize` / `ConfigureInstance` 送进陈旧进程。同理，进程面 apply 未成功的实例不会在协议面被晋升为运行实例。
 
-## 11. 数据和升级
+## 11. 数据和升级（目标态）
 
 - Core 数据迁移与插件数据迁移分开。
 - 插件升级先调用 `PlanMigration`，展示可回滚性、停机和数据副本大小。

@@ -74,8 +74,3 @@ export function installFetch(route: FetchRoute): FetchStub {
   }
   return stub
 }
-
-/** 全部端点 404（Schema 面缺席 / 后端未就绪的最小现实） */
-export function installEmptyFetch(): FetchStub {
-  return installFetch(() => stubResponse(404, { error: 'not found' }))
-}

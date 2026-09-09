@@ -33,6 +33,7 @@ export function Badge({ tone = 'idle', children, className }: { tone?: Tone; chi
 export function StatusDot({ online, className }: { online: boolean; className?: string }) {
   return (
     <span
+      aria-hidden="true"
       className={cn('inline-block h-2 w-2 shrink-0 rounded-full',
         online ? 'bg-ok' : 'bg-idle/50', className)}
     />
@@ -46,8 +47,8 @@ export function Panel({ title, right, className, children }: {
     <section className={cn('card p-4', className)}>
       {(title || right) && (
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-[15px] font-semibold tracking-[-0.01em]">{title}</h2>
-          {right}
+          {title && <h2 className="text-[15px] font-semibold tracking-[-0.01em]">{title}</h2>}
+          {right && <div className={cn(!title && 'ml-auto')}>{right}</div>}
         </div>
       )}
       {children}
@@ -92,7 +93,7 @@ export function StatTile({ icon, label, value, unit, sub }: {
 export function EmptyState({ icon, title, hint }: { icon?: ReactNode; title: string; hint?: string }) {
   return (
     <div className="card flex flex-col items-center justify-center px-6 py-16 text-center fade-up">
-      <span className="text-ink-3">{icon}</span>
+      <span aria-hidden="true" className="text-ink-3">{icon}</span>
       <p className="mt-3 text-[15px] font-semibold">{title}</p>
       {hint && <p className="mt-1 max-w-sm text-sm text-ink-2">{hint}</p>}
     </div>
@@ -113,7 +114,7 @@ export function ErrorState({ icon, title, hint, onRetry, retrying, compact }: {
       className={cn('card flex flex-col items-center justify-center px-6 text-center fade-up',
         compact ? 'py-9' : 'py-14')}
     >
-      <span className="text-bad">{icon ?? <RefreshCw size={22} />}</span>
+      <span aria-hidden="true" className="text-bad">{icon ?? <RefreshCw size={22} />}</span>
       <p className="mt-3 text-[15px] font-semibold">{title}</p>
       {hint && <p className="mt-1 max-w-md text-sm break-words text-ink-2">{hint}</p>}
       {onRetry && (
@@ -352,7 +353,7 @@ export function ThemeToggle({ className }: { className?: string }) {
         className,
       )}
     >
-      <Cur size={15} strokeWidth={2} />
+      <Cur aria-hidden="true" size={15} strokeWidth={2} />
     </button>
   )
 }
@@ -369,7 +370,7 @@ export function AuthCard({ title, subtitle, children, footer }: {
       <ThemeToggle className="absolute right-4 top-4" />
       <div className="w-full max-w-sm fade-up">
         <div className="mb-8 flex flex-col items-center text-center">
-          <span className="flex h-14 w-14 items-center justify-center rounded-xl bg-accent/10 text-accent">
+          <span aria-hidden="true" className="flex h-14 w-14 items-center justify-center rounded-xl bg-accent/10 text-accent">
             <Logo size={30} />
           </span>
           <h1 className="mt-4 text-[26px] font-semibold leading-tight tracking-[-0.01em]">{title}</h1>

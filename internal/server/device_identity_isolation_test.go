@@ -362,3 +362,70 @@ func TestStaleDisconnectCannotClearCurrentConnection(t *testing.T) {
 	oldWS.CloseNow()
 	newWS.CloseNow()
 }
+
+// TestStaleDisconnectDoesNotBroadcastEdgeDown 同租户重连后，旧连接退出不得向浏览器
+// 广播 edge_down，否则新连接的 edge_up 会被旧连接的清理覆盖。
+func TestStaleDisconnectDoesNotBroadcastEdgeDown(t *testing.T) {
+	st, srv, ts, a, _ := setupIdentityTenants(t)
+	edgeToken := issueTenantToken(t, st, a, `["edge"]`)
+	readToken := issueTenantToken(t, st, a, `["read"]`)
+	devs := []api.DeviceMeta{{ID: "d1", Adapter: "demo"}}
+
+	oldWS := dialEdgeHello(t, ts, "e1", edgeToken, devs...)
+	oldLink := waitEdgeLink(t, srv, "e1", a)
+	writeEnv(t, oldWS, api.Envelope{
+		V: api.Version, Type: api.MsgState, Device: "e1/d1", Ts: time.Now().Unix(),
+		Data: rawData(t, api.StateData{Online: true, Raw: map[string]any{"v": 1}, UpdatedAt: time.Now().Unix()}),
+	})
+	waitDeviceOnline(t, srv, "e1/d1")
+
+	// 在旧连接上线后再订阅，确保这里观察到的 edge_up 只可能来自新连接。
+	bws := dialWithToken(t, wsURL(ts.URL, "/ws"), readToken)
+	bch := edgeReader(bws)
+	if _, ok := waitEnv(t, bch, api.MsgSnapshot, 30*time.Second); !ok {
+		t.Fatal("浏览器未收到首帧快照")
+	}
+
+	newWS := dialEdgeHello(t, ts, "e1", edgeToken, devs...)
+	defer newWS.CloseNow()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// 旧连接客户端读到关闭时，服务端 handleEdgeWS 的清理 defer 已执行完毕。
+	if _, _, err := oldWS.Read(ctx); err == nil {
+		t.Fatal("旧连接应被新连接挤掉")
+	}
+	newLink := waitEdgeLink(t, srv, "e1", a)
+	if newLink == oldLink {
+		t.Fatal("旧连接未被新连接替换")
+	}
+
+	deadline := time.After(30 * time.Second)
+	sawUp := false
+	for !sawUp {
+		select {
+		case env, ok := <-bch:
+			if !ok {
+				t.Fatal("浏览器在收到 edge_up 前关闭")
+			}
+			if env.Device != "e1" {
+				continue
+			}
+			switch env.Type {
+			case api.MsgEdgeDown:
+				t.Fatalf("旧连接退出错误广播 edge_down: %+v", env)
+			case api.MsgEdgeUp:
+				sawUp = true
+			}
+		case <-deadline:
+			t.Fatal("新连接上线后浏览器未收到 edge_up")
+		}
+	}
+
+	// edge_up 之后仍留一个排空窗口，覆盖竞态下稍后到达的旧连接 edge_down。
+	for _, env := range collectTypes(t, bch, 300*time.Millisecond) {
+		if env.Device == "e1" && env.Type == api.MsgEdgeDown {
+			t.Fatalf("旧连接退出错误广播 edge_down: %+v", env)
+		}
+	}
+}

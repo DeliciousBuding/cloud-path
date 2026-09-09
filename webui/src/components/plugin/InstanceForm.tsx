@@ -14,15 +14,14 @@ import { PermissionList, PluginErrorNote } from './PluginFacts'
 import { useEdges } from '@/hooks/useEdges'
 import { useCreateInstance, useUpdateInstance } from '@/hooks/usePlugins'
 import { optionLabel } from '@/lib/format'
-import { permissionCount, secretHandleName } from '@/lib/plugins'
+import { normalizePluginKind, permissionCount, pluginDisplayName, secretHandleName } from '@/lib/plugins'
 import type {
   PluginCatalogView, PluginInstanceCreateRequest, PluginInstanceUpdateRequest, PluginInstanceView,
 } from '@/lib/types'
 
 const ISOLATIONS = [
-  { value: 'process', label: '独立进程（process）' },
-  { value: 'container', label: '容器（container）' },
-  { value: 'none', label: '无隔离（none）' },
+  { value: 'shared', label: '共享运行（默认）' },
+  { value: 'per-instance', label: '每个实例独立运行' },
 ]
 
 // 原生 select/option 不吃 CSS 截断：限宽 + overflow-hidden，option 文本另做收敛
@@ -39,6 +38,11 @@ function refsToText(refs: string[] | undefined): string {
   return (refs ?? []).map(secretHandleName).join('\n')
 }
 
+function legalIsolation(value: string | undefined): 'shared' | 'per-instance' {
+  if (value === 'per-instance' || value === 'process' || value === 'container') return 'per-instance'
+  return 'shared'
+}
+
 export function InstanceForm({ mode, instance, catalog, onDone }: {
   mode: 'create' | 'edit'
   /** edit 模式下的当前实例（用于预填） */
@@ -50,22 +54,34 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
   const { list: edges } = useEdges()
   const d = instance?.desired
 
-  const [edgeId, setEdgeId] = useState(instance?.edge_id ?? edges[0]?.edge_id ?? '')
+  const [edgeId, setEdgeId] = useState(instance?.edge_id ?? '')
   const [instanceId, setInstanceId] = useState(d?.instance_id ?? '')
-  const [pluginId, setPluginId] = useState(d?.plugin_id ?? catalog[0]?.id ?? '')
+  const [pluginId, setPluginId] = useState(d?.plugin_id ?? '')
   const [version, setVersion] = useState(d?.version ?? '')
   const [enabled, setEnabled] = useState(d?.enabled ?? true)
-  const [isolation, setIsolation] = useState(d?.isolation || 'process')
+  const [isolation, setIsolation] = useState<'shared' | 'per-instance'>(() => legalIsolation(d?.isolation))
   const [rows, setRows] = useState<ConfigRow[]>(rowsFromConfig(d?.config))
   const [refsText, setRefsText] = useState(refsToText(d?.secret_refs))
   const [permAcked, setPermAcked] = useState(false)
   const [error, setError] = useState<unknown>(null)
 
-  const selected = useMemo(() => catalog.find((p) => p.id === pluginId), [catalog, pluginId])
+  const effectivePluginId = pluginId || catalog[0]?.id || ''
+  const selected = useMemo(() => catalog.find((p) => p.id === effectivePluginId), [catalog, effectivePluginId])
+  const pluginKind = normalizePluginKind(selected?.kind)
   const perms = permissionCount(selected?.permissions)
+  const effectiveVersion = version || selected?.version || ''
+  const versionOptions = Array.from(new Set(
+    [d?.version, selected?.version, effectiveVersion].filter((x): x is string => Boolean(x)),
+  ))
 
-  // Edge 列表异步到达时补一个默认值（不覆盖用户已选）
-  const effectiveEdge = edgeId || edges[0]?.edge_id || ''
+  // 运行位置由插件类型决定：应用只能跑在中心服务，驱动只能跑在网关，连接器不创建运行实例。
+  const effectiveEdge = edgeId || (pluginKind === 'application' ? 'server'
+    : pluginKind === 'driver' ? edges[0]?.edge_id ?? '' : '')
+  const hostMismatch = mode === 'edit' && (
+    (pluginKind === 'application' && instance?.edge_id !== 'server')
+    || (pluginKind === 'driver' && instance?.edge_id === 'server')
+    || pluginKind === 'connector'
+  )
 
   const secretRefs = useMemo(
     () => refsText.split(/[\n,]/).map((s) => s.trim()).filter(Boolean).map(secretHandleName),
@@ -73,10 +89,13 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
   )
 
   const missing: string[] = []
-  if (mode === 'create' && !effectiveEdge) missing.push('目标 Edge')
-  if (mode === 'create' && !instanceId.trim()) missing.push('实例 ID')
-  if (!pluginId.trim()) missing.push('插件')
-  if (!version.trim()) missing.push('版本')
+  if (mode === 'create' && !instanceId.trim()) missing.push('名称或标识')
+  if (!effectivePluginId.trim()) missing.push('插件')
+  if (pluginKind === 'connector') missing.push('连接器不能创建运行实例')
+  if (pluginKind !== 'application' && pluginKind !== 'driver' && pluginKind !== 'connector') missing.push('插件类型')
+  if (mode === 'create' && pluginKind !== 'connector' && pluginKind !== 'unknown' && !effectiveEdge) missing.push('运行位置')
+  if (hostMismatch) missing.push('运行位置与插件类型不匹配')
+  if (!effectiveVersion.trim()) missing.push('版本')
   if (perms > 0 && !permAcked) missing.push('权限确认')
 
   function buildConfig(): Record<string, string> | undefined {
@@ -101,63 +120,109 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
         {mode === 'create' ? (
           <>
             <div>
-              <label htmlFor="pi-edge" className="mb-1.5 block text-[13px] font-medium text-ink-2">目标 Edge</label>
-              <select id="pi-edge" className={SELECT_CLS} value={effectiveEdge} onChange={(e) => setEdgeId(e.target.value)}>
-                {edges.length === 0 && <option value="">（还没有边缘节点）</option>}
-                {edges.map((ed) => (
-                  <option key={ed.edge_id} value={ed.edge_id}>
-                    {optionLabel(`${ed.edge_id}${ed.online ? '' : '（离线）'}`, 40)}
-                  </option>
-                ))}
-              </select>
+              <label htmlFor="pi-edge" className="mb-1.5 block text-[13px] font-medium text-ink-2">运行位置</label>
+              {pluginKind === 'connector' ? (
+                <p className="rounded-lg bg-surface-2 px-3.5 py-2.5 text-[13px] text-ink-2">
+                  连接器只负责连接，不能创建运行实例。
+                </p>
+              ) : pluginKind === 'application' ? (
+                <select id="pi-edge" className={SELECT_CLS} value="server" disabled>
+                  <option value="server">中心服务</option>
+                </select>
+              ) : pluginKind === 'driver' ? (
+                <select id="pi-edge" className={SELECT_CLS} value={effectiveEdge} onChange={(e) => setEdgeId(e.target.value)}>
+                  {edges.length === 0 && <option value="">（还没有可用网关）</option>}
+                  {edges.map((ed) => (
+                    <option key={ed.edge_id} value={ed.edge_id}>
+                      {optionLabel(`${ed.edge_id}${ed.online ? '' : '（离线）'}`, 40)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="rounded-lg bg-surface-2 px-3.5 py-2.5 text-[13px] text-ink-2">
+                  无法判断插件类型，暂时不能选择运行位置。
+                </p>
+              )}
               <p className="mt-1.5 text-xs text-ink-3">
-                离线的 Edge 也可以写期望态；它重连后会自动应用最新完整快照。
+                {pluginKind === 'application'
+                  ? '应用只能运行在中心服务。'
+                  : pluginKind === 'driver'
+                    ? '驱动只能运行在网关；离线网关也可以先保存设置。'
+                    : '请选择类型明确的插件。'}
               </p>
             </div>
             <TextField
-              label="实例 ID" value={instanceId} placeholder="例如 compartment-main"
+              label="名称或标识" value={instanceId} placeholder="例如 compartment-main"
               autoComplete="off" spellCheck={false}
-              hint="同一 Edge 内唯一；创建后不可改"
+              hint="同一网关内不能重复；创建后不能修改，建议使用英文和短横线"
               onChange={(e) => setInstanceId(e.target.value)}
             />
           </>
         ) : (
           <div className="sm:col-span-2">
-            <p className="num rounded-lg bg-surface-2 px-3.5 py-2.5 text-xs break-all text-ink-2">
-              {instance?.edge_id} · {d?.instance_id}
+            <p className="rounded-lg bg-surface-2 px-3.5 py-2.5 text-xs break-words text-ink-2">
+              运行位置：{instance?.edge_id === 'server' ? '中心服务' : `网关 ${instance?.edge_id || '—'}`} · 名称：{d?.instance_id || '—'}
             </p>
+            {hostMismatch && (
+              <p role="alert" className="mt-2 rounded-lg bg-warn/12 px-3 py-2 text-[12px] leading-relaxed text-warn">
+                当前运行位置与插件类型不匹配。为避免保存明显错误的设置，请先删除后按正确类型重新创建。
+              </p>
+            )}
           </div>
         )}
 
         <div>
           <label htmlFor="pi-plugin" className="mb-1.5 block text-[13px] font-medium text-ink-2">插件</label>
-          {catalog.length > 0 ? (
-            <select id="pi-plugin" className={SELECT_CLS} value={pluginId} onChange={(e) => setPluginId(e.target.value)}>
+          {mode === 'edit' ? (
+            <div id="pi-plugin" className="input flex min-w-0 items-center text-[13px] text-ink-2">
+              <span className="min-w-0 truncate">{pluginDisplayName(selected)}</span>
+            </div>
+          ) : catalog.length > 0 ? (
+            <select id="pi-plugin" className={SELECT_CLS} value={effectivePluginId}
+              onChange={(e) => {
+                const nextID = e.target.value
+                const next = catalog.find((p) => p.id === nextID)
+                const nextKind = normalizePluginKind(next?.kind)
+                setPluginId(nextID)
+                setVersion(next?.version ?? '')
+                setEdgeId(nextKind === 'application' ? 'server'
+                  : nextKind === 'driver' ? edges[0]?.edge_id ?? '' : '')
+              }}>
               {catalog.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {optionLabel(`${p.id}${p.version ? ` · ${p.version}` : ''}${p.verified ? '' : '（未验证）'}`, 40)}
+                  {optionLabel(`${pluginDisplayName(p)}${p.version ? ` · ${p.version}` : ''}${p.verified ? '' : '（未验证）'}`, 40)}
                 </option>
               ))}
             </select>
           ) : (
-            <input id="pi-plugin" className="input text-[13px]" value={pluginId} placeholder="插件 ID"
-              autoComplete="off" spellCheck={false} onChange={(e) => setPluginId(e.target.value)} />
+            <p className="rounded-lg bg-surface-2 px-3.5 py-2.5 text-[13px] text-ink-2">
+              暂无可选插件。请先确认插件是否已经同步，再回来添加。
+            </p>
           )}
           <p className="mt-1.5 text-xs text-ink-3">
-            {catalog.length > 0 ? '候选来自插件目录（GET /api/plugins）' : '目录为空，需手动填写插件 ID'}
+            {mode === 'edit' ? '创建后不能更换插件' : catalog.length > 0 ? '从已同步的插件中选择' : '没有可用插件，暂时无法添加'}
           </p>
         </div>
 
-        <TextField
-          label="版本" value={version} placeholder="例如 v1.2.0"
-          autoComplete="off" spellCheck={false}
-          hint={selected?.version ? `目录里当前是 ${selected.version}` : '固定版本，Edge 只会安装这个版本'}
-          onChange={(e) => setVersion(e.target.value)}
-        />
+        <div>
+          <label htmlFor="pi-version" className="mb-1.5 block text-[13px] font-medium text-ink-2">版本</label>
+          {versionOptions.length > 0 ? (
+            <select id="pi-version" className={SELECT_CLS} value={effectiveVersion}
+              onChange={(e) => setVersion(e.target.value)}>
+              {versionOptions.map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
+          ) : (
+            <input id="pi-version" className="input text-[13px]" value={version} placeholder="例如 v1.2.0"
+              autoComplete="off" spellCheck={false} onChange={(e) => setVersion(e.target.value)} />
+          )}
+          <p className="mt-1.5 text-xs text-ink-3">
+            {selected?.version ? `可用版本：${selected.version}` : '暂未取得可用版本，请稍后重试'}
+          </p>
+        </div>
 
         <div>
           <label htmlFor="pi-iso" className="mb-1.5 block text-[13px] font-medium text-ink-2">隔离级别</label>
-          <select id="pi-iso" className={SELECT_CLS} value={isolation} onChange={(e) => setIsolation(e.target.value)}>
+          <select id="pi-iso" className={SELECT_CLS} value={isolation} onChange={(e) => setIsolation(e.target.value as 'shared' | 'per-instance')}>
             {ISOLATIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
@@ -166,24 +231,24 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
           <label className="flex cursor-pointer items-center gap-2.5 text-[13px]">
             <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)}
               className="h-4 w-4 shrink-0 accent-accent" />
-            创建后立即启用（期望态）
+            创建后立即启用
           </label>
         </div>
       </div>
 
       {/* ---- 权限确认 ---- */}
       <div className="rounded-lg bg-surface-2 p-3.5">
-        <p className="mb-2 text-[13px] font-medium">该插件声明的权限</p>
+        <p className="mb-2 text-[13px] font-medium">该插件需要的权限</p>
         <PermissionList
           permissions={selected?.permissions}
-          emptyHint={selected ? '没有声明任何权限' : '目录里没有这个插件，无法核对权限声明'}
+          emptyHint={selected ? '不需要额外权限' : '可用插件列表中没有这个插件，无法核对权限'}
         />
         {perms > 0 && (
           <label className="mt-3 flex cursor-pointer items-start gap-2.5 border-t border-hairline pt-3">
             <input type="checkbox" checked={permAcked} onChange={(e) => setPermAcked(e.target.checked)}
               className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
             <span className="min-w-0 text-[12px] leading-relaxed">
-              我已核对上述 {perms} 项权限，同意授予。提交时会带上 confirm_permissions。
+              我已核对上述 {perms} 项权限，同意授予。提交时会确认这些权限。
             </span>
           </label>
         )}
@@ -192,24 +257,24 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
       {/* ---- 非敏感配置 ---- */}
       <div>
         <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="text-[13px] font-medium">配置项（非敏感）</p>
+          <p className="text-[13px] font-medium">应用设置（可选）</p>
           <Button type="button" variant="ghost" onClick={() => setRows((r) => [...r, { key: '', value: '' }])}>
-            <Plus size={13} /> 添加
+            <Plus size={13} /> 添加设置项
           </Button>
         </div>
         {rows.length === 0 ? (
-          <p className="text-xs text-ink-3">没有配置项。需要敏感值请改用下面的密钥引用。</p>
+          <p className="text-xs text-ink-3">没有额外设置。需要密钥时请使用下面的密钥名称。</p>
         ) : (
           <div className="space-y-2">
             {rows.map((r, i) => (
               <div key={i} className="flex min-w-0 gap-2">
-                <label className="sr-only" htmlFor={`cfg-k-${i}`}>配置键</label>
+                <label className="sr-only" htmlFor={`cfg-k-${i}`}>设置名称</label>
                 <input id={`cfg-k-${i}`} className="input num min-w-0 flex-1 font-mono text-[12px]"
-                  placeholder="key" value={r.key} autoComplete="off" spellCheck={false}
+                  placeholder="设置名称" value={r.key} autoComplete="off" spellCheck={false}
                   onChange={(e) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, key: e.target.value } : x)))} />
-                <label className="sr-only" htmlFor={`cfg-v-${i}`}>配置值</label>
+                <label className="sr-only" htmlFor={`cfg-v-${i}`}>设置值</label>
                 <input id={`cfg-v-${i}`} className="input num min-w-0 flex-1 font-mono text-[12px]"
-                  placeholder="value" value={r.value} autoComplete="off" spellCheck={false}
+                  placeholder="设置值" value={r.value} autoComplete="off" spellCheck={false}
                   onChange={(e) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))} />
                 <button type="button" aria-label={`删除配置项 ${r.key || i + 1}`}
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-3 transition-colors hover:text-bad"
@@ -225,18 +290,21 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
       {/* ---- secret handle ---- */}
       <div>
         <label htmlFor="pi-refs" className="mb-1.5 flex items-center gap-1.5 text-[13px] font-medium">
-          <KeyRound size={13} className="shrink-0" /> 密钥引用（一行一个）
+          <KeyRound size={13} className="shrink-0" /> 使用的密钥（可选）
         </label>
         <textarea
           id="pi-refs" rows={3} value={refsText} autoComplete="off" spellCheck={false}
-          placeholder={'db-password\nsmtp-token'}
+          placeholder={'例如：提醒服务密钥\n自动化密钥'}
           onChange={(e) => setRefsText(e.target.value)}
           className="input num resize-y font-mono text-[12px]"
         />
         <p className="mt-1.5 text-[12px] leading-relaxed text-ink-3">
-          只填引用名（<span className="num">secret://</span> 前缀可省略）。明文只存在于边缘节点本地的密钥提供方
-          与插件进程内存中，服务器与浏览器都不会看到，也不会被记录。
+          每行填一个密钥名称，不要填密钥内容。平台只会保存名称，不会显示密钥内容。
         </p>
+        <details className="mt-1.5 text-[12px] text-ink-3">
+          <summary className="cursor-pointer">技术详情</summary>
+          <p className="mt-1.5 leading-relaxed">可填写 <span className="num">secret://</span> 前缀，也可以只填写名称；两种写法都会按名称保存。</p>
+        </details>
         {secretRefs.length > 0 && (
           <ul className="mt-2 flex list-none flex-wrap gap-1.5 p-0">
             {secretRefs.map((n) => (
@@ -249,7 +317,7 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
       </div>
 
       {missing.length > 0 && (
-        <p className="text-[12px] text-ink-3">还需要填写：{missing.join('、')}</p>
+        <p className="text-[12px] text-ink-3">还需要处理：{missing.join('、')}</p>
       )}
       {error ? <PluginErrorNote error={error} /> : null}
 
@@ -262,8 +330,8 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
             const body: PluginInstanceCreateRequest = {
               edge_id: effectiveEdge,
               instance_id: instanceId.trim(),
-              plugin_id: pluginId.trim(),
-              version: version.trim(),
+              plugin_id: effectivePluginId.trim(),
+              version: effectiveVersion.trim(),
               enabled,
               isolation,
               config: buildConfig(),
@@ -275,7 +343,7 @@ export function InstanceForm({ mode, instance, catalog, onDone }: {
           onUpdate={() => {
             setError(null)
             const body: PluginInstanceUpdateRequest = {
-              version: version.trim() || undefined,
+              version: effectiveVersion.trim() || undefined,
               enabled,
               isolation,
               config: buildConfig(),
@@ -320,7 +388,7 @@ function SubmitButton({ mode, disabled, onCreate, onUpdate, onError, instanceId,
 
   return (
     <Button type="button" disabled={disabled || busy} onClick={() => void run()}>
-      {busy ? '提交中…' : mode === 'create' ? '创建实例' : '保存变更'}
+      {busy ? '提交中…' : mode === 'create' ? '创建并保存' : '保存修改'}
     </Button>
   )
 }

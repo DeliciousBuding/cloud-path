@@ -26,7 +26,8 @@ CloudPath turns **plug in a device → see it in the cloud → control it remote
   applied snapshot. Edge is autonomous: keeps running offline, and on reconnect applies only the final snapshot
   without replaying intermediate side effects.
 - **Device-agnostic · plugin-driven**: core (`internal/*`) knows no concrete hardware; a new device = one Driver plugin.
-- **Distributed Hub-Spoke**: multiple edge nodes + one control plane, a natural center-edge topology, horizontally scalable.
+- **Distributed Hub-Spoke**: multiple edge nodes + one control plane. The current release runs one Server;
+  multi-Server scaling and distributed quotas remain target-state work.
 - **Device identity** = `(tenant_id, edge_id, device_id)`; the wire key is `<edge_id>/<device_id>`.
 - **Real-time end-to-end**: edge → server → browser all over WebSocket; REST only serves history and management.
 - **Single binary · zero CGO**: WebUI `go:embed`-ed into server; SQLite via `modernc.org/sqlite`; cross-compiles to Linux/arm64 with no toolchain.
@@ -60,11 +61,15 @@ CloudPath turns **plug in a device → see it in the cloud → control it remote
 | **Application** | Server | business objects, bindings, rules, tasks, domain APIs | direct serial access or Core DB |
 | **Connector** | Edge or Server | MQTT / Webhook / external platforms / notifications / data egress | defining the core device model |
 
-UI contributions are not a separate executable plugin type: plugins submit declarative navigation,
-forms, and page Schema via a Manifest.
+Driver Protocol v1 and Application Protocol v1 are implemented. Connector has a manifest contract but
+no runtime yet. UI contributions are not a separate executable plugin type: the current WebUI uses
+Descriptor/Capability schemas for generic device views, capability actions, and command forms.
+Arbitrary page schemas and third-party JavaScript remain target-state work. See
+[docs/architecture.md](docs/architecture.md) for the current-versus-target boundary.
 
-Current Application source repositories:
+Current plugin source repositories:
 
+- [cloud-path-driver-stcb](https://github.com/DeliciousBuding/cloud-path-driver-stcb) - STC-B reference Driver plugin
 - [cloud-path-app-scheduled-compartment](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment)
 - [cloud-path-app-button-indicator](https://github.com/DeliciousBuding/cloud-path-app-button-indicator)
 - [cloud-path-app-environment-guard](https://github.com/DeliciousBuding/cloud-path-app-environment-guard)
@@ -82,6 +87,12 @@ repository declares its dependency range in `plugin.yaml` and `go.mod`.
 
 The STC-B reference Driver lives in the separate `cloud-path-driver-stcb` repo and is installed
 via GitHub discover/install. See the [plugin runtime contract](docs/architecture/plugin-system.md).
+
+**Identity-chain boundary:** command/event routing currently assumes globally unique `entity_id`;
+`(device_key, entity_id)` is not yet threaded through binding and routing. Reusing an `entity_id`
+across multiple boards of the same model can make entity binding or event routing ambiguous. Until
+that contract and multi-board hardware evidence exist, use the single-board boundary or require the
+Driver to keep `entity_id` globally unique.
 
 ## Quick start (local)
 

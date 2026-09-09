@@ -8,7 +8,6 @@
 //      用户勾选后才带 confirm_permissions:true 重发同一份 payload。
 import { useState } from 'react'
 import { useAuth } from '@/store/auth'
-import { Link } from 'react-router'
 import { Pencil, Power, RefreshCw, Trash2 } from 'lucide-react'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { PermissionList, PluginErrorNote } from './PluginFacts'
@@ -26,7 +25,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
   showEdit?: boolean
 }) {
   const readOnly = useAuth((s) => s.status === 'in' && s.user?.role === 'viewer')
-  const host = v.edge_id === 'server' ? '应用宿主' : '边缘节点'
+  const host = v.edge_id === 'server' ? '中心服务' : '网关'
   const update = useUpdateInstance()
   const remove = useDeleteInstance()
   const reconcile = useReconcileInstance()
@@ -51,9 +50,10 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
     }
   }
 
-  if (readOnly) return <p className="text-sm text-ink-3">当前账号为只读，可查看应用数据，不能更改实例。</p>
+  if (readOnly) return <p className="text-sm text-ink-3">当前账号只能查看，不能修改这个项目。</p>
 
   const toggleLabel = v.desired.enabled ? '停用' : '启用'
+  const needsReapply = v.drift || v.stale || !v.has_observed
 
   return (
     <div className="min-w-0">
@@ -61,31 +61,28 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
         <button
           type="button" className="btn btn-ghost" disabled={busy}
           onClick={() => void patch({ enabled: !v.desired.enabled })}
-          title={`把期望态改成${toggleLabel}；${host}应用后才真正生效`}
+          title={`将保存的设置改为${toggleLabel}；${host}应用后才真正生效`}
         >
           <Power size={13} className="shrink-0" />
           {update.isPending ? '提交中…' : toggleLabel}
         </button>
 
-        <button
-          type="button" className="btn btn-ghost" disabled={busy}
-          // 不一致或过期时值得问一下（可能强制重启实例），一致时直接下发
-          onClick={() => (v.drift || v.stale ? setReconcileOpen(true) : void reconcile.mutateAsync({ id: v.id }).catch(() => {}))}
-          title={"让" + host + "重新收敛到最新期望快照"}
-        >
-          <RefreshCw size={13} className="shrink-0" />
-          {reconcile.isPending ? '下发中…' : '重新下发'}
-        </button>
+        {needsReapply && (
+          <button
+            type="button" className="btn btn-ghost" disabled={busy}
+            onClick={() => setReconcileOpen(true)}
+            title={"让" + host + "重新应用最新设置"}
+          >
+            <RefreshCw size={13} className="shrink-0" />
+            {reconcile.isPending ? '正在应用…' : '重新应用设置'}
+          </button>
+        )}
 
         {showEdit && onEdit && (
           <button type="button" className="btn btn-ghost" disabled={busy} onClick={onEdit}>
             <Pencil size={13} className="shrink-0" /> 编辑
           </button>
         )}
-
-        <Link to={`/plugins/${encodeURIComponent(v.id)}`} className="btn btn-ghost no-underline">
-          详情
-        </Link>
 
         <button
           type="button" className="btn btn-danger-ghost ml-auto" disabled={busy}
@@ -101,19 +98,19 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
       <ConfirmDialog
         open={pendingPerm !== null}
         tone="warn"
-        title="这次变更会扩大插件权限"
+        title="这次修改会增加插件权限"
         body={
           <>
-            <p>服务端要求显式确认后才接受这次写入。下面是该插件声明的权限，请逐项核对：</p>
+            <p>请先核对下面新增的权限，确认后再保存：</p>
             <div className="mt-3 rounded-lg bg-surface-2 p-3">
               <PermissionList
                 permissions={catalog?.permissions}
-                emptyHint="目录里没有这个插件的权限声明，无法核对，建议先确认插件来源再重试。"
+                emptyHint="可用插件列表中没有这个插件的权限信息，无法核对，建议先确认插件来源再重试。"
               />
             </div>
           </>
         }
-        confirmLabel="确认并重新提交"
+        confirmLabel="确认并保存"
         requireAck="我已核对上述权限，同意授予该插件这些权限。"
         busy={update.isPending}
         onCancel={() => setPendingPerm(null)}
@@ -124,32 +121,33 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
         }}
       />
 
-      {/* ---- reconcile 确认（仅在 drift/stale 时出现） ---- */}
+      {/* ---- 重新应用确认：可能重启实例，必须显式确认 ---- */}
       <ConfirmDialog
         open={reconcileOpen}
         tone="warn"
-        title="重新下发期望快照？"
+        title="重新应用最新设置？"
         body={
           <>
             <p>
-              当前期望修订版 {v.desired_revision}，{host}已应用 {v.applied_revision}。
-              重新下发会让{host}重新收敛到最新完整快照。
+              {!v.has_observed
+                ? `还没有收到${host}的运行状态。重新应用可能会重启这个项目，请确认后再继续。`
+                : `${host}还没有应用最新设置。重新应用可能会重启这个项目，请确认后再继续。`}
             </p>
             <p className="mt-2 text-xs text-ink-2">
-              {v.edge_id !== 'server' && !v.edge_online && '注意：该边缘节点当前离线，快照会在它重连后才被应用。'}
-              {v.edge_id !== 'server' && v.edge_online && '该边缘节点在线，通常会立即开始应用。'}
-              {v.edge_id === 'server' && '由中心服务的应用宿主处理；请以更新后的运行状态为准。'}
+              {v.edge_id !== 'server' && !v.edge_online && '注意：该网关当前离线，重新连接后才会应用。'}
+              {v.edge_id !== 'server' && v.edge_online && '该网关在线，通常会立即开始同步。'}
+              {v.edge_id === 'server' && '由中心服务处理；请以更新后的运行状态为准。'}
             </p>
           </>
         }
-        confirmLabel="下发"
+        confirmLabel="重新应用"
         busy={reconcile.isPending}
         extra={
           <label className="flex cursor-pointer items-start gap-2.5 rounded-lg bg-surface-2 p-3">
             <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)}
               className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
             <span className="min-w-0 text-[12px] leading-relaxed">
-              强制（force）：即使{host}认为已应用同一修订版也重新执行一次
+              强制重新应用：即使{host}认为当前设置已经生效，也再执行一次
             </span>
           </label>
         }
@@ -170,22 +168,22 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true }: {
         body={
           <>
             <p>
-              期望态会被移除，{host}在下一次同步时停止该实例。这是一次写操作，会记入审计。
+              删除后，{host}会在下一次更新时停止这个项目。操作会留下记录。
             </p>
-            <p className="num mt-2 text-xs text-ink-3 break-all">
-              {v.edge_id} · {v.desired.plugin_id} · {v.desired.version}
+            <p className="mt-2 text-xs text-ink-3">
+              运行位置：{v.edge_id === 'server' ? '中心服务' : `网关 ${v.edge_id || '—'}`} · 版本：{v.desired.version || '—'}
             </p>
           </>
         }
         confirmLabel="删除实例"
         busy={remove.isPending}
-        requireAck="我确认要删除这个插件实例。"
+        requireAck="我确认要删除这个运行实例。"
         extra={
           <label className="flex cursor-pointer items-start gap-2.5 rounded-lg bg-surface-2 p-3">
             <input type="checkbox" checked={purge} onChange={(e) => setPurge(e.target.checked)}
               className="mt-0.5 h-4 w-4 shrink-0 accent-accent" />
             <span className="min-w-0 text-[12px] leading-relaxed">
-              同时清除本地数据（purge）：插件在运行宿主上产生的数据一并删除，<span className="font-semibold text-bad">不可恢复</span>
+              同时删除运行数据：该应用保存的数据会一并删除，<span className="font-semibold text-bad">且无法恢复</span>
             </span>
           </label>
         }

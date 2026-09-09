@@ -26,7 +26,7 @@ const Settings = lazy(() => import('@/pages/Settings'))
 const Admin = lazy(() => import('@/pages/Admin'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
-/** 登录态探测中的整页占位（与 Layout 相同的内容宽度约束，390px 无横向溢出） */
+/** 登录态探测中的整页占位（与 Layout 相同的内容宽度约束） */
 function AuthProbeFallback() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-7 sm:px-6 lg:px-10">

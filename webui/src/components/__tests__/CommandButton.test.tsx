@@ -64,7 +64,7 @@ describe('公共命令权限与 legacy 兼容边界', () => {
   it.each(denied)('%s 不渲染表单、命令按钮或确认框（包括独立按钮）', (_name, state) => {
     auth(state)
     mount(<><ActionPanel deviceId={KEY} set={commands} /><CommandButton deviceId={KEY} action={simple} /></>)
-    expect(screen.getByText(/只读：需要 operator 或 admin/)).toBeInTheDocument()
+    expect(screen.getByText('当前账号没有操作权限。')).toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
@@ -88,7 +88,7 @@ describe('公共命令权限与 legacy 兼容边界', () => {
     send.mockRejectedValue(new ApiError(403, 'forbidden'))
     mount(<CommandButton deviceId={KEY} action={simple} />)
     await clickRead()
-    expect(useToasts.getState().items.at(-1)).toMatchObject({ title: '读取未下发', tone: 'bad', detail: expect.stringContaining('权限不足') })
+    expect(useToasts.getState().items.at(-1)).toMatchObject({ title: '读取没有执行', tone: 'bad', detail: expect.stringContaining('当前账号没有执行操作的权限') })
   })
 })
 
@@ -157,8 +157,8 @@ describe('表单/确认状态隔离', () => {
   it('legacy 高级入口换命令/降级后不会复活原始参数', () => {
     const set: CommandSet = { source: 'adapter', actions: [simple, { cmd: 'other', label: '其他命令' }] }
     mount(<ActionPanel deviceId={KEY} set={set} />)
-    const select = screen.getByRole('combobox', { name: '选择命令' })
-    const args = screen.getByRole('textbox', { name: '命令参数' })
+    const select = screen.getByRole('combobox', { name: '选择操作' })
+    const args = screen.getByRole('textbox', { name: '操作参数' })
     fireEvent.change(select, { target: { value: 'read' } })
     fireEvent.change(args, { target: { value: 'legacy raw' } })
     fireEvent.change(select, { target: { value: 'other' } })
@@ -168,9 +168,9 @@ describe('表单/确认状态隔离', () => {
     auth({ status: 'in', user: { ...operator, role: 'viewer' } })
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
     auth({ status: 'in', user: operator })
-    expect(screen.getByRole('combobox', { name: '选择命令' })).toHaveValue('')
-    expect(screen.getByRole('textbox', { name: '命令参数' })).toHaveValue('')
-    expect(screen.getByRole('textbox', { name: '命令参数' })).toBeDisabled()
+    expect(screen.getByRole('combobox', { name: '选择操作' })).toHaveValue('')
+    expect(screen.getByRole('textbox', { name: '操作参数' })).toHaveValue('')
+    expect(screen.getByRole('textbox', { name: '操作参数' })).toBeDisabled()
   })
 })
 
@@ -237,7 +237,7 @@ describe('POST / WS ACK / history / timeout 生命周期', () => {
     expect(screen.getByRole('button', { name: '读取' })).toHaveAttribute('aria-busy', 'false')
     expect(invalidate).toHaveBeenCalledTimes(4)
     act(() => useLive.setState({ acks: { [id]: { command_id: id, status: 'ok', detail: 'duplicate' } } }))
-    expect(ok).toHaveBeenCalledExactlyOnceWith('读取已执行', 'done')
+    expect(ok).toHaveBeenCalledExactlyOnceWith('读取已完成', 'done')
     expect(invalidate).toHaveBeenCalledTimes(4)
   })
   it('失败 ACK 同样结算并刷新历史', async () => {
@@ -247,7 +247,7 @@ describe('POST / WS ACK / history / timeout 生命周期', () => {
     act(() => useLive.setState({ acks: { 7: { command_id: 7, status: 'failed', detail: 'device rejected' } } }))
     expect(screen.getByRole('button', { name: '读取' })).toBeEnabled()
     expect(invalidate).toHaveBeenCalledTimes(4)
-    expect(useToasts.getState().items.at(-1)).toMatchObject({ title: '读取失败', detail: 'device rejected', tone: 'bad' })
+    expect(useToasts.getState().items.at(-1)).toMatchObject({ title: '读取失败', detail: '设备返回失败，请在操作记录中查看结果。', tone: 'bad' })
   })
   it('15s 超时释放按钮并刷新历史；晚到 ACK 不改写已结算提示', async () => {
     vi.useFakeTimers()
@@ -274,7 +274,7 @@ describe('POST / WS ACK / history / timeout 生命周期', () => {
     act(() => useLive.setState({ acks: { 7: { command_id: 7, status: 'ok' } } }))
     await act(async () => { resolve(receipt) })
     expect(screen.getByRole('button', { name: '读取' })).toBeEnabled()
-    expect(useToasts.getState().items.at(-1)?.title).toBe('读取已执行')
+    expect(useToasts.getState().items.at(-1)?.title).toBe('读取已完成')
   })
   it('发送中连点不会重复 POST', async () => {
     send.mockReturnValue(new Promise(() => {}))

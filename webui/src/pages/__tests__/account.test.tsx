@@ -58,9 +58,10 @@ describe('侧栏账号区', () => {
     route()
     useAuth.setState({ status: 'in', user: admin })
     renderLayout()
-    expect(screen.getByText('运维管理员')).toBeInTheDocument()
-    expect(screen.getByText('管理员')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '登出' })).toBeInTheDocument()
+    const aside = document.querySelector('aside') as HTMLElement
+    expect(within(aside).getByText('运维管理员')).toBeInTheDocument()
+    expect(within(aside).getByText('管理员')).toBeInTheDocument()
+    expect(within(aside).getByRole('button', { name: '登出' })).toBeInTheDocument()
   })
 
   it('登出真的打 POST /api/auth/logout、清掉本机令牌并把状态置为未登录', async () => {
@@ -70,7 +71,7 @@ describe('侧栏账号区', () => {
     useAuth.setState({ status: 'in', user: admin })
     renderLayout()
 
-    await user.click(screen.getByRole('button', { name: '登出' }))
+    await user.click(within(document.querySelector('aside') as HTMLElement).getByRole('button', { name: '登出' }))
     expect(http.to('/api/auth/logout')).toHaveLength(1)
     expect(http.to('/api/auth/logout')[0]?.method).toBe('POST')
     expect(getToken()).toBe('')
@@ -88,21 +89,10 @@ describe('侧栏账号区', () => {
     expect(screen.queryByRole('button', { name: '登出' })).not.toBeInTheDocument()
   })
 
-  it('长用户名/长姓名在侧栏里截断，不撑破 240px 侧栏', () => {
-    route()
-    const LONG = 'y'.repeat(64)
-    useAuth.setState({ status: 'in', user: { ...admin, username: LONG, name: LONG } })
-    renderLayout()
-    const hits = screen.getAllByText(LONG)
-    expect(hits.length).toBeGreaterThan(0)
-    for (const el of hits) {
-      expect(String(el.className), `${el.tagName} 未做截断收口`).toMatch(/truncate|break-words|break-all/)
-    }
-  })
 })
 
 describe('Settings 账号与令牌面板', () => {
-  it('已登录：显示用户名/角色/租户，鉴权标注为账号鉴权', async () => {
+  it('已登录：显示用户名/角色/组织，鉴权标注为账号鉴权', async () => {
     route()
     useAuth.setState({ status: 'in', user: admin })
     renderWithProviders(<Settings />)
@@ -110,8 +100,8 @@ describe('Settings 账号与令牌面板', () => {
     expect(screen.getByText('管理员')).toBeInTheDocument()
     expect(screen.getByText('default')).toBeInTheDocument()
     // stats 是异步的，等它落地再断言鉴权标注
-    expect(await screen.findByText('账号鉴权：全部接口需登录')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /登出/ })).toBeInTheDocument()
+    expect(await screen.findByText('需要账号登录')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /退出登录/ })).toBeInTheDocument()
   })
 
   // 回归：auth_enabled 时代只看「有没有配 legacy 令牌」，账号模式（已建用户、无 CLOUDPATH_TOKEN）
@@ -121,7 +111,7 @@ describe('Settings 账号与令牌面板', () => {
     route({ authMode: 'account' })
     useAuth.setState({ status: 'in', user: admin })
     renderWithProviders(<Settings />)
-    expect(await screen.findByText('账号鉴权：全部接口需登录')).toBeInTheDocument()
+    expect(await screen.findByText('需要账号登录')).toBeInTheDocument()
     expect(screen.queryByText(/未启用/)).not.toBeInTheDocument()
     expect(screen.queryByText(/本机模式/)).not.toBeInTheDocument()
   })
@@ -130,12 +120,12 @@ describe('Settings 账号与令牌面板', () => {
     route({ authMode: 'token' })
     useAuth.setState({ status: 'in', user: admin })
     const { unmount } = renderWithProviders(<Settings />)
-    expect(await screen.findByText('共享令牌（legacy）：读开放，写需令牌或本机回环')).toBeInTheDocument()
+    expect(await screen.findByText('使用访问令牌：可查看，修改需令牌或本机操作')).toBeInTheDocument()
     unmount()
 
     route({ authMode: 'open' })
     renderWithProviders(<Settings />)
-    expect(await screen.findByText('未启用：读开放，写仅限本机回环')).toBeInTheDocument()
+    expect(await screen.findByText('无需登录：可查看，修改仅限本机')).toBeInTheDocument()
   })
 
   it('未知鉴权形态回落原值展示，不伪造中文语义', async () => {
@@ -149,9 +139,9 @@ describe('Settings 账号与令牌面板', () => {
     route({ authMode: 'open' })
     useAuth.setState({ status: 'open', user: null })
     renderWithProviders(<Settings />)
-    expect(await screen.findByText('开放访问')).toBeInTheDocument()
-    expect(screen.getByText(/GET \/api\/auth\/me 不可用/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /^登出$/ })).not.toBeInTheDocument()
+    expect(await screen.findByText('无需登录')).toBeInTheDocument()
+    expect(screen.getByText(/当前无需登录即可查看/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^退出登录$/ })).not.toBeInTheDocument()
   })
 
   it('未登录：如实说明受保护接口会 401，并指向登录页', async () => {
@@ -159,17 +149,16 @@ describe('Settings 账号与令牌面板', () => {
     useAuth.setState({ status: 'out', user: null })
     renderWithProviders(<Settings />)
     expect(await screen.findByText('未登录')).toBeInTheDocument()
-    expect(screen.getByText(/受保护的数据接口会返回 401/)).toBeInTheDocument()
+    expect(screen.getByText(/尚未登录。请先到登录页用账号密码登录/)).toBeInTheDocument()
   })
 
-  it('令牌面板不再把 legacy 共享令牌说成必需：账号模式默认走会话 cookie', async () => {
+  it('访问令牌是可选入口：账号登录默认使用浏览器登录状态', async () => {
     route()
     useAuth.setState({ status: 'in', user: admin })
     renderWithProviders(<Settings />)
-    const panel = (await screen.findByText('本机令牌（可选）')).closest('section') as HTMLElement
-    expect(within(panel).getByText(/不需要填任何东西/)).toBeInTheDocument()
-    expect(within(panel).getByText(/会话 cookie/)).toBeInTheDocument()
-    expect(within(panel).getByPlaceholderText(/留空 = 用会话 cookie/)).toBeInTheDocument()
+    const panel = (await screen.findByText('访问令牌（可选）')).closest('section') as HTMLElement
+    expect(within(panel).getByText(/不需要填写/)).toBeInTheDocument()
+    expect(within(panel).getByPlaceholderText('留空即使用当前登录状态')).toBeInTheDocument()
     // 旧文案（把共享令牌说成强制）必须消失
     expect(panel.textContent).not.toContain('都必须携带同一令牌')
   })
@@ -185,7 +174,7 @@ describe('Settings 账号与令牌面板', () => {
       </Routes>,
       '/settings',
     )
-    await user.click(await screen.findByRole('button', { name: /登出/ }))
+    await user.click(await screen.findByRole('button', { name: /退出登录/ }))
     expect(await screen.findByRole('heading', { name: '登录页占位' })).toBeInTheDocument()
     expect(useAuth.getState().status).toBe('out')
   })

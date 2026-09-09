@@ -27,6 +27,11 @@ func setupOverview(t *testing.T) (*store.Store, *Server, *httptest.Server, *stor
 	a := ensureTenantSlug(t, st, "tenant-a")
 	b := ensureTenantSlug(t, st, "tenant-b")
 	mem := storeport.NewMemory()
+	if err := mem.UpsertPluginInstallations(a, "e1", []api.PluginInstallationStatusData{{
+		PluginID: "io.github.acme.driver", Version: "0.1.0", Kind: "Driver", Protocol: 1,
+	}}); err != nil {
+		t.Fatal(err)
+	}
 	srv := New(Config{Store: st, Version: "test", RequireAuth: true, PluginStore: mem})
 	ts := httptest.NewServer(srv.Routes())
 	t.Cleanup(func() { ts.Close(); srv.CloseAll(); time.Sleep(80 * time.Millisecond) })

@@ -1,6 +1,7 @@
 // REST 客户端：TanStack Query 的 queryFn 全走这里。
 // 鉴权接缝（docs/api.md §2）：会话 cookie 同源自动携带（fetch credentials:'same-origin'）
-// + 可选 Bearer 服务令牌（localStorage）。登录态事实源 = GET /api/auth/me（200 已登录 / 401 未登录）。
+// + 可选 legacy 本机服务令牌（localStorage；仅 REST Authorization header，绝不进入 URL/WS）。
+// 登录态事实源 = GET /api/auth/me（200 已登录 / 401 未登录）。
 // 任何受保护端点返回 401 → markUnauthenticated() 全局收敛（store/auth.ts → 路由守卫跳 /login）。
 import type {
   AppDomainRecordsView, AppBindingsView, AppJobsView, AppJobRunRequest, AppJobRunView, AdapterView, CommandView, CreateTokenInput, CreatedToken, CreateUserInput, DeviceView, EdgeView,
@@ -12,11 +13,12 @@ import type {
 import { PLUGIN_ERR_CODES } from './types'
 import { markUnauthenticated } from '@/store/auth'
 
-const TOKEN_KEY = 'cloudpath.token'
+const LEGACY_TOKEN_KEY = 'cloudpath.token'
 
+/** legacy 本机服务令牌：只供 REST Authorization header 使用，WS 走同源会话 cookie。 */
 export function getToken(): string {
   try {
-    return localStorage.getItem(TOKEN_KEY) ?? ''
+    return localStorage.getItem(LEGACY_TOKEN_KEY) ?? ''
   } catch {
     return '' // 隐私模式下 localStorage 可能抛错
   }
@@ -24,8 +26,8 @@ export function getToken(): string {
 
 export function setToken(v: string) {
   try {
-    if (v) localStorage.setItem(TOKEN_KEY, v)
-    else localStorage.removeItem(TOKEN_KEY)
+    if (v) localStorage.setItem(LEGACY_TOKEN_KEY, v)
+    else localStorage.removeItem(LEGACY_TOKEN_KEY)
   } catch { /* 忽略：令牌只影响鉴权，不影响本地展示 */ }
 }
 
@@ -91,7 +93,7 @@ async function req<T>(path: string, init?: RequestInit, opts?: ReqOptions): Prom
     res = await fetch(path, { ...init, headers, credentials: 'same-origin' })
   } catch (error) {
     if (init?.signal?.aborted) throw error
-    throw new Error('无法连接 server（服务未启动或网络不可达）')
+    throw new Error('无法连接服务（服务未启动或网络不可达）')
   }
   init?.signal?.throwIfAborted()
   if (!res.ok) {
@@ -121,14 +123,14 @@ function qs(params: Record<string, string | number | undefined>): string {
 }
 
 /** Wave2 契约探测：Descriptor/Capability 端点由后端 A1 落地（路径以 A1 实现为准）。
- *  缺席（404/405/501）或网络不可达时返回 null —— UI 走通用回落，而不是抛错刷屏。 */
-const ABSENT = new Set([404, 405, 501, 502])
+ *  只有端点明确缺席（404/405/501）才返回 null；网关/网络故障必须上抛给错误态。 */
+const ABSENT = new Set([404, 405, 501])
 
 async function reqOrNull<T>(path: string): Promise<T | null> {
   try {
     return await req<T>(path)
   } catch (e) {
-    if (!(e instanceof ApiError) || ABSENT.has(e.status)) return null
+    if (e instanceof ApiError && ABSENT.has(e.status)) return null
     throw e
   }
 }
@@ -228,8 +230,8 @@ export const api = {
   capabilities: () => reqOrNull<unknown>('/api/capabilities'),
 }
 
+/** 浏览器 WS 只依赖同源会话 cookie；token 永不进入 URL/query。 */
 export function wsUrl(): string {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-  const t = getToken()
-  return `${proto}://${location.host}/ws${t ? `?token=${encodeURIComponent(t)}` : ''}`
+  return `${proto}://${location.host}/ws`
 }

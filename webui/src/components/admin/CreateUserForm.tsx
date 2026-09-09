@@ -6,12 +6,17 @@ import { Button, TextField } from '@/components/ui'
 import { ErrorNote } from './ErrorNote'
 import { SelectField } from './fields'
 import { useCreateUser } from '@/hooks/useAdmin'
-import { adminErrorMessage, DEFAULT_ROLE, ROLE_OPTIONS, roleOption } from '@/lib/admin'
+import { adminErrorMessage, DEFAULT_ROLE, ROLE_OPTIONS } from '@/lib/admin'
 import { roleLabel } from '@/lib/format'
 import { toast } from '@/store/toast'
 import type { Role } from '@/lib/types'
 
 const ROLE_FIELD_OPTIONS = ROLE_OPTIONS.map((r) => ({ value: r.value, label: r.label }))
+const ROLE_HINTS: Record<Role, string> = {
+  viewer: '只能查看设备状态和记录。',
+  operator: '可以查看并执行设备操作。',
+  admin: '可以管理用户和访问令牌。',
+}
 
 export function CreateUserForm({ onDone }: { onDone: () => void }) {
   const create = useCreateUser()
@@ -46,7 +51,7 @@ export function CreateUserForm({ onDone }: { onDone: () => void }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <TextField
           label="用户名" value={username} error={usernameErr} autoComplete="off"
-          hint="登录名，租户内唯一"
+          hint="登录名，本组织内不能重复"
           onChange={(ev) => setUsername(ev.target.value)}
         />
         <TextField
@@ -61,7 +66,7 @@ export function CreateUserForm({ onDone }: { onDone: () => void }) {
         />
         <SelectField
           label="角色" value={role} options={ROLE_FIELD_OPTIONS}
-          hint={roleOption(role)?.hint}
+          hint={ROLE_HINTS[role]}
           onChange={(v) => setRole(v as Role)}
         />
       </div>

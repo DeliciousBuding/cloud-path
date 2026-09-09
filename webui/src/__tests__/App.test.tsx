@@ -90,7 +90,7 @@ describe('路由回落', () => {
 })
 
 describe('Schema 端点缺席时的设备详情页', () => {
-  it('descriptor/capabilities 全 404 → 通用回落视图 + 命令集来自适配器白名单', async () => {
+  it('descriptor/capabilities 全 404 → 通用回落视图 + 命令集来自设备支持的操作', async () => {
     installFetch((url) => {
       if (url === '/api/auth/me') return stubResponse(200, me)
       if (url === '/api/adapters') return stubResponse(200, { adapters: [{ name: 'demo', commands: ['raw', 'identify'] }] })
@@ -99,30 +99,44 @@ describe('Schema 端点缺席时的设备详情页', () => {
     })
     renderApp('/devices/edge-1/dev-9')
 
-    // 详情页改成六个分区（概览/实时状态/控制/事件/能力/诊断），头部标题先落地
+    // 详情页收敛为四个一级分区；高级里再切换状态/功能/诊断子视图
     expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument()
     const user = userEvent.setup()
-    for (const name of ['概览', '实时状态', '控制', '事件', '能力', '诊断']) {
+    for (const name of ['概览', '设备操作', '记录', '高级']) {
       expect(screen.getByRole('tab', { name: new RegExp(name) })).toBeInTheDocument()
     }
 
-    // 实时状态分区：通用回落视图，上报字段按类型渲染（标量成键值行，对象数组成表格，嵌套对象成 JSON）
-    await user.click(screen.getByRole('tab', { name: /实时状态/ }))
-    expect(await screen.findByText('该设备未上报能力声明，此处按上报字段通用渲染')).toBeInTheDocument()
-    expect(screen.getByText('上报字段（通用视图）')).toBeInTheDocument()
+    // 高级 → 状态与趋势：通用回落视图，上报字段按类型渲染（标量成键值行，对象数组成表格，嵌套对象成 JSON）
+    await user.click(screen.getByRole('tab', { name: /高级/ }))
+    await user.click(screen.getByRole('button', { name: '状态与趋势' }))
+    expect(await screen.findByText('该设备尚未同步功能信息，此处按已接收的数据显示')).toBeInTheDocument()
+    expect(screen.getByText('设备数据（通用视图）')).toBeInTheDocument()
     expect(screen.getByText('Mode')).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Slots 数据表' })).toBeInTheDocument()
-    expect(screen.getByRole('group', { name: 'Diag 原始 JSON' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Diag 完整数据' })).toBeInTheDocument()
 
     // 控制分区：命令面板回落到后端白名单，而不是前端自己编一张命令表
-    await user.click(screen.getByRole('tab', { name: /控制/ }))
-    expect(await screen.findByText('适配器白名单')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '原始命令' })).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: '选择命令' })).toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: /设备操作/ }))
+    expect(await screen.findByText('高级：手动输入参数')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: '选择操作' })).toBeInTheDocument()
 
-    // 能力分区：没有 Descriptor 就明说，不猜能力
-    await user.click(screen.getByRole('tab', { name: /能力/ }))
-    expect(await screen.findByText('该设备还没有上报能力声明')).toBeInTheDocument()
+    // 高级 → 设备功能：没有 Descriptor 就明说，不猜能力
+    await user.click(screen.getByRole('tab', { name: /高级/ }))
+    await user.click(screen.getByRole('button', { name: '设备功能' }))
+    expect(await screen.findByText('该设备还没有同步设备功能')).toBeInTheDocument()
+  })
+
+  it('旧高级查询参数映射到高级子视图', async () => {
+    installFetch((url) => {
+      if (url === '/api/auth/me') return stubResponse(200, me)
+      if (url === '/api/adapters') return stubResponse(200, { adapters: [{ name: 'demo', commands: ['raw'] }] })
+      if (url === '/api/devices/edge-1/dev-9') return stubResponse(200, makeDeviceView())
+      return stubResponse(404, { error: 'not found' })
+    })
+    renderApp('/devices/edge-1/dev-9?tab=capabilities')
+    expect(await screen.findByRole('tab', { name: /高级/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('button', { name: '设备功能' })).toHaveAttribute('aria-pressed', 'true')
+    expect(await screen.findByText('该设备还没有同步设备功能')).toBeInTheDocument()
   })
 
   it('设备不存在 → 明确空态而不是崩溃', async () => {
@@ -135,7 +149,7 @@ describe('Schema 端点缺席时的设备详情页', () => {
 })
 
 describe('渲染崩溃兜底', () => {
-  it('ErrorBoundary 把异常收敛成可读卡片（不白屏）', async () => {
+  it('ErrorBoundary 把异常同步成可读卡片（不白屏）', async () => {
     const Boom = () => { throw new Error('组件炸了') }
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})

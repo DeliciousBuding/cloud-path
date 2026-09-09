@@ -1,8 +1,10 @@
 # Plugin Control Plane Synchronization
 
-最后更新：2026-09-03
+最后更新：2026-09-09
 
-> 状态：**目标契约，尚未全部实现**。本文定义 CloudPath Server 与 Edge 之间的插件期望态、实际态、离线行为和审计边界。实现状态以测试和 `docs/design.md` 为准。
+> 状态：当前控制面契约。Server desired/Edge applied/observed 投影、单调 revision、幂等 ack、
+> 离线执行缓存、secret handle 与审计边界均已落地；跨 Server、集中 KMS 等扩展见
+> [architecture.md](../architecture.md) §11。
 
 ## 1. 问题与第一性结论
 
@@ -161,7 +163,7 @@ Server 在 Edge hello 成功后发送当前完整快照；期望态变更后再�
 
 ## 6. 管理 API
 
-v0.1 最小写面：
+当前最小写面：
 
 - `POST /api/plugin-instances`
 - `PATCH /api/plugin-instances/{id}`
@@ -181,7 +183,7 @@ v0.1 最小写面：
 - Edge 仅在插件 manifest 已声明该 secret name，且实例配置显式绑定该 handle 时解析；
 - handle 不存在、已吊销、路径权限不安全或声明不符时，实例 reconcile fail-closed；不得回落到旧明文缓存。
 
-这样 secret 不跨越网络信任边界，也不要求 v0.1 自建中心密钥库。具体规则见 [tenant-security-policy.md](tenant-security-policy.md)。
+这样 secret 不跨越网络信任边界，也不要求当前版本自建中心密钥库。具体规则见 [tenant-security-policy.md](tenant-security-policy.md)。
 
 ## 8. 故障与恢复
 
@@ -200,20 +202,21 @@ v0.1 最小写面：
 | 权限扩大 | 未显式确认不生成新 desired revision |
 | 秘密已吊销 | reconcile 失败；不回落旧明文；审计只记录 handle 名称/版本 |
 
-## 9. 实施顺序与并行边界
+## 9. 模块边界与实施顺序
 
-1. **契约冻结**：本文 + API DTO +协议测试。
-2. **并行实现**：
-   - Store lane：schema/migration/repository；
-   - Edge lane：状态采集、本地 cache、reconciler、WS report/ack；
-   - Server lane：WS ingest/downlink、Catalog SourceReader、只读投影；
-   - Security lane：secret handle/policy/quota 的纯领域逻辑。
-3. **接缝集成**：Server 管理写 API + audit；CLI 远端模式；Catalog UI 接真实数据。
+1. **契约冻结**：本文、API DTO 与协议测试先确定字段和错误语义。
+2. **按模块实现**：
+   - Store：schema/migration/repository；
+   - Edge：状态采集、本地 cache、reconciler、WS report/ack；
+   - Server：WS ingest/downlink、Catalog SourceReader、只读投影；
+   - Security：secret handle/policy/quota 的纯领域逻辑。
+3. **接缝集成**：Server 管理写 API + audit、CLI 远端模式、Catalog UI 接真实数据。
 4. **验收**：断网、重连、重复消息、跨租户、stale boot、权限扩大、secret 吊销的真实 WS + SQLite E2E。
 
-共享写点唯一归属：Store lane 独占 `internal/store/**`；Edge lane 独占 Edge 运行时；Server lane 独占 Server 路由/WS；API 契约在并行开始前先合并。
+共享写点唯一归属：`internal/store/**` 由 Store 模块维护；Edge 运行时和 Server 路由/WS 分别由各自模块维护；
+API 契约先冻结，再跨模块集成。
 
-## 10. 完成定义
+## 10. 验收标准
 
 只有同时满足以下条件，才能称插件控制面完成：
 

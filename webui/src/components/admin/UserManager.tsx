@@ -35,7 +35,7 @@ export function UserManager() {
       ) : isPending ? (
         <RowSkeleton rows={3} />
       ) : users.length === 0 ? (
-        <p className="py-6 text-center text-sm text-ink-3">本租户还没有用户</p>
+        <p className="py-6 text-center text-sm text-ink-3">本组织还没有用户</p>
       ) : (
         <ul className="divide-y divide-hairline" aria-label="用户列表">
           {users.map((u) => <UserRow key={u.id} user={u} />)}
@@ -43,7 +43,7 @@ export function UserManager() {
       )}
 
       <p className="mt-4 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3 break-words">
-        列表永不包含密码哈希；角色为 admin &gt; operator &gt; viewer 层级，跨租户用户统一不可见。
+        这里只显示本组织成员。角色决定可以查看还是执行操作。
       </p>
     </Panel>
   )

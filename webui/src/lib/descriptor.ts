@@ -34,7 +34,7 @@ export function humanize(s: string): string {
 const PROPERTY_LABEL: Record<string, string> = {
   raw: '原始值', value: '数值', state: '状态', time: '时间', direction: '方向',
   mask: '掩码', mode: '模式', level: '设定值', enabled: '开关', count: '计数',
-  status: '状态',
+  status: '状态', notes: '音符序列', frequency_hz: '频率 (Hz)', duration_ms: '时长 (ms)', gap_ms: '音符间隔 (ms)',
   commands: '命令数', pings: 'Ping 计数', ticks: '心跳计数', uptime_s: '运行时长',
   seconds: '秒数',
 }
@@ -545,6 +545,20 @@ export interface CommandSet {
 const MAX_ACTIONS = 16
 const DEFAULT_ARGS_MAX = 64
 
+/** 与 command-schema 的无参数判定同构，避免声明层把空 object 渲染成空表单。 */
+function schemaNeedsInput(schema: Record<string, unknown>): boolean {
+  if (Object.keys(schema).length === 0) return false
+  if (schema.type !== 'object') return true
+  const properties = obj(schema.properties)
+  if (properties && Object.keys(properties).length > 0) return true
+  if (['oneOf', 'anyOf', 'allOf'].some((key) => Array.isArray(schema[key]) && schema[key].length > 0)) return true
+  if (Array.isArray(schema.required) && schema.required.length > 0) return true
+  if ('patternProperties' in schema) return true
+  if ('additionalProperties' in schema && schema.additionalProperties !== false) return true
+  if (typeof schema.minProperties === 'number' || typeof schema.maxProperties === 'number') return true
+  return false
+}
+
 function variantOf(decl: Record<string, unknown>): CommandAction['variant'] {
   const v = str(decl.variant)
   if (v === 'primary' || v === 'ghost' || v === 'danger') return v
@@ -557,7 +571,7 @@ function confirmOf(decl: Record<string, unknown>, label: string): string | undef
   const c = decl.confirmation ?? decl.confirmText ?? decl.confirm
   if (typeof c === 'string' && c.length) return c
   if (c === true || decl.destructive === true) {
-    return `确认执行「${label}」？该动作由 Capability 声明为破坏性操作。`
+    return `确认执行「${label}」？此操作会改变设备状态，请确认继续。`
   }
   return undefined
 }
@@ -582,8 +596,9 @@ function declaredCommands(container: Record<string, unknown>): CommandAction[] {
       const hint = str(o.description) ?? str(o.hint); if (hint) a.hint = hint
       const confirmText = confirmOf(o, label); if (confirmText) a.confirmText = confirmText
       const schema = obj(o.inputSchema) ?? obj(o.input) ?? obj(o.args)
-      if (schema) { a.needsInput = true; a.inputSchema = schema }
-      else if (o.args === true || o.needsInput === true) a.needsInput = true
+      if (schema) {
+        if (schemaNeedsInput(schema)) { a.needsInput = true; a.inputSchema = schema }
+      } else if (o.args === true || o.needsInput === true) a.needsInput = true
       const maxLen = typeof o.maxArgsLength === 'number' ? o.maxArgsLength : DEFAULT_ARGS_MAX
       a.inputMaxLength = maxLen
       out.push(a)
@@ -615,7 +630,7 @@ function actionsFromCapabilities(
         const hint = str(decl.description) ?? str(decl.hint); if (hint) a.hint = hint
         const confirmText = confirmOf(decl, label); if (confirmText) a.confirmText = confirmText
         const schema = obj(decl.inputSchema)
-        if (schema) { a.needsInput = true; a.inputSchema = schema }
+        if (schema && schemaNeedsInput(schema)) { a.needsInput = true; a.inputSchema = schema }
         a.inputMaxLength = typeof decl.maxArgsLength === 'number' ? decl.maxArgsLength : DEFAULT_ARGS_MAX
         out.push(a)
       }

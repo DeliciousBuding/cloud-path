@@ -8,7 +8,7 @@ import { toast } from '@/store/toast'
 import { cn } from '@/lib/cn'
 import { ConfirmDialog } from './ConfirmDialog'
 import { commandScope } from './command/scope'
-import { commandArgsError } from '@/lib/command-schema'
+import { commandArgsError, commandArgsErrorCopy, commandHasInput } from '@/lib/command-schema'
 import { commandErrorCopy } from '@/lib/format'
 import type { CommandAction } from '@/lib/descriptor'
 
@@ -46,7 +46,8 @@ function ScopedCommandButton({ deviceId, action, args, className, disabled, scop
   const active = useRef(true)
   const sending = useRef(false)
   const label = action.label
-  const error = commandArgsError(args ?? '', action.inputSchema, action.inputMaxLength)
+  const inputSchema = action.inputSchema && commandHasInput(action.inputSchema) ? action.inputSchema : undefined
+  const error = commandArgsError(args ?? '', inputSchema, action.inputMaxLength)
   const blocked = !!disabled || !!error
   const current = useCallback(() => active.current && commandScope(useAuth.getState(), deviceId) === scope, [deviceId, scope])
 
@@ -66,8 +67,8 @@ function ScopedCommandButton({ deviceId, action, args, className, disabled, scop
     setBusy(false)
     setPendingId(null)
     refreshHistory()
-    if (ack.status === 'ok') toast.ok(label + '已执行', ack.detail || undefined)
-    else toast.bad(label + '失败', ack.detail || '边缘节点返回失败但未附原因，可在命令历史查看原始回执')
+    if (ack.status === 'ok') toast.ok(label + '已完成', ack.detail || undefined)
+    else toast.bad(label + '失败', '设备返回失败，请在操作记录中查看结果。')
   }, [acks, pendingId, label, current, refreshHistory])
 
   useEffect(() => {
@@ -79,7 +80,7 @@ function ScopedCommandButton({ deviceId, action, args, className, disabled, scop
       setBusy(false)
       setPendingId(null)
       refreshHistory()
-      toast.bad(label + '超时', '边缘节点未回执（设备可能离线或通道忙）')
+      toast.bad(label + '超时', '设备没有在规定时间内返回结果，可能离线或正在忙。')
     }, ACK_TIMEOUT_MS)
     return () => clearTimeout(t)
   }, [pendingId, label, current, refreshHistory])
@@ -99,7 +100,7 @@ function ScopedCommandButton({ deviceId, action, args, className, disabled, scop
       if (!current()) return
       sending.current = false
       setBusy(false)
-      toast.bad(label + '未下发', commandErrorCopy(e))
+      toast.bad(label + '没有执行', commandErrorCopy(e))
     }
   }
 
@@ -108,12 +109,7 @@ function ScopedCommandButton({ deviceId, action, args, className, disabled, scop
     if (action.confirmText || action.variant === 'danger') { setConfirming({ args }); return }
     void send()
   }
-  const title = [
-    error, action.hint,
-    action.capability ? 'Capability ' + action.capability : '',
-    action.entityLabel ? 'Entity ' + action.entityLabel : '',
-    'cmd=' + action.cmd,
-  ].filter(Boolean).join(' · ')
+  const title = commandArgsErrorCopy(error)
 
   return (
     <>
@@ -130,10 +126,9 @@ function ScopedCommandButton({ deviceId, action, args, className, disabled, scop
       <ConfirmDialog open={confirming !== null && confirming.args === args && !blocked}
         tone={action.variant === 'danger' ? 'danger' : 'warn'} title={'确认执行「' + label + '」？'}
         body={<>
-          <p>{action.confirmText ?? '请确认要向该设备执行此命令。'}</p>
+          <p>{action.confirmText ?? '请确认要执行此操作。'}</p>
           <p className="num mt-2 text-xs text-ink-3">
-            目标设备 <span className="break-all">{deviceId}</span> · 命令 <span className="font-mono">{action.cmd}</span>
-            {args ? <> · 参数 <span className="font-mono break-all">{args}</span></> : null}
+            目标设备 <span className="break-all">{deviceId}</span>
           </p>
         </>}
         confirmLabel={label} busy={busy}

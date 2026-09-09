@@ -1,8 +1,9 @@
 # Tenant Security Policy, Retention, Quotas, and Plugin Secrets
 
-最后更新：2026-09-03
+最后更新：2026-09-09
 
-> 状态：**v0.1 目标契约，尚未全部实现**。本文只定义防滥用与最小秘密边界，不引入计费系统或中心密钥库。
+> 状态：当前安全契约。租户隔离、本地 secret provider、保留期与硬配额已落地；中心 KMS/Vault、
+> 分布式配额等扩展属于目标态。
 
 ## 1. 设计目标
 
@@ -24,7 +25,7 @@ CloudPath 的租户隔离不仅是“查询时带 tenant id”，还必须保证
 
 ### 2.2 明文边界
 
-v0.1 不提供中心 `/api/secrets`，Server 不存储、不解析、不转发明文。Edge 本地 secret provider 是唯一明文来源：
+当前不提供中心 `/api/secrets`，Server 不存储、不解析、不转发明文。Edge 本地 secret provider 是唯一明文来源：
 
 ```text
 <secret-root>/<tenant>/<instance>/<name>
@@ -57,7 +58,7 @@ v0.1 不提供中心 `/api/secrets`，Server 不存储、不解析、不转发�
 
 - 轮换：原子替换 Edge secret 文件并重启/reconcile 实例；新进程只读取新值。
 - 吊销：删除本地 secret 后重启/reconcile 必须失败；旧进程需由管理员停止或触发 reconcile。
-- v0.1 不做 secret 版本历史、远程分发或自动轮换；这些属于 v0.2。
+- 当前不做 secret 版本历史、远程分发或自动轮换；这些属于后续目标态。
 
 ## 3. Tenant retention
 
@@ -73,7 +74,7 @@ v0.1 不提供中心 `/api/secrets`，Server 不存储、不解析、不转发�
 | current device state | 常驻 | 设备删除时清理 |
 | plugin observed projection | 30 天 | desired 不随 observed 清理 |
 
-每个字段可为 NULL，表示继承 Server 默认值；不能用 0 表示无限。需要无限保留时必须在未来版本设计独立权限与存储预算，v0.1 不提供。
+每个字段可为 NULL，表示继承 Server 默认值；不能用 0 表示无限。需要无限保留时必须在未来版本设计独立权限与存储预算，当前不提供。
 
 ### 3.2 Sweeper
 
@@ -91,7 +92,7 @@ Sweeper 仍运行在 `cloudpath-server` 内部：
 
 ## 4. Tenant quotas
 
-v0.1 quota 只用于防滥用，不用于计费。
+当前 quota 只用于防滥用，不用于计费。
 
 | 资源 | 默认硬上限 | 拒绝点 |
 |---|---:|---|
@@ -128,7 +129,7 @@ v0.1 quota 只用于防滥用，不用于计费。
 - `updated_at`；
 - 所有字段有 DB `CHECK`；NULL 表示继承默认。
 
-Plugin control plane 的 v7 schema 与 tenant policy schema 必须由同一个 Store lane 统一编号和迁移顺序，禁止两个并行 lane 都声明“schema v7”。
+Plugin control plane 与 tenant policy 的 schema 版本必须共用 `internal/store` 的同一 `PRAGMA user_version` 迁移链；禁止两个模块并行声明同一个版本号。
 
 ## 6. 不变量
 
@@ -157,8 +158,8 @@ Plugin control plane 的 v7 schema 与 tenant policy schema 必须由同一个 S
 
 反向验证至少包括：移除 tenant predicate 会误删并令测试失败；移除原子 admit 会在并发测试中超过上限；把 secret 值放入 DTO/log 会触发泄漏测试。
 
-## 8. v0.1 与后续边界
+## 8. 当前与后续边界
 
-v0.1 必须实现：本地 secret provider + 双重授权、per-tenant retention、devices/edges/browser WS/tokens/users/events/plugin instances 硬配额、稳定错误码和审计。
+当前基线：本地 secret provider + 双重授权、per-tenant retention、devices/edges/browser WS/tokens/users/events/plugin instances 硬配额、稳定错误码和审计。
 
-v0.2 可实现：中心 KMS/Vault、远程 secret 分发、secret 版本历史、自动轮换、计费配额、分布式 limiter、多 Server 全局配额。
+后续目标态：中心 KMS/Vault、远程 secret 分发、secret 版本历史、自动轮换、计费配额、分布式 limiter、多 Server 全局配额。

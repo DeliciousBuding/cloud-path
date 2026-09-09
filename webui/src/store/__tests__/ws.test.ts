@@ -2,7 +2,7 @@
 //
 // 三件事必须成立，否则验收场景「登录一个账号 → 看到真实设备 → 下发命令」会静默失真：
 //   ① 账号模式下浏览器给不了 WS 自定义 header，`/ws` 靠**会话 cookie** 鉴权，
-//      所以没有本机令牌时 wsUrl() 必须是干净的 `/ws`（不拼 ?token=）；
+//      所以 wsUrl() 必须始终是干净的 `/ws`（本机 token 也绝不拼进 query）；
 //   ② 登出 → 再登录必须真的重新拨号（旧实现 started 永不复位，第二次登录收不到实时数据）；
 //   ③ 握手连续失败要如实计数，并定期用 me 复核登录态；未知/畸形 WS 帧一律忽略，不得崩。
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -10,7 +10,7 @@ import { connectLive, disconnectLive, reconnectLive, useLive } from '@/store/ws'
 import { useAuth } from '@/store/auth'
 import { setToken } from '@/lib/api'
 import { payloadLabel } from '@/lib/format'
-import type { EventView } from '@/lib/types'
+import type { DeviceDescriptor, EventView, Observation } from '@/lib/types'
 import { installFetch, stubResponse } from '@/test/http'
 import { resetStores } from '@/test/render'
 
@@ -83,10 +83,14 @@ describe('wsUrl：会话 cookie 模式', () => {
     expect(lastSocket().url).not.toContain('token=')
   })
 
-  it('有本机令牌时才拼 ?token=（legacy 共享令牌走 query 是后端允许的）', () => {
+  it('有本机 legacy token 时仍不拼 query，token 只留在 REST Authorization', () => {
     setToken('tok-abc')
     connectLive()
-    expect(lastSocket().url).toContain('token=tok-abc')
+    expect(lastSocket().url).toMatch(/\/ws$/)
+    expect(lastSocket().url).not.toContain('token=')
+    expect(lastSocket().url).not.toContain('tok-abc')
+    expect(document.body.textContent).not.toContain('tok-abc')
+    setToken('')
   })
 })
 
@@ -137,7 +141,7 @@ describe('握手连续失败要说实话并复核登录态', () => {
     }
   })
 
-  it('连续失败满 5 次 → 调 me 复核登录态（会话失效时守卫才能收敛到 /login）', () => {
+  it('连续失败满 5 次 → 调 me 复核登录态（会话失效时守卫才能同步到 /login）', () => {
     connectLive()
     const before = meCalls()
     for (let i = 0; i < 5; i++) {
@@ -197,7 +201,7 @@ describe('WS 消费必须宽容（不得让整个 UI 崩）', () => {
     expect(useLive.getState().status).toBe('open')
   })
 
-  it('正常快照与状态帧仍被采纳（宽容不等于什么都不收）', () => {
+  it('正常配置与状态帧仍被采纳（宽容不等于什么都不收）', () => {
     const s = openSocket()
     s.simulateMessage({
       v: 1, type: 'snapshot', ts: 10,
@@ -211,6 +215,24 @@ describe('WS 消费必须宽容（不得让整个 UI 崩）', () => {
 
     s.simulateMessage({ v: 1, type: 'state', device: 'e1/d1', ts: 12, data: { online: false, raw: { a: 2 }, updated_at: 12 } })
     expect(useLive.getState().devices['e1/d1']?.online).toBe(false)
+  })
+
+  it('快照重建 descriptor 缓存，删除不在 devices 里的旧键与快照外 Descriptor', () => {
+    const s = openSocket()
+    useLive.setState({ descriptors: {
+      'e1/old': sampleDescriptor('e1/old'),
+      'e1/d1': sampleDescriptor('e1/d1'),
+    } })
+    s.simulateMessage({
+      v: 1, type: 'snapshot', ts: 11,
+      data: {
+        devices: [{ id: 'e1/d1', edge_id: 'e1', adapter: 'demo', online: true, state: {}, updated_at: 11, last_seen: 11 }],
+        edges: [{ edge_id: 'e1', online: true, version: 'v1', devices: ['e1/d1'], connected_at: 11 }],
+        descriptors: [sampleDescriptor('e1/d1'), sampleDescriptor('e1/ghost')],
+      },
+    })
+    expect(Object.keys(useLive.getState().descriptors)).toEqual(['e1/d1'])
+    expect(useLive.getState().descriptors['e1/d1'].device_id).toBe('e1/d1')
   })
 })
 
@@ -338,10 +360,10 @@ function sample(overrides: Record<string, unknown> = {}) {
   return { capability: sampleCapability, property: 'value', value: 7,
     quality: 'good', observed_at: '2026-09-08T00:00:00Z', received_at: '2026-09-08T00:00:01Z', sequence: 1, ...overrides }
 }
-function sampleDescriptor(deviceID: string) {
+function sampleDescriptor(deviceID: string): DeviceDescriptor {
   return { device_id: deviceID, external_id: deviceID, status: 'online', entities: [
-    { entity_id: 'shared', unique_key: 'shared', category: 'sensor', capabilities: [sampleCapability], observations: { value: sample() } },
-    { entity_id: 'sibling', unique_key: 'sibling', category: 'sensor', capabilities: [sampleCapability], observations: { value: sample({ value: 9 }) } },
+    { entity_id: 'shared', unique_key: 'shared', category: 'sensor', capabilities: [sampleCapability], observations: { value: sample() as Observation } },
+    { entity_id: 'sibling', unique_key: 'sibling', category: 'sensor', capabilities: [sampleCapability], observations: { value: sample({ value: 9 }) as Observation } },
   ] }
 }
 function observationSocket() {

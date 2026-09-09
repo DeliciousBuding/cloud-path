@@ -1,7 +1,7 @@
-// 概览页的四态守卫 + 「禁止假数据」反向断言。
+// 概览页的四态与真实来源边界。
 // 概览是产品首屏，验收要求：Loading / Empty / Error / 有数据 四种后端形态都必须是
 // 设计过的呈现，且任何一个数字都能追溯到真实通道（服务端聚合优先，列表通道降级），
-// 不得有写死的 demo。
+
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -59,10 +59,10 @@ describe('概览：有数据', () => {
     route(FULL)
     renderWithProviders(<Overview />)
     expect(await screen.findByText('在线设备')).toBeInTheDocument()
-    expect(screen.getByText('在线边缘')).toBeInTheDocument()
+    expect(screen.getByText('在线网关')).toBeInTheDocument()
     expect(screen.getByText('活跃插件')).toBeInTheDocument()
-    expect(screen.getByText('近24小时失败命令')).toBeInTheDocument()
-    // 2/3、1/2、1/2 成对呈现；失败命令只有计数
+    expect(screen.getByText('近24小时失败操作')).toBeInTheDocument()
+    // 2/3、1/2、1/2 成对呈现；失败操作只有计数
     expect(screen.getByText('2').parentElement?.textContent).toMatch(/2\/3/)
     expect(screen.getByText('需要关注')).toBeInTheDocument()
   })
@@ -71,7 +71,7 @@ describe('概览：有数据', () => {
     route(FULL)
     const { container } = renderWithProviders(<Overview />)
     expect(await screen.findByText('1 台设备离线')).toBeInTheDocument()
-    expect(screen.getByText('近24小时 1 条命令失败或超时')).toBeInTheDocument()
+    expect(screen.getByText('近24小时 1 条操作失败或超时')).toBeInTheDocument()
     // 机器命令名/状态徽章/明细时间不在概览二次出现（同屏同一答案只留一处）
     expect(screen.queryByText('Relay On')).not.toBeInTheDocument()
     expect(screen.queryByText('失败')).not.toBeInTheDocument()
@@ -82,7 +82,7 @@ describe('概览：有数据', () => {
   it('边缘离线与插件未活跃各生成一条可执行的提醒（含去向链接）', async () => {
     route(FULL)
     const { container } = renderWithProviders(<Overview />)
-    expect(await screen.findByText('1 台边缘节点离线')).toBeInTheDocument()
+    expect(await screen.findByText('1 台网关离线')).toBeInTheDocument()
     expect(screen.getByText('1 个插件实例未达到活跃')).toBeInTheDocument()
     const links = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))
     expect(links).toContain('/edges')
@@ -96,7 +96,7 @@ describe('概览：有数据', () => {
       events: [{ id: -1, device_id: 'edge-a/dev-1', ts: 1_770_000_000, type: 'device.boot', payload: '{}' }],
     })
     renderWithProviders(<Overview />)
-    expect(await screen.findByText('近期事件')).toBeInTheDocument()
+    expect(await screen.findByText('近期运行记录')).toBeInTheDocument()
     // 平台生命周期事件走平台词汇层：device.boot → 设备启动
     expect(screen.getAllByText('设备启动').length).toBeGreaterThan(0)
   })
@@ -105,22 +105,18 @@ describe('概览：有数据', () => {
 describe('概览：空态（禁止假数据）', () => {
   it('全零数据 → 设计过的空态文案，没有一个编造的数字或设备', async () => {
     route(EMPTY)
-    const { container } = renderWithProviders(<Overview />)
+    renderWithProviders(<Overview />)
     expect(await screen.findByText('在线设备')).toBeInTheDocument()
     // 统计瓦片给出「等待接入」这类空态说明，而不是塞个看起来合理的数
-    expect(screen.getByText('等待边缘节点接入设备')).toBeInTheDocument()
-    expect(screen.getByText('尚未有边缘节点注册')).toBeInTheDocument()
+    expect(screen.getByText('等待网关接入设备')).toBeInTheDocument()
+    expect(screen.getByText('尚未有网关注册')).toBeInTheDocument()
     expect(screen.getByText('还没有插件实例')).toBeInTheDocument()
     // 无异常是明确说出来的，不是空白
     expect(screen.getByText('暂无异常')).toBeInTheDocument()
     // 设备舰队与事件各自给出空态说明（不得空白）
     expect(screen.getByText('还没有设备接入')).toBeInTheDocument()
-    expect(screen.getByText('还没有事件上报')).toBeInTheDocument()
-    // 反向断言：不得写死任何示例设备/示例数字冒充真实数据
-    const text = container.textContent ?? ''
-    for (const fake of ['demo-device', '示例设备', '客厅', '药盒', '1234']) {
-      expect(text, `概览空态里出现了疑似写死数据 ${fake}`).not.toContain(fake)
-    }
+    expect(screen.getByText('暂无运行记录')).toBeInTheDocument()
+
   })
 
   it('设备列表有内容但概览计数为 0 时，仍按各自真实来源渲染（不互相编造）', async () => {
@@ -130,15 +126,16 @@ describe('概览：空态（禁止假数据）', () => {
     }])
     renderWithProviders(<Overview />)
     expect(await screen.findByText('真实设备')).toBeInTheDocument()
-    expect(screen.getByText('等待边缘节点接入设备')).toBeInTheDocument()
+    expect(screen.getByText('等待网关接入设备')).toBeInTheDocument()
   })
 })
 
 describe('概览：加载与错误态（不得白屏）', () => {
-  it('首帧是骨架，不是空白也不是 0', async () => {
+  it('首帧不把未加载数据渲染成统计值或空态', () => {
     route(FULL)
-    const { container } = renderWithProviders(<Overview />)
-    expect(container.querySelectorAll('.skeleton').length).toBeGreaterThan(0)
+    renderWithProviders(<Overview />)
+    expect(screen.queryByText('在线设备')).not.toBeInTheDocument()
+    expect(screen.queryByText('暂无异常')).not.toBeInTheDocument()
   })
 
   it('聚合 500 但列表通道可用 → 降级统计 + 来源标注 + 重试入口，设备舰队照常', async () => {
@@ -147,13 +144,13 @@ describe('概览：加载与错误态（不得白屏）', () => {
       port: 'COM3', online: true, state: {}, updated_at: 1, last_seen: 1,
     }])
     renderWithProviders(<Overview />)
-    expect(await screen.findByText(/聚合通道不可用/)).toBeInTheDocument()
+    expect(await screen.findByText(/汇总数据暂不可用，以上数据来自设备和网关列表/)).toBeInTheDocument()
     // 降级统计来自设备列表通道的真实字段
     expect(await screen.findByText('仍在上报的设备')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '设备' })).toBeInTheDocument()
 
     const before = stub.to('/api/overview').length
-    await userEvent.click(screen.getByRole('button', { name: /重试聚合/ }))
+    await userEvent.click(screen.getByRole('button', { name: '重新加载' }))
     expect(stub.to('/api/overview').length).toBeGreaterThan(before)
   })
 

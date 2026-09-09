@@ -1,9 +1,10 @@
 # CloudPath 架构总览
 
-最后更新：2026-09-03
+最后更新：2026-09-09
 
-> 状态：**目标架构已定，尚未全部实现**。本文是架构入口；当前 P1 实现事实仍以
-> [design.md](design.md) 为准。插件契约落地期间必须同时标注“已实现”和“目标态”，不得把规划写成现状。
+> 状态：**当前实现与目标态分列**。外部 Driver Host、Registry、Application Runtime 与多租户隔离
+> 已落地；Connector/Transform 运行时、集中 Secret Store、分布式配额和跨 Server 部署仍是目标态。
+> 当前契约以 [design.md](design.md)、`spec/` 和代码为准；目标态见 §11。
 >
 > 插件控制面期望态/实际态同步见 [control-plane-sync.md](architecture/control-plane-sync.md)；租户保留期、配额与插件秘密边界见 [tenant-security-policy.md](architecture/tenant-security-policy.md)。
 
@@ -27,8 +28,8 @@ CloudPath 是一个以 **Device / Entity / Capability** 为核心的通用 IoT �
 
 - Driver Plugin 把厂商硬件和协议映射为标准能力。
 - Application Plugin 把能力组合成具体业务。
-- Connector Plugin 把 CloudPath 与外部平台、通知系统或数据后端连接。
-- WebUI 默认按插件声明的 Schema 渲染，不写死设备字段和业务页面。
+- Connector Plugin 把 CloudPath 与外部平台、通知系统或数据后端连接（运行时仍属目标态）。
+- WebUI 默认按 Descriptor / Capability 声明渲染设备字段与操作，不写死具体设备；业务页面 Schema 仍属目标态。
 
 第一个板卡和“定时分格提醒”只作为 reference driver / reference application；两者必须可以独立替换。
 
@@ -68,7 +69,7 @@ CloudPath 是一个以 **Device / Entity / Capability** 为核心的通用 IoT �
 │ CloudPath Edge Plane                                    │
 │ Driver Host · Discovery · Offline Buffer · Local Policy │
 └──────────────┬───────────────────────────┬──────────────┘
-               │ versioned gRPC            │ versioned gRPC
+               │ versioned RPC             │ versioned RPC
       ┌────────▼────────┐          ┌────────▼────────┐
       │ Driver Plugin A │          │ Driver Plugin B │
       └─────────────────┘          └─────────────────┘
@@ -100,7 +101,7 @@ CloudPath 是一个以 **Device / Entity / Capability** 为核心的通用 IoT �
 | Connector | Edge 或 Server | MQTT/Webhook/外部平台/通知/数据出口 | 定义核心设备模型 |
 | Transform（后期） | Server/Edge 沙箱 | 无状态映射、过滤、聚合、规则函数 | 长连接和任意系统访问 |
 
-UI 贡献不是独立可执行插件类型。v1 由上述插件通过 Manifest 提交声明式导航、表单、页面和组件 Schema；自定义 JavaScript 延后到具备独立 Origin、沙箱与细粒度 API token 以后。
+UI 贡献不是独立可执行插件类型。当前 WebUI 由 Descriptor/Capability schema 驱动通用设备视图、能力动作与命令表单；任意第三方页面或 JavaScript 延后到具备独立 Origin、沙箱与细粒度 API token 以后。
 
 ## 6. 核心领域模型
 
@@ -149,35 +150,43 @@ Topic 只是候选集合，不是信任证明。CLI 搜到仓库后还必须检�
 
 ## 9. 插件运行时
 
-- Driver 和有 Backend 的 Application/Connector 使用独立子进程。
-- 子进程通过 stdout 完成一次握手，再通过本地 versioned gRPC 通信。
-- Transport 不写死：Windows 可用 loopback TCP 或 named pipe；Linux/macOS 优先 Unix socket；测试使用内存传输。
+- Driver 和有 Backend 的 Application 使用独立子进程；Connector 运行时仍是目标态。
+- 子进程通过 stdout 完成一次握手，再通过本地 versioned RPC 通信（当前为长度前缀 JSON 帧，transport 可替换）。
+- Transport 不写死：当前 Windows 使用 loopback TCP，Linux/macOS 使用 Unix socket，测试使用内存传输；named pipe 等可后续扩展。
 - 一个插件进程可托管多个 Plugin Instance 和多台设备，而不是一设备一进程。
 - Host 负责健康检查、日志、崩溃检测、指数退避、资源统计和优雅退出。
 
 详细契约见 [architecture/plugin-system.md](architecture/plugin-system.md)。
 
-## 10. 当前实现与目标态
+## 10. 当前实现
 
-| 能力 | 当前 P1 | 目标 |
+| 能力 | 当前状态 | 边界 |
 |---|---|---|
-| 设备扩展 | Go `init()` + `device.Adapter` | 外部 Driver Plugin + versioned gRPC |
-| 状态 | `State.Raw map[string]any` | Entity/Capability + typed Observation；Raw 仅兼容 |
-| UI | 部分字段与命令外观硬编码 | Descriptor/Schema 全驱动 |
-| STC-B | ~~`examples/stcb` 编译进 Edge~~（已移除） | 独立 `cloud-path-driver-stcb` 仓库（v0.1.0 已发布） |
-| 业务应用 | 无正式 Application Runtime | Capability Binding + App Plugin |
-| 插件发现 | 无 | GitHub Topic + Registry |
-| 安装可信度 | 无 | digest、来源验证、attestation、lockfile |
-| 多租户 | 仅设计 | tenant-scoped plugin/device/data |
+| 设备扩展 | 外部 Driver Plugin + Driver Protocol v1，由 Edge Plugin Host 运行；内置 `demo` 仅作无硬件参考 | 同一外部 Driver 的多实例多设备映射与串口注入已实现；命令/事件身份链仍以全局唯一 `entity_id` 为前提，`(device_key, entity_id)` 未贯穿；多块真板现场 E2E 尚未完成 |
+| 状态模型 | Descriptor / Entity / Capability + typed Observation；`State.Raw` 仅保留兼容与诊断 | 旧 raw 读面继续可用，不冒充 typed 语义 |
+| UI | Descriptor / Capability 驱动设备视图、能力动作与命令表单 | 任意第三方 React bundle 注入仍是非目标 |
+| STC-B | 已拆为独立 Driver Plugin [`cloud-path-driver-stcb`](https://github.com/DeliciousBuding/cloud-path-driver-stcb)，Core 生产二进制不再内置 STC-B | 发布版本以插件仓库 tag 为准 |
+| 业务应用 | Server AppHost + `internal/appruntime` + Application Protocol v1，支持 Capability 绑定、领域记录、任务与手动操作 | 参考应用已拆为独立仓库；旧 bootstrap 仅作历史参考 |
+| 插件发现与安装 | GitHub Topic 开放发现 + Registry CLI（search/inspect/install/enable/disable/update/remove/host），校验 Manifest、digest、兼容范围并写 `plugins.lock` | Registry 是信任增强通道，不替代摘要与权限校验 |
+| 多租户 | 账号/RBAC、tenant token、审计、设备和插件实例按 `tenant_id` 隔离；浏览器 WS 快照与 fan-out 按租户过滤 | 单 Server 部署；分布式全局配额与跨 Server 调度未实现 |
 
-## 11. 决策记录与实施
+## 11. 目标态与后续演进
+
+以下能力不是当前实现，不能按现状使用：
+
+- **Connector / Transform Runtime**：Connector 已有 Manifest 契约，运行时待实现；Transform/WASM 仍在设计阶段。
+- **强隔离与集中秘密**：当前是受用户授权的本地进程插件与 Edge 本地 secret provider；中心 KMS/Vault、远程 secret 分发、自动轮换尚未实现。
+- **横向扩展**：多 Server 全局配额、分布式 limiter、跨节点调度与一致性尚未实现。
+- **协议与数据扩展**：MQTT/Modbus 等接入网关、远程 OTA 编排、时序聚合和业务分析不在当前基线。
+- **第三方 UI 扩展**：任意 React bundle 不进入主页面；未来需要独立 Origin、sandboxed iframe 与细粒度 API token。
+
+## 12. 决策记录
 
 - [ADR-0001：能力中心的多契约插件模型](architecture/adr/0001-capability-centered-plugins.md)
 - [ADR-0002：GitHub Topic + Registry 混合发现](architecture/adr/0002-github-plugin-discovery.md)
 
-分阶段实施计划与当前进度跟踪在私有层（gitignored，不入库）。约定：公开文档只泛指「私有层」，不点名其中具体文件——clone 后 `.local/` 不存在，点名即坏链接。
 
-## 12. 非目标
+## 13. 非目标
 
 - v1 不支持任意第三方 React bundle 注入主页面。
 - v1 不承诺不受信任插件的强 OS 沙箱；初期定位为“经用户授权的本地代码”，但仍执行进程隔离与权限披露。

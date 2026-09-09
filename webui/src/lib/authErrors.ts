@@ -33,9 +33,9 @@ const BASE: AuthErrorCopy = {
  */
 export const SESSION_NOT_ESTABLISHED = {
   /** POST /api/auth/login 2xx 之后 GET /api/auth/me 复核失败：凭据是对的，可以重试 */
-  login: '账号和密码是对的，但会话没有建立（浏览器或反向代理可能拦掉了会话 cookie，或服务端会话写入失败）。请重试一次；仍失败请检查浏览器是否禁用了 cookie、反向代理是否透传 Set-Cookie。',
+  login: '账号和密码是对的，但登录状态没有保存成功。请重试一次；如果仍然失败，请检查浏览器是否允许保存网站数据，或联系管理员检查服务配置。',
   /** POST /api/auth/setup 2xx 之后复核失败：账号已创建且不可逆，只能去登录页 */
-  setup: '管理员账号已创建，实例已进入全鉴权模式，但会话没有建立（浏览器或反向代理可能拦掉了会话 cookie）。请直接用刚创建的账号在登录页登录。',
+  setup: '管理员账号已创建，但登录状态没有保存成功。请直接到登录页使用刚创建的账号登录。',
 } as const
 
 /** POST /api/auth/login 的错误语义 */
@@ -55,12 +55,12 @@ export function loginErrorCopy(e: unknown): AuthErrorCopy {
       case 400:
         return { ...BASE, message: '账号或密码格式不被接受（用户名 ≤64 字符，密码 ≤256 字符）' }
       case 503:
-        return { ...BASE, message: '服务端存储不可用，暂时无法登录。请稍后重试；持续失败请联系管理员。' }
+        return { ...BASE, message: '服务暂时无法保存登录信息，请稍后重试；持续失败请联系管理员。' }
       default:
-        return { ...BASE, message: `登录失败（HTTP ${e.status}）` }
+        return { ...BASE, message: `登录失败，请稍后重试（错误代码 ${e.status}）` }
     }
   }
-  return { ...BASE, message: '无法连接 server（服务未启动或网络不可达）', unreachable: true }
+  return { ...BASE, message: '无法连接服务（服务未启动或网络不可达）', unreachable: true }
 }
 
 /**
@@ -75,12 +75,12 @@ export function setupErrorCopy(e: unknown): AuthErrorCopy {
       case 403:
         return {
           ...BASE, alreadySetup: true,
-          message: '无法从这里初始化：本实例已完成初始化，或首次设置只允许从服务器本机（回环地址）进行。请联系管理员为你创建账号，然后在登录页登录。',
+          message: '无法从这里完成初始化：系统已经设置过，或首次设置只能在运行服务的电脑上操作。请联系管理员创建账号，然后到登录页登录。',
         }
       case 409:
         return {
           ...BASE, alreadySetup: true,
-          message: '本实例已经初始化过了，不能再创建首个账号。请直接去登录页登录；忘记密码请联系管理员重置。',
+          message: '系统已经完成初始化，不能再创建首个账号。请直接到登录页登录；忘记密码请联系管理员重置。',
         }
       // 没有 401 分支：/api/auth/setup 是免认证端点，只会 403/409/400/503。
       // 建号成功后 me→401 是「会话没落地」，属另一件事，由 SESSION_NOT_ESTABLISHED.setup
@@ -93,10 +93,10 @@ export function setupErrorCopy(e: unknown): AuthErrorCopy {
           message: e.retryAfter ? `操作过于频繁，请 ${e.retryAfter} 秒后重试` : '操作过于频繁，请稍后再试',
         }
       case 503:
-        return { ...BASE, message: '服务端存储不可用，暂时无法创建账号。请稍后重试。' }
+        return { ...BASE, message: '服务暂时无法保存账号信息，请稍后重试。' }
       default:
-        return { ...BASE, message: `初始化失败（HTTP ${e.status}）` }
+        return { ...BASE, message: `初始化失败，请稍后重试（错误代码 ${e.status}）` }
     }
   }
-  return { ...BASE, message: '无法连接 server（服务未启动或网络不可达）', unreachable: true }
+  return { ...BASE, message: '无法连接服务（服务未启动或网络不可达）', unreachable: true }
 }

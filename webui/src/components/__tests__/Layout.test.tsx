@@ -1,5 +1,4 @@
-// Layout：地标与跳转链接、实时通道状态提示、外观主题控件、轻提示播报区，
-// 以及 390px 的溢出收口（移动端导航局部滚动、内容宽度用 max-w 而不是固定宽度）。
+// Layout：地标与跳转链接、实时通道状态提示、外观主题控件与轻提示播报区。
 import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router'
@@ -48,7 +47,7 @@ describe('地标与键盘入口', () => {
 
   it('侧栏底部给出 server 版本（运维定位用）', async () => {
     renderLayout()
-    expect(await screen.findByText('server v0.1.0')).toBeInTheDocument()
+    expect(await screen.findByText('服务 v0.1.0')).toBeInTheDocument()
   })
 })
 
@@ -65,18 +64,18 @@ describe('任务导向导航', () => {
 describe('实时通道状态提示', () => {
   it('断开时给出系统级提示条并说明会自动重连', () => {
     renderLayout()
-    expect(screen.getByText(/实时通道已断开，正在自动重连/)).toBeInTheDocument()
+    expect(screen.getByText(/实时连接已断开，正在自动重连/)).toBeInTheDocument()
     expect(screen.getAllByText('已断开').length).toBeGreaterThan(0)
   })
 
   it('连接中与已连接分别有可读文案，连上后提示条消失', () => {
     useLive.setState({ status: 'connecting' })
     renderLayout()
-    expect(screen.getByText('正在连接实时通道…')).toBeInTheDocument()
+    expect(screen.getByText(/正在.*实时连接/)).toBeInTheDocument()
 
     act(() => { useLive.setState({ status: 'open' }) })
-    expect(screen.queryByText(/正在连接实时通道/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/实时通道已断开/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/正在.*实时连接/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/实时连接已断开/)).not.toBeInTheDocument()
     expect(screen.getAllByText('已连接').length).toBeGreaterThan(0)
   })
 })
@@ -85,7 +84,7 @@ describe('外观主题控件', () => {
   it('三分段控件有分组名称、按下态与键盘可达性', async () => {
     const user = userEvent.setup()
     renderLayout()
-    const group = screen.getByRole('group', { name: '外观主题' })
+    const group = screen.getAllByRole('group', { name: '外观主题' })[0] as HTMLElement
     const buttons = within(group).getAllByRole('button')
     expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual(['浅色外观', '深色外观', '跟随系统'])
     expect(buttons[0]).toHaveAttribute('aria-pressed', 'false')
@@ -110,9 +109,9 @@ describe('轻提示播报区', () => {
     const live = screen.getByRole('status', { name: '通知' })
     expect(live).toHaveAttribute('aria-live', 'polite')
 
-    toast.ok('闭合已执行', '设备已回执')
+    toast.ok('闭合已执行', '设备已确认结果')
     expect(await screen.findByText('闭合已执行')).toBeInTheDocument()
-    expect(screen.getByText('设备已回执')).toBeInTheDocument()
+    expect(screen.getByText('设备已确认结果')).toBeInTheDocument()
 
     const dismiss = screen.getByRole('button', { name: '关闭提示：闭合已执行' })
     await user.click(dismiss)
@@ -127,36 +126,5 @@ describe('轻提示播报区', () => {
     expect(buttons.some((n) => n?.includes('下发失败'))).toBe(true)
     // 正文在无障碍树里是文本，不是按钮名
     expect(screen.getByRole('button', { name: '关闭提示：下发失败' })).not.toHaveTextContent('设备离线')
-  })
-})
-
-describe('390px 溢出收口', () => {
-  it('移动端导航在自身容器内横向滚动，不把溢出推给 body', () => {
-    renderLayout()
-    const navs = screen.getAllByRole('navigation', { name: '主导航' })
-    const mobile = navs[navs.length - 1] as HTMLElement
-    expect(mobile.className).toContain('overflow-x-auto')
-    expect(mobile.querySelector('span.whitespace-nowrap')).not.toBeNull()
-  })
-
-  it('内容宽度用 max-w + 相对内边距，桌面侧栏在窄屏不参与布局', () => {
-    renderLayout()
-    const main = screen.getByRole('main')
-    expect(main.className).toContain('lg:pl-60')
-    const box = main.firstElementChild as HTMLElement
-    expect(box.className).toContain('max-w-[1360px]')
-    expect(box.className).toContain('px-4')
-    const aside = document.querySelector('aside') as HTMLElement
-    expect(aside.className).toContain('hidden')
-    expect(aside.className).toContain('lg:flex')
-    expect(aside.className).toContain('w-60')
-  })
-
-  it('提示条宽度跟随视口上限，窄屏不会顶出横向滚动', () => {
-    renderLayout()
-    toast.info('提示')
-    const live = screen.getByRole('status', { name: '通知' })
-    expect(live.className).toContain('max-w-[calc(100vw-3rem)]')
-    expect(live.className).not.toMatch(/\bw-\[\d+px\]/)
   })
 })

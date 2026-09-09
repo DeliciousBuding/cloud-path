@@ -24,8 +24,8 @@ import { useLive } from '@/store/ws'
  * 概览（产品级首屏）：一屏回答四件事——系统健康吗 / 多少设备在线 / 有什么要我处理 / 最近发生了什么。
  *
  * 数据来源边界（禁止假数据）：
- *   - 计数 / 离线设备 / 失败命令 / 近期事件 → GET /api/overview 的服务端聚合（SSOT）；
- *   - 聚合通道缺席或失败（老版本 server 无该端点）→ 降级为设备/边缘列表通道实时计算，
+ *   - 计数 / 离线设备 / 失败命令 / 近期运行记录 → GET /api/overview 的服务端聚合（SSOT）；
+ *   - 汇总数据缺席或失败（老版本 server 无该端点）→ 降级为设备/边缘列表通道实时计算，
  *     并显式标注来源；两条通道都拿不到才渲染 Error 态，绝不塞占位数字。
  *   - 设备 fleet → useDevices（WS 快照优先，REST 轮询兜底）；事件流 → 聚合 + WS 去重合并。
  */
@@ -49,7 +49,16 @@ export default function Overview() {
   )
 
   const serverOk = Boolean(data)
-  const stats: OverviewStat[] | null = data ? overviewStats(data) : null
+  const stats: OverviewStat[] | null = data
+    ? overviewStats(data).map((s) => ({
+      ...s,
+      label: s.key === 'edges' ? '在线网关'
+        : s.key === 'commands' ? '近24小时失败操作' : s.label,
+      emptyHint: s.key === 'devices' ? '等待网关接入设备'
+        : s.key === 'edges' ? '尚未有网关注册'
+          : s.key === 'commands' ? '近24小时没有失败或超时的操作' : s.emptyHint,
+    }))
+    : null
   // 降级统计按通道独立落地：哪条列表通道可用就算哪一块，不编分母
   // （插件/失败命令无列表来源 → 不出现在降级态）；两条都失败才进 Error 态。
   const devOk = !devError
@@ -58,19 +67,31 @@ export default function Overview() {
     ...(devOk ? [{
       key: 'devices' as const, label: '在线设备',
       online: devices.filter((d) => d.online).length, total: devices.length,
-      emptyHint: '等待边缘节点接入设备',
+      emptyHint: '等待网关接入设备',
       tone: (devices.length === 0 ? 'idle' : devices.some((d) => d.online) ? 'ok' : 'bad') as OverviewStat['tone'],
     }] : []),
     ...(edgesOk ? [{
-      key: 'edges' as const, label: '在线边缘',
+      key: 'edges' as const, label: '在线网关',
       online: edges.online, total: edges.list.length,
-      emptyHint: '尚未有边缘节点注册',
+      emptyHint: '尚未有网关注册',
       tone: (edges.list.length === 0 ? 'idle' : edges.online === 0 ? 'bad' : 'ok') as OverviewStat['tone'],
     }] : []),
   ] : []
   const shownStats: OverviewStat[] | null = stats ?? (fallbackStats.length ? fallbackStats : null)
 
-  const alerts: OverviewAlert[] = data ? overviewAlerts(data) : []
+  const alerts: OverviewAlert[] = data
+    ? overviewAlerts(data).map((a) => ({
+      ...a,
+      title: a.id === 'edges-offline' ? a.title.replace('边缘节点', '网关')
+        : a.id === 'commands-failed' ? a.title.replace('命令', '操作') : a.title,
+      hint: a.id === 'edges-offline'
+        ? '离线网关上的设备不会更新状态；已发送的操作会排队等待重连。其他在线网关不受影响。'
+        : a.id === 'devices-offline' ? '这些设备最近一次更新后未再变化，点开可查看最后在线时间和运行记录。'
+          : a.id === 'commands-failed' ? '查看失败或超时的操作及结果，核对原因和发生时间；运行记录页保留全部历史。'
+            : a.id === 'plugins-gap' ? '变更已提交，但设备或应用还没有确认。它可能仍在处理中，也可能没有成功应用。'
+              : a.hint,
+    }))
+    : []
   const offline = data?.offline_devices ?? []
   // 降级态的关注项：离线设备 + 离线边缘（列表通道真实字段）
   const fallbackAlerts: OverviewAlert[] = !serverOk ? [
@@ -79,13 +100,13 @@ export default function Overview() {
       return {
         id: `dev-offline-${d.id}`, tone: 'warn', count: 1,
         to: `/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`,
-        title: `${deviceShortName(d)} 离线`, hint: '点开可看最后在线时间与历史事件。',
+        title: `${deviceShortName(d)} 离线`, hint: '点开可查看最后在线时间和运行记录。',
       }
     }),
     ...edges.list.filter((e) => !e.online).map((e): OverviewAlert => ({
       id: `edge-offline-${e.edge_id}`, tone: 'bad', count: 1,
       to: `/edges/${encodeURIComponent(e.edge_id)}`,
-      title: `边缘节点 ${e.edge_id} 离线`, hint: '离线节点上的设备不会上报状态。',
+      title: `网关 ${e.edge_id} 离线`, hint: '离线网关上的设备不会更新状态。',
     })),
   ] : []
   const attentionRows = [...alerts, ...fallbackAlerts]
@@ -102,16 +123,11 @@ export default function Overview() {
             ? <span title={fmtDateTime(data.server_time)}>更新于 {timeAgo(data.server_time)}</span>
             : health
               ? <>服务已运行 <span className="num">{Math.floor(health.uptime_s / 60)}</span> 分钟</>
-              : '设备、边缘节点与插件的实时总览'
+              : '设备、网关与插件的实时总览'
         }
-        actions={
-          <>
-            {/* 关注计数只在一处出现（关注面板右槽）；页头不重复同屏元数据 */}
-            <Badge tone={status === 'open' ? 'ok' : status === 'connecting' ? 'warn' : 'bad'}>
-              {status === 'open' ? '实时连接正常' : status === 'connecting' ? '连接中…' : '实时连接断开'}
-            </Badge>
-          </>
-        }
+        actions={status === 'open'
+          ? <Badge tone="ok">实时连接正常</Badge>
+          : undefined}
       />
 
       {/* ---- KPI：服务端聚合优先；缺席降级列表通道并标注来源 ---- */}
@@ -137,8 +153,8 @@ export default function Overview() {
           {!serverOk && (
             <p className="mt-2 flex items-center gap-1 px-0.5 text-[12px] text-ink-3">
               <AlertTriangle size={11} className="shrink-0" />
-              聚合通道不可用，以上计数由设备/边缘列表实时计算
-              <button type="button" className="link ml-1 text-[12px]" onClick={() => void refetch()}>重试聚合</button>
+              汇总数据暂不可用，以上数据来自设备和网关列表
+              <button type="button" className="link ml-1 text-[12px]" onClick={() => void refetch()}>重新加载</button>
             </p>
           )}
         </>
@@ -146,7 +162,7 @@ export default function Overview() {
         <ErrorState
           icon={<AlertTriangle size={20} />}
           title="概览数据加载失败"
-          hint="服务端聚合与设备/边缘列表通道都不可用。下面的实时通道状态仍独立维护，可检查 server 是否可达后重试。"
+          hint="汇总数据与设备/网关列表暂时都不可用。下面的实时连接状态仍独立维护，请检查服务是否正常后重试。"
           onRetry={() => { void refetch(); void refetchDevices() }}
           retrying={isFetching}
         />
@@ -205,13 +221,13 @@ export default function Overview() {
             <RowSkeleton rows={3} />
           ) : devError ? (
             <ErrorState icon={<WifiOff size={20} />} title="设备状态加载失败"
-              hint="拿不到设备列表（GET /api/devices）。概览计数与设备列表是两条独立通道，上面的计数可能仍然可用。"
+              hint="暂时无法加载设备列表。概览统计与设备列表分开加载，上面的统计可能仍然可用。"
               onRetry={refetchDevices} compact />
           ) : devices.length === 0 ? (
             <EmptyState
               icon={<Inbox size={24} />}
               title="还没有设备接入"
-              hint="在边缘主机上复制 edge.example.yaml 为 edge.yaml，填好串口后启动 cloudpath-edge，设备会自动出现在这里。"
+              hint="启动网关并完成设备接入后，设备会自动出现在这里。"
             />
           ) : (
             <ul className="m-0 list-none p-0">
@@ -228,7 +244,7 @@ export default function Overview() {
 
 
         <Panel
-          title={<span className="flex items-center gap-1.5"><Activity size={14} />近期事件</span>}
+          title={<span className="flex items-center gap-1.5"><Activity size={14} />近期运行记录</span>}
           right={
             <Link to="/activity" className="link flex items-center gap-0.5 text-xs">
               全部 <ArrowRight size={12} />
@@ -240,10 +256,11 @@ export default function Overview() {
             : feed.length === 0
               ? (serverOk
                 ? <p className="flex flex-col items-center gap-2 py-10 text-center text-sm text-ink-3">
-                  <History size={20} /> 还没有事件上报
+                  <History size={20} /> 暂无运行记录
+                  <span className="text-[12px]">设备状态变化或操作结果会显示在这里。</span>
                 </p>
-                : <ErrorState icon={<History size={20} />} title="事件历史暂不可用"
-                  hint="聚合通道失败；实时通道的新事件仍会自动汇入。"
+                : <ErrorState icon={<History size={20} />} title="运行记录暂不可用"
+                  hint="暂时无法加载历史运行记录；实时连接收到的新记录仍会显示。"
                   onRetry={() => void refetch()} compact />)
               : <EventFeed events={feed} limit={10} />}
         </Panel>

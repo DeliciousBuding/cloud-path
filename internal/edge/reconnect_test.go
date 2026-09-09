@@ -226,7 +226,7 @@ type gatedAdapter struct {
 }
 
 func (a *gatedAdapter) Name() string                { return a.name }
-func (a *gatedAdapter) SupportedCommands() []string { return nil } // 无生命周期命令，避免轮询干扰
+func (a *gatedAdapter) SupportedCommands() []string { return []string{"trigger"} } // 仅命令白名单；无生命周期命令，避免轮询干扰
 func (a *gatedAdapter) Open(ctx context.Context, cfg device.Config, _ func(device.Event)) (device.Device, error) {
 	return &gatedDevice{id: cfg.ID, a: a, done: make(chan struct{})}, nil
 }

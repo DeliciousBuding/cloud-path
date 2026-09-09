@@ -45,10 +45,10 @@ const asAdmin = () => useAuth.setState({ status: 'in', user: root })
 
 /** 打开创建表单并提交。不断言结果：成功看 dialog，失败看 alert，由调用方决定 */
 async function submitCreateToken(user: ReturnType<typeof userEvent.setup>, name = 'ci-deploy') {
-  await user.click(await screen.findByRole('button', { name: '新建令牌' }))
-  const form = screen.getByRole('form', { name: '新建服务令牌' })
-  await user.type(within(form).getByLabelText('令牌名称'), name)
-  await user.click(within(form).getByRole('button', { name: '创建令牌' }))
+  await user.click(await screen.findByRole('button', { name: '新建访问令牌' }))
+  const form = screen.getByRole('form', { name: '新建访问令牌' })
+  await user.type(within(form).getByLabelText('用途名称'), name)
+  await user.click(within(form).getByRole('button', { name: '创建访问令牌' }))
 }
 
 /** 两份 Web Storage 的全部键值拼成一个字符串（反向断言用） */
@@ -72,17 +72,17 @@ describe('TestScopeDefaultsLeastPrivilege', () => {
     installFetch(tokenRoute())
     renderWithProviders(<Admin />)
 
-    await user.click(await screen.findByRole('button', { name: '新建令牌' }))
-    const group = within(screen.getByRole('form', { name: '新建服务令牌' }))
-      .getByRole('group', { name: /权限范围/ })
+    await user.click(await screen.findByRole('button', { name: '新建访问令牌' }))
+    const group = within(screen.getByRole('form', { name: '新建访问令牌' }))
+      .getByRole('group', { name: '可以使用它做什么' })
 
-    expect(within(group).getByRole('checkbox', { name: 'read' })).toBeChecked()
-    for (const s of ['write', 'admin', 'edge']) {
+    expect(within(group).getByRole('checkbox', { name: '查看' })).toBeChecked()
+    for (const s of ['操作', '管理', '网关接入']) {
       expect(within(group).getByRole('checkbox', { name: s })).not.toBeChecked()
     }
     // 危险范围的说明文案必须可见（不是藏在 title 里）
-    expect(within(group).getByText(/等同管理员权限/)).toBeInTheDocument()
-    expect(within(group).getByText(/允许边缘代理以本租户身份接入/)).toBeInTheDocument()
+    expect(within(group).getByText(/权限最高/)).toBeInTheDocument()
+    expect(within(group).getByText(/允许网关连接平台并同步设备状态/)).toBeInTheDocument()
   })
 
   it('用默认值提交 → body scopes 只有 read，expires_at 走默认 30 天', async () => {
@@ -109,11 +109,11 @@ describe('TestScopeDefaultsLeastPrivilege', () => {
     const http = installFetch(tokenRoute())
     renderWithProviders(<Admin />)
 
-    await user.click(await screen.findByRole('button', { name: '新建令牌' }))
-    const form = screen.getByRole('form', { name: '新建服务令牌' })
-    await user.type(within(form).getByLabelText('令牌名称'), 'edge-a')
+    await user.click(await screen.findByRole('button', { name: '新建访问令牌' }))
+    const form = screen.getByRole('form', { name: '新建访问令牌' })
+    await user.type(within(form).getByLabelText('用途名称'), 'edge-a')
     await user.selectOptions(within(form).getByLabelText('有效期'), 'never')
-    await user.click(within(form).getByRole('button', { name: '创建令牌' }))
+    await user.click(within(form).getByRole('button', { name: '创建访问令牌' }))
 
     await waitFor(() => expect(http.to('/api/tokens').some((c) => c.method === 'POST')).toBe(true))
     const body = http.to('/api/tokens').find((c) => c.method === 'POST')?.body as Record<string, unknown>
@@ -121,19 +121,19 @@ describe('TestScopeDefaultsLeastPrivilege', () => {
     expect(body).not.toHaveProperty('expires_at')
   })
 
-  it('scope 全不勾 → 本地先拦（不发请求），并说明服务端要求非空', async () => {
+  it('scope 全不勾 → 本地先拦（不发请求），并提示至少选择一项权限', async () => {
     asAdmin()
     const user = userEvent.setup()
     const http = installFetch(tokenRoute())
     renderWithProviders(<Admin />)
 
-    await user.click(await screen.findByRole('button', { name: '新建令牌' }))
-    const form = screen.getByRole('form', { name: '新建服务令牌' })
-    await user.type(within(form).getByLabelText('令牌名称'), 'ci-deploy')
-    await user.click(within(form).getByRole('checkbox', { name: 'read' }))
-    await user.click(within(form).getByRole('button', { name: '创建令牌' }))
+    await user.click(await screen.findByRole('button', { name: '新建访问令牌' }))
+    const form = screen.getByRole('form', { name: '新建访问令牌' })
+    await user.type(within(form).getByLabelText('用途名称'), 'ci-deploy')
+    await user.click(within(form).getByRole('checkbox', { name: '查看' }))
+    await user.click(within(form).getByRole('button', { name: '创建访问令牌' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('至少选择一个权限范围')
+    expect(await screen.findByRole('alert')).toHaveTextContent('请至少选择一项权限')
     expect(http.to('/api/tokens').filter((c) => c.method === 'POST')).toHaveLength(0)
   })
 })
@@ -148,8 +148,8 @@ describe('TestCreateTokenSecretShownOnce', () => {
     await submitCreateToken(user)
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toHaveAttribute('aria-modal', 'true')
-    expect(within(dialog).getByLabelText('令牌明文')).toHaveValue(SECRET)
-    expect(within(dialog).getByText(/明文只显示这一次/)).toBeInTheDocument()
+    expect(within(dialog).getByLabelText('访问令牌')).toHaveValue(SECRET)
+    expect(within(dialog).getByText(/完整内容只显示这一次/)).toBeInTheDocument()
     expect(within(dialog).getByText(/无法再次查看/)).toBeInTheDocument()
 
     // 明文只以只读输入框的 value 存在：页面正文（textContent）里没有它
@@ -157,7 +157,7 @@ describe('TestCreateTokenSecretShownOnce', () => {
     expect(screen.queryByText(SECRET)).toBeNull()
     // 列表里只有 prefix 与元数据
     expect(screen.getAllByText(PREFIX).length).toBeGreaterThan(0)
-    expect(screen.getByRole('list', { name: '服务令牌列表' })).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: '访问令牌列表' })).toBeInTheDocument()
     // toast 只带名称，不带明文
     expect(JSON.stringify(useToasts.getState().items)).not.toContain(SECRET)
   })
@@ -170,13 +170,13 @@ describe('TestCreateTokenSecretShownOnce', () => {
 
     await submitCreateToken(user)
     await screen.findByRole('dialog')
-    await user.click(screen.getByRole('button', { name: '我已保存，关闭令牌明文' }))
+    await user.click(screen.getByRole('button', { name: '我已保存，关闭访问令牌' }))
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(document.body.textContent).not.toContain(SECRET)
     expect(document.body.innerHTML).not.toContain(SECRET)
     // 列表仍在，但只有元数据：没有任何「查看明文」入口
-    expect(screen.getByRole('list', { name: '服务令牌列表' })).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: '访问令牌列表' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /查看明文|显示令牌/ })).toBeNull()
   })
 
@@ -206,9 +206,9 @@ describe('TestCreateTokenSecretShownOnce', () => {
     const dialog = await screen.findByRole('dialog')
     const status = within(dialog).getByRole('status')
     expect(status).toHaveAttribute('aria-live', 'polite')
-    expect(status).toHaveTextContent('复制后请立即粘贴到安全位置')
+    expect(status).toHaveTextContent('复制后请立即保存到安全位置')
 
-    await user.click(within(dialog).getByRole('button', { name: '复制令牌明文' }))
+    await user.click(within(dialog).getByRole('button', { name: '复制访问令牌' }))
     expect(await within(dialog).findByText('已复制到剪贴板')).toBeInTheDocument()
     expect(writeText).toHaveBeenCalledWith(SECRET)
 
@@ -229,9 +229,9 @@ describe('TestCreateTokenSecretShownOnce', () => {
 
     await submitCreateToken(user)
     const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByRole('button', { name: '复制令牌明文' }))
-    expect(await within(dialog).findByText(/复制失败：请手动选中上方文本复制/)).toBeInTheDocument()
-    expect(within(dialog).getByLabelText('令牌明文')).toHaveValue(SECRET)
+    await user.click(within(dialog).getByRole('button', { name: '复制访问令牌' }))
+    expect(await within(dialog).findByText(/复制失败，请手动选中上方内容复制/)).toBeInTheDocument()
+    expect(within(dialog).getByLabelText('访问令牌')).toHaveValue(SECRET)
     expect(within(dialog).getByRole('status')).toHaveAttribute('aria-live', 'polite')
 
     delete (navigator as { clipboard?: unknown }).clipboard
@@ -259,9 +259,9 @@ describe('TestTokenNeverPersistedClientSide', () => {
     renderWithProviders(<Admin />)
     await submitCreateToken(user)
     const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByRole('button', { name: '复制令牌明文' }))
+    await user.click(within(dialog).getByRole('button', { name: '复制访问令牌' }))
     await within(dialog).findByText('已复制到剪贴板')
-    await user.click(screen.getByRole('button', { name: '我已保存，关闭令牌明文' }))
+    await user.click(screen.getByRole('button', { name: '我已保存，关闭访问令牌' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
 
     // 剪贴板是唯一允许的明文出口
@@ -309,7 +309,7 @@ describe('TestRevokeToken', () => {
     })
     renderWithProviders(<Admin />)
 
-    const list = await screen.findByRole('list', { name: '服务令牌列表' })
+    const list = await screen.findByRole('list', { name: '访问令牌列表' })
     expect(within(list).getByText('有效')).toBeInTheDocument()
 
     await user.click(within(list).getByRole('button', { name: '吊销令牌 ci-deploy' }))
@@ -325,7 +325,7 @@ describe('TestRevokeToken', () => {
     // 列表刷新为已吊销，并且不再有吊销按钮
     expect(await within(list).findByText('已吊销')).toBeInTheDocument()
     expect(within(list).queryByRole('button', { name: '吊销令牌 ci-deploy' })).toBeNull()
-    expect(within(list).getByText(/不能恢复；需要时请新建一个/)).toBeInTheDocument()
+    expect(within(list).getByText(/不能恢复，需要时请新建一个/)).toBeInTheDocument()
   })
 
   it('取消确认 → 不发请求，状态保持有效', async () => {
@@ -334,7 +334,7 @@ describe('TestRevokeToken', () => {
     const http = installFetch(tokenRoute())
     renderWithProviders(<Admin />)
 
-    const list = await screen.findByRole('list', { name: '服务令牌列表' })
+    const list = await screen.findByRole('list', { name: '访问令牌列表' })
     await user.click(within(list).getByRole('button', { name: '吊销令牌 ci-deploy' }))
     await user.click(screen.getByRole('button', { name: '取消吊销 ci-deploy' }))
 
@@ -350,7 +350,7 @@ describe('TestRevokeToken', () => {
     const http = installFetch(tokenRoute({ tokens: [expired] }))
     renderWithProviders(<Admin />)
 
-    const list = await screen.findByRole('list', { name: '服务令牌列表' })
+    const list = await screen.findByRole('list', { name: '访问令牌列表' })
     expect(within(list).getByText('已过期')).toBeInTheDocument()
     expect(within(list).queryByText('已吊销')).toBeNull()
 
@@ -379,10 +379,10 @@ describe('令牌列表卫生', () => {
     installFetch(tokenRoute())
     renderWithProviders(<Admin />)
 
-    const list = await screen.findByRole('list', { name: '服务令牌列表' })
+    const list = await screen.findByRole('list', { name: '访问令牌列表' })
     expect(within(list).getByText('ci-deploy')).toBeInTheDocument()
     expect(within(list).getByText(PREFIX)).toBeInTheDocument()
-    expect(within(list).getByText('read')).toBeInTheDocument()
+    expect(within(list).getByText('查看')).toBeInTheDocument()
     expect(within(list).getByText('从未使用')).toBeInTheDocument()
     expect(within(list).getByText('永不过期')).toBeInTheDocument()
     expect(list.textContent).not.toContain(SECRET)

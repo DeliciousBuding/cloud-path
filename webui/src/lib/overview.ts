@@ -52,12 +52,12 @@ export function overviewStats(o: OverviewView): OverviewStat[] {
   return [
     {
       key: 'devices', label: '在线设备', online: o.devices_online, total: o.devices_total,
-      emptyHint: '等待边缘节点接入设备', tone: o.devices_total === 0 ? 'idle'
+      emptyHint: '等待网关接入设备', tone: o.devices_total === 0 ? 'idle'
         : o.devices_online === 0 ? 'bad' : 'ok',
     },
     {
-      key: 'edges', label: '在线边缘', online: o.edges_online, total: o.edges_total,
-      emptyHint: '尚未有边缘节点注册', tone: o.edges_total === 0 ? 'idle'
+      key: 'edges', label: '在线网关', online: o.edges_online, total: o.edges_total,
+      emptyHint: '尚未有网关注册', tone: o.edges_total === 0 ? 'idle'
         : o.edges_online === 0 ? 'bad' : 'ok',
     },
     {
@@ -67,8 +67,8 @@ export function overviewStats(o: OverviewView): OverviewStat[] {
     },
     // 固定近24小时的完整失败/超时计数，来自服务端；不以有界列表长度推算
     {
-      key: 'commands', label: '近24小时失败命令', online: o.commands_failed, total: -1,
-      emptyHint: '近24小时没有失败或超时的命令', tone: o.commands_failed === 0 ? 'ok' : 'bad',
+      key: 'commands', label: '近24小时失败操作', online: o.commands_failed, total: -1,
+      emptyHint: '近24小时没有失败或超时的操作', tone: o.commands_failed === 0 ? 'ok' : 'bad',
     },
   ]
 }
@@ -91,8 +91,8 @@ export function overviewAlerts(o: OverviewView): OverviewAlert[] {
   if (offlineEdges > 0) {
     out.push({
       id: 'edges-offline', tone: 'bad', count: offlineEdges, to: '/edges',
-      title: `${offlineEdges} 台边缘节点离线`,
-      hint: '离线节点上的设备不会上报状态；已下发的命令会排队等它重连。其余在线节点不受影响。',
+      title: `${offlineEdges} 台网关离线`,
+      hint: '离线网关上的设备不会上报状态；已经发出的操作会等它重新连接后继续。其他在线网关不受影响。',
     })
   }
 
@@ -108,8 +108,8 @@ export function overviewAlerts(o: OverviewView): OverviewAlert[] {
     const n = o.commands_failed
     out.push({
       id: 'commands-failed', tone: 'bad', count: n, to: '/activity',
-      title: `近24小时 ${n} 条命令失败或超时`,
-      hint: '查看失败或超时记录及回执，核对原因和发生时间；活动页保留全部历史记录。',
+      title: `近24小时 ${n} 条操作失败或超时`,
+      hint: '查看失败或超时记录及处理结果，核对原因和发生时间；运行记录页保留全部历史。',
     })
   }
 
@@ -118,7 +118,7 @@ export function overviewAlerts(o: OverviewView): OverviewAlert[] {
     out.push({
       id: 'plugins-gap', tone: 'warn', count: pluginGap, to: '/plugins',
       title: `${pluginGap} 个插件实例未达到活跃`,
-      hint: '期望态已提交但运行宿主还没上报活跃。可能是宿主不可用、正在应用，或实际态与期望态不一致。',
+      hint: '设置已经保存，但还没有收到正常运行状态。可能是网关暂时不可用、正在应用设置，或运行情况与保存的设置不一致。',
     })
   }
 

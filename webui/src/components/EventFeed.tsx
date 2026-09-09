@@ -29,7 +29,7 @@ export function EventFeed({ events, showDevice = true, limit = 30, dayGrouped = 
   ), [devices])
 
   if (!events.length) {
-    return <p className="py-6 text-center text-sm text-ink-3">暂无事件</p>
+    return <p className="py-6 text-center text-sm text-ink-3">暂无运行记录。设备状态变化或操作结果会显示在这里。</p>
   }
   const shown = events.slice(0, limit)
   if (!dayGrouped) {
@@ -100,7 +100,7 @@ function EventRow({ e, first, showDevice, name }: {
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
-            aria-label={open ? '收起原始载荷' : '展开原始载荷'}
+            aria-label={open ? '收起运行记录详情' : '查看运行记录详情'}
             className="flex shrink-0 items-center text-ink-3 transition-colors hover:text-ink-2">
             <ChevronRight size={12} className={open ? 'rotate-90 transition-transform' : 'transition-transform'} />
           </button>
@@ -110,7 +110,7 @@ function EventRow({ e, first, showDevice, name }: {
         </span>
       </div>
       {open && (
-        <pre tabIndex={0} role="group" aria-label="事件原始载荷"
+        <pre tabIndex={0} role="group" aria-label="运行记录详情数据"
           className="num mb-2 max-h-40 overflow-auto rounded-lg bg-surface-2 p-2 font-mono text-[11px] leading-relaxed text-ink-2">
           {e.payload}
         </pre>

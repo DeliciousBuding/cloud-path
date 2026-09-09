@@ -59,8 +59,11 @@ func TestPluginWriteOverRealHTTPAuth(t *testing.T) {
 // TestPluginWriteRequestIDRoundtrip 锁定 X-Request-ID：调用方提供的合法 id 必须
 // 同时出现在响应头、响应体与审计行里（写操作可追溯到单次请求）。
 func TestPluginWriteRequestIDRoundtrip(t *testing.T) {
-	st, _, ts, _, a, _ := setupPluginSync(t)
+	st, srv, ts, mem, a, _ := setupPluginSync(t)
 	adminTok := issueTenantToken(t, st, a, `["admin"]`)
+	seedInstallations(t, srv, mem, a, "e1", []api.PluginInstallationStatusData{{
+		PluginID: "p1", Version: "1.0.0", Kind: "Driver", Protocol: 1,
+	}})
 	const reqID = "req-lane-test-0001"
 
 	req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/plugin-instances",

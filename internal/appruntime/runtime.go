@@ -114,8 +114,7 @@ func (r *Runtime) StartInstance(ctx context.Context, spec InstanceSpec) (*Instan
 		rec.mu.Unlock()
 		close(rec.done)
 		// 失败即回滚记录：调用方拿到错误快照后，下次 StartInstance 必须能
-		// 直接重建（AppHost reconcile 每轮重试，占位记录会让它永远撞
-		// ErrInstanceExists——2026-09-05 D3 真板实测）。
+		// 直接重建；保留失败占位会让后续 reconcile 一直撞 ErrInstanceExists。
 		r.forgetInstance(spec.TenantID, spec.PluginInstanceID)
 		return rec.snapshot(), err
 	}
@@ -224,11 +223,9 @@ func (r *Runtime) startRecord(ctx context.Context, rec *instanceRecord) error {
 	rec.state = StateRunning
 	rec.mu.Unlock()
 
-	// 流开启即派发初始 Lifecycle 事件：应用普遍在首个业务事件到达时才登记
-	// 本实例的 effect writer，而 RunJob/RunRequest 可早于任何设备事件到达
-	// （如 AppHost 分钟循环驱动的 descriptor job）——没有这个首事件，此类
-	// 调用产生的 effect 会被「无 writer」路径静默丢弃（2026-09-05 button-
-	// indicator bootstrap 实测：heartbeat 声明在无人按键时永远无法送达）。
+	// 流开启即派发初始 Lifecycle 事件：应用通常要到首个事件才登记本实例的
+	// effect writer，而 job/request 可能先于设备事件到达；没有首事件，其
+	// effect 会被「无 writer」路径静默丢弃。
 	_ = r.DispatchEvent(context.Background(), rec.spec.TenantID, rec.spec.PluginInstanceID,
 		&sdkapplication.ApplicationEvent{Union: &sdkapplication.InstanceLifecycle{State: "running"}})
 	return nil
@@ -460,9 +457,7 @@ func (r *Runtime) StopInstance(ctx context.Context, tenantID, instanceID, reason
 
 // StopInstanceStreamOnly 只拆除本实例的会话（事件流 + 运行记录），不发
 // 进程级 Shutdown RPC。共享插件进程里停掉一个实例时必须用它：Shutdown
-// RPC 是参考应用的进程退出信号，对共享进程上的任一实例发送都会连带
-// 杀死全部兄弟实例（2026-09-05 生产环境实测：删除兄弟实例后 box-prod
-// 一起 died → state=failed 且无人自愈）。
+// RPC 会终止插件进程，对共享进程上的任一实例发送都会连带杀死全部兄弟实例。
 func (r *Runtime) StopInstanceStreamOnly(tenantID, instanceID string) error {
 	rec, err := r.instance(tenantID, instanceID)
 	if err != nil {
@@ -548,10 +543,7 @@ func (r *Runtime) stopRecord(ctx context.Context, rec *instanceRecord, reason st
 	rec.state = StateStopped
 	rec.mu.Unlock()
 	// 停机即移除记录：失败/停止的实例必须能被 StartInstance 重建，否则
-	// AppHost reconcile 的进程内自愈永远撞 ErrInstanceExists（2026-09-05
-	// D3 真板实测：首次启动失败后每 15s 重试全部 "instance already
-	// exists"——此前 box-prod 的自愈实际靠部署重启清空内存态，heal 路径
-	// 从未被走过）。
+	// reconcile 会持续撞 ErrInstanceExists，无法走进程内恢复路径。
 	r.forgetInstance(rec.spec.TenantID, rec.spec.PluginInstanceID)
 	return shutdownErr
 }

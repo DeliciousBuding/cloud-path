@@ -168,7 +168,7 @@ describe('TestAdminCanManageUsers', () => {
     expect(screen.getByRole('form', { name: '编辑用户 ops' })).toBeInTheDocument()
   })
 
-  it('列表 401 → 全局收敛为未登录，管理面立即收回（不留在页面上）', async () => {
+  it('列表 401 → 全局同步为未登录，管理面立即收回（不留在页面上）', async () => {
     asAdmin()
     installFetch(adminRoute({ usersStatus: 401 }))
     renderWithProviders(<Admin />)
@@ -242,9 +242,9 @@ describe('TestNonAdminCannotSeeManagement', () => {
 
     expect(await screen.findByText('需要管理员权限')).toBeInTheDocument()
     expect(screen.queryByRole('list', { name: '用户列表' })).toBeNull()
-    expect(screen.queryByRole('list', { name: '服务令牌列表' })).toBeNull()
+    expect(screen.queryByRole('list', { name: '访问令牌列表' })).toBeNull()
     expect(screen.queryByRole('button', { name: '新建用户' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '新建令牌' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '新建访问令牌' })).toBeNull()
     expect(screen.queryByRole('button', { name: /编辑用户/ })).toBeNull()
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.queryByText('root')).toBeNull()
@@ -283,7 +283,7 @@ describe('TestNonAdminCannotSeeManagement', () => {
     expect(screen.getByRole('heading', { level: 1, name: '管理' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '管理' })).toBeNull()
     // 其余入口照旧（桌面侧栏 + 移动端顶栏各一份）
-    expect(screen.getAllByRole('link', { name: '系统' })).toHaveLength(2)
+    expect(screen.getAllByRole('link', { name: '设置' })).toHaveLength(2)
   })
 
   it('admin 时侧栏与移动端顶栏各出现一个「管理」入口', async () => {

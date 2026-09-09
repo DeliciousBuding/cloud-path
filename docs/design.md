@@ -1,18 +1,21 @@
-# Cloudpath 技术设计（P1 实现版）
+# CloudPath 技术设计（当前实现）
 
-本文是 Cloudpath 的技术 SSOT：技术栈、进程模型、目录、契约、存储、前端、安全、测试与里程碑。
-设备侧协议契约见 [protocol.md](protocol.md)；面向使用者的说明见根 [README.md](../README.md)。
+本文是 CloudPath 的技术 SSOT：技术栈、进程模型、目录、契约、存储、前端、安全、测试与验证边界。
+设备侧协议契约见 [protocol.md](protocol.md)；架构状态分层见 [architecture.md](architecture.md)；
+面向使用者的说明见根 [README.md](../README.md)。
 
-> 状态：P1（M0–M4）已实现并通过测试与真机验证。文末「实现偏差记录」列出与最初设计稿的差异。
+> 状态：以 `v0.2.20` 发布线为当前基线。外部 Driver Host、Registry、Application Runtime 与多租户
+> 隔离已落地；目标态与未实现项见 [architecture.md](architecture.md) §11。历史里程碑和实现偏差记录
+> 只用于解释演进，不代表当前缺口。
 
-## 目标 / 非目标
+## 当前基线与范围
 
-**P1 目标**：插上一台串口设备 → edge 解析状态 → WebSocket 实时上报 server → 管理台看到设备卡片
-（时钟/漂移/业务状态/事件流），可下发命令（对时/转储/触发），事件与命令持久化到 SQLite，
-单二进制部署（webui 内嵌 server）。
+**当前基线**：设备接入与边缘监督、WebSocket 实时链路、账号/RBAC/多租户隔离、插件发现与验证安装、
+外部 Driver Plugin Host、Server AppHost + Application Runtime、SQLite 持久化与单二进制部署。
 
-**非目标（P1 不做）**：公网多租户与用户体系（P2）、MQTT 接入（P2）、远程 OTA 编排（P3）、
-时序聚合与业务分析（P4）。架构为它们留扩展点（见文末）。
+**当前范围外（目标态）**：Connector/Transform 运行时、MQTT/Modbus 接入、远程 OTA 编排、
+时序聚合与业务分析、中心 KMS/Vault、分布式全局配额与多 Server 部署。架构保留扩展点，但不把这些
+目标态写成现状。
 
 ## 技术栈
 
@@ -35,48 +38,50 @@
 
 ## 进程模型与数据流
 
-```
-设备(串口) ──> cloudpath-edge(每站点一个)
-                  │  适配器解析协议 → 状态/事件
-                  │  设备监督协程（拔插退避重开）+ 轮询/对时调度
-                  │  WS 长连接（上报 state/event，接收 command，断线指数退避重连 + 事件缓冲）
-                  ▼
-             cloudpath-server(中心，单二进制)
-                  │  ├─ WS hub：edge 连接池 + 浏览器订阅 fan-out
-                  │  ├─ REST API：设备/事件/命令/边缘/适配器/统计
-                  │  ├─ SQLite：devices / device_state / events / commands
-                  │  ├─ 后台维护：命令超时 sweeper + 保留期清理
-                  │  └─ embed：webui/dist 静态资源（SPA fallback）
-                  ▼
-             React 管理台（浏览器，WS 实时 + REST 历史）
+```text
+设备(串口/网络) ──> 外部 Driver Plugin（独立进程）
+                         │ Driver Protocol v1：Describe / Watch / Execute
+                         ▼
+                  cloudpath-edge（每站点一个）
+                         │ Plugin Host、设备监督、离线事件缓冲、WS 重连
+                         ▼
+                  cloudpath-server（中心，单二进制）
+                         ├─ REST / WS hub + tenant / RBAC / audit
+                         ├─ Plugin control plane：desired / revision / observed / Registry
+                         ├─ AppHost + appruntime：Application Plugin
+                         ├─ SQLite：tenant / device / state / event / command / plugin data
+                         └─ embed：webui/dist 静态资源
+                         ▼
+                  React 管理台（浏览器，WS 实时 + REST 历史）
 ```
 
 要点：**全链路 WebSocket**（edge→server→浏览器），状态变化秒级到达面板；REST 只承担历史查询与
-管理操作。命令走 server→edge 的 WS 下行，带 ack 回执落库，前端按 `command_id` 结算。
+管理操作。命令走 server→edge 的 WS 下行，带 ack 回执落库，前端按 `command_id` 结算。外部 Driver
+拥有硬件连接与协议解析；内置 `demo` 仅用于无硬件参考，不承载具体设备语义。
 
 ## 目录结构
 
-```
+```text
 cloudpath/
-├── go.mod                      # module github.com/DeliciousBuding/cloud-path
-├── Taskfile.yml                # setup/build/dev/test/lint/run/clean
-├── cmd/
-│   ├── cloudpath-server/main.go
-│   └── cloudpath-edge/main.go
+├── cmd/                         # cloudpath-server / cloudpath-edge / cloudpath CLI
 ├── internal/
-│   ├── api/                    # REST/WS 共享类型（信封、消息、DTO）——两侧唯一契约
-│   ├── device/                 # Device/Adapter 接口 + 注册表（设备无关核心）
-│   ├── edge/                   # 运行时：设备监督、轮询/对时、WS 客户端、离线事件缓冲
-│   ├── server/                 # chi 路由、WS hub、命令下发与限流、保留期清理、webui embed
-│   ├── store/                  # SQLite：schema 迁移(user_version)、devices/state/events/commands
-│   └── logx/                   # slog 初始化
-├── examples/
-│   └── stcb/                   # 参考适配器：STC-B 学习板（协议 + 解析器 + 黄金样本单测）
-├── webui/                      # React SPA（Vite），构建产物被 server 内嵌
-│   └── src/{pages,components,hooks,store,lib}
-├── firmware/                   # 设备侧协议参考说明（不含任何厂商固件/库）
-├── scripts/                    # 跨平台开发脚本（gofmt 门禁、清理），Python 3 stdlib
-└── docs/                       # design.md(本文) + protocol.md
+│   ├── api/                     # REST/WS 共享类型
+│   ├── device/                  # Device/Adapter 核心接口与注册表
+│   ├── edge/                    # Edge 运行时、外部 Driver 桥接、Plugin Host
+│   ├── pluginhost/              # 插件进程握手、传输、监督
+│   ├── plugincontrol/           # desired/applied/observed 收敛与 secret handle
+│   ├── registry/                # GitHub 发现、Manifest/digest/兼容校验、lockfile
+│   ├── server/                  # REST/WS、鉴权、审计、命令与 AppHost
+│   ├── appruntime/ + application/ # Application Runtime 与绑定/领域模型
+│   ├── store/                   # SQLite schema 迁移与持久化
+│   └── tenantpolicy/ + secrethandle/ + plugincatalog/
+├── sdk/go/                      # 公开插件 SDK、模型、RPC、transport、pluginmain
+├── spec/ + proto/               # Manifest/Capability schema 与协议定义
+├── templates/go-plugin/         # Driver/Application 插件模板
+├── webui/                       # React SPA，构建产物被 server 内嵌
+├── examples/                    # demo adapter 与历史参考应用
+├── deploy/ + firmware/ + scripts/ + docs/
+└── testing/plugin-harness/      # 黑盒一致性测试
 ```
 
 ## 设备抽象（核心不变量）
@@ -106,8 +111,8 @@ type Adapter interface {                              // examples/demo 实现
 // → 新增设备不改核心，前端命令面板自动跟随 GET /api/adapters
 ```
 
-约定：`Raw` 里的通用键（`clock` `hour` `min` `state` `state_label` `slots` `drift_min`
-`dump_raw`）由前端直接展示；未知键原样进「原始状态」面板。核心与前端都不对具体设备做分支判断。
+外部 Driver 通过 Driver Protocol v1 桥接为 `device.Adapter`；`Raw` 只保留兼容与诊断用途，主路径使用
+Descriptor / Entity / Capability / Observation。核心与前端都不对具体设备做分支判断。
 
 ## API 契约
 
@@ -128,8 +133,8 @@ type Adapter interface {                              // examples/demo 实现
 | `command_ack` | edge→server→浏览器 | `{command_id, status, detail}` | 更新 `commands` 并广播 |
 | `edge_up` / `edge_down` | server→浏览器 | `{edge_id, devices[], version}` | 边缘节点上下线 |
 
-浏览器连接 `/ws` 订阅全量 fan-out（P1 单租户，不做按设备订阅过滤）。协议版本不匹配（`v`）的消息
-被丢弃并告警。
+浏览器连接 `/ws` 获得本租户快照与实时 fan-out；当前不做按设备订阅过滤。协议版本不匹配（`v`）的消息
+被丢弃并告警。完整的插件控制面与 Application 消息以 [protocol.md](protocol.md) 和 `internal/api/types.go` 为准。
 
 **事件同形不变量**：server 对 `event` 只做一次 `json.Marshal(EventData)`，落库与广播
 共用这份 payload；浏览器端不得重建载荷形状。否则同一条事件在实时列表与历史里会呈现
@@ -166,7 +171,8 @@ INDEX idx_commands_device(device_id, created_at) -- 设备详情页命令历史
 ```
 
 迁移是有序表（`internal/store/store.go` 的 `migrations`）：新增版本追加一项，**永不修改已发布项**。
-连接池上限 4 + WAL + `busy_timeout(5000)`，避免 `database is locked`。
+当前 `PRAGMA user_version = 11`（v0.2.20 持久化最后已知 Descriptor）；上面的 v1/v2 只是基础表示意，
+完整迁移见 `internal/store/migrate_v*.go`。连接池上限 4 + WAL + `busy_timeout(5000)`，避免 `database is locked`。
 
 ## 并发与稳定性不变量
 
@@ -195,6 +201,7 @@ INDEX idx_commands_device(device_id, created_at) -- 设备详情页命令历史
 ## 安全边界
 
 - server 默认只绑 `127.0.0.1`；公网部署必须置于自有反代 + TLS 之后。
+- 鉴权支持账号会话、tenant token 与本地开放模式；实际形态和权限矩阵以 [api.md](api.md) 为准。
 - `CLOUDPATH_TOKEN` 一启用：edge hello 校验、浏览器写操作 Bearer 校验、浏览器 WS `?token=` 校验。
   令牌只经环境变量/配置注入（`edge.yaml` 支持 `${ENV}` 展开），不入库。
 - WS Origin 策略：`CLOUDPATH_ALLOWED_ORIGINS` 显式清单（公网形态）；留空 = 开发策略
@@ -206,9 +213,12 @@ INDEX idx_commands_device(device_id, created_at) -- 设备详情页命令历史
 
 ## 前端（React Router 7）
 
+> WebUI 的呈现、排版、布局与交互 SSOT 是 [`webui/DESIGN.md`](../webui/DESIGN.md)；
+> 本节只保留路由、数据获取、行为契约与安全边界。
+
 | 路由 | 页面 | 内容 |
 |---|---|---|
-| `/` | 概览 | 在线设备/边缘、运行实例、近24小时失败命令、需要关注的状态、设备与事件 |
+| `/` | 概览 | 在线设备/边缘、运行实例、近24小时失败操作、需要关注的状态、设备与事件 |
 | `/devices` | 设备 | 全部设备卡片（WS 快照优先，REST 轮询兜底） |
 | `/devices/:edgeId/:deviceId` | 设备详情 | 声明驱动的观测概览、能力、命令控制、事件与历史、技术诊断 |
 | `/activity` | 活动 | 事件与命令历史、设备/类型筛选、实时与历史合并；`/events` 为兼容重定向 |
@@ -230,9 +240,6 @@ INDEX idx_commands_device(device_id, created_at) -- 设备详情页命令历史
 计数来自完整匹配集，不因预览截断。原始命令历史与保留期不变。聚合来源不可用时返回
 `503`，界面保留错误、来源说明与重试入口，不将不可用伪装成没有失败。
 
-设计系统（`webui/src/index.css`）：CSS 变量主题（浅色 `#f5f5f7` 画布 / 深色纯黑画布 +
-iOS 系统语义色），`.dark` class 切换 + 首帧前内联脚本防闪白，稳定的侧栏/顶栏与卡片阴影层级、
-`tabular-nums` 数字等宽、骨架屏微光、`prefers-reduced-motion` 降级、`:focus-visible` 焦点环。
 
 状态管理：zustand 持有 WS 实时快照（设备 map + 事件环形缓冲 300 条 + 会话级漂移历史 240 点 +
 ack map）；TanStack Query 管 REST（设备/事件/命令/统计）。`store/ws.ts` 是单例连接，
@@ -251,15 +258,15 @@ server 退化为 API-only 并返回可读提示）。
 action 的 `destructive`（可选布尔值）与 `confirmation`（可选字符串）是正式交互安全声明，
 必须随 Driver RPC `ActionDescriptor`、SDK 模型、Edge 上报与 REST 文档完整往返；动作的
 `title` / `description` 同样来自 Driver 声明。旧 Driver 可省略新增字段，未声明时不按命令名猜测危险性；声明本身
-不替代服务端权限与设备端检查。参数声明完整
-保留：简单标量对象显示有标签的字段，嵌套或复杂结构回落 JSON；不预填可能产生副作用的
-零值、布尔值或 schema default。首次显示使用中性填写提示，编辑后才显示具体错误。
+不替代服务端权限与设备端检查。参数声明完整保留：平铺标量、数组、对象数组和根级
+`oneOf` 在能无损映射时显示为字段或“设置方式”表单；只有无法安全展开的嵌套对象、其他
+组合结构或未知约束才保留高级 JSON 编辑，JSON 与表单切换不得丢弃字段。不预填可能产生
+副作用的零值、布尔值或 schema default。首次显示使用中性填写提示，编辑后才显示具体错误。
 前端校验 JSON 语法、已支持的 required/type/enum、数值/字符串/数组边界以及
 `oneOf` / `anyOf` / `allOf`（包括布尔与嵌套子 schema），并遵守 64 UTF-8 字节及换行/NUL 传输门禁。
-组合结构始终保留 JSON 编辑，不展开不完整的字段选择器。未知约束参与组合匹配时使用未知态，
-不冒充匹配或不匹配；只有能确定违反约束时才拒绝，界面仍明确提示未校验的关键字。
-设备端仍为最终裁决者，前端校验不替代 Driver 的参数及帧边界检查。
-参数与 JSON 切换不得丢弃额外字段，原始 JSON 不静默压缩或截断。
+未知约束参与组合匹配时使用未知态，不冒充匹配或不匹配；只有能确定违反约束时才拒绝，
+界面以“部分参数由设备端确认”提示未校验的关键字。设备端仍为最终裁决者，前端校验不替代
+Driver 的参数及帧边界检查。参数与 JSON 切换不得丢弃额外字段，原始 JSON 不静默压缩或截断。
 
 命令面板及独立按钮都检查当前身份：viewer、加载中、未登录或无效身份无写表单；
 保留显式开放模式和合法服务身份 id=0 的既有设备命令契约。更换设备、账号、租户、角色
@@ -310,6 +317,8 @@ REST 仍是数据事实源：查询缓存按租户、用户、裸实例标识隔
   Core 不从 raw 的字段名猜实体或伪造样本。AppHost 只向同租户、实际绑定了该实体和能力的应用投递
   `cloudpath.dev/event/property-observed@1` CapabilityEvent，PayloadJSON 是一条完整 Observation。
   保留 observed_at / received_at / quality / sequence；离线状态降为 unavailable，不升级坏数据为正常。
+  **身份边界**：命令/事件当前只按全局唯一 `entity_id` 绑定和路由，`(device_key, entity_id)` 尚未贯穿；
+  同租户同型号多板必须由 Driver 保证 `entity_id` 全局唯一，否则属于单板边界，不承诺多板正确路由。
 - **明确分配**：实例 config 的可选 `app_bindings` 是完整 Binding 数组的 JSON 字符串，按给定顺序选择稳定
   entity_id。复用 Binder.Validate 核对实际设备租户、能力、基数与重复占用；非法选择必须失败，不能换绑
   到任意在线实体。缺省仍自动匹配。应用只接收 ValidateBinding，不读取此控制面配置。
@@ -354,7 +363,7 @@ devices:
 ```
 
 配置校验在启动时完成并给出可执行错误信息（缺 id/adapter/port、id 重复、协议前缀错误、
-devices 为空），运行中不热加载（P1 有意为之：热加载与串口生命周期纠缠，收益低风险高）。
+devices 为空），运行中不热加载（当前有意为之：热加载与串口生命周期纠缠，收益低风险高）。
 
 ## 测试策略
 
@@ -366,11 +375,11 @@ devices 为空），运行中不热加载（P1 有意为之：热加载与串口
 | 服务加固 | `internal/server/hardening_test.go` | 适配器/统计端点、nil-store 不 panic、命令限流、参数校验、未知设备与离线 edge、命令设备过滤、查询参数夹取、保留期、edge_id 校验、重连挤占不误标离线、安全头、SPA 回落与路径穿越、未路由 `/api/*` 与缺失 `/assets/*` 回 404 而非 index.html、鉴权形态三档如实上报 |
 | Origin 策略 | `internal/server/origin_test.go` | 开发策略放行 localhost/无 Origin、拒绝外站；显式清单生效且防后缀伪装 |
 | 边缘运行时 | `internal/edge/{config_test.go,wsclient_test.go}` | 配置默认值/`${ENV}` 展开/各类错误、离线只缓冲事件、在线入队、队满回落缓冲、缓冲溢出丢最旧、回放（含部分回放）、状态 diff 抑制与心跳兜底、重连强制补报 |
-| 前端 | `pnpm exec tsc --noEmit` | 类型门禁（`strict` + `noUnusedLocals`） |
+| 前端 | `pnpm exec tsc --noEmit` + `pnpm test` | 类型门禁（`strict` + `noUnusedLocals`）与 Vitest 行为回归；不把源码 class/样式扫描当行为测试 |
 | 契约 | `scripts/check_contract.py`（`task check:contract`） | Go `internal/api/types.go` ↔ TS `webui/src/lib/types.ts` 同名类型的 JSON 字段集合一致（含 `extends` 平面化）；`--self-test` 是解析器红队自检 |
-| e2e | 真机手工清单 | 见下；验证证据记录在私有层（gitignored，不入库） |
+| e2e | 真机手工清单 | 见下；验证证据按发布/真板记录另行归档，不写入公开仓 |
 
-真机验收清单（一台接串口的设备即可跑完）：
+单板真机回归清单（多设备现场 E2E 另列验收）：
 
 1. `task build` 出双二进制；起 server → 打开 :8080 内嵌管理台可见（无设备时是空状态而非报错）。
 2. 起 edge → 管理台出现 edge 与设备，时钟/漂移/槽位有值，`GET /api/devices` 与之一致。
@@ -382,22 +391,11 @@ devices 为空），运行中不热加载（P1 有意为之：热加载与串口
 7. 重启 server → 设备仍在列表（水合），状态为离线，edge 重连后恢复。
 8. 未知命令 → 400；高频下发 → 429；`-token` 启用后无令牌写操作 → 401。
 
-## 里程碑
 
-| # | 内容 | 验证门 | 状态 |
-|---|---|---|---|
-| M0 | monorepo 骨架：go.mod、cmd 双入口、Taskfile、webui scaffold、.gitignore | `task build` 出双二进制 | ✅ |
-| M1 | `internal/api` 类型 + device 抽象 + 参考适配器与解析器 | `go test ./...` 绿（黄金样本含损坏行） | ✅ |
-| M2 | server（chi + hub + SQLite）+ edge（串口 + WS + 轮询/对时） | 真机接入：REST 见设备、事件落库、WS fan-out、sync 后漂移≈0 | ✅ |
-| M3 | React 管理台五页 + embed 单二进制 | 浏览器看真机实时状态；命令全链路生效 | ✅ |
-| M4 | 加固：ack 跟踪、拔插重连、slog、漂移趋势、限流、保留期、Origin 策略、README、tag v0.1.0 | `task test` 全绿 + 真机清单 | ✅ |
-
-## 扩展点（P2+）
+## 后续扩展（当前范围外）
 
 - **接入协议**：`internal/edge` 之外再加一个 MQTT/HTTP 接入网关，复用同一 `api.Envelope`
   与 hub（新增 `internal/gateway`），设备抽象不变。
-- **多租户与鉴权**：`authWrite` 已是单点，替换为 JWT/会话中间件即可；`devices` 表加 `tenant_id`
-  走 v3 迁移。
 - **按设备订阅**：浏览器 WS 增加 `subscribe` 消息类型，`broadcast` 改为按订阅集分发。
 - **告警通道**：事件落库处已是单点（`handleEdgeWS` 的 `MsgEvent` 分支），挂一个 notifier 即可。
 - **时序聚合**：`events` 表按天聚合到 `rollups` 表（v4 迁移），sweeper 里加一个任务。
@@ -419,7 +417,7 @@ devices 为空），运行中不热加载（P1 有意为之：热加载与串口
 ## 约束（硬）
 
 1. **不含任何第三方厂商固件/SDK/库/课件**：`firmware/` 只放协议参考说明；设备侧代码不进本仓库。
-2. **核心设备/行业无关**：具体语义只存在于 `examples/<device>` 适配器。
+2. **核心设备/行业无关**：具体设备语义只存在于外部 Driver 插件；内置 `demo` 仅作无硬件参考。
 3. **私有信息不入库**：构想、设备清单、验证证据只写 `.local/`（gitignored）。
 4. **契约三处同步**：`internal/api/types.go` ↔ `webui/src/lib/types.ts` ↔ 本文档的 WS 信封表；
    HTTP 路由与 DTO 的文档家是 `api.md`。同一条契约只允许一个文档落点，别处只放指针。

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/auth"
+	"github.com/DeliciousBuding/cloud-path/internal/registry"
 	"github.com/DeliciousBuding/cloud-path/internal/server/storeport"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
 )
@@ -41,6 +43,23 @@ func setupPluginPlane(t *testing.T) (*Server, *httptest.Server, *store.Store, *s
 	ts := httptest.NewServer(srv.Routes())
 	t.Cleanup(func() { ts.Close(); srv.CloseAll(); time.Sleep(50 * time.Millisecond) })
 	t.Cleanup(func() { st.Close() })
+	return srv, ts, st, mem, a, b
+}
+
+// setupPluginWritePlane 在通用插件面底座上预置写测试所需的安装物投影。
+// 新写入规则要求 manifest kind 可解析；这些投影等价于 Edge 已上报的 plugin_status。
+func setupPluginWritePlane(t *testing.T) (*Server, *httptest.Server, *store.Store, *storeport.Memory, int64, int64) {
+	t.Helper()
+	srv, ts, st, mem, a, b := setupPluginPlane(t)
+	seedInstallations(t, srv, mem, a, "e1", []api.PluginInstallationStatusData{
+		{PluginID: "p1", Version: "1.0.0", Kind: "Driver", Protocol: 1,
+			Permissions: api.PluginPermissionsData{Secrets: []string{"api_token"}}},
+		{PluginID: "io.github.acme.driver", Version: "0.1.0", Kind: "Driver", Protocol: 1},
+	})
+	seedInstallations(t, srv, mem, a, "e2", []api.PluginInstallationStatusData{
+		{PluginID: "p1", Version: "1.0.0", Kind: "Driver", Protocol: 1,
+			Permissions: api.PluginPermissionsData{Secrets: []string{"api_token"}}},
+	})
 	return srv, ts, st, mem, a, b
 }
 
@@ -139,7 +158,7 @@ func hasAudit(actions []string, want string) bool {
 // TestPluginInstanceCreateAndRead 锁定创建 → 读面：desired 真实落库、revision 从 1 起、
 // 未上报时 HasObserved=false 且 Observed 必须为 null（绝不把期望渲染成观测）。
 func TestPluginInstanceCreateAndRead(t *testing.T) {
-	srv, _, _, mem, a, _ := setupPluginPlane(t)
+	srv, _, _, mem, a, _ := setupPluginWritePlane(t)
 	rec := servePlugin(t, srv, http.MethodPost, "/api/plugin-instances",
 		`{"edge_id":"e1","instance_id":"box1","plugin_id":"io.github.acme.driver","version":"0.1.0","config":{"interval":"30"}}`,
 		a, "tenant-a", string(api.RoleOperator))
@@ -174,10 +193,127 @@ func TestPluginInstanceCreateAndRead(t *testing.T) {
 	}
 }
 
+// installServerPlugins 把指定 kind 的插件安装物写入临时 AppHost 目录/lock，
+// 供写路径解析 Server 宿主上的 manifest kind。
+func installServerPlugins(t *testing.T, srv *Server, kinds map[string]string) {
+	t.Helper()
+	root := t.TempDir()
+	pluginsDir := filepath.Join(root, "plugins.d")
+	lockPath := filepath.Join(root, "plugins.lock")
+	lock := registry.NewLockFile()
+	for pluginID, kind := range kinds {
+		dir := filepath.Join(pluginsDir, registry.SafePluginID(pluginID))
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		manifest := "apiVersion: plugins.cloudpath.dev/v1alpha1\n" +
+			"kind: " + kind + "\n" +
+			"id: " + pluginID + "\n" +
+			"version: 1.0.0\n" +
+			"protocol: 1\n" +
+			"entrypoint: ./plugin\n" +
+			"compatibility:\n  core: \">=0.1.0 <0.2.0\"\n"
+		if err := os.WriteFile(filepath.Join(dir, "plugin.yaml"), []byte(manifest), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		lock.Upsert(registry.LockedPlugin{
+			ID: pluginID, Version: "1.0.0", Digest: strings.Repeat("a", 64),
+			Source: "test", Verified: true, Protocol: 1,
+		})
+	}
+	if err := registry.WriteLockFile(lockPath, lock); err != nil {
+		t.Fatal(err)
+	}
+	ah, err := NewAppHost(srv, AppHostConfig{
+		Enabled: true, PluginsDir: pluginsDir, LockPath: lockPath, StateDir: filepath.Join(root, "state"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.SetAppHost(ah)
+	t.Cleanup(ah.Close)
+}
+
+// TestPluginInstanceKindHostValidation 锁定运行时宿主边界：
+// Driver 只能真实 Edge，Application 只能 Server，Connector 无运行时；
+// kind 无法解析时也必须拒绝，创建与更新走同一规则。
+func TestPluginInstanceKindHostValidation(t *testing.T) {
+	srv, _, _, mem, a, _ := setupPluginWritePlane(t)
+	installServerPlugins(t, srv, map[string]string{
+		"io.test.server-app":       "Application",
+		"io.test.server-driver":    "Driver",
+		"io.test.server-connector": "Connector",
+	})
+	seedInstallations(t, srv, mem, a, "e1", []api.PluginInstallationStatusData{
+		{PluginID: "io.test.edge-driver", Version: "1.0.0", Kind: "Driver", Protocol: 1},
+		{PluginID: "io.test.edge-app", Version: "1.0.0", Kind: "Application", Protocol: 1},
+		{PluginID: "io.test.edge-connector", Version: "1.0.0", Kind: "Connector", Protocol: 1},
+		{PluginID: "io.test.edge-unknown", Version: "1.0.0", Kind: "Wizard", Protocol: 1},
+	})
+
+	create := func(edgeID, instanceID, pluginID string) *httptest.ResponseRecorder {
+		t.Helper()
+		return servePlugin(t, srv, http.MethodPost, "/api/plugin-instances",
+			`{"edge_id":"`+edgeID+`","instance_id":"`+instanceID+`","plugin_id":"`+pluginID+`","version":"1.0.0"}`,
+			a, "tenant-a", string(api.RoleAdmin))
+	}
+	assertOK := func(edgeID, instanceID, pluginID string) {
+		t.Helper()
+		if rec := create(edgeID, instanceID, pluginID); rec.Code != http.StatusOK {
+			t.Fatalf("合法组合 %s/%s = %d body=%s", pluginID, edgeID, rec.Code, rec.Body.String())
+		}
+	}
+	assertReject := func(method, path, body, wantCode string) {
+		t.Helper()
+		rec := servePlugin(t, srv, method, path, body, a, "tenant-a", string(api.RoleAdmin))
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("%s %s = %d, want 409 body=%s", method, path, rec.Code, rec.Body.String())
+		}
+		if got := decodePluginBody(t, rec); got.Code != wantCode {
+			t.Fatalf("%s %s code = %q, want %q", method, path, got.Code, wantCode)
+		}
+	}
+
+	assertOK("e1", "edge-driver", "io.test.edge-driver")
+	assertOK(AppHostEdgeID, "server-app", "io.test.server-app")
+	assertReject(http.MethodPost, "/api/plugin-instances",
+		`{"edge_id":"e1","instance_id":"edge-app","plugin_id":"io.test.edge-app","version":"1.0.0"}`,
+		pluginErrHostMismatch)
+	assertReject(http.MethodPost, "/api/plugin-instances",
+		`{"edge_id":"`+AppHostEdgeID+`","instance_id":"server-driver","plugin_id":"io.test.server-driver","version":"1.0.0"}`,
+		pluginErrHostMismatch)
+	assertReject(http.MethodPost, "/api/plugin-instances",
+		`{"edge_id":"e1","instance_id":"edge-connector","plugin_id":"io.test.edge-connector","version":"1.0.0"}`,
+		pluginErrKindUnsupported)
+	assertReject(http.MethodPost, "/api/plugin-instances",
+		`{"edge_id":"`+AppHostEdgeID+`","instance_id":"server-connector","plugin_id":"io.test.server-connector","version":"1.0.0"}`,
+		pluginErrKindUnsupported)
+	assertReject(http.MethodPost, "/api/plugin-instances",
+		`{"edge_id":"e1","instance_id":"unknown-kind","plugin_id":"io.test.unreported","version":"1.0.0"}`,
+		pluginErrKindUnavailable)
+	assertReject(http.MethodPost, "/api/plugin-instances",
+		`{"edge_id":"e1","instance_id":"invalid-kind","plugin_id":"io.test.edge-unknown","version":"1.0.0"}`,
+		pluginErrKindUnavailable)
+
+	for _, row := range []storeport.PluginInstanceRow{
+		{TenantID: a, EdgeID: AppHostEdgeID, InstanceID: "bad-server-driver", PluginID: "io.test.server-driver",
+			Version: "1.0.0", Enabled: true, Isolation: "shared", ConfigJSON: "{}", SecretRefs: "[]"},
+		{TenantID: a, EdgeID: "e1", InstanceID: "bad-edge-connector", PluginID: "io.test.edge-connector",
+			Version: "1.0.0", Enabled: true, Isolation: "shared", ConfigJSON: "{}", SecretRefs: "[]"},
+	} {
+		if _, err := mem.CreatePluginInstance(row); err != nil {
+			t.Fatal(err)
+		}
+	}
+	invalidatePluginCache(t, srv, a)
+	assertReject(http.MethodPatch, "/api/plugin-instances/bad-server-driver", `{"enabled":false}`, pluginErrHostMismatch)
+	assertReject(http.MethodPatch, "/api/plugin-instances/bad-edge-connector", `{"enabled":false}`, pluginErrKindUnsupported)
+}
+
 // TestPluginInstanceRBAC 锁定角色差异：viewer 只读；operator 可写；
 // purge 删数据要求 admin（契约的 DeleteRequest 没有 confirm 字段）。
 func TestPluginInstanceRBAC(t *testing.T) {
-	srv, _, _, _, a, _ := setupPluginPlane(t)
+	srv, _, _, _, a, _ := setupPluginWritePlane(t)
 	create := `{"edge_id":"e1","instance_id":"box1","plugin_id":"p1","version":"1.0.0"}`
 	if rec := servePlugin(t, srv, http.MethodPost, "/api/plugin-instances", create,
 		a, "tenant-a", string(api.RoleViewer)); rec.Code != http.StatusForbidden {
@@ -216,7 +352,7 @@ func TestPluginInstanceRBAC(t *testing.T) {
 // TestPluginInstanceQuotaDoesNotAdvanceRevision 锁定暗卷 6：配额超限不得增加 revision、
 // 不得留「成功」审计，必须记失败审计，并返回稳定错误码。
 func TestPluginInstanceQuotaDoesNotAdvanceRevision(t *testing.T) {
-	srv, _, st, mem, a, _ := setupPluginPlane(t)
+	srv, _, st, mem, a, _ := setupPluginWritePlane(t)
 	if err := mem.SetTenantPolicy(a, storeport.TenantPolicyRow{TenantID: a, QuotaPluginInstances: 1}); err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +404,7 @@ func TestPluginInstanceQuotaDoesNotAdvanceRevision(t *testing.T) {
 // TestPluginInstancePermissionEscalationRequiresConfirm 锁定：绑定 secret / 削弱隔离
 // 属于权限扩大，未显式确认不得生成新 desired revision。
 func TestPluginInstancePermissionEscalationRequiresConfirm(t *testing.T) {
-	srv, _, _, mem, a, _ := setupPluginPlane(t)
+	srv, _, _, mem, a, _ := setupPluginWritePlane(t)
 	// 1) operator 绑定 secret 但未确认 → 403，且不产生任何 revision。
 	rec := servePlugin(t, srv, http.MethodPost, "/api/plugin-instances",
 		`{"edge_id":"e1","instance_id":"box1","plugin_id":"p1","version":"1.0.0","config":{"api_token":"secret://api_token"}}`,
@@ -328,7 +464,7 @@ func TestPluginInstancePermissionEscalationRequiresConfirm(t *testing.T) {
 // TestPluginInstanceRejectsPlaintextSecret 锁定 secret 边界：明文一律拒绝，
 // 且拒绝响应、审计、存储里都不得出现该明文。
 func TestPluginInstanceRejectsPlaintextSecret(t *testing.T) {
-	srv, _, st, mem, a, _ := setupPluginPlane(t)
+	srv, _, st, mem, a, _ := setupPluginWritePlane(t)
 	const plaintext = "sk" + "-live-SUPERSECRETVALUE" // 红队字面量拆分，防 public_audit 误报
 	rec := servePlugin(t, srv, http.MethodPost, "/api/plugin-instances",
 		`{"edge_id":"e1","instance_id":"box1","plugin_id":"p1","version":"1.0.0","config":{"api_token":"`+plaintext+`"}}`,
@@ -371,7 +507,7 @@ func TestPluginInstanceRejectsPlaintextSecret(t *testing.T) {
 // TestPluginInstanceSecretMustBeDeclared 锁定双重授权的服务端一半：
 // 已有安装物投影时，handle 名必须在 manifest permissions.secrets 中声明。
 func TestPluginInstanceSecretMustBeDeclared(t *testing.T) {
-	srv, _, _, mem, a, _ := setupPluginPlane(t)
+	srv, _, _, mem, a, _ := setupPluginWritePlane(t)
 	if err := mem.UpsertPluginInstallations(a, "e1", []api.PluginInstallationStatusData{{
 		PluginID: "p1", Version: "1.0.0", Kind: "Driver", Protocol: 1,
 		Permissions: api.PluginPermissionsData{Secrets: []string{"other_name"}},
@@ -415,7 +551,7 @@ func TestPluginInstanceSecretMustBeDeclared(t *testing.T) {
 // TestPluginInstanceDeleteKeepsObservedByDefault 锁定 purge 语义：
 // 默认删除期望态但保留 observed 投影（标 stale），purge 才删投影。
 func TestPluginInstanceDeleteKeepsObservedByDefault(t *testing.T) {
-	srv, _, _, mem, a, _ := setupPluginPlane(t)
+	srv, _, _, mem, a, _ := setupPluginWritePlane(t)
 	mustCreate := func(edge, id string) {
 		t.Helper()
 		rec := servePlugin(t, srv, http.MethodPost, "/api/plugin-instances",
@@ -480,7 +616,7 @@ func TestPluginInstanceDeleteKeepsObservedByDefault(t *testing.T) {
 // TestPluginInstanceReconcileRequiresOnlineEdge 锁定：reconcile 不增 revision；
 // Edge 离线必须明确失败（稳定码 plugin_edge_offline），绝不伪装成功。
 func TestPluginInstanceReconcileRequiresOnlineEdge(t *testing.T) {
-	srv, _, st, mem, a, _ := setupPluginPlane(t)
+	srv, _, st, mem, a, _ := setupPluginWritePlane(t)
 	if rec := servePlugin(t, srv, http.MethodPost, "/api/plugin-instances",
 		`{"edge_id":"e1","instance_id":"box1","plugin_id":"p1","version":"1.0.0"}`,
 		a, "tenant-a", string(api.RoleOperator)); rec.Code != http.StatusOK {
@@ -505,7 +641,7 @@ func TestPluginInstanceReconcileRequiresOnlineEdge(t *testing.T) {
 // TestPluginInstanceNotFoundConflictCrossTenant 锁定稳定错误码：未知实例 404、
 // 同租户 instance_id 冲突 409、跨租户一律 404（不泄漏存在性）。
 func TestPluginInstanceNotFoundConflictCrossTenant(t *testing.T) {
-	srv, _, _, _, a, b := setupPluginPlane(t)
+	srv, _, _, _, a, b := setupPluginWritePlane(t)
 	if rec := servePlugin(t, srv, http.MethodPatch, "/api/plugin-instances/nope", `{"enabled":true}`,
 		a, "tenant-a", string(api.RoleOperator)); rec.Code != http.StatusNotFound {
 		t.Fatalf("未知实例 patch = %d, want 404", rec.Code)
@@ -550,7 +686,7 @@ func TestPluginInstanceNotFoundConflictCrossTenant(t *testing.T) {
 // TestPluginInstanceInvalidInput 锁定输入校验：非法 edge/instance/plugin id、缺 version、
 // 未知 isolation 都返回稳定码 plugin_invalid_config，且不产生 revision。
 func TestPluginInstanceInvalidInput(t *testing.T) {
-	srv, _, _, mem, a, _ := setupPluginPlane(t)
+	srv, _, _, mem, a, _ := setupPluginWritePlane(t)
 	bad := []string{
 		`{"edge_id":"","instance_id":"b1","plugin_id":"p1","version":"1.0.0"}`,
 		`{"edge_id":"e1","instance_id":"","plugin_id":"p1","version":"1.0.0"}`,

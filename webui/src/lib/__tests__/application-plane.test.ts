@@ -32,8 +32,8 @@ describe('通用应用展示，不猜业务或设备', () => {
     expect(appTime(undefined)).toBe('尚无记录')
   })
   it('真实宿主隔离枚举在展示层有中文，未知值不篡改', () => {
-    expect(isolationLabel('shared')).toBe('共享进程')
-    expect(isolationLabel('per-instance')).toBe('实例独立进程')
+    expect(isolationLabel('shared')).toBe('共享运行')
+    expect(isolationLabel('per-instance')).toBe('独立运行')
     expect(isolationLabel('future-mode')).toBe('future-mode')
   })
 })

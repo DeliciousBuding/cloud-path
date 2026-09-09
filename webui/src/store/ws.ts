@@ -265,16 +265,25 @@ function handle(env: Envelope) {
       for (const d of snap.devices ?? []) devices[d.id] = d
       const edges: Record<string, EdgeView> = {}
       for (const e of snap.edges ?? []) edges[e.edge_id] = e
-      // 快照可能一并携带 Descriptor（宽容：数组或映射都接受）
-      const descriptors = { ...st.descriptors }
+      // 快照是设备集合的权威：Descriptor 缓存也按本次快照重建，不能留下已删设备的旧操作。
+      const descriptors: Record<string, DeviceDescriptor> = {}
       const rawList = (snap as { descriptors?: unknown }).descriptors
-      const list: unknown[] = Array.isArray(rawList)
-        ? rawList
-        : rawList ? Object.values(rawList as object) : []
-      for (const item of list) {
+      const entries: Array<[string | undefined, unknown]> = Array.isArray(rawList)
+        ? rawList.map((item) => [undefined, item])
+        : rawList && typeof rawList === 'object'
+          ? Object.entries(rawList as Record<string, unknown>)
+          : []
+      for (const [mappedKey, item] of entries) {
         const dd = normalizeDescriptor(item)
         if (!dd) continue
-        descriptors[dd.device_id] = dd
+        let key = mappedKey && devices[mappedKey] ? mappedKey
+          : devices[dd.device_id] ? dd.device_id : undefined
+        if (!key) {
+          // 兼容旧短 ID Descriptor：只有唯一命中设备时才归属，绝不复活不在快照里的键。
+          const matches = Object.keys(devices).filter((candidate) => candidate.split('/').at(-1) === dd.device_id)
+          if (matches.length === 1) key = matches[0]
+        }
+        if (key) descriptors[key] = dd
       }
       useLive.setState({ devices, edges, descriptors })
       break
