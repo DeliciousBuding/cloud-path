@@ -1,1 +1,140 @@
-export default {}
+export default {
+  page: { title: '设备' },
+  status: {
+    online: '在线', offline: '离线', degraded: '降级', unavailable: '不可用', unknown: '未知',
+  },
+  quality: {
+    good: '良好', uncertain: '不确定', bad: '异常', unavailable: '不可用',
+    title: '观测质量：{{quality}}', aria: '观测质量 {{quality}}',
+  },
+  category: { sensor: '传感器', actuator: '执行器', diagnostic: '诊断', config: '配置' },
+  source: {
+    ws: '实时同步', inline: '设备上报', rest: '设备直连', bulk: '批量同步', none: '尚未同步', error: '加载失败',
+  },
+  stateValue: {
+    free: '空闲', busy: '忙碌', idle: '空闲', running: '运行中', stopped: '已停止',
+    on: '已开启', off: '已关闭', clock: '时钟模式',
+  },
+  list: {
+    subtitle: {
+      loading: '正在加载设备状态…', error: '设备状态暂不可用', empty: '还没有设备接入',
+      mixed: '{{online}} 台在线 · {{offline}} 台离线，已优先排列',
+      allOnline: '{{count}} 台在线 · 全部在线',
+    },
+    filter: { label: '在线状态筛选', all: '全部 {{count}}', online: '在线 {{count}}', offline: '离线 {{count}}' },
+    search: { label: '搜索设备', placeholder: '按名称、编号、网关或设备类型搜索', clear: '清除' },
+    error: {
+      title: '设备列表加载失败',
+      hint: '暂时无法加载设备列表。这不表示没有设备已接入，请检查服务是否正常后重试。',
+    },
+    empty: { title: '还没有设备接入', hint: '启动网关并完成设备接入后，设备会自动出现在这里。' },
+    noMatch: {
+      title: '没有匹配的设备',
+      query: '没有设备匹配「{{query}}」。试试只搜名称的一部分，或清除筛选条件。',
+      filter: '当前筛选条件下没有设备，换一个状态试试。',
+    },
+    limit: '仅显示前 300 台（共 {{count}} 台匹配）；请用搜索或在线状态筛选缩小范围',
+    note: '关键数据来自设备上报；「等待同步」表示设备还没有上报可显示的数据。',
+  },
+  row: {
+    device: '设备', gateway: '网关', keyData: '关键数据', status: '状态', lastReport: '最近上报',
+    gatewayPrefix: '网关 ', deviceType: '设备类型 {{type}}',
+    metricsWaiting: '读数等待同步', metricsWaitingTitle: '设备尚未同步信息，读数未知',
+    noMetrics: '暂无可读数值', noMetricsTitle: '设备信息里没有可显示的主读数',
+    updatedAt: '更新于 {{time}}', lastOnline: '最后在线 {{time}}', never: '从未更新',
+  },
+  detail: {
+    back: '设备',
+    tabs: { controls: '设备操作', overview: '概览', events: '操作记录', advanced: '高级' },
+    tabsAria: '设备详情分区',
+    header: { deviceId: '设备编号 {{id}}', updatedAt: '更新于 {{time}}', lastSeen: '最后见 {{time}}' },
+    advanced: { label: '高级视图', state: '状态与趋势', capabilities: '设备能力', diagnostics: '诊断' },
+    overview: {
+      connectedNoPrimary: '设备已连接，但还没有可呈现的主值',
+      offlineNoPrimary: '设备离线，暂无可呈现的主值',
+      summary: '设备摘要',
+      lastUpdate: '最近更新', lastSeen: '最后见',
+      capabilities: '设备能力', actions: '可执行操作',
+      loadFailed: '加载失败', notSynced: '尚未同步', itemCount: '{{count}} 项',
+      recentEvents: '最近事件', viewRecord: '查看记录', noEvents: '还没有事件',
+    },
+    state: {
+      live: '实时', offline: '离线', showingLastUpdate: '展示最后一次更新的数据',
+      viewLabel: '状态视图', rows: '分组', table: '表格', trend: '趋势',
+      rangeLabel: '时间范围', lastMinute: '近 1 分', lastFiveMinutes: '近 5 分', session: '全会话',
+      chartLabel: '图表形态', area: '面积图', line: '折线图',
+      noTrend: '暂无趋势数据，设备更新数值后会自动开始采样',
+      points: '{{count}} 点',
+      trendNote: '趋势只记录本页打开期间的数据（最多 240 点）；更早的数值请查事件记录与操作记录。',
+    },
+    controls: {
+      title: '设备操作', descriptorFailed: '设备能力加载失败，操作列表暂不可用。',
+      actuatorState: '执行器状态', noData: '暂无数据',
+      gatewayOffline: '所属网关当前离线，操作暂不可用。网关离线期间不能下发操作，恢复连接后再试。',
+      deviceOffline: '设备当前离线，操作暂不可用。请检查设备供电和串口连接，设备恢复后会自动刷新。',
+    },
+    events: {
+      title: '事件', count: '{{count}} 条', filter: '筛选', all: '全部事件', empty: '还没有事件',
+      limited: '仅显示最近 30 条（共 {{count}} 条）· 查看完整运行记录',
+    },
+    capabilities: {
+      title: '设备能力', loadFailed: '设备能力加载失败，暂时无法显示能力列表。',
+      emptyTitle: '该设备还没有同步设备能力',
+      emptyHint: '设备同步能力信息后，这里会显示它支持的能力与操作。',
+      synced: '{{count}} 项 · 已同步 {{docs}} 份',
+      note: '点击一行查看详细说明；名称优先使用设备提供的中文名称。',
+      mobileNote: '字段表可左右滑动查看完整标识。',
+    },
+    diagnostics: {
+      title: '身份与原始状态', referenceTime: '参考时间 {{time}}',
+      deviceId: '设备编号', gateway: '网关', deviceType: '设备类型', port: '串口',
+      online: '在线', yes: '是', no: '否', lastUpdate: '最后更新', lastSeen: '最后见',
+      descriptorSource: '设备说明来源', sourceTitle: '原始来源：{{source}}',
+      manufacturer: '厂商', model: '型号', externalId: '外部 ID',
+      rawState: '原始状态数据', descriptorRaw: '设备说明原始数据',
+      inventoryTitle: '实体（技术详情）',
+      summary: '实体 {{entities}} 个 · 设备能力 {{capabilities}} 项 · 已同步 {{docs}} 份 · 数值序列 {{series}} 条',
+      mobileNote: '左右滑动可查看完整实体编号和能力标识。',
+    },
+    stateTable: {
+      aria: '设备状态表', empty: '设备信息中没有可显示的数据',
+      entity: '实体', property: '属性', value: '当前值', quality: '质量', received: '接收', stale: '已过期',
+    },
+  },
+  error: {
+    descriptor: {
+      timeoutTitle: '设备能力读取超时',
+      timeoutHint: '读取设备能力超时，暂时无法显示操作与能力信息。请稍后重试。',
+      unavailableTitle: '设备能力暂时不可用',
+      unavailableHint: '设备能力服务暂时不可用，暂时无法显示操作与能力信息。请稍后重试。',
+      loadTitle: '设备能力加载失败',
+      loadHint: '暂时无法加载设备能力与操作信息，请检查服务后重试。',
+    },
+    notFoundTitle: '设备未注册',
+    notFoundHint: '没有找到 {{key}}。设备接入后会自动注册；请检查接入配置与连接。',
+    loadTitle: '设备信息加载失败',
+    loadHint: '暂时无法加载这台设备的详情。这不表示设备不存在，请检查服务是否正常后重试。',
+  },
+  raw: {
+    title: '设备数据', genericTitle: '设备数据（通用视图）', waiting: '等待设备同步…', fields: '{{count}} 字段',
+    unsupported: '该设备尚未同步能力信息，此处按已接收的数据显示',
+  },
+  json: {
+    defaultLabel: '完整数据', title: '完整数据视图', dataTable: '{{label}} 数据表', fullData: '{{label}} 完整数据',
+  },
+  table: { defaultLabel: '数据表', value: '值', empty: '暂无内容' },
+  observation: { empty: '还没有数据', unknown: '暂无详情' },
+  state: {
+    empty: '设备信息中没有可显示的数据', stale: '已过期', remaining: '其余 {{count}} 项',
+    waiting: '等待数据', unavailable: '暂无数据',
+  },
+  capability: {
+    empty: '设备信息中没有可显示的能力', unknown: '暂无详情',
+    counts: '{{properties}} 属性 · {{actions}} 动作 · {{events}} 事件',
+    fieldsAria: '{{name}} 字段', property: '属性', fieldId: '字段标识', type: '类型', unit: '单位', access: '访问',
+    version: '版本 {{version}}', dataStructure: '数据结构', fullData: '{{ref}} 完整数据',
+  },
+  entity: {
+    inventoryAria: '实体清单', entity: '实体', id: '实体编号', category: '分类', capabilityId: '能力标识',
+  },
+}

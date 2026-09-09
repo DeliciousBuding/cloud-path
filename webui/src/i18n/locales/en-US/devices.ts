@@ -1,1 +1,140 @@
-export default {}
+export default {
+  page: { title: 'Devices' },
+  status: {
+    online: 'Online', offline: 'Offline', degraded: 'Degraded', unavailable: 'Unavailable', unknown: 'Unknown',
+  },
+  quality: {
+    good: 'Good', uncertain: 'Uncertain', bad: 'Bad', unavailable: 'Unavailable',
+    title: 'Observation quality: {{quality}}', aria: 'Observation quality {{quality}}',
+  },
+  category: { sensor: 'Sensors', actuator: 'Actuators', diagnostic: 'Diagnostics', config: 'Configuration' },
+  source: {
+    ws: 'Live sync', inline: 'Device report', rest: 'Device connection', bulk: 'Bulk sync', none: 'Not synced', error: 'Load failed',
+  },
+  stateValue: {
+    free: 'Free', busy: 'Busy', idle: 'Idle', running: 'Running', stopped: 'Stopped',
+    on: 'On', off: 'Off', clock: 'Clock mode',
+  },
+  list: {
+    subtitle: {
+      loading: 'Loading device status…', error: 'Device status is unavailable', empty: 'No devices connected yet',
+      mixed: '{{online}} online · {{offline}} offline; offline devices shown first',
+      allOnline: '{{count}} online · All devices online',
+    },
+    filter: { label: 'Filter by status', all: 'All {{count}}', online: 'Online {{count}}', offline: 'Offline {{count}}' },
+    search: { label: 'Search devices', placeholder: 'Search by name, ID, gateway, or device type', clear: 'Clear' },
+    error: {
+      title: 'Could not load devices',
+      hint: 'The device list is temporarily unavailable. This does not mean that no devices are connected. Check the service and try again.',
+    },
+    empty: { title: 'No devices connected yet', hint: 'Devices will appear here after a gateway is started and a device connects.' },
+    noMatch: {
+      title: 'No matching devices',
+      query: 'No devices match “{{query}}”. Try part of a name, or clear the filters.',
+      filter: 'No devices match the current status filter. Try another status.',
+    },
+    limit: 'Showing the first 300 devices ({{count}} matches); narrow the list with search or status filters',
+    note: 'Key data comes from device reports. “Waiting for sync” means the device has not reported displayable data yet.',
+  },
+  row: {
+    device: 'Device', gateway: 'Gateway', keyData: 'Key readings', status: 'Status', lastReport: 'Last report',
+    gatewayPrefix: 'Gateway ', deviceType: 'Device type {{type}}',
+    metricsWaiting: 'Waiting for readings', metricsWaitingTitle: 'The device has not synced its information yet, so readings are unknown',
+    noMetrics: 'No readings', noMetricsTitle: 'The device information contains no primary reading to display',
+    updatedAt: 'Updated {{time}}', lastOnline: 'Last online {{time}}', never: 'Never updated',
+  },
+  detail: {
+    back: 'Devices',
+    tabs: { controls: 'Controls', overview: 'Overview', events: 'Activity', advanced: 'Advanced' },
+    tabsAria: 'Device detail sections',
+    header: { deviceId: 'Device ID {{id}}', updatedAt: 'Updated {{time}}', lastSeen: 'Last seen {{time}}' },
+    advanced: { label: 'Advanced view', state: 'Status & trends', capabilities: 'Capabilities', diagnostics: 'Diagnostics' },
+    overview: {
+      connectedNoPrimary: 'The device is connected, but has no primary value to display yet',
+      offlineNoPrimary: 'The device is offline and has no primary value to display',
+      summary: 'Device summary',
+      lastUpdate: 'Last update', lastSeen: 'Last seen',
+      capabilities: 'Capabilities', actions: 'Available controls',
+      loadFailed: 'Load failed', notSynced: 'Not synced', itemCount: '{{count}}',
+      recentEvents: 'Recent events', viewRecord: 'View activity', noEvents: 'No events yet',
+    },
+    state: {
+      live: 'Live', offline: 'Offline', showingLastUpdate: 'Showing data from the last update',
+      viewLabel: 'Status view', rows: 'Grouped', table: 'Table', trend: 'Trend',
+      rangeLabel: 'Time range', lastMinute: 'Last minute', lastFiveMinutes: 'Last 5 minutes', session: 'Session',
+      chartLabel: 'Chart type', area: 'Area', line: 'Line',
+      noTrend: 'No trend data yet. Sampling starts when the device reports numeric updates.',
+      points: '{{count}} points',
+      trendNote: 'Trends only cover data collected while this page is open (up to 240 points). For earlier values, check events and activity.',
+    },
+    controls: {
+      title: 'Controls', descriptorFailed: 'Capabilities could not be loaded, so controls are unavailable.',
+      actuatorState: 'Actuator status', noData: 'No data',
+      gatewayOffline: 'The gateway is offline, so controls are unavailable. Reconnect the gateway and try again.',
+      deviceOffline: 'The device is offline, so controls are unavailable. Check its power and serial connection; the page will refresh when it reconnects.',
+    },
+    events: {
+      title: 'Events', count: '{{count}}', filter: 'Filter', all: 'All events', empty: 'No events yet',
+      limited: 'Showing the latest 30 of {{count}} events · View full activity',
+    },
+    capabilities: {
+      title: 'Capabilities', loadFailed: 'Capabilities could not be loaded, so the list is unavailable.',
+      emptyTitle: 'Capabilities have not been synced for this device',
+      emptyHint: 'Once the device syncs its capabilities, the supported capabilities and controls will appear here.',
+      synced: '{{count}} capabilities · {{docs}} documents synced',
+      note: 'Select a row for details. Chinese names provided by the device are preferred.',
+      mobileNote: 'Scroll the field table horizontally to see full identifiers.',
+    },
+    diagnostics: {
+      title: 'Identity & raw status', referenceTime: 'Reference time {{time}}',
+      deviceId: 'Device ID', gateway: 'Gateway', deviceType: 'Device type', port: 'Serial port',
+      online: 'Online', yes: 'Yes', no: 'No', lastUpdate: 'Last update', lastSeen: 'Last seen',
+      descriptorSource: 'Descriptor source', sourceTitle: 'Raw source: {{source}}',
+      manufacturer: 'Manufacturer', model: 'Model', externalId: 'External ID',
+      rawState: 'Raw status data', descriptorRaw: 'Raw descriptor data',
+      inventoryTitle: 'Entities (technical details)',
+      summary: '{{entities}} entities · {{capabilities}} capabilities · {{docs}} documents synced · {{series}} numeric series',
+      mobileNote: 'Scroll horizontally to see full entity IDs and capability identifiers.',
+    },
+    stateTable: {
+      aria: 'Device status table', empty: 'The device information contains no data to display',
+      entity: 'Entity', property: 'Property', value: 'Current value', quality: 'Quality', received: 'Received', stale: 'Stale',
+    },
+  },
+  error: {
+    descriptor: {
+      timeoutTitle: 'Capability request timed out',
+      timeoutHint: 'Reading device capabilities timed out, so controls and capability details are unavailable. Try again later.',
+      unavailableTitle: 'Capabilities are temporarily unavailable',
+      unavailableHint: 'The capability service is temporarily unavailable, so controls and capability details cannot be shown. Try again later.',
+      loadTitle: 'Could not load capabilities',
+      loadHint: 'Capabilities and controls are temporarily unavailable. Check the service and try again.',
+    },
+    notFoundTitle: 'Device not registered',
+    notFoundHint: '{{key}} was not found. Devices register automatically after connecting; check the connection configuration.',
+    loadTitle: 'Could not load device information',
+    loadHint: 'This device’s details are temporarily unavailable. This does not mean the device is missing. Check the service and try again.',
+  },
+  raw: {
+    title: 'Device data', genericTitle: 'Device data (generic view)', waiting: 'Waiting for device sync…', fields: '{{count}} fields',
+    unsupported: 'Capabilities have not been synced for this device; the received data is shown as-is',
+  },
+  json: {
+    defaultLabel: 'Full data', title: 'Full data view', dataTable: '{{label}} table', fullData: 'Full data for {{label}}',
+  },
+  table: { defaultLabel: 'Table', value: 'Value', empty: 'No content' },
+  observation: { empty: 'No data yet', unknown: 'No details' },
+  state: {
+    empty: 'The device information contains no data to display', stale: 'Stale', remaining: '{{count}} more',
+    waiting: 'Waiting for data', unavailable: 'No data',
+  },
+  capability: {
+    empty: 'The device information contains no capabilities to display', unknown: 'No details',
+    counts: '{{properties}} properties · {{actions}} actions · {{events}} events',
+    fieldsAria: '{{name}} fields', property: 'Property', fieldId: 'Field ID', type: 'Type', unit: 'Unit', access: 'Access',
+    version: 'Version {{version}}', dataStructure: 'Data structure', fullData: 'Full data for {{ref}}',
+  },
+  entity: {
+    inventoryAria: 'Entity inventory', entity: 'Entity', id: 'Entity ID', category: 'Category', capabilityId: 'Capability ID',
+  },
+}
