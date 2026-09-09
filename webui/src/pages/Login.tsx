@@ -15,10 +15,12 @@ import { ChevronDown, Eye, EyeOff, KeyRound } from 'lucide-react'
 import { AuthCard, Button, Spinner, TextField } from '@/components/ui'
 import { api, getToken, setToken } from '@/lib/api'
 import { SESSION_NOT_ESTABLISHED, loginErrorCopy } from '@/lib/authErrors'
-import { confirmSession } from '@/store/auth'
+import { confirmSession, useAuth } from '@/store/auth'
 import { toast } from '@/store/toast'
 import { cn } from '@/lib/cn'
 import { usePageTitle } from '@/hooks/usePageTitle'
+
+const UI_ROLES = new Set(['admin', 'operator', 'viewer'])
 
 export default function Login() {
   usePageTitle('登录')
@@ -67,6 +69,11 @@ export default function Login() {
     try {
       const r = await api.login(u, password)
       accepted = true
+      // 账号登录必须由 cookie 会话裁决；旧的本机令牌会覆盖 Bearer 身份，
+      // 先清掉再复核，避免「密码正确却显示登录状态未保存」或静默降权。
+      setToken('')
+      setTokenInput('')
+      setTokenError('')
       const user = await confirmSession(r?.user ?? null)
       toast.ok('登录成功', user?.name || user?.username || undefined)
       navigate('/', { replace: true })
@@ -94,9 +101,21 @@ export default function Login() {
     setTokenError('')
     setToken(v)
     try {
-      // 令牌模式的判据同样是 me：任意字符串打 healthz 一律不算登录
-      const user = await confirmSession()
-      toast.ok('访问令牌已生效', user?.name || user?.username || undefined)
+      // 令牌模式的判据同样是 me：任意字符串打 healthz 一律不算登录。
+      // 这里不能先用 confirmSession()：它会在校验 role 前把 auth 置为 in，
+      // LoginRoute 随即卸载本页，错误提示会落到已卸载组件上。
+      const me = await api.me()
+      const user = me?.user ?? null
+      if (!user || !UI_ROLES.has(user.role)) {
+        setToken('')
+        setTokenInput('')
+        useAuth.setState({ status: 'out', user: null })
+        setTokenError('这个访问令牌只能用于网关接入，不能登录平台。请使用具备查看、操作或管理权限的令牌。')
+        setTokenBusy(false)
+        return
+      }
+      useAuth.setState({ status: 'in', user })
+      toast.ok('访问令牌已生效', user.name || user.username || undefined)
       navigate('/', { replace: true })
     } catch (err) {
       setTokenInput('') // 同时清空输入框，避免无效令牌继续留在页面中
@@ -174,7 +193,7 @@ export default function Login() {
           onClick={() => setTokenOpen((v) => !v)}
           aria-expanded={tokenOpen}
           aria-controls="token-signin"
-          className="flex w-full items-center gap-1.5 text-xs font-medium text-ink-2 transition-colors hover:text-ink"
+          className="flex min-h-11 w-full items-center gap-1.5 text-xs font-medium text-ink-2 transition-colors hover:text-ink"
         >
           <KeyRound size={13} className="shrink-0" />
           使用访问令牌（自动化工具）

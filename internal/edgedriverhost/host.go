@@ -1,5 +1,5 @@
 // Package edgedriverhost 把外部 Driver Plugin Host 接入 edge 进程生命周期：
-// 由 A4.5 的 desired-state + lockfile 驱动，在 edge 退出时优雅关闭、不留孤儿进程。
+// 由 desired-state + lockfile 驱动，在 edge 退出时优雅关闭、不留孤儿进程。
 //
 // 外部 driver 已通过 Driver Protocol v1 桥接进 edge 数据流：installed plugin 的
 // driver ID 被包装成 device.Adapter，handshake/descriptor/observation 经 DriverClient
@@ -24,13 +24,7 @@ import (
 // ErrInvalidConfig 表示 edgedriverhost 配置不合法。
 var ErrInvalidConfig = errors.New("edgedriverhost: invalid config")
 
-// Dialer 是握手后连接插件传输端点的接缝。host-only 生命周期从不拨号；
-// 保留该接缝是为了 A4.7 数据流桥接可注入，而不改变 host 接线。
-type Dialer interface {
-	Dial(ctx context.Context, network, address string) (io.Closer, error)
-}
-
-// Options 配置外部 Driver Plugin Host。Manager/Runner/Dialer 均为接缝：
+// Options 配置外部 Driver Plugin Host。Manager/Runner 均为接缝：
 // 测试注入 fake，生产用真实实现，任何测试都不启动真实第三方插件。
 type Options struct {
 	// Manager 是插件实例控制面（注册安装/建实例/启动/关闭）。
@@ -38,8 +32,6 @@ type Options struct {
 	Manager plugincontrol.HostManager
 	// Runner 是插件进程启动接缝（生产 ExecRunner）。仅在 Manager 为 nil 时使用。
 	Runner pluginhost.Runner
-	// Dialer 是插件传输拨号接缝（host-only 阶段保留，不调用）。
-	Dialer Dialer
 
 	PluginsDir string
 	StateDir   string

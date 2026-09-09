@@ -71,14 +71,14 @@ describe('应用数据读取和通用展示', () => {
     })] }))
     const user = userEvent.setup()
     const { container } = renderWithProviders(<ApplicationPlane instanceID="app-a" />)
-    expect(await screen.findByText('missed')).toBeVisible()
+    expect(await screen.findByRole('heading', { name: '状态 missed' })).toBeVisible()
     expect(screen.getByText('succeeded')).toBeVisible()
     expect(screen.getByText('reminder_state')).toBeVisible()
-    expect(screen.getByText('closed_at')).not.toBeVisible()
+    expect(screen.getByText('关闭时间')).not.toBeVisible()
     expect(container.querySelector('pre')).toBeNull()
     expect(screen.queryByText('漏服')).not.toBeInTheDocument()
     await user.click(screen.getByText(/^其余字段（/))
-    expect(screen.getByText('closed_at')).toBeVisible()
+    expect(screen.getByText('关闭时间')).toBeVisible()
     expect(screen.getByText('E')).toBeVisible()
     expect(container.querySelector('pre')).toBeNull()
   })
@@ -87,12 +87,10 @@ describe('应用数据读取和通用展示', () => {
     const iso = '2026-09-05T22:30:03Z'
     installFetch((url) => appResponse(url, { records: [appRecord('time', { happened_at: iso, note: '06:30' })] }))
     const { container } = renderWithProviders(<ApplicationPlane instanceID="app-a" />)
-    await screen.findByText('happened_at')
-    const time = container.querySelector(`time[datetime="${iso}"]`)
-    expect(time).not.toBeNull()
-    expect(time).toHaveAttribute('title', iso)
-    expect(time?.textContent).not.toBe(iso)
+    expect(await screen.findByRole('heading', { name: /发生时间 / })).toBeVisible()
+    await screen.findByText('note')
     expect(screen.getByText('06:30')).toBeVisible()
+    expect(container.querySelector(`time[datetime="${iso}"]`)).toBeNull()
   })
 
   it('200 空列表与停止状态保持真实空态，不伪造运行绑定或任务', async () => {
@@ -280,6 +278,17 @@ describe('插件实例详情的应用入口', () => {
     expect(screen.queryByText('应用未运行')).not.toBeInTheDocument()
     expect(screen.queryByText('应用已停止，不能执行操作。')).not.toBeInTheDocument()
     expect(screen.getByText('设置已停用，不能执行操作。')).toBeVisible()
+  })
+
+  it('观察态与实际运行态冲突时显示状态冲突，不把冲突二选一', async () => {
+    const base = appInstance('app-a', 'app-a')
+    const instance = { ...base, observed: { ...base.observed!, state: 'stopped' } }
+    installFetch((url) => url === '/api/plugins' ? stubResponse(200, { plugins: [] }) : appResponse(url, { instance, running: true }))
+    renderDetail(instance.id)
+    expect(await screen.findByText('状态冲突')).toBeVisible()
+    expect(screen.getByText('运行状态来源不一致，暂时无法确认应用是否正在运行。')).toBeVisible()
+    expect(screen.getByText('运行状态来源不一致，暂不能执行操作。')).toBeVisible()
+    expect(screen.queryByText('应用运行中')).not.toBeInTheDocument()
   })
 
   it('普通驱动详情不探测应用数据', async () => {

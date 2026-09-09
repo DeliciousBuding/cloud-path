@@ -76,10 +76,11 @@ const COMMAND_LABEL_FALLBACK: Record<string, string> = {
   'pillbox remind': '触发药盒提醒',
 }
 
-/** 事件主标签：中文声明 title → 平台/通用词典 → humanize；不采信 payload 里的英文机器标签。 */
-export function eventDisplayLabel(type: string, index?: CapabilityIndex): string {
+/** 事件主标签：中文声明 title → 中文后端标签 → 平台/通用词典 → 中文兜底；不采信英文机器标签。 */
+export function eventDisplayLabel(type: string, index?: CapabilityIndex, label?: string): string {
   const declared = index ? eventDecl(type, index)?.title : undefined
   if (declared) return declared
+  if (label && CJK_RE.test(label)) return label
   const base = eventLabel(type, index)
   for (const key of machineNameKeys(type)) {
     if (EVENT_LABEL_FALLBACK[key]) return EVENT_LABEL_FALLBACK[key]
@@ -88,10 +89,10 @@ export function eventDisplayLabel(type: string, index?: CapabilityIndex): string
   for (const key of machineNameKeys(base)) {
     if (EVENT_LABEL_FALLBACK[key]) return EVENT_LABEL_FALLBACK[key]
   }
-  return base
+  return CJK_RE.test(base) ? base : '未知状态记录'
 }
 
-/** 命令主标签：声明/平台词典 → 通用词典 → humanize；原始 cmd 只由调用方放进 title。 */
+/** 命令主标签：声明/平台词典 → 通用词典 → 中文兜底；原始 cmd 只由调用方放进 title。 */
 export function commandDisplayMeta(cmd: string, index?: CapabilityIndex): { label: string; hint: string } {
   const meta = cmdMeta(cmd, undefined, index)
   if (CJK_RE.test(meta.label)) return meta
@@ -101,7 +102,26 @@ export function commandDisplayMeta(cmd: string, index?: CapabilityIndex): { labe
   for (const key of machineNameKeys(meta.label)) {
     if (COMMAND_LABEL_FALLBACK[key]) return { ...meta, label: COMMAND_LABEL_FALLBACK[key] }
   }
-  return meta
+  return { ...meta, label: '未知操作' }
+}
+
+/** 事件载荷里的英文状态/错误摘要：只翻译低歧义的通用词，其余不进入主路径。 */
+const PAYLOAD_SUMMARY_FALLBACK: Record<string, string> = {
+  'network timeout': '网络连接超时',
+  'connection timeout': '连接超时',
+  'connection refused': '连接被拒绝',
+  'device offline': '设备离线',
+  'operation failed': '操作失败',
+  'request failed': '请求失败',
+}
+
+function payloadSummary(raw: string | undefined): string | undefined {
+  if (!raw) return undefined
+  if (CJK_RE.test(raw)) return raw
+  for (const key of machineNameKeys(raw)) {
+    if (PAYLOAD_SUMMARY_FALLBACK[key]) return PAYLOAD_SUMMARY_FALLBACK[key]
+  }
+  return undefined
 }
 
 /** 操作失败原因 → 人话 + 下一步。文案与设备详情「操作记录」保持同源，原始 result 只放 title。 */
@@ -186,7 +206,7 @@ function EventRow({ e, first, showDevice, name }: {
   // 展开就是它自己，给按钮等于骗点击（真实数据里 9/9 行都是这个形状）。
   const hasPayload = payloadHasMore(e.payload)
   // 行内摘要只取载荷里的人话字段（label/message/reason/text）：机器 key 不进默认视图
-  const rawSummary = payloadLabel(e.payload)
+  const rawSummary = payloadSummary(payloadLabel(e.payload))
   const typeKeys = new Set(machineNameKeys(e.type))
   const summary = rawSummary && machineNameKeys(rawSummary).some((key) => typeKeys.has(key))
     ? undefined
@@ -194,7 +214,7 @@ function EventRow({ e, first, showDevice, name }: {
   return (
     <li className={first ? 'fade-up' : undefined}>
       <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-2 lg:grid-cols-[auto_minmax(8rem,0.45fr)_minmax(0,1fr)_auto_auto]">
-        <span className="min-w-0 max-w-[9rem] truncate lg:col-start-1" title={e.type}>
+        <span className="min-w-0 max-w-[9rem] truncate lg:col-start-1" title={`原始类型：${e.type}`}>
           <Badge tone={tone} className="max-w-full truncate">{label}</Badge>
         </span>
         {showDevice && (

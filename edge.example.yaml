@@ -1,7 +1,7 @@
-# Cloudpath edge 配置示例 —— 复制为 edge.yaml 后按实际设备填写（edge.yaml 不入库）
+# CloudPath edge 配置示例 —— 复制为 edge.yaml 后按实际设备填写（edge.yaml 不入库）
 # token 支持环境变量展开：${CLOUDPATH_TOKEN}（凭据不落盘）
 
-server: ws://127.0.0.1:8080/ws/edge   # server 的 edge 接入端点；公网部署用 wss://cloudpath.vectorcontrol.tech/ws/edge
+server: ws://127.0.0.1:8080/ws/edge   # server 的 edge 接入端点；公网部署用 wss://console.example.com/ws/edge
 token: ${CLOUDPATH_TOKEN}              # server 启用鉴权时必填
 edge_id: lab-1                         # 边缘节点唯一 ID（小写字母/数字/-/_；缺省用主机名）
                                        # 多台电脑接入同一 server 时，每台的 edge_id 必须不同

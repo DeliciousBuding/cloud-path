@@ -14,7 +14,7 @@
 
 - **Driver Plugin**（跑在 Edge）：设备发现、连接、协议解析、能力映射、设备动作。
 - **Application Plugin**（跑在 Server）：业务对象、绑定、规则、任务、仪表盘、领域 API。
-- **Connector Plugin**（Edge 或 Server）：MQTT / Webhook / 外部平台 / 通知 / 数据出口。
+- **Connector Plugin**（Edge 或 Server；运行时目标态）：MQTT / Webhook / 外部平台 / 通知 / 数据出口。
 
 核心不变量：
 
@@ -30,6 +30,6 @@
 ## 后果
 
 - 正面：硬件、业务、连接三方独立演进，第三方可扩展。
-- 代价：Capability 注册表、Schema 渲染、绑定向导、版本协商都是必须投入的基础设施。
+- 代价：Capability 注册表、Schema 渲染、绑定向导（目标态）、版本协商都是必须投入的基础设施。
 
 详见 [../capability-model.md](../capability-model.md) 与 [../plugin-system.md](../plugin-system.md)。

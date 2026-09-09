@@ -59,7 +59,7 @@ function ThemeControl() {
           aria-pressed={mode === value}
           onClick={() => { setMode(value); setTheme(value) }}
           className={cn(
-            'flex h-6 w-7 items-center justify-center rounded-full transition-all',
+            'flex h-11 w-11 items-center justify-center rounded-full transition-all sm:h-6 sm:w-7',
             mode === value ? 'bg-surface text-ink shadow-sm' : 'text-ink-3 hover:text-ink',
           )}
         >

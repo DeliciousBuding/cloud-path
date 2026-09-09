@@ -58,7 +58,7 @@ CloudPath 把「插上一台设备 → 上云看到它 → 远程控制它」做
 |---|---|---|---|
 | **Driver** | Edge | 设备发现、连接、协议解析、能力映射、设备动作 | 业务流程、租户 UI |
 | **Application** | Server | 业务对象、绑定、规则、任务、领域 API | 直接访问串口或 Core 数据库 |
-| **Connector** | Edge 或 Server | MQTT / Webhook / 外部平台 / 通知 / 数据出口 | 定义核心设备模型 |
+| **Connector** | Edge 或 Server（运行时目标态） | MQTT / Webhook / 外部平台 / 通知 / 数据出口 | 定义核心设备模型 |
 
 UI 贡献不是独立的可执行插件类型：当前由 Descriptor/Capability schema 驱动通用设备视图与命令表单；任意页面 Schema 属于目标态。
 
@@ -156,14 +156,13 @@ cp edge.example.yaml edge.yaml    # edge.yaml 是本地私有配置，不入库
 ```bash
 curl -fsS -X POST http://127.0.0.1:8080/api/devices/<edge_id>/<device_id>/commands \
   -H 'Content-Type: application/json' --data '{"cmd":"sync","args":""}'
-# 返回 {"id":1,...,"status":"sent"}；设备离线时回执为 failed / "device offline"
+# 返回 200 {"id":1,...,"status":"sent"}；网关离线返回 409，设备离线由后续回执标 failed
 
 curl -fsS "http://127.0.0.1:8080/api/events?limit=10"     # 事件流（新→旧）
 curl -fsS http://127.0.0.1:8080/api/edges                 # 网关在线状态
 ```
 
-命令闭环是 `pending → sent → ok|failed`，90 秒未回执由后台 sweeper 标 `timeout`；
-前端按 `command_id` 结算回执。事件与终态命令默认保留 30 天。
+命令闭环是 `pending → sent → ok|failed|timeout`；90 秒未回执由后台 sweeper 标为 `timeout`，前端按 `command_id` 结算回执。事件与终态命令默认保留 30 天。
 
 ### 界面
 
@@ -230,7 +229,7 @@ curl -fsS http://127.0.0.1:8080/api/edges                 # 网关在线状态
 ### 使用者侧（自己的电脑，不改任何代码）
 
 完整指引见 [deploy/edge/README.md](deploy/edge/README.md)（含各平台一句话安装、
-开机自启、常见问题）。最短路径：
+手动启动、常见问题）。最短路径：
 
 1. 从 [GitHub Release](https://github.com/DeliciousBuding/cloud-path/releases) 下载
    自己平台的 `cloudpath-edge_<version>_<os>_<arch>[.exe]`，并按 `checksums.txt` 校验。
@@ -433,7 +432,7 @@ cloud-path/
 
 ## 当前真实能力与边界
 
-> 目标态不冒充当前态。下表以基线代码与本机实测为准；不确定的一律指向 [docs/](docs/)。
+> 目标态不冒充当前态。以下内容以基线代码与本机实测为准；不确定的一律指向 [docs/](docs/)。
 
 **当前实现（IMPLEMENTED；不等同真板 VERIFIED）**
 

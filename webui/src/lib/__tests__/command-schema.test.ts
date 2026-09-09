@@ -289,6 +289,23 @@ describe('普通参数表单模型', () => {
     expect(commandArgsError('{"level":5}', schema)).toContain('不能大于 4')
   })
 
+  it('unit/enumNames 是展示注解，不导致简单参数回落 JSON', () => {
+    const schema = {
+      type: 'object', required: ['mode', 'duration'],
+      properties: {
+        mode: { type: 'string', enum: ['auto', 'manual'], enumNames: ['自动', '手动'], title: '模式' },
+        duration: { type: 'integer', unit: 'ms', title: '时长' },
+      },
+    }
+    expect(unsupportedSchemaKeywords(schema)).toEqual([])
+    const form = commandForm(schema)
+    expect(form).not.toBeNull()
+    expect(form?.fields.find((field) => field.key === 'mode')).toMatchObject({
+      type: 'enum', choices: ['auto', 'manual'], choiceLabels: ['自动', '手动'],
+    })
+    expect(form?.fields.find((field) => field.key === 'duration')).toMatchObject({ type: 'integer' })
+  })
+
   it('平铺对象直接生成字段，数组字段生成可读输入', () => {
     const form = commandForm({
       type: 'object', required: ['digits'],

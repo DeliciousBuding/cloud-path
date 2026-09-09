@@ -95,9 +95,10 @@ Field rules:
   (0-9 each). Omitted fields default to the quiet minimum (`freq: 1`,
   `duration: 1`); out-of-range values are rejected.
 
-`ScheduleTick` events carry the concrete runtime window (with RFC3339 `start` /
-`end` timestamps). The app validates that the referenced compartment exists in
-the instance config before starting the window.
+The application owns the window state machine. It derives today's concrete
+`start` / `end` timestamps from the instance config and timezone whenever the
+`window-check` job runs; Core does not parse compartment schedules or synthesize
+window ticks.
 
 ## Binding
 
@@ -121,19 +122,22 @@ mapped back to their compartment.
 
 The runtime is a process-based `ApplicationService` (Application Protocol v1):
 
-1. **Window start** — on a `ScheduleTick`, the app opens a window, emits a
-   `UpsertDomainRecord` (`window`, `state=opened`), a `RequestCommand` to the
-   bound buzzer entity (action `buzzer` with the configured freq/duration
-   steps), and a `ScheduleTask` so Core can later trigger the `window-check`
-   job.
+1. **Window start** — when the `window-check` job observes the configured
+   start time, the app opens the window, emits an `UpsertDomainRecord`
+   (`window`, `state=opened`), a `RequestCommand` to the bound buzzer entity
+   (action `buzzer` with the configured freq/duration steps), and a
+   `ScheduleTask` for the generic durable cron path.
 2. **Completion** — on a key `press` event for the compartment while its
    window is open, the app marks the window `completed` and cancels the
    `window-check` task.
-3. **Missed** — the `window-check` job scans open windows against the clock and
-   records a `window` record with `state=missed`, cancels the task and emits a
-   notification.
-4. **Idempotency** — duplicate events (same sequence or same window id) and
-   repeated jobs (same `IdempotencyKey`) do not emit duplicate effects.
+3. **Missed** — when the job observes the configured end time without a
+   completion, the app records `state=missed`, cancels the task and emits a
+   notification. If the first observation is already past the end, it records
+   the miss without replaying a stale reminder.
+4. **Idempotency** — repeated jobs (same `IdempotencyKey` or the same daily
+   occurrence) and duplicate key presses do not emit duplicate effects. The
+   state machine is scoped per configured day, so the next day's occurrence can
+   open again.
 
 Effects are limited to the Core-approved closed set: `UpsertDomainRecord`,
 `DeleteDomainRecord`, `RequestCommand`, `ScheduleTask`,

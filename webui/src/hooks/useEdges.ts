@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useLive } from '@/store/ws'
+import { authIdentity, useAuth } from '@/store/auth'
 import type { EdgeView } from '@/lib/types'
 
 export interface EdgesResult {
@@ -12,14 +13,15 @@ export interface EdgesResult {
   refetch: () => void
 }
 
-/** 边缘节点列表：WS 实时状态覆盖 REST 兜底（离线节点只在 REST 里可见）。 */
+/** 边缘节点列表：WS snapshot 覆盖 REST 兜底；WS 断开后 REST 重新成为权威。 */
 export function useEdges(): EdgesResult {
+  const identity = useAuth(authIdentity)
   const live = useLive((s) => s.edges)
   const status = useLive((s) => s.status)
   const connectionEpoch = useLive((s) => s.connectionEpoch)
   const snapshotEpoch = useLive((s) => s.snapshotEpoch)
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['edges'], queryFn: api.edges, refetchInterval: 10000, retry: false,
+    queryKey: ['edges', identity], queryFn: api.edges, refetchInterval: 10000, retry: false,
   })
 
   // WS 只有 open 时是当前权威；断开后 REST 轮询是兜底权威，避免旧在线态粘住。
@@ -27,19 +29,23 @@ export function useEdges(): EdgesResult {
   const liveAuthoritative = status === 'open' &&
     (connectionEpoch === 0 || snapshotEpoch === connectionEpoch)
   const merged: Record<string, EdgeView> = {}
-  if (liveAuthoritative || data === undefined) {
+  if (liveAuthoritative) {
+    // 本次连接的 snapshot 是权威集合；REST 里只可能更旧，不能把已删/不属于当前
+    // 租户的键补回来。
     for (const [id, e] of Object.entries(live)) merged[id] = e
-    for (const e of data?.edges ?? []) if (!merged[e.edge_id]) merged[e.edge_id] = e
-  } else {
+  } else if (data !== undefined) {
     // REST 已成功返回时它就是权威集合；不能把已断开的旧 live 键补回来。
     for (const e of data.edges) merged[e.edge_id] = e
+  } else {
+    // REST 尚未成功时仍用 live 兜底，避免断网期间把最后已知状态清空。
+    for (const [id, e] of Object.entries(live)) merged[id] = e
   }
   const list = Object.values(merged).sort((a, b) => a.edge_id.localeCompare(b.edge_id))
 
   return {
     list,
     online: list.filter((e) => e.online).length,
-    loading: list.length === 0 && !liveAuthoritative && isLoading,
+    loading: list.length === 0 && !liveAuthoritative && (isLoading || status !== 'closed'),
     // WS open 时空快照也是权威事实；只有 REST 才是唯一来源且失败时才报错误态。
     error: list.length === 0 && !liveAuthoritative && !isLoading ? error : null,
     refetch: () => { void refetch() },

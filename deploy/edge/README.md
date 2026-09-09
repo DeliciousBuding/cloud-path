@@ -156,18 +156,17 @@ curl -fsS -H "Authorization: Bearer <管理令牌>" https://console.example.com/
 curl -fsS -H "Authorization: Bearer <管理令牌>" https://console.example.com/api/devices
 ```
 
-## 6. 让它开机自启（可选）
+## 6. 手动启动（默认不配置开机自启）
 
-- **Windows**：任务计划程序 → 创建任务 → 触发器“登录时” → 操作“启动程序”指向
-  `cloudpath-edge_...exe`，参数 `-config <绝对路径>\edge.yaml`，起始于该目录；
-  令牌用系统环境变量 `CLOUDPATH_TOKEN` 提供。
-- **macOS**：`~/Library/LaunchAgents/` 下放一个 plist，`ProgramArguments` 指向二进制与
-  `-config`，`RunAtLoad`/`KeepAlive` 置真；令牌用 `EnvironmentVariables` 或包装脚本提供。
-- **Linux**：用户级 systemd unit（`systemctl --user enable --now cloudpath-edge.service`），
-  `ExecStart=` 指向二进制，`Environment=` 只写变量名并从 0600 的 `EnvironmentFile=` 读值；
-  串口权限需要账号在 `dialout`（Debian 系）或 `uucp`（Arch 系）组。
+Edge 按设计是手动拉起的进程：下载、配置、启动都由使用者明确操作。项目不提供开机自启脚本，也不要求在系统里注册常驻服务。
 
-自启配置里同样**不要写明文令牌**：用环境变量文件或系统密钥管理，权限 0600。
+- **Windows**：在终端进入二进制目录，设置 `CLOUDPATH_TOKEN` 后运行
+  `cloudpath-edge_...exe -config <绝对路径>\edge.yaml`。
+- **macOS / Linux**：在终端设置 `CLOUDPATH_TOKEN` 后运行
+  `./cloudpath-edge_... -config <绝对路径>/edge.yaml`；串口权限需要账号在
+  `dialout`（Debian 系）或 `uucp`（Arch 系）组。
+
+需要长期运行时，由使用者显式保持该终端/进程运行；更新或排障后重新手动启动。若历史上配置过开机自启，请在卸载或迁移时移除对应计划任务、LaunchAgent 或 systemd unit。
 
 ## 7. 常见问题
 

@@ -371,7 +371,19 @@ function handle(env: Envelope) {
     case 'edge_down': {
       const id = env.device
       if (!id || !st.edges[id]) return
-      useLive.setState({ edges: { ...st.edges, [id]: { ...st.edges[id], online: false } } })
+      // Edge 断线即其下所有设备不可达。服务端通常会先发 state offline，但前端不能
+      // 依赖该帧一定到达/先到达，否则设备会在 edge_down 后继续显示在线。
+      const devices = { ...st.devices }
+      let devicesChanged = false
+      for (const [key, device] of Object.entries(devices)) {
+        if (device.edge_id !== id || !device.online) continue
+        devices[key] = { ...device, online: false }
+        devicesChanged = true
+      }
+      useLive.setState({
+        edges: { ...st.edges, [id]: { ...st.edges[id], online: false } },
+        ...(devicesChanged ? { devices } : {}),
+      })
       break
     }
     default:

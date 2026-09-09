@@ -9,19 +9,19 @@ import (
 	"github.com/DeliciousBuding/cloud-path/internal/registry"
 )
 
-// DriverIDs 返回 lockfile 中每个已安装插件贡献的 driver ID（去重、排序）。
-// 贡献来自 registry.Manifest.Contributes 的 typed model——本包不再就地解析
-// plugin.yaml，消除与 internal/registry 的二次解析漂移。
-//
-// 没有 `contributes.drivers` 块的 manifest（如 Application/Connector，或旧版
-// Driver）贡献零个 ID；lock 条目对应的 manifest 无法读取/解析时 fail-closed。
-func DriverIDs(root, lockPath string) ([]string, error) {
+type driverContribution struct {
+	driverID string
+	pluginID string
+}
+
+// loadDriverContributions 从 lockfile 对应的 manifest 读取 typed contributions。
+// 任一 manifest 无法读取/解析都 fail-closed；调用方不要各自重复解析。
+func loadDriverContributions(root, lockPath string) ([]driverContribution, error) {
 	lock, err := registry.LoadLockFile(lockPath)
 	if err != nil {
 		return nil, err
 	}
-	seen := map[string]bool{}
-	var ids []string
+	var out []driverContribution
 	for _, locked := range lock.Plugins {
 		manifestPath := filepath.Join(root, registry.SafePluginID(locked.ID), "plugin.yaml")
 		manifest, err := registry.ReadManifest(manifestPath)
@@ -33,12 +33,34 @@ func DriverIDs(root, lockPath string) ([]string, error) {
 		}
 		for _, d := range manifest.Contributes.Drivers {
 			id := strings.TrimSpace(d.ID)
-			if id == "" || seen[id] {
+			if id == "" {
 				continue
 			}
-			seen[id] = true
-			ids = append(ids, id)
+			out = append(out, driverContribution{driverID: id, pluginID: locked.ID})
 		}
+	}
+	return out, nil
+}
+
+// DriverIDs 返回 lockfile 中每个已安装插件贡献的 driver ID（去重、排序）。
+// 贡献来自 registry.Manifest.Contributes 的 typed model——本包不再就地解析
+// plugin.yaml，消除与 internal/registry 的二次解析漂移。
+//
+// 没有 `contributes.drivers` 块的 manifest（如 Application/Connector，或旧版
+// Driver）贡献零个 ID；lock 条目对应的 manifest 无法读取/解析时 fail-closed。
+func DriverIDs(root, lockPath string) ([]string, error) {
+	contributions, err := loadDriverContributions(root, lockPath)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var ids []string
+	for _, contribution := range contributions {
+		if seen[contribution.driverID] {
+			continue
+		}
+		seen[contribution.driverID] = true
+		ids = append(ids, contribution.driverID)
 	}
 	sort.Strings(ids)
 	return ids, nil
@@ -71,23 +93,13 @@ func CheckConflicts(builtins, externalDriverIDs []string) error {
 // resolved from the lockfile manifests. It fails closed when the driver id is
 // unknown or its manifest cannot be parsed.
 func driverPluginID(root, lockPath, driverID string) (string, error) {
-	lock, err := registry.LoadLockFile(lockPath)
+	contributions, err := loadDriverContributions(root, lockPath)
 	if err != nil {
 		return "", err
 	}
-	for _, locked := range lock.Plugins {
-		manifestPath := filepath.Join(root, registry.SafePluginID(locked.ID), "plugin.yaml")
-		manifest, err := registry.ReadManifest(manifestPath)
-		if err != nil {
-			return "", fmt.Errorf("read manifest for %s: %w", locked.ID, err)
-		}
-		if manifest.Contributes == nil {
-			continue
-		}
-		for _, d := range manifest.Contributes.Drivers {
-			if strings.TrimSpace(d.ID) == driverID {
-				return locked.ID, nil
-			}
+	for _, contribution := range contributions {
+		if contribution.driverID == driverID {
+			return contribution.pluginID, nil
 		}
 	}
 	return "", fmt.Errorf("driver id %q not contributed by any installed plugin", driverID)

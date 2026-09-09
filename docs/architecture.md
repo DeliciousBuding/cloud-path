@@ -98,7 +98,7 @@ CloudPath 是一个以 **Device / Entity / Capability** 为核心的通用 IoT �
 |---|---|---|---|
 | Driver | Edge | 设备发现、连接、协议解析、能力映射、设备动作 | 业务流程、租户 UI |
 | Application | Server | 业务对象、绑定、规则、任务、仪表盘、领域 API | 直接访问串口或 Core DB |
-| Connector | Edge 或 Server | MQTT/Webhook/外部平台/通知/数据出口 | 定义核心设备模型 |
+| Connector（运行时目标态） | Edge 或 Server | MQTT/Webhook/外部平台/通知/数据出口 | 定义核心设备模型 |
 | Transform（后期） | Server/Edge 沙箱 | 无状态映射、过滤、聚合、规则函数 | 长连接和任意系统访问 |
 
 UI 贡献不是独立可执行插件类型。当前 WebUI 由 Descriptor/Capability schema 驱动通用设备视图、能力动作与命令表单；任意第三方页面或 JavaScript 延后到具备独立 Origin、沙箱与细粒度 API token 以后。

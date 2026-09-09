@@ -59,7 +59,6 @@ type AppHost struct {
 	mu      sync.Mutex
 	running map[appInstKey]*appInstanceRun    // (tenant, instanceID) → 运行记录
 	failed  map[appInstKey]appInstanceFailure // (tenant, instanceID) → 启动/绑定失败投影
-	ticked  map[string]bool                   // "<tenant>|<instance>|<window>|<date>" → 已派发（防重复开窗）
 	appCmds map[int64]appCommandRef           // server 命令 id → 应用侧引用（RequestCompleted 用）
 	seq     uint64                            // observed 上报序号
 }
@@ -97,22 +96,13 @@ type appInstanceRun struct {
 	bindings       []api.AppBindingView           // 启动时 Binder 权威匹配的绑定快照（D1 读面）
 	jobIDs         []string                       // 应用声明的 job（包含手动操作）
 	jobDescriptors []sdkapplication.JobDescriptor // immutable runtime declaration snapshot
-	tz             *time.Location                 // 应用配置时区
-	windows        []appWindowSpec                // 应用配置的每日窗口
+	tz             *time.Location                 // 应用配置声明的时区（通用 durable schedule_job 使用）
 }
 
-// appWindowSpec 是应用配置里的一个每日窗口（HH:MM，配置时区）。
-type appWindowSpec struct {
-	ID          string `json:"id"`
-	Compartment string `json:"compartment"`
-	Start       string `json:"start"`
-	End         string `json:"end"`
-}
-
-// appConfig 是 AppHost 侧需要的应用配置最小投影（应用自身解析完整配置）。
+// appConfig 是 AppHost 为通用 durable schedule_job 读取的最小配置投影。
+// 窗口等业务字段由应用自身解析，Core 不保留业务副本。
 type appConfig struct {
-	Timezone string          `json:"timezone"`
-	Schedule []appWindowSpec `json:"schedule"`
+	Timezone string `json:"timezone"`
 }
 
 // appCommandRef 把一条 server 命令关联回发起它的应用实例。
@@ -166,7 +156,6 @@ func NewAppHost(srv *Server, cfg AppHostConfig) (*AppHost, error) {
 		bootID:  fmt.Sprintf("server-apphost-%d", time.Now().UnixNano()),
 		running: map[appInstKey]*appInstanceRun{},
 		failed:  map[appInstKey]appInstanceFailure{},
-		ticked:  map[string]bool{},
 		appCmds: map[int64]appCommandRef{},
 	}
 	rt, err := appruntime.NewRuntime(appruntime.RuntimeOptions{
@@ -559,7 +548,6 @@ func (h *AppHost) startInstance(ctx context.Context, row store.PluginInstanceRow
 			if tz, err := time.LoadLocation(cfg.Timezone); err == nil {
 				run.tz = tz
 			}
-			run.windows = cfg.Schedule
 		}
 	}
 	if run.tz == nil {
@@ -689,7 +677,7 @@ func (h *AppHost) dispatchRequestCompleted(ref appCommandRef, state sdkapplicati
 	}
 }
 
-// ---- 分钟调度：窗口开启 tick + 声明 job ----
+// ---- 分钟调度：自动 job + 通用 durable job ----
 
 func (h *AppHost) minuteLoop(ctx context.Context) {
 	for {
@@ -705,64 +693,24 @@ func (h *AppHost) minuteLoop(ctx context.Context) {
 }
 
 func (h *AppHost) minutePass(now time.Time) {
-	type tickDispatch struct {
-		tenantStr  string
-		instanceID string
-		tick       *sdkapplication.ScheduleTick
-	}
 	type jobDispatch struct {
 		tenantStr  string
 		instanceID string
 		req        *sdkapplication.RunJobRequest
 	}
 	h.mu.Lock()
-	var ticks []tickDispatch
 	var jobs []jobDispatch
 	minuteKey := strconv.FormatInt(now.Unix()/60, 10)
 	for key, run := range h.running {
 		id := key.instanceID
-		local := now.In(run.tz)
-		hhmm := local.Format("15:04")
-		date := local.Format("2006-01-02")
-		for _, w := range run.windows {
-			if w.Start != hhmm {
-				continue
-			}
-			// 键含租户：两个租户的同名实例各自每日只开一次窗。
-			tickKey := run.tenantStr + "|" + id + "|" + w.ID + "|" + date
-			if h.ticked[tickKey] {
-				continue
-			}
-			h.ticked[tickKey] = true
-			if t := buildWindowTick(w, local, run.tz); t != nil {
-				ticks = append(ticks, tickDispatch{tenantStr: run.tenantStr, instanceID: id, tick: t})
-			}
-		}
 		for _, jobID := range run.automaticJobs() {
 			jobs = append(jobs, jobDispatch{tenantStr: run.tenantStr, instanceID: id, req: &sdkapplication.RunJobRequest{
 				PluginInstanceID: id, JobID: jobID, IdempotencyKey: jobID + "-" + minuteKey,
 			}})
 		}
 	}
-	// ticked 只增不减会缓慢膨胀：超限时丢弃非今日键（窗口每日最多开一次，
-	// 历史键不再有防重意义）。
-	if len(h.ticked) > 4096 {
-		today := time.Now().Format("2006-01-02")
-		for k := range h.ticked {
-			if !hasSuffix(k, today) {
-				delete(h.ticked, k)
-			}
-		}
-	}
 	h.mu.Unlock()
 
-	for _, t := range ticks {
-		if err := h.rt.DispatchEvent(h.ctxOrBackground(), t.tenantStr, t.instanceID, &sdkapplication.ApplicationEvent{Union: t.tick}); err != nil {
-			h.logger.Warn("apphost dispatch schedule tick", "instance", t.instanceID, "err", err)
-		} else {
-			h.logger.Info("apphost window opened", "instance", t.instanceID, "schedule", t.tick.ScheduleID)
-		}
-	}
 	for _, j := range jobs {
 		if _, err := h.rt.RunJob(h.ctxOrBackground(), j.tenantStr, j.instanceID, j.req); err != nil {
 			h.logger.Warn("apphost run job", "instance", j.instanceID, "job", j.req.JobID, "err", err)
@@ -875,45 +823,6 @@ func (h *AppHost) instanceTimezone(tenantStr, instanceID string) *time.Location 
 	return time.UTC
 }
 
-// buildWindowTick 把当日窗口规格转成应用期望的 WindowJSON
-// （RFC3339 start/end，配置时区）。非法时间返回 nil（诚实跳过）。
-func buildWindowTick(w appWindowSpec, local time.Time, tz *time.Location) *sdkapplication.ScheduleTick {
-	sh, sm, ok1 := parseHHMM(w.Start)
-	eh, em, ok2 := parseHHMM(w.End)
-	if !ok1 || !ok2 {
-		return nil
-	}
-	start := time.Date(local.Year(), local.Month(), local.Day(), sh, sm, 0, 0, tz)
-	end := time.Date(local.Year(), local.Month(), local.Day(), eh, em, 0, 0, tz)
-	if !end.After(start) {
-		return nil
-	}
-	payload, err := json.Marshal(map[string]string{
-		"id": w.ID, "compartment": w.Compartment,
-		"start": start.Format(time.RFC3339), "end": end.Format(time.RFC3339),
-	})
-	if err != nil {
-		return nil
-	}
-	return &sdkapplication.ScheduleTick{
-		ScheduleID: "window-" + w.ID,
-		OccurredAt: local.Format(time.RFC3339),
-		WindowJSON: string(payload),
-	}
-}
-
-func parseHHMM(s string) (int, int, bool) {
-	if len(s) != 5 || s[2] != ':' {
-		return 0, 0, false
-	}
-	h, err1 := strconv.Atoi(s[0:2])
-	m, err2 := strconv.Atoi(s[3:5])
-	if err1 != nil || err2 != nil || h > 23 || m > 59 {
-		return 0, 0, false
-	}
-	return h, m, true
-}
-
 // ---- observed 投影：以实例 edge_id（约定 "server"）上报插件控制面 ----
 
 func (h *AppHost) observedLoop(ctx context.Context) {
@@ -1013,11 +922,6 @@ func (h *AppHost) runningTenantIDs() []int64 {
 		}
 	}
 	return out
-}
-
-// hasSuffix 报告 s 是否以 suffix 结尾。
-func hasSuffix(s, suffix string) bool {
-	return len(s) >= len(suffix) && s[len(s)-len(suffix):] == suffix
 }
 
 // managerSnapshot 取进程面的健康/重启计数（找不到时零值）。

@@ -12,7 +12,7 @@ const FIELD_LABEL: Record<string, string> = {
   notes: '音符序列', frequency_hz: '频率 (Hz)', duration_ms: '时长 (ms)', gap_ms: '音符间隔 (ms)',
 }
 const TYPES = Object.keys(TYPE_NAMES)
-const ANNOTATIONS = new Set(['title', 'description', 'default', 'examples', '$schema', '$id', '$comment', '$defs', 'definitions', 'readOnly', 'writeOnly', 'deprecated'])
+const ANNOTATIONS = new Set(['title', 'description', 'default', 'examples', 'unit', 'enumNames', '$schema', '$id', '$comment', '$defs', 'definitions', 'readOnly', 'writeOnly', 'deprecated'])
 
 function object(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v)
@@ -241,6 +241,8 @@ export interface CommandField {
   type: 'string' | 'number' | 'integer' | 'boolean' | 'enum' | 'array' | 'object-rows'
   schema: Schema
   choices?: unknown[]
+  /** 与 choices 同序的展示名；只影响下拉文案，不改下发值。 */
+  choiceLabels?: string[]
   itemType?: 'string' | 'number' | 'integer'
   fields?: CommandField[]
   examples?: unknown[]
@@ -288,6 +290,10 @@ export function commandFields(schema: Schema): CommandField[] | null {
     const declaredChoices = Array.isArray(prop.enum) && prop.enum.length > 0
       && prop.enum.every((v) => v === null || ['string', 'boolean', 'number'].includes(typeof v)) ? prop.enum : undefined
     const choices = declaredChoices ?? boundedIntegerChoices(prop)
+    const choiceLabels = choices && Array.isArray(prop.enumNames)
+      && prop.enumNames.length === choices.length
+      && prop.enumNames.every((value) => typeof value === 'string' && value.trim())
+      ? prop.enumNames.map((value) => (value as string).trim()) : undefined
     let type: CommandField['type'] = choices ? 'enum' : prop.type as CommandField['type']
     let itemType: CommandField['itemType']
     let nestedFields: CommandField[] | undefined
@@ -307,7 +313,7 @@ export function commandFields(schema: Schema): CommandField[] | null {
     const title = typeof prop.title === 'string' && prop.title.trim() ? prop.title : undefined
     const description = typeof prop.description === 'string' && prop.description.trim() ? prop.description : undefined
     fields.push({ key, label: propertyLabel(key, prop), description: title && description !== title ? description : undefined,
-      required: Array.isArray(schema.required) && schema.required.includes(key), type, schema: prop, choices,
+      required: Array.isArray(schema.required) && schema.required.includes(key), type, schema: prop, choices, choiceLabels,
       itemType, fields: nestedFields, examples: Array.isArray(prop.examples) ? prop.examples : undefined,
       minItems: count(prop.minItems) ? prop.minItems : undefined, maxItems: count(prop.maxItems) ? prop.maxItems : undefined })
   }

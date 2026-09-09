@@ -553,7 +553,7 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
               <summary className="flex cursor-pointer select-none flex-wrap items-center gap-x-3 gap-y-1">
                 <span className="min-w-0 truncate text-[13px] font-medium">{capabilityLabel(ref, idx)}</span>
                 {!doc && <Badge tone="idle" className="shrink-0">暂无详情</Badge>}
-                <span className="num min-w-0 truncate font-mono text-[11px] text-ink-3" title={ref}>{ref}</span>
+                <span className="num min-w-0 select-all break-all font-mono text-[11px] text-ink-3 sm:truncate" title={ref}>{ref}</span>
                 <span className="num ml-auto shrink-0 text-[12px] text-ink-3">
                   {props.length} 属性 · {actions.length} 动作 · {events.length} 事件
                 </span>
@@ -562,7 +562,7 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
                 {props.length > 0 && (
                   <div tabIndex={0} role="region"
                     aria-label={`${capabilityLabel(ref, idx)} 字段`} className="overflow-x-auto">
-                    <table className="w-full border-collapse text-left text-xs">
+                    <table className="w-full min-w-[34rem] border-collapse text-left text-xs">
                       <thead>
                         <tr className="text-[12px] text-ink-3">
                           <th className="px-1 pb-1 font-medium">属性</th>
@@ -577,8 +577,8 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
                           const d = (decl ?? {}) as Record<string, unknown>
                           return (
                             <tr key={name}>
-                              <td className="max-w-[10rem] truncate px-1 py-1.5">{declTitle(d, propertyLabel(name, ref, idx))}</td>
-                              <td className="num px-1 py-1.5 font-mono text-[11px] text-ink-3">{name}</td>
+                              <td className="whitespace-nowrap px-1 py-1.5">{declTitle(d, propertyLabel(name, ref, idx))}</td>
+                              <td className="num select-all whitespace-nowrap px-1 py-1.5 font-mono text-[11px] text-ink-3">{name}</td>
                               <td className="px-1 py-1.5 text-ink-2">{String(d.type ?? '—')}</td>
                               <td className="num px-1 py-1.5 text-ink-2">{String(d.unit ?? '—')}</td>
                               <td className="px-1 py-1.5 text-ink-2">{String(d.access ?? '—')}</td>
@@ -633,7 +633,7 @@ export function EntityInventory({ descriptor, className }: {
 }) {
   return (
     <div tabIndex={0} role="region" aria-label="设备对象清单" className={cn('overflow-x-auto', className)}>
-      <table className="w-full border-collapse text-left text-xs">
+      <table className="w-full min-w-[44rem] border-collapse text-left text-xs">
         <thead>
           <tr className="text-[12px] text-ink-3">
             <th className="px-1 pb-1.5 font-medium">实体</th>
@@ -645,15 +645,15 @@ export function EntityInventory({ descriptor, className }: {
         <tbody className="divide-y divide-hairline">
           {descriptor.entities.map((e) => (
             <tr key={e.entity_id || e.unique_key}>
-              <td className="max-w-[12rem] truncate px-1 py-1.5">{entityTitle(e)}</td>
-              <td className="num px-1 py-1.5 font-mono text-[11px] text-ink-3">{e.entity_id}</td>
+              <td className="whitespace-nowrap px-1 py-1.5">{entityTitle(e)}</td>
+              <td className="num select-all whitespace-nowrap px-1 py-1.5 font-mono text-[11px] text-ink-3">{e.entity_id}</td>
               <td className="px-1 py-1.5 text-ink-2">{CATEGORY_LABEL[e.category] ?? e.category}</td>
               <td className="px-1 py-1.5">
                 <span className="flex min-w-0 flex-wrap gap-1">
                   {e.capabilities.length === 0
                     ? <span className="text-ink-3">—</span>
                     : e.capabilities.map((c) => (
-                      <span key={c} className="num max-w-[16rem] truncate font-mono text-[11px] text-ink-3" title={c}>
+                      <span key={c} className="num select-all break-all font-mono text-[11px] text-ink-3" title={c}>
                         {c}
                       </span>
                     ))}

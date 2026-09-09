@@ -240,6 +240,23 @@ describe('WS 消费必须宽容（不得让整个 UI 崩）', () => {
     expect(useLive.getState().devices['e1/d1']?.online).toBe(false)
   })
 
+  it('edge_down 即使缺少 state offline，也必须把该 Edge 下设备标离线', () => {
+    const s = openSocket()
+    s.simulateMessage({
+      v: 1, type: 'snapshot', ts: 10,
+      data: {
+        devices: [{ id: 'e1/d1', edge_id: 'e1', adapter: 'demo', online: true, state: {}, updated_at: 10, last_seen: 10 }],
+        edges: [{ edge_id: 'e1', online: true, version: 'v1', devices: ['e1/d1'], connected_at: 9 }],
+      },
+    })
+    s.simulateMessage({
+      v: 1, type: 'edge_down', device: 'e1', ts: 11,
+      data: { edge_id: 'e1', devices: ['e1/d1'], version: 'v1' },
+    })
+    expect(useLive.getState().edges.e1?.online).toBe(false)
+    expect(useLive.getState().devices['e1/d1']?.online).toBe(false)
+  })
+
   it('快照重建 descriptor 缓存，删除不在 devices 里的旧键与快照外 Descriptor', () => {
     const s = openSocket()
     useLive.setState({ descriptors: {

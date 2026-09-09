@@ -12,6 +12,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ApiError, api } from '@/lib/api'
 import { useLive } from '@/store/ws'
+import { authIdentity, useAuth } from '@/store/auth'
 import {
   EMPTY_INDEX, commandActions, indexCapabilities, normalizeCapabilityDocs,
   normalizeDescriptor, pickDescriptorFor, readInlineDescriptor,
@@ -62,10 +63,11 @@ function splitPayload(payload: unknown): { descriptor: DeviceDescriptor | null; 
 export function useDeviceDescriptor(
   key: string, edgeId: string, devId: string, opts: Options = {},
 ): DescriptorResult {
+  const identity = useAuth(authIdentity)
   const live = useLive((s) => s.descriptors[key])
 
   const bulk = useQuery({
-    queryKey: ['descriptors'],
+    queryKey: ['descriptors', identity],
     queryFn: api.descriptors,
     enabled: !opts.skipBulk,
     staleTime: 60_000,
@@ -90,7 +92,7 @@ export function useDeviceDescriptor(
   const bulkSettled = Boolean(opts.skipBulk) || bulk.isSuccess || bulk.isError
 
   const single = useQuery({
-    queryKey: ['descriptor', key],
+    queryKey: ['descriptor', key, identity],
     queryFn: () => api.deviceDescriptor(edgeId, devId),
     enabled: !live && !bulkHit && bulkSettled,
     staleTime: 5 * 60_000,
@@ -99,7 +101,7 @@ export function useDeviceDescriptor(
   })
 
   const catalog = useQuery({
-    queryKey: ['capabilities'],
+    queryKey: ['capabilities', identity],
     queryFn: api.capabilities,
     staleTime: 10 * 60_000,
     retry: false,
@@ -158,8 +160,9 @@ export type CapabilityIndexResult = CapabilityIndex & {
 
 /** 只要 Capability catalog（无设备上下文，例如事件/命令标签的通用推导） */
 export function useCapabilityIndex(): CapabilityIndexResult {
+  const identity = useAuth(authIdentity)
   const { data, isLoading, error } = useQuery({
-    queryKey: ['capabilities'],
+    queryKey: ['capabilities', identity],
     queryFn: api.capabilities,
     staleTime: 10 * 60_000,
     retry: false,

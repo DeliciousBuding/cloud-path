@@ -445,12 +445,15 @@ export function pluginDisplayName(catalog?: PluginCatalogView): string {
 
 const PERMISSION_ITEM_LABELS: Record<string, string> = {
   'hardware:uart': '访问串口',
+  'hardware:serial': '访问串口',
+  'hardware:serial-port': '访问串口',
   'hardware:gpio': '控制输入输出端口',
   'hardware:i2c': '访问 I2C 设备',
   'hardware:spi': '访问 SPI 设备',
   'hardware:usb': '访问 USB 设备',
   'network:outbound': '访问网络',
   'network:inbound': '接受网络连接',
+  'network:local-network': '访问局域网',
   'network:http': '访问网页服务',
   'filesystem:read': '读取文件',
   'filesystem:write': '写入文件',

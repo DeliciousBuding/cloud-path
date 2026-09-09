@@ -1,7 +1,6 @@
 package registry
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -87,14 +86,6 @@ func ValidateRegistryEntry(entry RegistryEntry) error {
 		return errors.New("registry entry: compatibility is required")
 	}
 	return nil
-}
-
-// EncodeRegistryEntry is a round-trip helper used by future registry readers.
-func EncodeRegistryEntry(entry RegistryEntry) ([]byte, error) {
-	if err := ValidateRegistryEntry(entry); err != nil {
-		return nil, err
-	}
-	return json.MarshalIndent(entry, "", "  ")
 }
 
 func isManifestKind(kind string) bool {

@@ -28,12 +28,12 @@ const stats = {
   retention_days: 30, auth_mode: 'account' as AuthMode,
 }
 
-function route(opts: { authMode?: AuthMode; adapters?: AdapterView[]; tokenMeStatus?: number } = {}) {
+function route(opts: { authMode?: AuthMode; adapters?: AdapterView[]; tokenMeStatus?: number; meUser?: UserView } = {}) {
   return installFetch((url, init) => {
     if (url === '/healthz') return stubResponse(200, health)
     if (url === '/api/auth/me') {
       return stubResponse(opts.tokenMeStatus ?? 200, opts.tokenMeStatus && opts.tokenMeStatus >= 400
-        ? { error: 'not authenticated' } : { user: admin })
+        ? { error: 'not authenticated' } : { user: opts.meUser ?? admin })
     }
     if (url === '/api/stats') {
       return stubResponse(200, { ...stats, auth_mode: opts.authMode ?? 'account' })
@@ -112,7 +112,7 @@ describe('Settings 账号与令牌面板', () => {
     route()
     useAuth.setState({ status: 'in', user: admin })
     renderWithProviders(<Settings />)
-    expect(screen.getByText('查看当前账号、保存访问令牌和高级诊断。')).toBeInTheDocument()
+    expect(screen.getByText('查看当前账号、外观和高级诊断。')).toBeInTheDocument()
     expect((await screen.findAllByText('ops-admin')).length).toBeGreaterThan(0)
     expect(screen.getAllByText('管理员').length).toBeGreaterThan(0)
     expect(screen.getByText('default')).toBeInTheDocument()
@@ -174,21 +174,22 @@ describe('Settings 账号与令牌面板', () => {
     expect(screen.getByText(/尚未登录。请先到登录页用账号密码登录/)).toBeInTheDocument()
   })
 
-  it('访问令牌是可选入口：账号登录默认使用浏览器登录状态', async () => {
+  it('已登录时不提供保存访问令牌，避免 Bearer 静默覆盖当前身份', async () => {
     route()
     useAuth.setState({ status: 'in', user: admin })
     renderWithProviders(<Settings />)
     const panel = (await screen.findByRole('heading', { name: '访问令牌' })).closest('section') as HTMLElement
-    expect(within(panel).getByText(/不需要填写/)).toBeInTheDocument()
-    expect(within(panel).getByPlaceholderText('收到令牌或使用自动化工具时填写')).toBeInTheDocument()
+    expect(within(panel).getByText(/当前已登录，不需要再保存访问令牌/)).toBeInTheDocument()
+    expect(within(panel).queryByPlaceholderText('收到令牌或使用自动化工具时填写')).toBeNull()
+    expect(within(panel).queryByRole('button', { name: '保存令牌' })).toBeNull()
     // 旧文案（把共享令牌说成强制）必须消失
     expect(panel.textContent).not.toContain('都必须携带同一令牌')
   })
 
-  it('保存访问令牌前用无 cookie 请求验证，成功后落盘', async () => {
+  it('开放访问保存访问令牌：先无 cookie 验证，再同步身份并落盘', async () => {
     const user = userEvent.setup()
     const http = route({ tokenMeStatus: 200 })
-    useAuth.setState({ status: 'in', user: admin })
+    useAuth.setState({ status: 'open', user: null })
     renderWithProviders(<Settings />)
 
     const input = screen.getByPlaceholderText('收到令牌或使用自动化工具时填写')
@@ -197,16 +198,33 @@ describe('Settings 账号与令牌面板', () => {
     await user.click(screen.getByRole('button', { name: '保存令牌' }))
 
     await waitFor(() => expect(getToken()).toBe('cp_valid_token'))
-    const probe = http.to('/api/auth/me')[0]
-    expect(probe?.credentials).toBe('omit')
-    expect(probe?.headers.Authorization).toBe('Bearer cp_valid_token')
+    await waitFor(() => expect(useAuth.getState().status).toBe('in'))
+    const probes = http.to('/api/auth/me')
+    expect(probes.length).toBeGreaterThanOrEqual(2)
+    expect(probes[0]?.credentials).toBe('omit')
+    expect(probes[0]?.headers.Authorization).toBe('Bearer cp_valid_token')
+  })
+
+  it('仅网关权限的访问令牌不能保存为平台登录凭据', async () => {
+    const user = userEvent.setup()
+    route({ tokenMeStatus: 200, meUser: { ...admin, role: '' as UserView['role'] } })
+    useAuth.setState({ status: 'open', user: null })
+    renderWithProviders(<Settings />)
+
+    const input = screen.getByPlaceholderText('收到令牌或使用自动化工具时填写')
+    await user.type(input, 'cp_edge_only')
+    await user.click(screen.getByRole('button', { name: '保存令牌' }))
+
+    expect(await screen.findByText(/只能用于网关接入/)).toBeInTheDocument()
+    expect(getToken()).toBe('')
+    expect(useAuth.getState().status).not.toBe('in')
   })
 
   it('访问令牌验证失败：不覆盖旧令牌，恢复旧值并提示重试', async () => {
     const user = userEvent.setup()
     setToken('cp_previous_token')
     route({ tokenMeStatus: 401 })
-    useAuth.setState({ status: 'in', user: admin })
+    useAuth.setState({ status: 'open', user: null })
     renderWithProviders(<Settings />)
 
     const input = screen.getByPlaceholderText('收到令牌或使用自动化工具时填写')

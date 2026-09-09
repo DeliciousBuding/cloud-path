@@ -12,7 +12,7 @@ import type { ReactElement } from 'react'
 import App from '@/App'
 import Login from '@/pages/Login'
 import Setup from '@/pages/Setup'
-import { api, getToken } from '@/lib/api'
+import { api, getToken, setToken } from '@/lib/api'
 import { installFetch, stubResponse } from '@/test/http'
 import { resetStores } from '@/test/render'
 import { useAuth } from '@/store/auth'
@@ -48,7 +48,7 @@ vi.mock('@/store/ws', async (importOriginal) => {
   return { ...actual, connectLive: vi.fn(), disconnectLive: vi.fn(), reconnectLive: vi.fn() }
 })
 
-beforeEach(() => { resetStores() })
+beforeEach(() => { resetStores(); setToken('') })
 
 describe('Login：真实账号鉴权（D3 修复）', () => {
   it('渲染用户名与密码两个字段，不再是单一「访问令牌」', () => {
@@ -100,6 +100,20 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
     expect(await screen.findByRole('heading', { name: '首页占位' })).toBeInTheDocument()
     expect(meSpy).toHaveBeenCalled()
     expect(useAuth.getState().status).toBe('in')
+    expect(useAuth.getState().user?.username).toBe('admin')
+  })
+
+  it('账号登录成功后清掉本机旧令牌，避免旧 Bearer 覆盖新会话复核', async () => {
+    const user = userEvent.setup()
+    setToken('cp_stale_token')
+    routeWith((url) => (url.startsWith('/api/auth/') ? stubResponse(200, { user: admin }) : stubResponse(404, {})))
+    renderPage(<Login />, '/login')
+    await user.type(screen.getByLabelText('用户名'), 'admin')
+    await user.type(screen.getByLabelText('密码'), 'correct-horse')
+    await user.click(screen.getByRole('button', { name: '登录' }))
+
+    expect(await screen.findByRole('heading', { name: '首页占位' })).toBeInTheDocument()
+    expect(getToken()).toBe('')
     expect(useAuth.getState().user?.username).toBe('admin')
   })
 
@@ -224,6 +238,21 @@ describe('Login：真实账号鉴权（D3 修复）', () => {
     await user.click(toggle)
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByLabelText('访问令牌')).toBeInTheDocument()
+  })
+
+  it('仅网关权限的访问令牌不能登录平台，且不留下凭据', async () => {
+    const user = userEvent.setup()
+    routeWith((url) => (url === '/api/auth/me'
+      ? stubResponse(200, { user: { ...admin, role: '' } })
+      : stubResponse(404, {})))
+    renderPage(<Login />, '/login')
+    await user.click(screen.getByRole('button', { name: /使用访问令牌（自动化工具）/ }))
+    await user.type(screen.getByLabelText('访问令牌'), 'cp_edge_only')
+    await user.click(screen.getByRole('button', { name: '用访问令牌登录' }))
+
+    expect(await screen.findByText(/只能用于网关接入/)).toBeInTheDocument()
+    expect(getToken()).toBe('')
+    expect(useAuth.getState().status).not.toBe('in')
   })
 
   it('访问令牌任意字符串 + healthz 200 → 仍然失败并回滚（不留无效凭据）', async () => {

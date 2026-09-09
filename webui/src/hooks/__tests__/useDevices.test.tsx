@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { ReactNode } from 'react'
 import { useDevices } from '@/hooks/useDevices'
 import { useLive } from '@/store/ws'
+import { useAuth } from '@/store/auth'
 import { makeDeviceView } from '@/test/fixtures'
 import { installFetch, stubResponse } from '@/test/http'
 import { resetStores } from '@/test/render'
@@ -38,6 +39,31 @@ describe('useDevices：REST / WS 权威边界', () => {
     useLive.setState({ status: 'closed', devices: { [KEY]: LIVE_OFFLINE } })
     const { result } = renderHook(() => useDevices(), { wrapper: makeWrapper() })
     await waitFor(() => expect(result.current.list[0]?.online).toBe(true))
+  })
+
+  it('WS snapshot 是权威集合：REST 里多出的旧键不得复活', async () => {
+    installFetch(() => stubResponse(200, { devices: [REST_ONLINE] }))
+    useLive.setState({ status: 'open', connectionEpoch: 1, snapshotEpoch: 1, devices: {} })
+    const { result } = renderHook(() => useDevices(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.list).toEqual([])
+    expect(result.current.error).toBeNull()
+  })
+
+  it('账号/租户切换时使用独立查询缓存，不展示上一身份的 REST 数据', async () => {
+    const a = makeDeviceView({ id: 'edge-a/dev-a', edge_id: 'edge-a' })
+    const b = makeDeviceView({ id: 'edge-b/dev-b', edge_id: 'edge-b' })
+    const user = { id: 1, username: 'a', name: 'A', role: 'operator' as const, tenant_id: 1, tenant_slug: 'one' }
+    installFetch(() => stubResponse(200, { devices: [useAuth.getState().user?.tenant_id === 2 ? b : a] }))
+    useAuth.setState({ status: 'in', user })
+    const { result } = renderHook(() => useDevices(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.list[0]?.id).toBe('edge-a/dev-a'))
+
+    act(() => useAuth.setState({
+      status: 'in',
+      user: { ...user, id: 2, username: 'b', tenant_id: 2, tenant_slug: 'two' },
+    }))
+    await waitFor(() => expect(result.current.list[0]?.id).toBe('edge-b/dev-b'))
   })
 
   it('WS open 但 snapshot 未到时不吞 REST 错误；空 snapshot 落地后才成为权威事实', async () => {

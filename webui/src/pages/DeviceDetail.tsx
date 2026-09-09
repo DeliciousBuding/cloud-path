@@ -12,7 +12,7 @@ import {
 import { ActionPanel } from '@/components/ActionPanel'
 import { CommandHistory } from '@/components/CommandHistory'
 import { TrendChart } from '@/components/TrendChart'
-import { EventFeed } from '@/components/EventFeed'
+import { EventFeed, eventDisplayLabel } from '@/components/EventFeed'
 import { RowSkeleton } from '@/components/Skeleton'
 import { api, isNotFound } from '@/lib/api'
 import { useLive } from '@/store/ws'
@@ -25,7 +25,7 @@ import {
   qualityTone, summarizeRaw, unitLabel, widgetFor, QUALITY_LABEL,
 } from '@/lib/descriptor'
 import type { SummaryValue } from '@/lib/descriptor'
-import { eventLabel, fmtDateTime, mergeEvents, optionLabel, payloadLabel, timeAgo } from '@/lib/format'
+import { fmtDateTime, mergeEvents, optionLabel, payloadLabel, timeAgo } from '@/lib/format'
 
 const DESCRIPTOR_SOURCE_LABEL: Record<DescriptorSource, string> = {
   ws: '实时同步', inline: '设备上报', rest: '设备直连', bulk: '批量同步', none: '尚未同步', error: '加载失败',
@@ -127,7 +127,7 @@ export default function DeviceDetail() {
 
   // 命令白名单唯一事实源是后端 /api/adapters；前端不自建清单
   const adapterCommands = useMemo(() => {
-    const a = adapters?.adapters.find((x) => x.name === d?.adapter)
+    const a = adapters?.adapters?.find((x) => x.name === d?.adapter)
     return a?.commands ?? []
   }, [adapters, d?.adapter])
 
@@ -201,7 +201,7 @@ export default function DeviceDetail() {
   /** 事件类型 → 展示名（过滤器选项；脏数据统一显示为无效事件） */
   const eventKinds = useMemo(() => {
     const m = new Map<string, string>()
-    for (const e of events) if (!m.has(e.type)) m.set(e.type, eventLabel(e.type, capabilities, payloadLabel(e.payload)))
+    for (const e of events) if (!m.has(e.type)) m.set(e.type, eventDisplayLabel(e.type, capabilities, payloadLabel(e.payload)))
     return [...m.entries()]
   }, [events, capabilities])
   const shownEvents = useMemo(
@@ -536,7 +536,7 @@ export default function DeviceDetail() {
               right={<span className="num text-[12px] text-ink-3">{capRefs.length} 种 · 已同步 {capabilities.docs.length} 份</span>}>
               <CapabilityBrowser descriptor={descriptor} idx={capabilities} />
               <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
-                点击一行查看详细说明；名称优先使用设备提供的中文名称。
+                点击一行查看详细说明；名称优先使用设备提供的中文名称。<span className="sm:hidden">字段表可左右滑动查看完整标识。</span>
               </p>
             </Panel>
           )}
@@ -560,7 +560,11 @@ export default function DeviceDetail() {
                   <KeyValue k="在线" v={d.online ? '是' : '否'} />
                   <KeyValue k="最后更新" v={<span className="num">{fmtDateTime(d.updated_at)}</span>} />
                   <KeyValue k="最后见" v={<span className="num">{fmtDateTime(d.last_seen)}</span>} />
-                  <KeyValue k="设备说明来源" v={descriptorFailed ? '加载失败' : DESCRIPTOR_SOURCE_LABEL[source]} />
+                  <KeyValue k="设备说明来源" v={
+                    <span title={`原始来源：${source}`}>
+                      {descriptorFailed ? '加载失败' : DESCRIPTOR_SOURCE_LABEL[source]}
+                    </span>
+                  } />
                   {descriptor?.manufacturer && <KeyValue k="厂商" v={descriptor.manufacturer} />}
                   {descriptor?.model && <KeyValue k="型号" v={descriptor.model} />}
                   {descriptor?.external_id && <KeyValue k="外部 ID" v={descriptor.external_id} mono />}
@@ -586,6 +590,7 @@ export default function DeviceDetail() {
             {descriptor && (
               <Panel title={<span className="flex items-center gap-1.5"><Grid3x3 size={14} />设备对象（技术详情）</span>}>
                 <EntityInventory descriptor={descriptor} />
+                <p className="mt-2 text-[11px] text-ink-3 sm:hidden">左右滑动可查看完整实体编号和功能标识。</p>
               </Panel>
             )}
           </div>
@@ -606,7 +611,7 @@ function StateTable({ descriptor, idx, nowSec }: {
   if (!rows.length) return <p className="py-6 text-center text-sm text-ink-3">设备信息中没有可显示的数据</p>
   return (
     <div className="card overflow-x-auto" tabIndex={0} role="region" aria-label="设备状态表">
-      <table className="w-full border-collapse text-left text-xs">
+      <table className="w-full min-w-[44rem] border-collapse text-left text-xs">
         <thead>
           <tr className="border-b border-hairline text-[12px] text-ink-3">
             <th className="px-3 py-2 font-medium">实体</th>
@@ -619,8 +624,8 @@ function StateTable({ descriptor, idx, nowSec }: {
         <tbody className="divide-y divide-hairline">
           {rows.map(({ e, o }) => (
             <tr key={`${e.entity_id}.${o.property}`}>
-              <td className="max-w-[10rem] truncate px-3 py-1.5">{entityTitle(e)}</td>
-              <td className="max-w-[10rem] truncate px-3 py-1.5 text-ink-2">
+              <td className="whitespace-nowrap px-3 py-1.5">{entityTitle(e)}</td>
+              <td className="whitespace-nowrap px-3 py-1.5 text-ink-2">
                 {propertyLabel(o.property, o.capability, idx)}
               </td>
               <td className="num px-3 py-1.5 text-right font-medium">

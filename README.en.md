@@ -55,7 +55,7 @@ devices (reference Driver: stcb; or external Driver plugins)
 |---|---|---|---|
 | **Driver** | Edge | discovery, connection, protocol parsing, capability mapping, device actions | business flow or tenant UI |
 | **Application** | Server | business objects, bindings, rules, jobs, domain APIs | direct serial access or Core database access |
-| **Connector** | Edge or Server | MQTT, webhook, external platforms, notifications, data egress | defining the core device model |
+| **Connector** | Edge or Server (runtime target-state) | MQTT, webhook, external platforms, notifications, data egress | defining the core device model |
 
 Driver Protocol v1 and Application Protocol v1 are implemented. Connector has a manifest
 contribution contract but no runtime. UI contributions are not an executable plugin type; the

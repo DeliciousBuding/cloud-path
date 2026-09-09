@@ -11,8 +11,10 @@ import { authModeLabel, cmdMeta, fmtDateTime, fmtUptime, roleLabel } from '@/lib
 import { getTheme, setTheme, type ThemeMode } from '@/lib/theme'
 import { reconnectLive, useLive } from '@/store/ws'
 import { usePageTitle } from '@/hooks/usePageTitle'
-import { logout, useAuth } from '@/store/auth'
+import { confirmSession, logout, useAuth } from '@/store/auth'
 import { toast } from '@/store/toast'
+
+const UI_ROLES = new Set(['admin', 'operator', 'viewer'])
 
 function InlineError({ title, hint, onRetry, retrying }: {
   title: string
@@ -111,9 +113,28 @@ export default function Settings() {
           : '暂时无法验证访问令牌，请稍后重试。')
         return
       }
+      const verified = await res.json().catch(() => null) as { user?: { role?: string } } | null
+      if (!verified?.user || !UI_ROLES.has(verified.user.role ?? '')) {
+        setToken(previous)
+        setTok(previous)
+        setHasStoredToken(Boolean(previous))
+        setTokenError('这个访问令牌只能用于网关接入，不能登录平台。请使用具备查看、操作或管理权限的令牌。')
+        return
+      }
       setToken(next)
       setTok(next)
       setHasStoredToken(true)
+      try {
+        // 令牌一旦保存，后续 REST 请求会优先带 Bearer；同步刷新身份，
+        // 不能继续显示旧的开放访问/账号状态。
+        await confirmSession()
+      } catch {
+        setToken(previous)
+        setTok(previous)
+        setHasStoredToken(Boolean(previous))
+        setTokenError('访问令牌已验证，但登录状态没有保存成功，请重试。')
+        return
+      }
       setSaved(true)
       setTimeout(() => setSaved(false), 1500)
       reconnectLive()
@@ -150,7 +171,9 @@ export default function Settings() {
       <PageHeader title="设置" subtitle="账号、外观和访问令牌" />
 
       <p className="mb-5 max-w-[62ch] text-sm leading-relaxed text-ink-2">
-        查看当前账号、保存访问令牌和高级诊断。
+        {authStatus === 'in'
+          ? '查看当前账号、外观和高级诊断。'
+          : '查看当前账号、保存访问令牌和高级诊断。'}
       </p>
 
       <div className="grid items-start gap-5 lg:grid-cols-2">
@@ -238,22 +261,35 @@ export default function Settings() {
 
         <Panel title={<span className="flex items-center gap-1.5"><KeyRound size={14} />访问令牌</span>}
           className="lg:col-span-2"
-          right={hasStoredToken ? <Badge tone="ok">已保存</Badge> : undefined}>
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-            <TextField
-              label="访问令牌"
-              type="password"
-              value={tok}
-              onChange={(e) => { setTok(e.target.value); setTokenError('') }}
-              placeholder="收到令牌或使用自动化工具时填写"
-              autoComplete="off"
-              error={tokenError}
-              hint="账号登录本身不需要填写。保存前会先验证令牌；令牌只保存在这台设备。"
-            />
-            <button type="button" className="btn btn-primary lg:mb-[1.625rem]" disabled={tokenSaving} onClick={() => void saveToken()}>
-              {saved && <Check size={14} />}{tokenSaving ? '验证中…' : saved ? '已保存' : '保存令牌'}
-            </button>
-          </div>
+          right={authStatus === 'open' && hasStoredToken ? <Badge tone="ok">已保存</Badge> : undefined}>
+          {authStatus === 'in' ? (
+            <p className="text-xs leading-relaxed text-ink-2">
+              当前已登录，不需要再保存访问令牌。访问令牌用于自动化工具；如需切换身份，请先退出登录。
+            </p>
+          ) : (
+            <>
+              {hasStoredToken && (
+                <p className="mb-3 text-xs leading-relaxed text-ink-2">
+                  本机已保存访问令牌，页面会优先使用它连接平台。
+                </p>
+              )}
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                <TextField
+                  label="访问令牌"
+                  type="password"
+                  value={tok}
+                  onChange={(e) => { setTok(e.target.value); setTokenError('') }}
+                  placeholder="收到令牌或使用自动化工具时填写"
+                  autoComplete="off"
+                  error={tokenError}
+                  hint="保存前会先验证令牌；令牌只保存在这台设备。"
+                />
+                <button type="button" className="btn btn-primary lg:mb-[1.625rem]" disabled={tokenSaving} onClick={() => void saveToken()}>
+                  {saved && <Check size={14} />}{tokenSaving ? '验证中…' : saved ? '已保存' : '保存令牌'}
+                </button>
+              </div>
+            </>
+          )}
         </Panel>
       </div>
 

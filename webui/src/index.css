@@ -214,6 +214,7 @@ table td, table th { vertical-align: baseline; }
 
 @media (max-width: 639px) {
   .card { box-shadow: none; }
+  .btn { min-height: 44px; }
 }
 
 /* 标题断行平衡、散文避孤行：CJK 标题折两行时长短悬殊是廉价感来源 */

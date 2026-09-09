@@ -27,8 +27,7 @@ type edgeRecorder struct {
 	conns int
 	cur   *websocket.Conn
 
-	srv    *httptest.Server
-	closer func() // 由测试注入的主动断连动作（重连测试用）
+	srv *httptest.Server
 }
 
 // startEdgeRecorder 启动记录型 server。tls=true 时用 httptest.NewTLSServer，

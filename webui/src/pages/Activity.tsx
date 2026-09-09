@@ -190,7 +190,7 @@ export default function Activity() {
                       else next.add(t)
                       return next
                     })}
-                    aria-pressed={types.has(t)} title={t}
+                    aria-pressed={types.has(t)} title={`原始类型：${t}`}
                     className={cn('max-w-full truncate rounded-full px-3 py-1 text-[12px] font-medium transition-colors',
                       types.has(t) ? 'bg-accent text-accent-ink' : 'bg-ink-3/10 text-ink-2 hover:bg-ink-3/16')}
                   >
@@ -312,7 +312,7 @@ function CommandRow({ c, names, index }: {
     <li className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-2.5 lg:grid-cols-[auto_minmax(10rem,auto)_minmax(0,1fr)_minmax(8rem,0.7fr)_auto]">
       <Badge tone={st.tone} className="shrink-0">{st.label}</Badge>
       <span className="min-w-0 truncate text-xs font-medium lg:col-start-2"
-        title={`${c.cmd}${meta.hint ? ` · ${meta.hint}` : ''}${c.args ? ` · 参数: ${c.args}` : ''}${c.result && st.tone === 'ok' ? ` · 结果: ${c.result}` : ''}`}>
+        title={`原始操作码：${c.cmd}${meta.hint ? ` · ${meta.hint}` : ''}${c.args ? ` · 参数: ${c.args}` : ''}${c.result && st.tone === 'ok' ? ` · 结果: ${c.result}` : ''}`}>
         {meta.label}
       </span>
       <div className="col-span-3 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 lg:contents">

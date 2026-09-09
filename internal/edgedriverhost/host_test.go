@@ -3,7 +3,6 @@ package edgedriverhost
 import (
 	"context"
 	"errors"
-	"io"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -153,40 +152,6 @@ func TestHostCloseDeadlineExceeded(t *testing.T) {
 		t.Fatal("Close 应在 deadline 附近返回")
 	}
 	close(m.block)
-}
-
-type fakeDialer struct {
-	mu    sync.Mutex
-	calls int
-}
-
-func (d *fakeDialer) Dial(context.Context, string, string) (io.Closer, error) {
-	d.mu.Lock()
-	d.calls++
-	d.mu.Unlock()
-	return io.NopCloser(nil), nil
-}
-
-func TestHostOnlyNeverDials(t *testing.T) {
-	opts, m := newTestOptions(t)
-	d := &fakeDialer{}
-	opts.Dialer = d
-	h, err := New(opts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := h.Start(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if err := h.Close(); err != nil {
-		t.Fatal(err)
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if d.calls != 0 {
-		t.Fatalf("host-only 阶段不应拨号，calls=%d", d.calls)
-	}
-	_ = m
 }
 
 type fakeRunner struct {

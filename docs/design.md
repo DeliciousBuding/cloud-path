@@ -1,6 +1,6 @@
 # CloudPath 技术设计（当前实现）
 
-本文是 CloudPath 的技术 SSOT：技术栈、进程模型、目录、契约、存储、前端、安全、测试与验证边界。
+本文是 CloudPath 的技术 SSOT：技术栈、进程模型、目录、契约、存储、前端数据与行为边界、安全、测试与验证边界。WebUI 的呈现、排版、布局与交互 SSOT 见 [webui/DESIGN.md](../webui/DESIGN.md)。
 设备侧协议契约见 [protocol.md](protocol.md)；架构状态分层见 [architecture.md](architecture.md)；
 面向使用者的说明见根 [README.md](../README.md)。
 
@@ -191,7 +191,7 @@ INDEX idx_commands_device(device_id, created_at) -- 设备详情页命令历史
    设备打开后立即 `sync` + `dump`（掉电后 RTC 需要重新对时）。
 7. **断线不丢事件**：离线期间事件进有界缓冲（512 条，超限丢最旧），重连后回放；
    状态消息幂等，重连即强制补报一次（`onServerOnline`）。
-8. **命令闭环**：`pending → sent → ok|failed`；90 秒未回执由 sweeper 标 `timeout`；
+8. **命令闭环**：`pending → sent → ok|failed|timeout`；90 秒未回执由 sweeper 标 `timeout`；
    前端按钮跟踪 `command_id` 的 ack，另有 15 秒超时兜底提示。
 9. **重启不空白**：server 启动从 SQLite 水合设备与最后状态，一律标离线，等 edge 重新上报。
 10. **输入收口**：命令白名单（适配器声明）、参数长度 ≤64 UTF-8 字节且不含换行/NUL、

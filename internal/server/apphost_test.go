@@ -54,63 +54,6 @@ func TestSendNotificationEffectFailsNotImplemented(t *testing.T) {
 	}
 }
 
-// TestBuildWindowTick 锁定窗口 tick 构造：配置时区的当日 RFC3339 start/end、
-// 应用期望的 WindowJSON 字段、非法 HH:MM / 跨午夜窗口诚实返回 nil。
-func TestBuildWindowTick(t *testing.T) {
-	tz := time.FixedZone("CST", 8*3600)
-	local := time.Date(2026, 9, 4, 20, 30, 0, 0, tz)
-	w := appWindowSpec{ID: "w1", Compartment: "c1", Start: "20:30", End: "20:40"}
-
-	tick := buildWindowTick(w, local, tz)
-	if tick == nil {
-		t.Fatal("expected tick")
-	}
-	if tick.ScheduleID != "window-w1" {
-		t.Fatalf("schedule id = %q", tick.ScheduleID)
-	}
-	var payload struct {
-		ID          string `json:"id"`
-		Compartment string `json:"compartment"`
-		Start       string `json:"start"`
-		End         string `json:"end"`
-	}
-	if err := json.Unmarshal([]byte(tick.WindowJSON), &payload); err != nil {
-		t.Fatal(err)
-	}
-	if payload.ID != "w1" || payload.Compartment != "c1" {
-		t.Fatalf("payload = %+v", payload)
-	}
-	start, err := time.Parse(time.RFC3339, payload.Start)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if start.Hour() != 20 || start.Minute() != 30 {
-		t.Fatalf("start = %v（应为配置时区 20:30）", start)
-	}
-	end, _ := time.Parse(time.RFC3339, payload.End)
-	if end.Sub(start) != 10*time.Minute {
-		t.Fatalf("窗口时长 = %v", end.Sub(start))
-	}
-
-	// 非法/跨午夜：诚实 nil，不构造反向窗口
-	if buildWindowTick(appWindowSpec{ID: "x", Start: "9:30", End: "10:00"}, local, tz) != nil {
-		t.Fatal("非法 HH:MM 应返回 nil")
-	}
-	if buildWindowTick(appWindowSpec{ID: "x", Start: "23:50", End: "00:10"}, local, tz) != nil {
-		t.Fatal("end <= start（跨午夜）应返回 nil")
-	}
-}
-
-// TestParseHHMM 锁定时间解析边界。
-func TestParseHHMM(t *testing.T) {
-	cases := map[string]bool{"00:00": true, "23:59": true, "24:00": false, "12:60": false, "9:30": false, "": false, "12-30": false}
-	for in, want := range cases {
-		if _, _, ok := parseHHMM(in); ok != want {
-			t.Fatalf("parseHHMM(%q) ok=%v want %v", in, ok, want)
-		}
-	}
-}
-
 // TestDispatchDeviceCommandAppPath 锁定应用效果 → 设备命令的下发内核：
 // 命令行落库、edge 链路收到 MsgCommand 信封、发送队列满诚实失败。
 func TestDispatchDeviceCommandAppPath(t *testing.T) {

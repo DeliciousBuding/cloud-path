@@ -7,7 +7,7 @@ import { ApplicationActions } from './ApplicationActions'
 import { RowSkeleton } from '@/components/Skeleton'
 import { APP_RECORD_PAGE_SIZE, useApplicationPlane } from '@/hooks/useApplicationPlane'
 import { ApiError } from '@/lib/api'
-import { appTime, bindingLabels, scheduleSummary, scheduleZone } from '@/lib/application-plane'
+import { appTime, applicationRunningState, bindingLabels, recordHeadline, scheduleSummary, scheduleZone } from '@/lib/application-plane'
 import type { AppDomainRecordView, AppScheduledJobView } from '@/lib/types'
 import { authIdentity, useAuth } from '@/store/auth'
 
@@ -39,9 +39,9 @@ function TechnicalDetails({ children }: { children: ReactNode }) {
   const [expanded, setExpanded] = useState(false)
   const id = useId()
   return <div className="mt-2 min-w-0">
-    <button type="button" className="btn btn-ghost" aria-expanded={expanded} aria-controls={id}
+    <button type="button" className="btn btn-ghost min-h-11 w-full sm:w-auto" aria-expanded={expanded} aria-controls={id}
       onClick={() => setExpanded(!expanded)}>{expanded ? '收起技术详情' : '查看技术详情'}</button>
-    {expanded && <div id={id} className="mt-2 min-w-0 space-y-2 break-all text-xs text-ink-2">{children}</div>}
+    {expanded && <div id={id} className="mt-2 min-w-0 space-y-2 break-words text-xs text-ink-2 [overflow-wrap:anywhere]">{children}</div>}
   </div>
 }
 
@@ -49,12 +49,16 @@ function RecordRow({ record, number }: { record: AppDomainRecordView; number: nu
   let content: unknown
   let readable = true
   try { content = JSON.parse(record.data_json) } catch { readable = false }
+  const headline = readable
+    ? recordHeadline(content, `记录 ${number}`)
+    : { title: `记录 ${number}`, usedKeys: [] }
   return <article className="min-w-0 border-t border-hairline py-5 first:border-0 first:pt-0">
     <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-      <h3 className="text-sm font-medium">记录 {number}</h3>
-      <p className="text-xs text-ink-3">更新于 <time>{appTime(record.updated_at)}</time></p>
+      <h3 className="min-w-0 break-words text-sm font-medium [overflow-wrap:anywhere]"
+        title={headline.title}>{headline.title}</h3>
+      <p className="shrink-0 text-xs text-ink-3">更新于 <time>{appTime(record.updated_at)}</time></p>
     </div>
-    <div className="min-w-0 text-sm">{readable ? <StructuredValue value={content} />
+    <div className="min-w-0 text-sm">{readable ? <StructuredValue value={content} omitKeys={headline.usedKeys} />
       : <p className="text-warn">记录内容无法读取，原文可在技术详情中核对。</p>}</div>
     <TechnicalDetails>
       <dl className="space-y-1">
@@ -104,9 +108,10 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState, desir
   const [filter, setFilter] = useState('')
   const [draft, setDraft] = useState('')
   const { records, bindings, jobs, presentation, status, running, canRead } = useApplicationPlane(instanceID, offset, filter, lifecycleKey)
-  const actionRunning = !desiredEnabled ? false
-    : runtimeState === undefined || runtimeState === 'running' ? running
-      : runtimeState === 'stopped' ? false : undefined
+  const runningState = applicationRunningState(running, runtimeState)
+  const actionRunning = runningState === 'running' ? desiredEnabled
+    : runningState === 'unknown' ? undefined : false
+  const runningConflict = runningState === 'conflict'
   const rows = records.data?.records ?? []
   const recordTypes = [...new Set(rows.map((row) => row.record_type).filter(Boolean))].sort()
   const refreshing = records.isFetching || bindings.isFetching || jobs.isFetching
@@ -117,25 +122,26 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState, desir
   return <section className="mb-5 min-w-0 space-y-5" aria-label="应用数据">
     <div className="flex flex-wrap items-center gap-2">
       <h2 className="text-[15px] font-semibold">应用数据</h2>
-      {running !== undefined && <Badge tone={running ? 'ok' : 'idle'}>{running ? '应用运行中' : '应用未运行'}</Badge>}
+      {runningState !== 'unknown' && <Badge tone={runningState === 'running' ? 'ok' : runningState === 'conflict' ? 'warn' : 'idle'}>{runningState === 'running' ? '应用运行中' : runningState === 'conflict' ? '状态冲突' : '应用未运行'}</Badge>}
       <p role="status" className="text-xs text-ink-3">{status === 'open' ? '实时更新已连接'
         : status === 'connecting' ? '正在连接实时更新，暂以定时同步为准' : '实时更新已断开，暂以定时同步为准'}</p>
       {refreshing && <span className="text-xs text-ink-3">正在同步…</span>}
     </div>
-    {running === false && <p className="text-sm text-ink-2">应用当前未运行。设备连接和临时任务会暂时清空，已保存的记录和计划仍可查看。</p>}
+    {runningConflict && <p className="text-sm text-ink-2">运行状态来源不一致，暂时无法确认应用是否正在运行。</p>}
+    {runningState === 'stopped' && <p className="text-sm text-ink-2">应用当前未运行。设备连接和临时任务会暂时清空，已保存的记录和计划仍可查看。</p>}
     <Panel title="应用操作">
       {(jobs.isPending || jobs.isError) && <ReadContent title="应用操作" query={jobs} empty={false}>{null}</ReadContent>}
-      <ApplicationActions instanceID={instanceID} jobs={jobs.data} running={actionRunning} desiredEnabled={desiredEnabled}
+      <ApplicationActions instanceID={instanceID} jobs={jobs.data} running={actionRunning} conflict={runningConflict} desiredEnabled={desiredEnabled}
         lifecycleKey={JSON.stringify([lifecycleKey, runtimeState, desiredEnabled])} />
     </Panel>
     <Panel title="应用记录">
       <details className="mb-4 min-w-0">
-        <summary className="cursor-pointer text-xs text-ink-2">筛选记录{filter ? '（已筛选）' : ''}</summary>
+        <summary className="flex min-h-11 cursor-pointer items-center text-xs text-ink-2">筛选记录{filter ? '（已筛选）' : ''}</summary>
         <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={(event) => {
           event.preventDefault(); setOffset(0); setFilter(draft.trim())
         }}>
           <label className="min-w-0 text-xs text-ink-2">分类
-            <select className="input mt-1 block w-full" value={draft} onChange={(event) => setDraft(event.target.value)}>
+            <select className="input mt-1 block min-h-11 w-full" value={draft} onChange={(event) => setDraft(event.target.value)}>
               <option value="">全部分类</option>
               {recordTypes.map((type) => <option key={type} value={type}>{type}</option>)}
               {draft && !recordTypes.includes(draft) && <option value={draft}>{draft}</option>}
@@ -167,7 +173,7 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState, desir
         <ul className="divide-y divide-hairline">{bindings.data?.bindings.map((binding, index) => {
           const labels = bindingLabels(binding, presentation)
           return <li key={JSON.stringify([binding.requirement_id, binding.entity_id])} className="min-w-0 py-3 first:pt-0">
-            <p className="break-all text-sm font-medium">{labels.entity || '设备绑定 ' + (index + 1)}</p>
+            <p className="break-words text-sm font-medium [overflow-wrap:anywhere]">{labels.entity || '设备绑定 ' + (index + 1)}</p>
             {labels.capability !== labels.entity && <p className="mt-1 break-words text-xs text-ink-2">{labels.capability}</p>}
             <TechnicalDetails><p>实体标识：{binding.entity_id}</p><p>功能标识：{binding.capability}</p><p>需求标识：{binding.requirement_id}</p></TechnicalDetails>
           </li>

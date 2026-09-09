@@ -251,7 +251,9 @@ func (s *Service) handleEvent(ev *application.ApplicationEvent) error {
 
 	switch u := ev.Union.(type) {
 	case *application.ScheduleTick:
-		return s.onScheduleTick(instanceID, u)
+		// Core no longer emits window ticks. Keep the event harmless for wire
+		// compatibility; window-check owns the schedule state machine.
+		return nil
 	case *application.CapabilityEvent:
 		return s.onCapabilityEvent(instanceID, u)
 	case *application.RequestCompleted:
@@ -261,37 +263,6 @@ func (s *Service) handleEvent(ev *application.ApplicationEvent) error {
 	default:
 		return nil
 	}
-}
-
-func (s *Service) onScheduleTick(instanceID string, tick *application.ScheduleTick) error {
-	if tick == nil {
-		return nil
-	}
-	w, err := parseWindowTick(tick.WindowJSON)
-	if err != nil {
-		return nil // malformed schedule tick is ignored, never crashes the stream
-	}
-
-	s.mu.Lock()
-	st := s.instance(instanceID)
-	if st.config == nil {
-		s.mu.Unlock()
-		return nil // not configured yet
-	}
-	if _, exists := st.windows[w.ID]; exists {
-		s.mu.Unlock()
-		return nil // already tracked; idempotent
-	}
-	if !st.config.hasCompartment(w.Compartment) {
-		s.mu.Unlock()
-		return nil // unknown compartment
-	}
-	w.ReminderEntity = reminderEntity(st)
-	st.windows[w.ID] = w
-	effects := s.windowStartEffects(st, w)
-	s.mu.Unlock()
-
-	return s.flush(instanceID, effects)
 }
 
 func (s *Service) onCapabilityEvent(instanceID string, ev *application.CapabilityEvent) error {
@@ -421,9 +392,11 @@ func (s *Service) HandleRequest(_ context.Context, req *application.PluginHTTPRe
 	}, nil
 }
 
-// RunJob executes the window-check job. It scans active windows against the
-// (injectable) clock and emits a missed domain record for any that have
-// expired without completing. RunJob is idempotent per IdempotencyKey.
+// RunJob executes the window-check job. It owns the window state machine:
+// opening a window when its configured start has arrived, and recording a miss
+// once its configured end has passed. The injectable clock keeps the test
+// boundary deterministic. RunJob is idempotent per IdempotencyKey and the
+// occurrence state prevents duplicate automatic/durable dispatches.
 func (s *Service) RunJob(_ context.Context, req *application.RunJobRequest) (*application.RunJobResponse, error) {
 	if req == nil {
 		return nil, status.Errorf(status.CodeInvalidArgument, "nil job request")
@@ -449,15 +422,67 @@ func (s *Service) RunJob(_ context.Context, req *application.RunJobRequest) (*ap
 		}
 	}
 
+	cfg := st.config
+	tz, err := time.LoadLocation(cfg.Timezone)
+	if err != nil {
+		s.mu.Unlock()
+		return &application.RunJobResponse{JobID: req.JobID, Status: status.New(), ResultJSON: resultJSON(nil)}, nil
+	}
 	now := s.now()
+	local := now.In(tz)
+	today := local.Format("2006-01-02")
+	for key := range st.windows {
+		if !strings.HasPrefix(key, today+"|") {
+			delete(st.windows, key)
+		}
+	}
+
 	var missed []string
 	var effects []application.ApplicationEffectUnion
-	for id, w := range st.windows {
-		if w.State == windowOpened && !now.Before(w.End) {
-			w.State = windowMissed
-			missed = append(missed, id)
-			effects = append(effects, windowRecord(w), cancelTaskEffect(w.ID), missedNotificationEffect(w))
+	for _, spec := range cfg.Schedule {
+		startClock, startOK := parseHHMM(spec.Start)
+		endClock, endOK := parseHHMM(spec.End)
+		if !startOK || !endOK {
+			continue
 		}
+		start := time.Date(local.Year(), local.Month(), local.Day(), startClock.Hour(), startClock.Minute(), 0, 0, tz)
+		end := time.Date(local.Year(), local.Month(), local.Day(), endClock.Hour(), endClock.Minute(), 0, 0, tz)
+		if !end.After(start) {
+			continue
+		}
+
+		key := today + "|" + spec.ID
+		w := st.windows[key]
+		if now.Before(start) {
+			continue
+		}
+		if now.Before(end) {
+			if w != nil {
+				continue // already opened or completed for this occurrence
+			}
+			w = &windowTrack{
+				ID: spec.ID, Compartment: spec.Compartment, Start: start, End: end,
+				State: windowOpened, OpenedAt: now, ReminderEntity: reminderEntity(st),
+			}
+			st.windows[key] = w
+			effects = append(effects, s.windowStartEffects(st, w)...)
+			continue
+		}
+		if w != nil && w.State != windowOpened {
+			continue // already completed or missed for this occurrence
+		}
+		if w == nil {
+			w = &windowTrack{
+				ID: spec.ID, Compartment: spec.Compartment, Start: start, End: end,
+				State: windowMissed, ClosedAt: now,
+			}
+			st.windows[key] = w
+		} else {
+			w.State = windowMissed
+			w.ClosedAt = now
+		}
+		missed = append(missed, spec.ID)
+		effects = append(effects, windowRecord(w), cancelTaskEffect(w.ID), missedNotificationEffect(w))
 	}
 	sort.Strings(missed)
 	body := resultJSON(missed)
@@ -613,15 +638,6 @@ func groupBindings(bindings []application.Binding) map[string][]string {
 	return out
 }
 
-func (c *Config) hasCompartment(id string) bool {
-	for _, cp := range c.Compartments {
-		if cp.ID == id {
-			return true
-		}
-	}
-	return false
-}
-
 func reminderEntity(st *instanceState) string {
 	if st == nil {
 		return ""
@@ -661,44 +677,6 @@ func activeCount(st *instanceState) int {
 		}
 	}
 	return n
-}
-
-// parseWindowTick parses the concrete schedule window delivered in
-// ScheduleTick.WindowJSON. Runtime windows use RFC3339 timestamps so the app
-// can compute a deterministic deadline.
-func parseWindowTick(raw string) (*windowTrack, error) {
-	if strings.TrimSpace(raw) == "" {
-		return nil, fmt.Errorf("window_json is empty")
-	}
-	var t struct {
-		ID          string `json:"id"`
-		Compartment string `json:"compartment"`
-		Start       string `json:"start"`
-		End         string `json:"end"`
-	}
-	if err := json.Unmarshal([]byte(raw), &t); err != nil {
-		return nil, err
-	}
-	id := strings.TrimSpace(t.ID)
-	if id == "" {
-		return nil, fmt.Errorf("window id is required")
-	}
-	comp := strings.TrimSpace(t.Compartment)
-	if comp == "" {
-		return nil, fmt.Errorf("window compartment is required")
-	}
-	start, err := time.Parse(time.RFC3339, strings.TrimSpace(t.Start))
-	if err != nil {
-		return nil, fmt.Errorf("window start %q is not RFC3339", t.Start)
-	}
-	end, err := time.Parse(time.RFC3339, strings.TrimSpace(t.End))
-	if err != nil {
-		return nil, fmt.Errorf("window end %q is not RFC3339", t.End)
-	}
-	if !end.After(start) {
-		return nil, fmt.Errorf("window end must be after start")
-	}
-	return &windowTrack{ID: id, Compartment: comp, Start: start, End: end, State: windowOpened}, nil
 }
 
 func parseOccurred(s string) time.Time {

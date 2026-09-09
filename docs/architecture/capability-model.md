@@ -119,7 +119,7 @@ Schema 使用 JSON Schema 可表达的子集；单位使用统一代码表，不
 
 ### Command
 
-当前设备命令按 `pending → sent → ok|failed` 结算，90 秒未回执由 sweeper 标 `timeout`；
+当前设备命令按 `pending → sent → ok|failed|timeout` 结算，90 秒未回执由 sweeper 标 `timeout`；
 请求携带 `cmd` / `args`，命令名必须命中 Driver/适配器声明，参数受长度和控制字符校验。
 
 类型化命令生命周期（`entity_id` / `action` / `idempotency_key` / `deadline` / `actor` 与

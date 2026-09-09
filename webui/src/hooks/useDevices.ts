@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useLive } from '@/store/ws'
+import { authIdentity, useAuth } from '@/store/auth'
 import type { DeviceView } from '@/lib/types'
 
 export interface DevicesResult {
@@ -22,12 +23,13 @@ export interface DevicesResult {
  * 这样即使实时通道断开（或页面刚打开、快照未到），面板也不会空白。
  */
 export function useDevices(): DevicesResult {
+  const identity = useAuth(authIdentity)
   const live = useLive((s) => s.devices)
   const status = useLive((s) => s.status)
   const connectionEpoch = useLive((s) => s.connectionEpoch)
   const snapshotEpoch = useLive((s) => s.snapshotEpoch)
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['devices'],
+    queryKey: ['devices', identity],
     queryFn: api.devices,
     refetchInterval: status === 'open' ? 30000 : 10000,
     retry: false,
@@ -39,19 +41,23 @@ export function useDevices(): DevicesResult {
   const liveAuthoritative = status === 'open' &&
     (connectionEpoch === 0 || snapshotEpoch === connectionEpoch)
   const merged: Record<string, DeviceView> = {}
-  if (liveAuthoritative || data === undefined) {
+  if (liveAuthoritative) {
+    // 本次连接的 snapshot 是权威集合；REST 里只可能更旧，不能把已删/不属于当前
+    // 租户的键补回来。
     for (const [k, d] of Object.entries(live)) merged[k] = d
-    for (const d of data?.devices ?? []) if (!merged[d.id]) merged[d.id] = d
-  } else {
+  } else if (data !== undefined) {
     // REST 已成功返回时它就是权威集合；不能把已断开的旧 live 键补回来。
     for (const d of data.devices) merged[d.id] = d
+  } else {
+    // REST 尚未成功时仍用 live 兜底，避免断网期间把最后已知状态清空。
+    for (const [k, d] of Object.entries(live)) merged[k] = d
   }
   const list = Object.values(merged).sort((a, b) => a.id.localeCompare(b.id))
 
   return {
     list,
     online: list.filter((d) => d.online).length,
-    loading: list.length === 0 && !liveAuthoritative && (isLoading || status === 'connecting'),
+    loading: list.length === 0 && !liveAuthoritative && (isLoading || status !== 'closed'),
     // WS open 时空快照也是权威事实；只有 REST 才是唯一来源且失败时才报错误态。
     error: list.length === 0 && !liveAuthoritative && !isLoading ? error : null,
     refetch: () => { void refetch() },

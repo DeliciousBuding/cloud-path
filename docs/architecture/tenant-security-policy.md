@@ -140,23 +140,9 @@ Plugin control plane 与 tenant policy 的 schema 版本必须共用 `internal/s
 5. secret name 不等于 secret value；把 handle 列入 Catalog 是安全的，把解析值列入 Catalog 是漏洞。
 6. audit 失败不能把已拒绝请求变成成功，也不能泄露请求中的敏感内容。
 
-## 7. 最小测试矩阵
+## 7. 验证要求
 
-- `TestSecretHandleRejectsTraversal`
-- `TestManifestSecretsAreNamesOnly`
-- `TestUndeclaredSecretFailsClosed`
-- `TestPluginEnvironmentCarriesOnlyBoundSecrets`
-- `TestSecretValueNeverAppearsInLogsOrCatalog`
-- `TestPruneByTenantKeepsOtherTenants`
-- `TestAuditRetentionCutoff`
-- `TestSweeperPrunesExpiredSessions`
-- `TestQuotaRejectsAtLimit`
-- `TestQuotaConcurrentAtomic`
-- `TestQuotaRejectDoesNotAdvanceRevision`
-- `TestQuotaAuditIsRateLimited`
-- `TestEdgeAndBrowserDisconnectReleaseQuota`
-
-反向验证至少包括：移除 tenant predicate 会误删并令测试失败；移除原子 admit 会在并发测试中超过上限；把 secret 值放入 DTO/log 会触发泄漏测试。
+验证至少覆盖 secret handle 越界、未声明 secret、环境注入边界；跨租户清理不越界；审计保留期与会话清理；配额原子性、并发上限、拒绝不推进 revision、审计限流和断连释放。具体测试文件与用例名以代码和 CI 为准，本文不维护测试名单。
 
 ## 8. 当前与后续边界
 

@@ -40,8 +40,6 @@ var validBindings = []application.Binding{
 	{RequirementID: "compartments", EntityID: c3},
 }
 
-var windowTickJSON = `{"id":"win-1","compartment":"c1","start":"2026-09-03T08:00:00+08:00","end":"2026-09-03T08:30:00+08:00"}`
-
 // --- in-package harness over the real Application Protocol wire ---
 
 type testApp struct {
@@ -131,6 +129,23 @@ func (a *testApp) openStream() {
 		a.t.Fatalf("HandleEvents: %v", err)
 	}
 	a.stream = st
+
+	// The real runtime dispatches an initial lifecycle event before jobs can
+	// arrive. Wait for the service-side HandleEvents loop to register its
+	// writer so RunJob-driven tests do not race that startup handshake.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		a.svc.mu.Lock()
+		ready := a.svc.writer != nil
+		a.svc.mu.Unlock()
+		if ready {
+			return
+		}
+		if time.Now().After(deadline) {
+			a.t.Fatal("service event writer did not become ready")
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 func (a *testApp) send(seq uint64, union application.ApplicationEventUnion) {
@@ -215,7 +230,7 @@ func (a *testApp) runJob(jobID, idem string) *application.RunJobResponse {
 	resp, err := a.cli.RunJob(a.ctx, &application.RunJobRequest{
 		PluginInstanceID: testInstance,
 		JobID:            jobID,
-		ArgsJSON:         `{"window_id":"win-1"}`,
+		ArgsJSON:         `{"window_id":"w-morning"}`,
 		IdempotencyKey:   idem,
 	})
 	if err != nil {
@@ -367,10 +382,13 @@ func TestConfigureAndValidateBinding(t *testing.T) {
 }
 
 func TestWindowReminderEffect(t *testing.T) {
-	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC))
+	// 00:00 UTC is 08:00 in the configured Asia/Shanghai timezone.
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC))
 	defer a.close()
 	a.openStream()
-	a.send(1, &application.ScheduleTick{ScheduleID: "s-1", OccurredAt: "2026-09-03T08:00:00+08:00", WindowJSON: windowTickJSON})
+	if resp := a.runJob("window-check", "job-open-1"); !resp.Status.IsOK() {
+		t.Fatalf("RunJob status: %s", resp.Status)
+	}
 	effects := a.waitEffects(3, 60*time.Millisecond)
 
 	var gotRequest *application.RequestCommand
@@ -402,22 +420,24 @@ func TestWindowReminderEffect(t *testing.T) {
 	if args.Freq != defaultReminder.Freq || args.Duration != defaultReminder.Duration {
 		t.Fatalf("buzzer args = %+v, want default reminder policy %+v", args, defaultReminder)
 	}
-	if gotRequest.IdempotencyKey != "reminder-win-1" {
-		t.Fatalf("idempotency = %q, want reminder-win-1", gotRequest.IdempotencyKey)
+	if gotRequest.IdempotencyKey != "reminder-w-morning" {
+		t.Fatalf("idempotency = %q, want reminder-w-morning", gotRequest.IdempotencyKey)
 	}
 	if !gotUpsert {
 		t.Fatal("expected a window UpsertDomainRecord effect")
 	}
-	if got := windowStateOf(effects, "win-1"); got != windowOpened {
+	if got := windowStateOf(effects, "w-morning"); got != windowOpened {
 		t.Fatalf("window state = %q, want %q", got, windowOpened)
 	}
 }
 
 func TestKeyPressCompletesWindow(t *testing.T) {
-	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC))
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC))
 	defer a.close()
 	a.openStream()
-	a.send(1, &application.ScheduleTick{ScheduleID: "s-1", OccurredAt: "2026-09-03T08:00:00+08:00", WindowJSON: windowTickJSON})
+	if resp := a.runJob("window-check", "job-open-1"); !resp.Status.IsOK() {
+		t.Fatalf("RunJob status: %s", resp.Status)
+	}
 	_ = a.waitEffects(3, 60*time.Millisecond)
 
 	a.send(2, &application.CapabilityEvent{
@@ -427,36 +447,38 @@ func TestKeyPressCompletesWindow(t *testing.T) {
 		OccurredAt:    "2026-09-03T08:05:00+08:00",
 	})
 	effects := a.waitEffects(2, 60*time.Millisecond)
-	if got := windowStateOf(effects, "win-1"); got != windowCompleted {
+	if got := windowStateOf(effects, "w-morning"); got != windowCompleted {
 		t.Fatalf("window state = %q, want %q", got, windowCompleted)
 	}
-	if !hasCancelTask(effects, "window-check-win-1") {
+	if !hasCancelTask(effects, "window-check-w-morning") {
 		t.Fatal("expected a CancelScheduledTask for the completed window")
 	}
 }
 
 func TestMissedWindowRecord(t *testing.T) {
-	start := time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC)
+	start := time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC) // 08:00 Asia/Shanghai
 	a := mustConfigureAndBind(t, start)
 	defer a.close()
 	a.openStream()
-	a.send(1, &application.ScheduleTick{ScheduleID: "s-1", OccurredAt: "2026-09-03T08:00:00+08:00", WindowJSON: windowTickJSON})
+	if resp := a.runJob("window-check", "job-open-1"); !resp.Status.IsOK() {
+		t.Fatalf("RunJob status: %s", resp.Status)
+	}
 	_ = a.waitEffects(3, 60*time.Millisecond)
 
 	// advance the clock past the window end and run the window-check job
-	a.now = time.Date(2026, 9, 3, 8, 31, 0, 0, time.UTC)
+	a.now = time.Date(2026, 9, 3, 0, 31, 0, 0, time.UTC) // 08:31 Asia/Shanghai
 	resp := a.runJob("window-check", "job-missed-1")
 	if !resp.Status.IsOK() {
 		t.Fatalf("RunJob status: %s", resp.Status)
 	}
-	if !strings.Contains(resp.ResultJSON, "win-1") {
-		t.Fatalf("result %s does not mention win-1", resp.ResultJSON)
+	if !strings.Contains(resp.ResultJSON, "w-morning") {
+		t.Fatalf("result %s does not mention w-morning", resp.ResultJSON)
 	}
 	effects := a.waitEffects(3, 60*time.Millisecond)
-	if got := windowStateOf(effects, "win-1"); got != windowMissed {
+	if got := windowStateOf(effects, "w-morning"); got != windowMissed {
 		t.Fatalf("window state = %q, want %q", got, windowMissed)
 	}
-	if !hasCancelTask(effects, "window-check-win-1") {
+	if !hasCancelTask(effects, "window-check-w-morning") {
 		t.Fatal("expected CancelScheduledTask for missed window")
 	}
 	if !hasNotification(effects) {
@@ -473,21 +495,33 @@ func TestMissedWindowRecord(t *testing.T) {
 	}
 }
 
-func TestDuplicateEventIdempotent(t *testing.T) {
-	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC))
+func TestDuplicateJobIdempotent(t *testing.T) {
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC))
 	defer a.close()
 	a.openStream()
 
-	a.send(1, &application.ScheduleTick{ScheduleID: "s-1", OccurredAt: "2026-09-03T08:00:00+08:00", WindowJSON: windowTickJSON})
+	first := a.runJob("window-check", "job-open-1")
 	start := a.waitEffects(3, 60*time.Millisecond)
 	if n := countRequestCommand(start); n != 1 {
 		t.Fatalf("window start emitted %d RequestCommand, want 1", n)
 	}
 
-	// duplicate same sequence, then re-delivery with a new sequence but the same
-	// window id. Neither should emit anything.
-	a.send(1, &application.ScheduleTick{ScheduleID: "s-1", OccurredAt: "2026-09-03T08:00:00+08:00", WindowJSON: windowTickJSON})
-	a.send(2, &application.ScheduleTick{ScheduleID: "s-1", OccurredAt: "2026-09-03T08:00:00+08:00", WindowJSON: windowTickJSON})
+	// Same idempotency key returns the stored result without re-emitting.
+	second := a.runJob("window-check", "job-open-1")
+	if second.ResultJSON != first.ResultJSON {
+		t.Fatalf("idempotent result mismatch: %s vs %s", second.ResultJSON, first.ResultJSON)
+	}
+	if dup := a.recvEffects(40 * time.Millisecond); len(dup) != 0 {
+		t.Fatalf("duplicate idempotency key emitted %d effects", len(dup))
+	}
+
+	// A different key for the same occurrence is also a no-op after the window
+	// has already opened. This models automatic minute-loop + durable cron
+	// dispatching the same job independently.
+	_ = a.runJob("window-check", "job-open-2")
+	if dup := a.recvEffects(40 * time.Millisecond); len(dup) != 0 {
+		t.Fatalf("duplicate occurrence emitted %d effects", len(dup))
+	}
 
 	a.send(3, &application.CapabilityEvent{
 		RequirementID: "compartments", EntityID: c1, EventType: keyPressEvent,
@@ -495,19 +529,69 @@ func TestDuplicateEventIdempotent(t *testing.T) {
 	})
 	after := a.waitEffects(2, 60*time.Millisecond)
 	if n := countRequestCommand(after); n != 0 {
-		t.Fatalf("duplicate events emitted %d additional RequestCommand, want 0", n)
+		t.Fatalf("completion emitted %d additional RequestCommand, want 0", n)
 	}
-	if got := windowStateOf(after, "win-1"); got != windowCompleted {
+	if got := windowStateOf(after, "w-morning"); got != windowCompleted {
 		t.Fatalf("window state after complete = %q, want %q", got, windowCompleted)
 	}
 
-	// a duplicate key press after completion must not re-complete
+	// A duplicate key press after completion must not re-complete.
 	a.send(4, &application.CapabilityEvent{
 		RequirementID: "compartments", EntityID: c1, EventType: keyPressEvent,
 		OccurredAt: "2026-09-03T08:06:00+08:00",
 	})
 	if dup := a.recvEffects(40 * time.Millisecond); len(dup) != 0 {
 		t.Fatalf("duplicate key press after completion emitted %d effects", len(dup))
+	}
+}
+
+func TestWindowCheckAfterEndRecordsMissedWithoutReminder(t *testing.T) {
+	// First job observation is already past the configured end. The app must
+	// record a miss, not replay a stale reminder.
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 0, 31, 0, 0, time.UTC))
+	defer a.close()
+	a.openStream()
+
+	resp := a.runJob("window-check", "job-late-observation")
+	if !resp.Status.IsOK() {
+		t.Fatalf("RunJob status: %s", resp.Status)
+	}
+	effects := a.waitEffects(3, 60*time.Millisecond)
+	if got := windowStateOf(effects, "w-morning"); got != windowMissed {
+		t.Fatalf("window state = %q, want %q", got, windowMissed)
+	}
+	if n := countRequestCommand(effects); n != 0 {
+		t.Fatalf("late observation emitted %d stale reminders", n)
+	}
+	if !hasCancelTask(effects, "window-check-w-morning") || !hasNotification(effects) {
+		t.Fatalf("late observation effects = %+v", effects)
+	}
+}
+
+func TestWindowCheckOpensAgainOnNextDay(t *testing.T) {
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC))
+	defer a.close()
+	a.openStream()
+
+	_ = a.runJob("window-check", "day-1-open")
+	dayOne := a.waitEffects(3, 60*time.Millisecond)
+	if n := countRequestCommand(dayOne); n != 1 {
+		t.Fatalf("day 1 emitted %d RequestCommand, want 1", n)
+	}
+	a.send(1, &application.CapabilityEvent{
+		RequirementID: "compartments", EntityID: c1, EventType: keyPressEvent,
+		OccurredAt: "2026-09-03T08:05:00+08:00",
+	})
+	_ = a.waitEffects(2, 60*time.Millisecond)
+
+	a.now = time.Date(2026, 9, 4, 0, 0, 0, 0, time.UTC)
+	_ = a.runJob("window-check", "day-2-open")
+	dayTwo := a.waitEffects(3, 60*time.Millisecond)
+	if n := countRequestCommand(dayTwo); n != 1 {
+		t.Fatalf("day 2 emitted %d RequestCommand, want 1", n)
+	}
+	if got := windowStateOf(dayTwo, "w-morning"); got != windowOpened {
+		t.Fatalf("day 2 window state = %q, want %q", got, windowOpened)
 	}
 }
 

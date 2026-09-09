@@ -2,13 +2,14 @@
 // Schema 端点 404 时的通用回落、以及命令集随声明出现/消失。
 // 这一层是「后端未就绪也不白屏」的关键接缝，必须有可重复的回归保护。
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { ReactNode } from 'react'
 import { useCapabilityIndex, useDeviceDescriptor } from '@/hooks/useDescriptor'
 import { ApiError } from '@/lib/api'
 import { EMPTY_INDEX } from '@/lib/descriptor'
 import { useLive } from '@/store/ws'
+import { useAuth } from '@/store/auth'
 import { capRelay, capTemperature, makeDescriptor, makeDeviceView } from '@/test/fixtures'
 import { installFetch, stubResponse } from '@/test/http'
 import { resetStores } from '@/test/render'
@@ -131,6 +132,22 @@ describe('useCapabilityIndex：无设备上下文的 catalog', () => {
     expect(result.current.errorStatus).toBe(502)
     expect(result.current.docs).toEqual([])
     expect(result.current.loading).toBe(false)
+  })
+
+  it('账号/租户切换时 capability 查询不复用上一身份的缓存', async () => {
+    const user = { id: 1, username: 'a', name: 'A', role: 'operator' as const, tenant_id: 1, tenant_slug: 'one' }
+    installFetch(() => stubResponse(200, {
+      capabilities: [useAuth.getState().user?.tenant_id === 2 ? capRelay : capTemperature],
+    }))
+    useAuth.setState({ status: 'in', user })
+    const { result } = renderHook(() => useCapabilityIndex(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.docs[0]?.metadata.id).toBe(capTemperature.metadata.id))
+
+    act(() => useAuth.setState({
+      status: 'in',
+      user: { ...user, id: 2, username: 'b', tenant_id: 2, tenant_slug: 'two' },
+    }))
+    await waitFor(() => expect(result.current.docs[0]?.metadata.id).toBe(capRelay.metadata.id))
   })
 
   it('catalog 200 → 索引可用；404 → 空索引（事件/命令标签回落 humanize）', async () => {

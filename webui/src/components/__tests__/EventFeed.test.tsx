@@ -33,7 +33,7 @@ describe('机器名中文优先展示名', () => {
     const machineName = 'Device Compartment Opened'
     renderWithProviders(<EventFeed events={[{ ...ev(1, Math.floor(Date.now() / 1000)), type: machineName }]} limit={10} />)
     expect(screen.getByText('设备舱门已打开')).toBeInTheDocument()
-    expect(screen.getByTitle(machineName)).toBeInTheDocument()
+    expect(screen.getByTitle(`原始类型：${machineName}`)).toBeInTheDocument()
     expect(screen.queryByText(machineName)).toBeNull()
   })
 
@@ -45,6 +45,21 @@ describe('机器名中文优先展示名', () => {
     expect(commandFailureInfo('device busy')).toEqual({
       message: '设备正忙', next: '等待设备空闲后重试',
     })
+  })
+
+  it('未知事件与操作不把英文机器码当主标签，原码只进技术详情', () => {
+    expect(eventDisplayLabel('vendor-setpoint-changed')).toBe('未知状态记录')
+    expect(commandDisplayMeta('vendor-setpoint-changed')).toEqual({ label: '未知操作', hint: '' })
+
+    renderWithProviders(<EventFeed events={[{
+      ...ev(1, Math.floor(Date.now() / 1000)),
+      type: 'vendor-setpoint-changed',
+      payload: '{"message":"network timeout"}',
+    }]} limit={10} />)
+    expect(screen.getByText('未知状态记录')).toBeInTheDocument()
+    expect(screen.getByText('网络连接超时')).toBeInTheDocument()
+    expect(screen.queryByText('vendor-setpoint-changed')).toBeNull()
+    expect(screen.queryByText('network timeout')).toBeNull()
   })
 })
 

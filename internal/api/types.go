@@ -75,7 +75,8 @@ type EntityObservationSet struct {
 	Observations map[string]model.Observation `json:"observations"`
 }
 
-// EventData 是设备事件。Type 为规范化标签（BOOT/REMIND/TAKEN/TAKEN-LATE/MISSED/SYNC-OK…）。
+// EventData 是设备事件。Type 是设备适配器/驱动声明的规范化事件标签，
+// 平台只按契约搬运，不解释具体硬件语义。
 type EventData struct {
 	Type string `json:"type"`
 	// EntityID 是事件归属实体（可为空：设备级事件）。Capability 绑定按它路由，
@@ -84,7 +85,8 @@ type EventData struct {
 	Label    string `json:"label,omitempty"`
 }
 
-// CommandData 是 server→edge 命令。Cmd ∈ sync|dump|trigger|open|isp|raw。
+// CommandData 是 server→edge 命令。Cmd 由设备适配器/驱动声明并通过命令白名单
+// 校验；平台不解释具体硬件语义。
 type CommandData struct {
 	CommandID int64  `json:"command_id"`
 	Cmd       string `json:"cmd"`
@@ -331,7 +333,7 @@ type PluginAckData struct {
 	Results        []PluginApplyResultData `json:"results,omitempty"`
 }
 
-// ---- Application Plane（Milestone D1：设备无关、业务无关的应用读面）----
+// ---- Application Plane（设备无关、业务无关的应用读面）----
 
 // DomainRecordData 是领域记录 WS 投影载荷。created=true 表示首次写入，
 // false 表示同键覆盖（upsert 语义）。Device 字段为空——记录属于应用实例，

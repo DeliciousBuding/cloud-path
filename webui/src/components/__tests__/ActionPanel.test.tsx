@@ -118,6 +118,20 @@ describe('actions.inputSchema → 参数输入', () => {
     expect(http.last()).toMatchObject({ url: '/api/devices/edge-1/dev-9/commands', method: 'POST', body: { cmd: 'pulse', args } })
   })
 
+  it('unit/enumNames 只影响展示，不把简单参数退化成 JSON 文本框', () => {
+    renderWithProviders(<ActionPanel deviceId={KEY} set={schemaSet({
+      type: 'object', required: ['mode', 'duration'],
+      properties: {
+        mode: { type: 'string', enum: ['auto', 'manual'], enumNames: ['自动', '手动'], title: '模式' },
+        duration: { type: 'integer', unit: 'ms', title: '时长' },
+      },
+    })} />)
+    const mode = screen.getByRole('combobox', { name: '模式' })
+    expect(within(mode).getByRole('option', { name: '自动' })).toBeInTheDocument()
+    expect(screen.getByRole('spinbutton', { name: '时长' })).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: '设置 技术参数' })).not.toBeInTheDocument()
+  })
+
   it('title/description/key 标签与合适控件，required/enum/布尔均不自动选值', async () => {
     const http = okPost()
     const user = userEvent.setup()

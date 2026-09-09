@@ -233,7 +233,7 @@ export function TabBar<T extends string>({ items, value, onChange, label = '分�
               tabIndex={selected ? 0 : -1}
               onClick={() => onChange(it.value)}
               className={cn(
-                '-mb-px inline-flex items-center gap-1.5 border-b-2 px-0.5 pb-2 text-[13px] font-medium whitespace-nowrap transition-colors',
+                '-mb-px inline-flex min-h-11 items-center gap-1.5 border-b-2 px-0.5 pb-2 text-[13px] font-medium whitespace-nowrap transition-colors sm:min-h-0',
                 selected ? 'border-ink text-ink' : 'border-transparent text-ink-3 hover:text-ink-2',
               )}
             >
@@ -355,7 +355,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       aria-label={`切换为${META[next].label}`}
       onClick={() => { setTheme(next); setMode(next) }}
       className={cn(
-        'flex h-8 w-8 items-center justify-center rounded-full border border-hairline',
+        'flex h-11 w-11 items-center justify-center rounded-full border border-hairline sm:h-8 sm:w-8',
         'bg-surface/70 text-ink-2 transition-colors hover:text-ink',
         className,
       )}

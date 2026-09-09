@@ -73,7 +73,7 @@ type DeviceCfg struct {
 	SyncCommand string `yaml:"sync_command"`
 }
 
-// PluginHostCfg 配置可选的进程内外部 Driver Plugin Host。默认不启用，保持 P1
+// PluginHostCfg 配置可选的进程内外部 Driver Plugin Host。默认不启用，保持
 // 纯内置 adapter 行为；启用时按 desired-state + lockfile 启动外部 driver 实例。
 type PluginHostCfg struct {
 	Enabled       bool   `yaml:"enabled"`         // false=不启用外部 host（默认）

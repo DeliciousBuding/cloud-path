@@ -302,7 +302,7 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
                 onChange={(e) => setField(field.key, e.target.value)}>
                 <option value="">请选择</option>
                 {field.type === 'boolean' ? <><option value="true">是</option><option value="false">否</option></>
-                  : field.choices?.map((choice, i) => <option key={i} value={String(i)}>{choiceLabel(choice)}</option>)}
+                  : field.choices?.map((choice, i) => <option key={i} value={String(i)}>{field.choiceLabels?.[i] ?? choiceLabel(choice)}</option>)}
               </select>
             ) : (
               <input id={fieldId} type={field.type === 'string' || field.type === 'array' ? 'text' : 'number'}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appTime, bindingLabels, recordFieldLabel, scheduleSummary, scheduleZone } from '@/lib/application-plane'
+import { appTime, applicationRunningState, bindingLabels, recordFieldLabel, scheduleSummary, scheduleZone } from '@/lib/application-plane'
 import { isolationLabel } from '@/lib/plugins'
 import { appBinding, appPresentation } from '@/test/application-plane'
 
@@ -35,5 +35,14 @@ describe('通用应用展示，不猜业务或设备', () => {
     expect(isolationLabel('shared')).toBe('共享运行')
     expect(isolationLabel('per-instance')).toBe('独立运行')
     expect(isolationLabel('future-mode')).toBe('future-mode')
+  })
+  it('运行态来源冲突显式报冲突，不用后到的数据面覆盖观察态', () => {
+    expect(applicationRunningState(true, 'running')).toBe('running')
+    expect(applicationRunningState(false, 'stopped')).toBe('stopped')
+    expect(applicationRunningState(true, 'stopped')).toBe('conflict')
+    expect(applicationRunningState(false, 'running')).toBe('conflict')
+    expect(applicationRunningState(undefined, 'running')).toBe('unknown')
+    expect(applicationRunningState(true, undefined)).toBe('running')
+    expect(applicationRunningState(false, 'unknown')).toBe('stopped')
   })
 })

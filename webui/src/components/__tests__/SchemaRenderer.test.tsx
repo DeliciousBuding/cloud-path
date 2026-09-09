@@ -5,7 +5,7 @@
 import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import {
-  CapabilityBrowser, GenericTable, ObservationTable,
+  CapabilityBrowser, EntityInventory, GenericTable, ObservationTable,
   QualityDot, RawView, StateMatrix, StatusBadge, ValueWidget,
 } from '@/components/SchemaRenderer'
 import { indexCapabilities, normalizeCapabilityDocs, observationsOf } from '@/lib/descriptor'
@@ -51,6 +51,14 @@ describe('未知 Capability 回落', () => {
     expect(screen.getAllByText('暂无详情').length).toBeGreaterThan(0)
     expect(screen.getByText(UNKNOWN_CAP)).toBeInTheDocument()
     expect(screen.getByText(CAP_TEMPERATURE)).toBeInTheDocument()
+  })
+
+  it('EntityInventory 的 ID 在窄屏可横向滚动、可复制且不截断', () => {
+    render(<EntityInventory descriptor={descriptor} />)
+    const region = screen.getByRole('region', { name: '设备对象清单' })
+    expect(region.querySelector('table')).toHaveClass('min-w-[44rem]')
+    expect(screen.getByText(tempEntity.entity_id)).toHaveClass('select-all', 'whitespace-nowrap')
+    expect(screen.getByText(tempEntity.entity_id)).not.toHaveClass('truncate')
   })
 
   it('ObservationTable 给暂无详情观测打「暂无详情」徽标，已收录的不打', () => {
