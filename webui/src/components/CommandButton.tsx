@@ -144,7 +144,7 @@ function ScopedCommandButton({ deviceId, targetLabel, action, args, buttonLabel,
         tone={action.variant === 'danger' ? 'danger' : 'warn'} title={'确认执行「' + label + '」？'}
         body={<>
           <p>{action.confirmText ?? '请确认要执行此操作。'}</p>
-          <p className="num mt-2 text-xs text-ink-3">
+          <p className="num mt-2 text-meta text-ink-3">
             目标设备 <span className="break-all">{displayTarget}</span>
           </p>
         </>}

@@ -37,7 +37,7 @@ export function QualityDot({ q }: { q?: ObservationQuality }) {
   if (!q || q === 'good') return null
   return (
     // role=img 才能让 aria-label 进入无障碍树（裸 span 的 label 会被忽略）
-    <span role="img" className={cn('inline-block h-1.5 w-1.5 shrink-0 rounded-full', QUALITY_DOT[q])}
+    <span role="img" className={cn('inline-block h-1.5 w-1.5 shrink-0 rounded-pill', QUALITY_DOT[q])}
       title={`观测质量：${QUALITY_LABEL[q]}`} aria-label={`观测质量 ${QUALITY_LABEL[q]}`} />
   )
 }
@@ -60,7 +60,7 @@ export function JsonBlock({ value, className, maxHeight = 'max-h-56', label = '�
     // 可滚动区域必须键盘可达（WCAG 2.1.1）：tabIndex=0 + role=group + 可读名称
     <pre
       tabIndex={0} role="group" aria-label={label}
-      className={cn('num overflow-auto rounded-lg bg-surface-2 p-3 font-mono text-[11px] leading-relaxed text-ink-2',
+      className={cn('num overflow-auto rounded-tile bg-surface-2 p-3 font-mono text-micro leading-relaxed text-ink-2',
         maxHeight, className)}
       title="完整数据视图"
     >{text}</pre>
@@ -91,14 +91,14 @@ export function GenericTable({ value, className, label = '数据表' }: {
     ? (v as Record<string, unknown>)
     : { value: v }))
   const cols = columnsOf(rows)
-  if (!cols.length) return <p className="py-3 text-center text-xs text-ink-3">暂无内容</p>
+  if (!cols.length) return <p className="py-3 text-center text-meta text-ink-3">暂无内容</p>
   return (
     // 390px：表格只在自身容器内横向滚动（overflow-x-auto），不把横向溢出推给 body；
     // 容器可聚焦并带名称，键盘/读屏用户才能进入这块滚动区。
     <div tabIndex={0} role="group" aria-label={label} className={cn('overflow-x-auto', className)}>
-      <table className="w-full border-collapse text-left text-xs">
+      <table className="w-full border-collapse text-left text-meta">
         <thead>
-          <tr className="text-[12px] text-ink-3">
+          <tr className="text-meta text-ink-3">
             <th className="px-1 pb-1.5 font-medium">#</th>
             {cols.map((c) => (
               <th key={c} className="whitespace-nowrap px-1 pb-1.5 font-medium">
@@ -125,11 +125,11 @@ export function GenericTable({ value, className, label = '数据表' }: {
 }
 
 function ScalarChips({ value }: { value: unknown[] }) {
-  if (!value.length) return <p className="py-2 text-center text-xs text-ink-3">暂无内容</p>
+  if (!value.length) return <p className="py-2 text-center text-meta text-ink-3">暂无内容</p>
   return (
     <div className="flex flex-wrap gap-1.5">
       {value.map((v, i) => (
-        <span key={i} className="num max-w-full truncate rounded-full bg-ink-3/10 px-2 py-0.5 text-[12px] font-medium text-ink-2"
+        <span key={i} className="num max-w-full truncate rounded-pill bg-ink-3/10 px-2 py-0.5 text-meta font-medium text-ink-2"
           title={cellText(v)}>
           {cellText(v)}
         </span>
@@ -145,8 +145,8 @@ function RangeBar({ value, range, className }: {
     ? 0
     : Math.max(0, Math.min(100, ((value - range[0]) / (range[1] - range[0])) * 100))
   return (
-    <span className={cn('block h-1 w-full overflow-hidden rounded-full bg-ink-3/12', className)} aria-hidden>
-      <span className="block h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+    <span className={cn('block h-1 w-full overflow-hidden rounded-pill bg-ink-3/12', className)} aria-hidden>
+      <span className="block h-full rounded-pill bg-accent" style={{ width: `${pct}%` }} />
     </span>
   )
 }
@@ -166,8 +166,8 @@ function rangeOf(obs: Observation, idx: CapabilityIndex): [number, number] | nul
 function ScalarText({ widget, value, emphasis }: { widget: WidgetKind; value: unknown; emphasis?: boolean }) {
   const text = widget === 'timestamp' ? formatTimestamp(value) : formatValue(value)
   return (
-    <span className={cn('num', emphasis ? 'metric block text-[30px] font-semibold leading-none'
-      : 'text-[13px] font-medium')}>{text}</span>
+    <span className={cn('num', emphasis ? 'metric block text-display font-semibold leading-none'
+      : 'text-compact font-medium')}>{text}</span>
   )
 }
 
@@ -220,7 +220,7 @@ export function ValueWidget({ obs, idx = EMPTY_INDEX, emphasis = false, classNam
       ? 'idle'
       : toneFromHint(presentationOf(obs.capability, idx)) ?? qualityTone(obs.quality)
     return (
-      <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-medium', TONE_CLS[tone])}>
+      <span className={cn('inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-meta font-medium', TONE_CLS[tone])}>
         {obs.quality && obs.quality !== 'good' && <QualityDot q={obs.quality} />}
         {formatValue(value)}
       </span>
@@ -234,7 +234,7 @@ export function ValueWidget({ obs, idx = EMPTY_INDEX, emphasis = false, classNam
       <span className="flex min-w-0 items-baseline gap-1">
         <ScalarText widget={widget} value={value} emphasis={emphasis} />
         {obs.unit && (
-          <span className={cn('num shrink-0 text-ink-3', emphasis ? 'text-sm' : 'text-[12px]')}>{obs.unit}</span>
+          <span className={cn('num shrink-0 text-ink-3', emphasis ? 'text-body' : 'text-meta')}>{obs.unit}</span>
         )}
       </span>
     </span>
@@ -248,7 +248,7 @@ export function ObservationTable({ observations, idx = EMPTY_INDEX }: {
   observations: Observation[]
   idx?: CapabilityIndex
 }) {
-  if (!observations.length) return <p className="py-3 text-center text-xs text-ink-3">还没有数据</p>
+  if (!observations.length) return <p className="py-3 text-center text-meta text-ink-3">还没有数据</p>
   return (
     <dl className="space-y-2.5">
       {observations.map((o) => {
@@ -318,7 +318,7 @@ export function StateRow({ entity, idx = EMPTY_INDEX, nowSec, series }: {
     <li className="px-3.5 py-2.5">
       <div className="flex min-w-0 items-center gap-3">
         <span className="flex min-w-0 flex-1 items-center gap-1.5">
-          <span className="truncate text-[13px] font-medium" title={entity.name || entity.unique_key}>
+          <span className="truncate text-compact font-medium" title={entity.name || entity.unique_key}>
             {entityTitle(entity)}
           </span>
           <QualityDot q={q} />
@@ -334,7 +334,7 @@ export function StateRow({ entity, idx = EMPTY_INDEX, nowSec, series }: {
       </div>
       {rest.length > 0 && (
         <details className="mt-1.5">
-          <summary className="cursor-pointer select-none text-[12px] text-ink-3 transition-colors hover:text-ink-2">
+          <summary className="cursor-pointer select-none text-meta text-ink-3 transition-colors hover:text-ink-2">
             其余 {rest.length} 项
           </summary>
           <div className="mt-2">
@@ -366,13 +366,13 @@ export function StateMatrix({ descriptor, idx = EMPTY_INDEX, categories, nowSec,
     .map((category) => ({ category, entities: descriptor.entities.filter((e) => e.category === category) }))
     .filter((g) => g.entities.length > 0)
   if (!groups.length) {
-    return <p className="py-6 text-center text-sm text-ink-3">设备信息中没有可显示的数据</p>
+    return <p className="py-6 text-center text-body text-ink-3">设备信息中没有可显示的数据</p>
   }
   return (
     <div className={cn('space-y-5', className)}>
       {groups.map(({ category, entities }) => (
         <section key={category}>
-          <h3 className="mb-1.5 px-0.5 text-[12px] font-medium text-ink-3">{CATEGORY_LABEL[category]}</h3>
+          <h3 className="mb-1.5 px-0.5 text-meta font-medium text-ink-3">{CATEGORY_LABEL[category]}</h3>
           {/* 紧凑瓦片矩阵：单标量不拉通栏行（标签↔值扫视距离是可读性成本）；
               列数随宽度递增，390 两列、桌面三列、宽屏四列 */}
           <ul className="m-0 grid list-none grid-cols-2 gap-2.5 p-0 md:grid-cols-3 xl:grid-cols-4">
@@ -399,7 +399,7 @@ export function ObsValue({ obs, idx = EMPTY_INDEX, tone = 'idle', size = 'tile',
   const shell = size === 'row' ? 'w-24 shrink-0 text-right' : 'min-w-0 truncate'
   if (!obs) {
     return (
-      <span className={cn(shell, 'text-[12px] text-ink-3', className)}>
+      <span className={cn(shell, 'text-meta text-ink-3', className)}>
         {size === 'row' ? '暂无数据' : '等待数据'}
       </span>
     )
@@ -417,7 +417,7 @@ export function ObsValue({ obs, idx = EMPTY_INDEX, tone = 'idle', size = 'tile',
   }
   if (widget === 'text' && MACHINEISH.test(text)) {
     return (
-      <span className={cn(shell, size === 'slot' ? 'font-mono text-[12px] text-ink-2' : 'font-mono text-[11px] text-ink-2', className)}
+      <span className={cn(shell, size === 'slot' ? 'font-mono text-meta text-ink-2' : 'font-mono text-micro text-ink-2', className)}
         title={`${text} · ${capTitle}`}>
         {text}
       </span>
@@ -425,15 +425,15 @@ export function ObsValue({ obs, idx = EMPTY_INDEX, tone = 'idle', size = 'tile',
   }
   const long = text.length > 12
   const valueCls = size === 'slot'
-    ? (long ? 'text-[15px] font-medium' : 'text-[24px] font-semibold')
-    : (long ? 'text-[13px] font-medium' : 'text-[15px] font-semibold')
+    ? (long ? 'text-lead font-medium' : 'text-hero font-semibold')
+    : (long ? 'text-compact font-medium' : 'text-lead font-semibold')
   return (
     <span
       className={cn(shell, 'num tracking-[-0.01em]', valueCls, alert ? TONE_TEXT_CLS[tone] : undefined, className)}
       title={capTitle}>
       {text}
       {obs.unit && (
-        <span className={cn('ml-1 font-normal text-ink-3', size === 'slot' ? 'text-xs' : 'text-[12px]')}>
+        <span className={cn('ml-1 font-normal text-ink-3', size === 'slot' ? 'text-meta' : 'text-meta')}>
           {unitLabel(obs.unit)}
         </span>
       )}
@@ -466,7 +466,7 @@ export function StateTile({ entity, idx = EMPTY_INDEX, nowSec, series }: {
   return (
     <li className="card min-w-0 p-3">
       <div className="flex min-w-0 items-center gap-1.5">
-        <span className="truncate text-[12px] font-medium text-ink-3" title={entity.name || entity.unique_key}>
+        <span className="truncate text-meta font-medium text-ink-3" title={entity.name || entity.unique_key}>
           {entityTitle(entity)}
         </span>
         <QualityDot q={q} />
@@ -480,7 +480,7 @@ export function StateTile({ entity, idx = EMPTY_INDEX, nowSec, series }: {
       </div>
       {rest.length > 0 && (
         <details className="mt-1.5">
-          <summary className="cursor-pointer select-none text-[12px] text-ink-3 transition-colors hover:text-ink-2">
+          <summary className="cursor-pointer select-none text-meta text-ink-3 transition-colors hover:text-ink-2">
             其余 {rest.length} 项
           </summary>
           <div className="mt-2">
@@ -500,7 +500,7 @@ export function MetricTile({ v }: { v: SummaryValue }) {
   if (v.kind === 'boolean') {
     return (
       <div className="card min-w-0 p-4 fade-up">
-        <p className="min-w-0 truncate text-[12px] font-medium text-ink-3" title={v.title}>{v.label}</p>
+        <p className="min-w-0 truncate text-meta font-medium text-ink-3" title={v.title}>{v.label}</p>
         <Badge tone={alert ? v.tone : 'idle'} className="mt-1.5">{v.text}</Badge>
       </div>
     )
@@ -508,11 +508,11 @@ export function MetricTile({ v }: { v: SummaryValue }) {
   const valueTone = alert ? TONE_TEXT_CLS[v.tone] : undefined
   return (
     <div className="card min-w-0 p-4 fade-up">
-      <p className="min-w-0 truncate text-[12px] font-medium text-ink-3" title={v.title}>{v.label}</p>
-      <p className={cn('metric num mt-1.5 truncate text-[30px] font-semibold leading-none', valueTone)}
+      <p className="min-w-0 truncate text-meta font-medium text-ink-3" title={v.title}>{v.label}</p>
+      <p className={cn('metric num mt-1.5 truncate text-display font-semibold leading-none', valueTone)}
         title={v.title}>
         {v.text}
-        {v.unit && <span className="ml-1 text-[12px] font-normal text-ink-3">{v.unit}</span>}
+        {v.unit && <span className="ml-1 text-meta font-normal text-ink-3">{v.unit}</span>}
       </p>
     </div>
   )
@@ -537,7 +537,7 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
   const set = new Set<string>()
   for (const e of descriptor.entities) for (const c of e.capabilities) if (c) set.add(c)
   const refs = [...set]
-  if (!refs.length) return <p className="py-6 text-center text-sm text-ink-3">设备信息中没有可显示的功能</p>
+  if (!refs.length) return <p className="py-6 text-center text-body text-ink-3">设备信息中没有可显示的功能</p>
   return (
     <ul className={cn('m-0 list-none divide-y divide-hairline p-0', className)}>
       {refs.map((ref) => {
@@ -551,10 +551,10 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
           <li key={ref}>
             <details className="py-2.5">
               <summary className="flex cursor-pointer select-none flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="min-w-0 truncate text-[13px] font-medium">{capabilityLabel(ref, idx)}</span>
+                <span className="min-w-0 truncate text-compact font-medium">{capabilityLabel(ref, idx)}</span>
                 {!doc && <Badge tone="idle" className="shrink-0">暂无详情</Badge>}
-                <span className="num min-w-0 select-all break-all font-mono text-[11px] text-ink-3 sm:truncate" title={ref}>{ref}</span>
-                <span className="num ml-auto shrink-0 text-[12px] text-ink-3">
+                <span className="num min-w-0 select-all break-all font-mono text-micro text-ink-3 sm:truncate" title={ref}>{ref}</span>
+                <span className="num ml-auto shrink-0 text-meta text-ink-3">
                   {props.length} 属性 · {actions.length} 动作 · {events.length} 事件
                 </span>
               </summary>
@@ -562,9 +562,9 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
                 {props.length > 0 && (
                   <div tabIndex={0} role="region"
                     aria-label={`${capabilityLabel(ref, idx)} 字段`} className="overflow-x-auto">
-                    <table className="w-full min-w-[34rem] border-collapse text-left text-xs">
+                    <table className="w-full min-w-[34rem] border-collapse text-left text-meta">
                       <thead>
-                        <tr className="text-[12px] text-ink-3">
+                        <tr className="text-meta text-ink-3">
                           <th className="px-1 pb-1 font-medium">属性</th>
                           <th className="px-1 pb-1 font-medium">字段标识</th>
                           <th className="px-1 pb-1 font-medium">类型</th>
@@ -578,7 +578,7 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
                           return (
                             <tr key={name}>
                               <td className="whitespace-nowrap px-1 py-1.5">{declTitle(d, propertyLabel(name, ref, idx))}</td>
-                              <td className="num select-all whitespace-nowrap px-1 py-1.5 font-mono text-[11px] text-ink-3">{name}</td>
+                              <td className="num select-all whitespace-nowrap px-1 py-1.5 font-mono text-micro text-ink-3">{name}</td>
                               <td className="px-1 py-1.5 text-ink-2">{String(d.type ?? '—')}</td>
                               <td className="num px-1 py-1.5 text-ink-2">{String(d.unit ?? '—')}</td>
                               <td className="px-1 py-1.5 text-ink-2">{String(d.access ?? '—')}</td>
@@ -611,7 +611,7 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
                   <details>
                     <summary
                       title={`版本 ${parsed.version ?? doc.metadata?.version ?? '—'}`}
-                      className="flex min-h-11 cursor-pointer select-none items-center text-[12px] text-ink-3 transition-colors hover:text-ink-2">
+                      className="flex min-h-touch cursor-pointer select-none items-center text-meta text-ink-3 transition-colors hover:text-ink-2">
                       数据结构
                     </summary>
                     <JsonBlock className="mt-1.5" value={doc.spec} maxHeight="max-h-48" label={`${ref} 完整数据`} />
@@ -633,9 +633,9 @@ export function EntityInventory({ descriptor, className }: {
 }) {
   return (
     <div tabIndex={0} role="region" aria-label="设备对象清单" className={cn('overflow-x-auto', className)}>
-      <table className="w-full min-w-[44rem] border-collapse text-left text-xs">
+      <table className="w-full min-w-[44rem] border-collapse text-left text-meta">
         <thead>
-          <tr className="text-[12px] text-ink-3">
+          <tr className="text-meta text-ink-3">
             <th className="px-1 pb-1.5 font-medium">实体</th>
             <th className="px-1 pb-1.5 font-medium">实体编号</th>
             <th className="px-1 pb-1.5 font-medium">分类</th>
@@ -646,14 +646,14 @@ export function EntityInventory({ descriptor, className }: {
           {descriptor.entities.map((e) => (
             <tr key={e.entity_id || e.unique_key}>
               <td className="whitespace-nowrap px-1 py-1.5">{entityTitle(e)}</td>
-              <td className="num select-all whitespace-nowrap px-1 py-1.5 font-mono text-[11px] text-ink-3">{e.entity_id}</td>
+              <td className="num select-all whitespace-nowrap px-1 py-1.5 font-mono text-micro text-ink-3">{e.entity_id}</td>
               <td className="px-1 py-1.5 text-ink-2">{CATEGORY_LABEL[e.category] ?? e.category}</td>
               <td className="px-1 py-1.5">
                 <span className="flex min-w-0 flex-wrap gap-1">
                   {e.capabilities.length === 0
                     ? <span className="text-ink-3">—</span>
                     : e.capabilities.map((c) => (
-                      <span key={c} className="num select-all break-all font-mono text-[11px] text-ink-3" title={c}>
+                      <span key={c} className="num select-all break-all font-mono text-micro text-ink-3" title={c}>
                         {c}
                       </span>
                     ))}
@@ -677,7 +677,7 @@ export function RawView({ raw, title = '设备数据', className }: {
   if (!rows.length) {
     return (
       <Panel className={className} title={title}>
-        <p className="py-4 text-center text-sm text-ink-3">等待设备同步…</p>
+        <p className="py-4 text-center text-body text-ink-3">等待设备同步…</p>
       </Panel>
     )
   }
@@ -702,7 +702,7 @@ export function RawView({ raw, title = '设备数据', className }: {
       )}
       {complex.map((r) => (
         <div key={r.key} className="mt-4 border-t border-hairline pt-3 first:mt-0">
-          <p className="mb-1.5 truncate text-[12px] text-ink-3" title={r.key}>{r.label}</p>
+          <p className="mb-1.5 truncate text-meta text-ink-3" title={r.key}>{r.label}</p>
           {Array.isArray(r.value)
             ? (r.value.every(isScalar)
               ? <ScalarChips value={r.value} />
@@ -710,7 +710,7 @@ export function RawView({ raw, title = '设备数据', className }: {
             : <JsonBlock value={r.value} maxHeight="max-h-40" label={`${r.label} 完整数据`} />}
         </div>
       ))}
-      <p className="mt-3 flex items-center gap-1 border-t border-hairline pt-2 text-[12px] text-ink-3">
+      <p className="mt-3 flex items-center gap-1 border-t border-hairline pt-2 text-meta text-ink-3">
         <Boxes size={11} />
         <span className={cn('truncate', TONE_TEXT_CLS.idle)}>
           该设备尚未同步功能信息，此处按已接收的数据显示

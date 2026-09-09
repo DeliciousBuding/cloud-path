@@ -86,7 +86,7 @@ const ROW_COLS = 'lg:grid-cols-[minmax(0,1.4fr)_4.5rem_5rem_minmax(0,1.2fr)_10.5
 /** 列表表头（仅桌面；窄屏每行自带列名） */
 function EdgeRowHead() {
   return (
-    <li aria-hidden className={`hidden gap-x-4 px-4 pb-2 text-[11px] font-medium text-ink-3 lg:grid ${ROW_COLS}`}>
+    <li aria-hidden className={`hidden gap-x-4 px-4 pb-2 text-micro font-medium text-ink-3 lg:grid ${ROW_COLS}`}>
       <span>网关</span><span>状态</span><span>版本</span><span>设备</span>
       <span className="text-right">最近上报</span><span />
     </li>
@@ -100,7 +100,7 @@ function EdgeRow({ f }: { f: EdgeFacts }) {
       {/* 节点 ID 是运维标识：mono；点击进详情 */}
       <div className="flex min-w-0 items-center gap-2">
         <Link to={`/edges/${encodeURIComponent(e.edge_id)}`}
-          className="inline-flex min-h-11 min-w-0 items-center truncate font-mono text-[13px] font-medium no-underline hover:text-accent sm:min-h-0"
+          className="inline-flex min-h-touch min-w-0 items-center truncate font-mono text-compact font-medium no-underline hover:text-accent sm:min-h-0"
           title={`${e.edge_id} · 查看详情`}>
           {e.edge_id}
         </Link>
@@ -108,7 +108,7 @@ function EdgeRow({ f }: { f: EdgeFacts }) {
       <div className="hidden lg:block">
         <Badge tone={e.online ? 'ok' : 'idle'}>{e.online ? '在线' : '离线'}</Badge>
       </div>
-      <div className="hidden min-w-0 truncate font-mono text-[11px] text-ink-2 lg:block" title={`版本 ${e.version || '未知'}`}>
+      <div className="hidden min-w-0 truncate font-mono text-micro text-ink-2 lg:block" title={`版本 ${e.version || '未知'}`}>
         {e.version || '未知'}
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
@@ -116,9 +116,9 @@ function EdgeRow({ f }: { f: EdgeFacts }) {
           <Badge tone={e.online ? 'ok' : 'idle'}>{e.online ? '在线' : '离线'}</Badge>
         </span>
         {f.devices.length === 0 ? (
-          <span className="text-[12px] text-ink-3">还没有接入设备</span>
+          <span className="text-meta text-ink-3">还没有接入设备</span>
         ) : (
-          <span className="num shrink-0 text-[12px] text-ink-2"
+          <span className="num shrink-0 text-meta text-ink-2"
             title={`${f.devices.length} 台设备 · ${f.onlineDevices} 台在线${e.online ? '' : '（网关离线，设备暂停更新）'}`}>
             {f.devices.length} 台设备 · {f.onlineDevices} 在线
             {f.devices.length > f.onlineDevices && (
@@ -127,13 +127,13 @@ function EdgeRow({ f }: { f: EdgeFacts }) {
           </span>
         )}
       </div>
-      <div className="num min-w-0 truncate text-left font-mono text-[11px] text-ink-3 lg:text-right"
+      <div className="num min-w-0 truncate text-left font-mono text-micro text-ink-3 lg:text-right"
         title={f.lastReport ? fmtDateTime(f.lastReport) : '从未更新'}>
         <span className="lg:hidden">最近上报 </span>
         {f.lastReport ? fmtDateTime(f.lastReport) : '从未更新'}
       </div>
       <Link to={`/edges/${encodeURIComponent(e.edge_id)}`}
-        className="link hidden justify-self-end text-[12px] lg:block"
+        className="link hidden justify-self-end text-meta lg:block"
         aria-label={`查看网关 ${e.edge_id}`}>
         查看
       </Link>

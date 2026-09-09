@@ -67,7 +67,7 @@ export function CreateTokenForm({ onCreated, onCancel }: {
       />
 
       <fieldset className="mt-4">
-        <legend className="mb-2 text-[13px] font-medium text-ink-2">这个令牌可以用来做什么</legend>
+        <legend className="mb-2 text-compact font-medium text-ink-2">这个令牌可以用来做什么</legend>
         <div className="space-y-2.5">
           {SCOPE_OPTIONS.map((o) => (
             <CheckRow

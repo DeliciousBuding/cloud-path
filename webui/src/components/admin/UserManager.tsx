@@ -35,14 +35,14 @@ export function UserManager() {
       ) : isPending ? (
         <RowSkeleton rows={3} />
       ) : users.length === 0 ? (
-        <p className="py-6 text-center text-sm text-ink-3">还没有成员。添加成员后，他们就可以按角色访问平台。</p>
+        <p className="py-6 text-center text-body text-ink-3">还没有成员。添加成员后，他们就可以按角色访问平台。</p>
       ) : (
         <ul className="divide-y divide-hairline" aria-label="成员列表">
           {users.map((u) => <UserRow key={u.id} user={u} />)}
         </ul>
       )}
 
-      <p className="mt-4 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3 break-words">
+      <p className="mt-4 border-t border-hairline pt-3 text-meta leading-relaxed text-ink-3 break-words">
         这里显示当前组织的成员。角色决定成员可以查看还是执行操作。
       </p>
     </Panel>

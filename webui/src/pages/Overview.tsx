@@ -181,16 +181,16 @@ export default function Overview() {
       >
         <div className={cn(hasStats && 'lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(22rem,1fr)]')}>
           <div className="p-4 sm:p-6">
-            <p className="text-[12px] font-medium text-ink-3">现在怎样</p>
+            <p className="text-meta font-medium text-ink-3">现在怎样</p>
             <div className="mt-3 flex items-start gap-3">
-              <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9', TONE_CLS[nowTone])}>
+              <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-pill sm:h-9 sm:w-9', TONE_CLS[nowTone])}>
                 <NowIcon size={18} strokeWidth={2} />
               </span>
               <div className="min-w-0">
-                <h2 id="overview-now-title" className={cn('text-[20px] font-semibold leading-tight tracking-[-0.01em] sm:text-[22px]', TONE_TEXT_CLS[nowTone])}>
+                <h2 id="overview-now-title" className={cn('text-section-sm font-semibold leading-tight tracking-[-0.01em] sm:text-section', TONE_TEXT_CLS[nowTone])}>
                   {nowTitle}
                 </h2>
-                <p className="mt-1.5 max-w-[58ch] text-sm text-ink-2">{nowDetail}</p>
+                <p className="mt-1.5 max-w-[58ch] text-body text-ink-2">{nowDetail}</p>
               </div>
             </div>
 
@@ -209,7 +209,7 @@ export default function Overview() {
             </div>
 
             {partial && (
-              <p className="mt-4 flex flex-wrap items-center gap-1.5 text-[12px] text-ink-3">
+              <p className="mt-4 flex flex-wrap items-center gap-1.5 text-meta text-ink-3">
                 <AlertTriangle size={12} className="shrink-0 text-warn" />
                 部分状态暂不可用，当前显示设备和网关的最新结果。
                 <button type="button" className="link" onClick={() => void refetch()}>重新加载</button>
@@ -219,7 +219,7 @@ export default function Overview() {
 
           {hasStats && (
             <div className="border-t border-hairline bg-surface-2/60 p-4 sm:p-5 lg:border-l lg:border-t-0">
-              <p className="text-[12px] font-medium text-ink-3">关键状态</p>
+              <p className="text-meta font-medium text-ink-3">关键状态</p>
               <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
                 {shownStats?.map((s) => {
                   const value = s.key === 'commands' ? s.online : `${s.online}/${s.total}`
@@ -231,10 +231,10 @@ export default function Overview() {
                   return (
                     <div key={s.key} className="min-w-0 border-b border-hairline pb-2 last:border-b-0">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="min-w-0 truncate text-[12px] text-ink-3">{s.label}</span>
-                        <span className={cn('num shrink-0 text-[18px] font-semibold leading-none', TONE_TEXT_CLS[s.tone])}>{value}</span>
+                        <span className="min-w-0 truncate text-meta text-ink-3">{s.label}</span>
+                        <span className={cn('num shrink-0 text-stat font-semibold leading-none', TONE_TEXT_CLS[s.tone])}>{value}</span>
                       </div>
-                      <p className="mt-1 truncate text-[11px] text-ink-3" title={hint}>{hint}</p>
+                      <p className="mt-1 truncate text-micro text-ink-3" title={hint}>{hint}</p>
                     </div>
                   )
                 })}
@@ -255,8 +255,8 @@ export default function Overview() {
             <section id="attention" className="card scroll-mt-28 overflow-hidden">
               <div className="flex items-center justify-between gap-3 border-b border-hairline px-4 py-3.5 sm:px-5">
                 <div className="min-w-0">
-                  <p className="text-[12px] text-ink-3">下一步</p>
-                  <h2 className="mt-0.5 flex items-center gap-1.5 text-[15px] font-semibold tracking-[-0.01em]">
+                  <p className="text-meta text-ink-3">下一步</p>
+                  <h2 className="mt-0.5 flex items-center gap-1.5 text-lead font-semibold tracking-[-0.01em]">
                     <AlertTriangle size={14} className="text-warn" /> 需要关注
                   </h2>
                 </div>
@@ -267,16 +267,16 @@ export default function Overview() {
                 !hasStats && !stillLoading ? (
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-4 sm:px-5">
                     <AlertTriangle size={16} className="shrink-0 text-warn" />
-                    <p className="min-w-0 flex-1 text-sm text-ink-2">状态不可用，暂时无法判断是否需要处理。</p>
-                    <button type="button" className="link shrink-0 text-xs" onClick={() => { void refetch(); void refetchDevices() }}>
+                    <p className="min-w-0 flex-1 text-body text-ink-2">状态不可用，暂时无法判断是否需要处理。</p>
+                    <button type="button" className="link shrink-0 text-meta" onClick={() => { void refetch(); void refetchDevices() }}>
                       重新检查
                     </button>
                   </div>
                 ) : (
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-4 sm:px-5">
                     <CheckCircle2 size={16} className="shrink-0 text-ok" />
-                    <p className="min-w-0 flex-1 text-sm text-ink-2">当前没有需要处理的异常。</p>
-                    <Link to="/activity" className="link flex min-h-11 shrink-0 items-center gap-0.5 text-xs">
+                    <p className="min-w-0 flex-1 text-body text-ink-2">当前没有需要处理的异常。</p>
+                    <Link to="/activity" className="link flex min-h-touch shrink-0 items-center gap-0.5 text-meta">
                       查看运行记录 <ArrowRight size={12} />
                     </Link>
                   </div>
@@ -289,13 +289,13 @@ export default function Overview() {
                         to={a.to}
                         className="group flex min-w-0 items-center gap-3 px-4 py-3.5 transition-colors hover:bg-ink-3/5 sm:px-5"
                       >
-                        <span className={cn('h-2 w-2 shrink-0 rounded-full',
+                        <span className={cn('h-2 w-2 shrink-0 rounded-pill',
                           a.tone === 'bad' ? 'bg-bad' : a.tone === 'warn' ? 'bg-warn' : 'bg-ink-3')} />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">{a.title}{a.count > 1 ? ` · ${a.count} 项` : ''}</span>
-                          <span className="mt-0.5 hidden truncate text-[12px] text-ink-3 sm:block">{a.hint}</span>
+                          <span className="block truncate text-body font-medium">{a.title}{a.count > 1 ? ` · ${a.count} 项` : ''}</span>
+                          <span className="mt-0.5 hidden truncate text-meta text-ink-3 sm:block">{a.hint}</span>
                         </span>
-                        <span className="shrink-0 text-xs font-medium text-accent">去处理</span>
+                        <span className="shrink-0 text-meta font-medium text-accent">去处理</span>
                         <ArrowRight size={13} className="shrink-0 text-ink-3 transition-transform group-hover:translate-x-0.5" />
                       </Link>
                     </li>
@@ -308,7 +308,7 @@ export default function Overview() {
               <Panel
                 title={<span className="flex items-center gap-1.5"><Cpu size={14} />设备状态</span>}
                 right={
-                  <Link to="/devices" className="link flex min-h-11 items-center gap-0.5 text-xs">
+                  <Link to="/devices" className="link flex min-h-touch items-center gap-0.5 text-meta">
                     查看全部设备 <ArrowRight size={12} />
                   </Link>
                 }
@@ -339,7 +339,7 @@ export default function Overview() {
                   </ul>
                 )}
                 {devices.length > 8 && (
-                  <Link to="/devices" className="link mt-3 flex min-h-11 items-center gap-0.5 border-t border-hairline pt-3 text-xs">
+                  <Link to="/devices" className="link mt-3 flex min-h-touch items-center gap-0.5 border-t border-hairline pt-3 text-meta">
                     另有 {devices.length - 8} 台 · 查看全部 <ArrowRight size={12} />
                   </Link>
                 )}
@@ -349,7 +349,7 @@ export default function Overview() {
             <Panel
               title={<span className="flex items-center gap-1.5"><Activity size={14} />最近运行记录</span>}
               right={
-                <Link to="/activity" className="link flex min-h-11 items-center gap-0.5 text-xs">
+                <Link to="/activity" className="link flex min-h-touch items-center gap-0.5 text-meta">
                   查看全部 <ArrowRight size={12} />
                 </Link>
               }
@@ -366,7 +366,7 @@ export default function Overview() {
                     action={<Link to="/devices" className="btn btn-ghost">查看设备 <ArrowRight size={13} /></Link>}
                   />
                 ) : (
-                  <p className="py-8 text-center text-sm text-ink-3">运行记录暂时不可用，恢复后会自动出现。</p>
+                  <p className="py-8 text-center text-body text-ink-3">运行记录暂时不可用，恢复后会自动出现。</p>
                 )
               ) : (
                 <EventFeed events={feed} limit={10} />

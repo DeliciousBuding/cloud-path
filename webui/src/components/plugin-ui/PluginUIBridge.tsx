@@ -148,19 +148,19 @@ export function PluginUIBridge({ pluginId, version, instance, section }: {
   }
 
   if (!src) {
-    return <div role="alert" className="rounded-lg bg-bad/10 px-4 py-3 text-sm text-bad">
+    return <div role="alert" className="rounded-tile bg-bad/10 px-4 py-3 text-body text-bad">
       <p className="flex items-center gap-2 font-medium"><ShieldAlert size={15} /> 自定义界面不可用</p>
-      <p className="mt-1 text-xs leading-relaxed opacity-90">插件没有声明有效的页面入口。请联系插件维护者修正后重试。</p>
+      <p className="mt-1 text-meta leading-relaxed opacity-90">插件没有声明有效的页面入口。请联系插件维护者修正后重试。</p>
     </div>
   }
 
   return <Panel title={<span className="flex items-center gap-1.5"><ExternalLink size={14} /> 自定义界面</span>}>
-    <p id={titleId} className="mb-3 text-xs leading-relaxed text-ink-3">
+    <p id={titleId} className="mb-3 text-meta leading-relaxed text-ink-3">
       页面在隔离环境中运行，只能通过平台提供的受控接口读取数据或执行操作。
     </p>
-    <div className="relative min-h-64 overflow-hidden rounded-lg border border-hairline bg-surface-2">
-      {state === 'loading' && <p role="status" className="absolute inset-0 z-10 flex items-center justify-center text-sm text-ink-3">正在加载自定义界面…</p>}
-      {state === 'error' && <div role="alert" className="absolute inset-0 z-10 flex items-center justify-center px-6 text-center text-sm text-bad">自定义界面加载失败，请返回应用页面或联系插件维护者。</div>}
+    <div className="relative min-h-64 overflow-hidden rounded-tile border border-hairline bg-surface-2">
+      {state === 'loading' && <p role="status" className="absolute inset-0 z-local flex items-center justify-center text-body text-ink-3">正在加载自定义界面…</p>}
+      {state === 'error' && <div role="alert" className="absolute inset-0 z-local flex items-center justify-center px-6 text-center text-body text-bad">自定义界面加载失败，请返回应用页面或联系插件维护者。</div>}
       <iframe
         ref={frame}
         src={src}

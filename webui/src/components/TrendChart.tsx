@@ -14,7 +14,7 @@ function ChartTooltip({ active, payload, unit }: {
   const p = payload?.[0]
   if (!active || !p || p.value === undefined) return null
   return (
-    <div className="card num px-2 py-1 text-[12px] text-ink-2 shadow-lg">
+    <div className="card num px-2 py-1 text-meta text-ink-2 shadow-lg">
       {p.payload?.t !== undefined && <span className="text-ink-3">{timeTick(p.payload.t)} · </span>}
       <span className="font-medium text-ink">{p.value}</span>
       {unit && <span className="text-ink-3"> {unit}</span>}
@@ -46,7 +46,7 @@ export function TrendChart({ points, unit, height = 112, kind = 'area', zeroBase
 }) {
   if (points.length < 2) {
     return (
-      <p className="py-8 text-center text-xs text-ink-3">
+      <p className="py-8 text-center text-meta text-ink-3">
         采样中：积累两个数据点后显示趋势{unit ? `（${unit}）` : ''}
       </p>
     )
@@ -83,7 +83,7 @@ export function TrendChart({ points, unit, height = 112, kind = 'area', zeroBase
       {/* 单位直接标签（Vercel: direct labels over legends）：有轴图右上角贴单位；
         * hideY 形态由调用方 caption 说人话（如活动页「峰值 N 条/桶宽」），不重复 */}
       {unit && !hideY && (
-        <span className="pointer-events-none absolute right-1 top-0 z-10 text-[12px] text-ink-3">{unit}</span>
+        <span className="pointer-events-none absolute right-1 top-0 z-local text-meta text-ink-3">{unit}</span>
       )}
       <ResponsiveContainer>
         {kind === 'line' ? (

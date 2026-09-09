@@ -39,15 +39,15 @@ export function SecretPanel({ secret, onClose }: { secret: CreatedToken; onClose
       aria-describedby={`${id}-warn`}
       className="card mb-4 border-bad/30 p-5 fade-up"
     >
-      <h3 id={`${id}-title`} className="flex items-center gap-1.5 text-[15px] font-semibold tracking-[-0.01em] text-bad">
+      <h3 id={`${id}-title`} className="flex items-center gap-1.5 text-lead font-semibold tracking-[-0.01em] text-bad">
         <ShieldAlert size={15} className="shrink-0" />
         <span className="min-w-0 break-words">访问令牌已创建：完整内容只显示这一次</span>
       </h3>
-      <p id={`${id}-warn`} className="mt-2 text-xs leading-relaxed text-ink-2 break-words">
+      <p id={`${id}-warn`} className="mt-2 text-meta leading-relaxed text-ink-2 break-words">
         关闭后无法再次查看，也无法找回。请立刻复制并保存到安全位置；不要贴进聊天、代码仓库或截图。
       </p>
 
-      <label htmlFor={`${id}-secret`} className="mt-4 mb-1.5 block text-[13px] font-medium text-ink-2">
+      <label htmlFor={`${id}-secret`} className="mt-4 mb-1.5 block text-compact font-medium text-ink-2">
         访问令牌
       </label>
       <div className="flex gap-2">
@@ -59,7 +59,7 @@ export function SecretPanel({ secret, onClose }: { secret: CreatedToken; onClose
           spellCheck={false}
           autoComplete="off"
           aria-describedby={`${id}-status`}
-          className="num min-w-0 flex-1 rounded-lg border border-hairline bg-surface-2 px-3 py-2 font-mono text-xs break-all outline-none focus:border-accent"
+          className="num min-w-0 flex-1 rounded-tile border border-hairline bg-surface-2 px-3 py-2 font-mono text-meta break-all outline-none focus:border-accent"
         />
         <button
           type="button"
@@ -71,7 +71,7 @@ export function SecretPanel({ secret, onClose }: { secret: CreatedToken; onClose
           {copied ? <Check size={14} /> : <Copy size={14} />}{copied ? '已复制' : '复制'}
         </button>
       </div>
-      <p id={`${id}-status`} role="status" aria-live="polite" className="mt-2 text-xs leading-relaxed text-ink-3 break-words">
+      <p id={`${id}-status`} role="status" aria-live="polite" className="mt-2 text-meta leading-relaxed text-ink-3 break-words">
         {copied ? '已复制到剪贴板' : copyFailed ? '复制失败，请手动选中上方内容复制' : '复制后请立即保存到安全位置'}
       </p>
 

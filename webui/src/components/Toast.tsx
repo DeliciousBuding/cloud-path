@@ -22,7 +22,7 @@ export function ToastViewport() {
       role="status"
       aria-live="polite"
       aria-label="通知"
-      className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2 sm:bottom-6 sm:right-6"
+      className="pointer-events-none fixed bottom-4 right-4 z-overlay flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2 sm:bottom-6 sm:right-6"
     >
       {items.map((t) => {
         const meta = TONE_ICON[t.tone]
@@ -30,18 +30,18 @@ export function ToastViewport() {
         return (
           <div
             key={t.id}
-            className="bg-surface pointer-events-auto flex items-start gap-3 rounded-xl border border-hairline px-4 py-3 text-left shadow-lift"
+            className="bg-surface pointer-events-auto flex items-start gap-3 rounded-card border border-hairline px-4 py-3 text-left shadow-lift"
           >
             <Icon size={17} className={cn('mt-0.5 shrink-0', meta.cls)} strokeWidth={2} aria-hidden />
             <span className="min-w-0 flex-1">
-              <span className="block text-[13px] font-semibold leading-snug">{t.title}</span>
-              {t.detail && <span className="mt-0.5 line-clamp-2 block text-xs text-ink-2">{t.detail}</span>}
+              <span className="block text-compact font-semibold leading-snug">{t.title}</span>
+              {t.detail && <span className="mt-0.5 line-clamp-2 block text-meta text-ink-2">{t.detail}</span>}
             </span>
             <button
               type="button"
               onClick={() => dismiss(t.id)}
               aria-label={`关闭提示：${t.title}`}
-              className="-mr-1 shrink-0 rounded-full p-1 text-ink-3 transition-colors hover:text-ink"
+              className="-mr-1 shrink-0 rounded-pill p-1 text-ink-3 transition-colors hover:text-ink"
             >
               <X size={14} aria-hidden />
             </button>

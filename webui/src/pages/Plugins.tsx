@@ -28,7 +28,7 @@ const LIST_CAP = 200
 function StatusPill({ label, count, tone }: { label: string; count: number; tone: 'ok' | 'warn' | 'idle' }) {
   return <span className="inline-flex min-w-0 items-center gap-1.5">
     <Badge tone={tone}>{label}</Badge>
-    <span className="num text-[13px] font-semibold">{count}</span>
+    <span className="num text-compact font-semibold">{count}</span>
   </span>
 }
 
@@ -157,7 +157,7 @@ export default function Plugins() {
                 return (
                   <Panel key={p.id} className="fade-up">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <span className="min-w-0 max-w-full truncate text-[15px] font-semibold tracking-[-0.01em]" title={pluginDisplayName(p)}>
+                      <span className="min-w-0 max-w-full truncate text-lead font-semibold tracking-[-0.01em]" title={pluginDisplayName(p)}>
                         {pluginDisplayName(p)}
                       </span>
                       <span className="ml-auto flex shrink-0 items-center gap-1.5">
@@ -177,12 +177,12 @@ export default function Plugins() {
                     </dl>
 
                     <div className="mt-3.5 border-t border-hairline pt-3">
-                      <p className="mb-2 text-[12px] font-medium text-ink-3">需要的权限</p>
+                      <p className="mb-2 text-meta font-medium text-ink-3">需要的权限</p>
                       <PermissionList permissions={p.permissions} emptyHint="不需要额外权限" />
                     </div>
 
-                    <details className="mt-3.5 min-w-0 border-t border-hairline pt-3 text-xs text-ink-2">
-                      <summary className="flex min-h-11 cursor-pointer items-center">技术详情</summary>
+                    <details className="mt-3.5 min-w-0 border-t border-hairline pt-3 text-meta text-ink-2">
+                      <summary className="flex min-h-touch cursor-pointer items-center">技术详情</summary>
                       <dl className="mt-2 space-y-1.5">
                         <div className="kv"><dt>插件标识</dt>
                           <dd className="num min-w-0 truncate font-mono" title={p.id}>{p.id}</dd></div>
@@ -217,11 +217,11 @@ export default function Plugins() {
                           <Plus size={13} /> 创建{kind === 'application' ? '应用' : '驱动'}实例
                         </button>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-ink-2">
+                        <span className="inline-flex items-center gap-1.5 text-meta font-medium text-ink-2">
                           <Ban size={13} className="shrink-0" /> 连接器不创建运行实例
                         </span>
                       )}
-                      <span className="min-w-0 text-[12px] leading-relaxed text-ink-3">
+                      <span className="min-w-0 text-meta leading-relaxed text-ink-3">
                         仅表示插件可以使用，不代表已经运行。
                       </span>
                     </div>
@@ -231,7 +231,7 @@ export default function Plugins() {
             </div>
           )}
           {plugins.length > LIST_CAP && (
-            <p className="mt-4 text-center text-[12px] text-ink-3">
+            <p className="mt-4 text-center text-meta text-ink-3">
               仅显示前 {LIST_CAP} 个插件（共 {plugins.length} 个）
             </p>
           )}
@@ -268,18 +268,18 @@ export default function Plugins() {
             </div>
           ) : (
             <div className="grid gap-4">
-              <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 rounded-lg bg-surface-2 px-3.5 py-2.5">
-                <span className="text-[12px] font-medium text-ink-3">状态概览</span>
+              <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 rounded-tile bg-surface-2 px-3.5 py-2.5">
+                <span className="text-meta font-medium text-ink-3">状态概览</span>
                 <StatusPill label="运行正常" count={statusCounts.normal} tone="ok" />
                 <StatusPill label="需要处理" count={statusCounts.attention} tone="warn" />
                 <StatusPill label="状态待确认" count={statusCounts.unknown} tone="idle" />
                 <StatusPill label="已停止" count={statusCounts.stopped} tone="idle" />
               </div>
-              <div className="flex min-w-0 flex-col gap-2 rounded-lg bg-surface-2 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <label htmlFor="instance-location" className="flex min-w-0 shrink-0 items-center gap-2 whitespace-nowrap text-[13px] font-medium text-ink-2">
+              <div className="flex min-w-0 flex-col gap-2 rounded-tile bg-surface-2 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <label htmlFor="instance-location" className="flex min-w-0 shrink-0 items-center gap-2 whitespace-nowrap text-compact font-medium text-ink-2">
                   <Server size={14} className="shrink-0" /> 运行位置
                 </label>
-                <select id="instance-location" className="input min-h-11 max-w-full text-[13px] sm:min-h-0 sm:w-72"
+                <select id="instance-location" className="input min-h-touch max-w-full text-compact sm:min-h-0 sm:w-72"
                   value={edgeFilter} onChange={(e) => setEdgeFilter(e.target.value)}>
                   <option value="all">全部运行位置（{instances.length}）</option>
                   {edgeOptions.map((edge) => (
@@ -300,14 +300,14 @@ export default function Plugins() {
                       onEdit={() => setEditing(v)} />
                   ))}
                   {visibleInstances.length > LIST_CAP && (
-                    <p className="text-center text-[12px] text-ink-3">
+                    <p className="text-center text-meta text-ink-3">
                       仅显示前 {LIST_CAP} 个实例（共 {visibleInstances.length} 个）
                     </p>
                   )}
                 </>
               )}
 
-              <p className="text-[12px] leading-relaxed text-ink-3">
+              <p className="text-meta leading-relaxed text-ink-3">
                 需要处理的项目会排在前面。展开「技术详情」可以查看版本和状态原值。
               </p>
             </div>

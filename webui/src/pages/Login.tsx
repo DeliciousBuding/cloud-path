@@ -166,7 +166,7 @@ export default function Login() {
               aria-label={reveal ? '隐藏密码' : '显示密码'}
               title={reveal ? '隐藏密码' : '显示密码'}
               aria-pressed={reveal}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-ink-3 transition-colors hover:text-ink"
+              className="flex h-7 w-7 items-center justify-center rounded-pill text-ink-3 transition-colors hover:text-ink"
             >
               {reveal ? <EyeOff size={15} /> : <Eye size={15} />}
             </button>
@@ -175,7 +175,7 @@ export default function Login() {
 
         {/* 表单级错误：凭据错 / 限流 / 不可达。role=alert 让读屏立即播报 */}
         {formError && (
-          <p role="alert" className="rounded-lg bg-bad/10 px-3.5 py-2.5 text-[13px] leading-relaxed break-words text-bad">
+          <p role="alert" className="rounded-tile bg-bad/10 px-3.5 py-2.5 text-compact leading-relaxed break-words text-bad">
             {formError}
           </p>
         )}
@@ -193,7 +193,7 @@ export default function Login() {
           onClick={() => setTokenOpen((v) => !v)}
           aria-expanded={tokenOpen}
           aria-controls="token-signin"
-          className="flex min-h-11 w-full items-center gap-1.5 text-xs font-medium text-ink-2 transition-colors hover:text-ink"
+          className="flex min-h-touch w-full items-center gap-1.5 text-meta font-medium text-ink-2 transition-colors hover:text-ink"
         >
           <KeyRound size={13} className="shrink-0" />
           使用访问令牌（自动化工具）
@@ -219,7 +219,7 @@ export default function Login() {
               {tokenBusy ? '校验中…' : '用访问令牌登录'}
             </Button>
             {getToken() && (
-              <p className="text-[12px] text-ink-3">
+              <p className="text-meta text-ink-3">
                 本机已保存一个访问令牌；提交新令牌会覆盖它。
               </p>
             )}

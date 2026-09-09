@@ -119,9 +119,9 @@ export function PluginConfigForm({ instance, section, readOnly }: {
 
   if (fields.length === 0) {
     return <div className="space-y-3">
-      <div role="alert" className="rounded-lg bg-warn/12 px-3.5 py-3 text-sm text-warn">
+      <div role="alert" className="rounded-tile bg-warn/12 px-3.5 py-3 text-body text-warn">
         <p className="font-medium">配置表单不可用</p>
-        <p className="mt-1 text-xs leading-relaxed opacity-90">插件没有提供可安全渲染的配置字段。原始配置只放在下方技术详情中。</p>
+        <p className="mt-1 text-meta leading-relaxed opacity-90">插件没有提供可安全渲染的配置字段。原始配置只放在下方技术详情中。</p>
       </div>
       <AdvancedConfig config={config} />
     </div>
@@ -147,7 +147,7 @@ export function PluginConfigForm({ instance, section, readOnly }: {
   }
 
   return <form className="space-y-4" onSubmit={(event) => void submit(event)}>
-    {readOnly && <p className="rounded-lg bg-ink-3/10 px-3.5 py-3 text-sm text-ink-2">当前账号只能查看设置，不能修改。</p>}
+    {readOnly && <p className="rounded-tile bg-ink-3/10 px-3.5 py-3 text-body text-ink-2">当前账号只能查看设置，不能修改。</p>}
     <div className="grid gap-4 sm:grid-cols-2">
       {fields.map((field) => {
         const value = values[field.key] ?? ''
@@ -158,22 +158,22 @@ export function PluginConfigForm({ instance, section, readOnly }: {
           disabled: readOnly || update.isPending,
         }
         if (field.type === 'boolean') {
-          return <label key={field.key} className="flex min-h-11 items-center gap-2 self-end text-sm text-ink-2">
+          return <label key={field.key} className="flex min-h-touch items-center gap-2 self-end text-body text-ink-2">
             <input type="checkbox" checked={value === 'true'} disabled={common.disabled}
               onChange={(event) => setValues((current) => ({ ...current, [field.key]: String(event.target.checked) }))} />
             <span>{common.label}</span>
           </label>
         }
         if (field.enum?.length || field.type === 'select') {
-          return <label key={field.key} className="min-w-0 text-[13px] font-medium text-ink-2">
+          return <label key={field.key} className="min-w-0 text-compact font-medium text-ink-2">
             <span className="mb-1.5 block">{common.label}{field.required ? ' *' : ''}</span>
-            <select className="input min-h-11 w-full" value={value} disabled={common.disabled}
+            <select className="input min-h-touch w-full" value={value} disabled={common.disabled}
               aria-invalid={common.error ? true : undefined}
               onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))}>
               <option value="">请选择</option>
               {(field.enum ?? []).map((option) => <option key={String(option)} value={String(option)}>{String(option)}</option>)}
             </select>
-            {common.error && <span className="mt-1.5 block text-xs text-bad">{common.error}</span>}
+            {common.error && <span className="mt-1.5 block text-meta text-bad">{common.error}</span>}
           </label>
         }
         return <TextField key={field.key} {...common} type={field.type === 'number' || field.type === 'integer' ? 'number' : 'text'}
@@ -193,10 +193,10 @@ export function PluginConfigForm({ instance, section, readOnly }: {
 
 function AdvancedConfig({ config }: { config: Record<string, string> }) {
   const entries = safeConfigEntries(config)
-  return <details className="min-w-0 text-xs text-ink-2">
-    <summary className="flex min-h-11 cursor-pointer items-center gap-1.5"><Braces size={12} />高级参数（原始配置）</summary>
+  return <details className="min-w-0 text-meta text-ink-2">
+    <summary className="flex min-h-touch cursor-pointer items-center gap-1.5"><Braces size={12} />高级参数（原始配置）</summary>
     <p className="mt-2 leading-relaxed text-ink-3">这里只用于排查问题；日常设置请使用上方表单。</p>
-    <dl className="mt-2 space-y-1 rounded-lg bg-surface-2 p-3">
+    <dl className="mt-2 space-y-1 rounded-tile bg-surface-2 p-3">
       {entries.map((entry) => <div key={entry.key} className="flex min-w-0 justify-between gap-3">
         <dt className="shrink-0">{entry.key}</dt>
         <dd className="num min-w-0 break-all text-right font-mono" title={entry.value}>{entry.isSecret ? '密钥名称已隐藏内容' : entry.value}</dd>

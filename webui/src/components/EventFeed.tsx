@@ -163,7 +163,7 @@ export function EventFeed({ events, showDevice = true, limit = 30, dayGrouped = 
   ), [devices])
 
   if (!events.length) {
-    return <p className="py-6 text-center text-sm text-ink-3">暂无运行记录。设备状态变化或操作结果会显示在这里。</p>
+    return <p className="py-6 text-center text-body text-ink-3">暂无运行记录。设备状态变化或操作结果会显示在这里。</p>
   }
   const shown = events.slice(0, limit)
   if (!dayGrouped) {
@@ -187,7 +187,7 @@ export function EventFeed({ events, showDevice = true, limit = 30, dayGrouped = 
     <div className="space-y-4">
       {groups.map((g, gi) => (
         <section key={`${g.day}-${gi}`}>
-          <h4 className="sticky top-0 z-10 -my-1 bg-surface py-1 px-0.5 text-[12px] font-medium text-ink-3">{g.day}</h4>
+          <h4 className="sticky top-0 z-local -my-1 bg-surface py-1 px-0.5 text-meta font-medium text-ink-3">{g.day}</h4>
           <ul className="divide-y divide-hairline">
             {g.items.map((e, i) => (
               <EventRow key={`${e.id}-${gi}-${i}`} e={e} first={gi === 0 && i === 0} showDevice={showDevice} name={names.get(e.device_id)} />
@@ -225,7 +225,7 @@ function EventRow({ e, first, showDevice, name }: {
         {showDevice && (
           <Link
             to={`/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`}
-            className={cn('flex min-h-11 min-w-0 max-w-[10rem] items-center text-[12px] text-ink-3 transition-colors hover:text-accent sm:min-h-0 lg:col-start-2',
+            className={cn('flex min-h-touch min-w-0 max-w-[10rem] items-center text-meta text-ink-3 transition-colors hover:text-accent sm:min-h-0 lg:col-start-2',
               !name && 'num font-mono')}
             title={`${e.device_id} · 查看设备`}
           >
@@ -233,7 +233,7 @@ function EventRow({ e, first, showDevice, name }: {
           </Link>
         )}
         {summary && (
-          <span className="col-span-3 row-start-2 min-w-0 truncate text-[12px] text-ink-2 lg:col-span-1 lg:col-start-3 lg:row-start-1"
+          <span className="col-span-3 row-start-2 min-w-0 truncate text-meta text-ink-2 lg:col-span-1 lg:col-start-3 lg:row-start-1"
             title={e.payload || undefined}>{summary}</span>
         )}
         <div className="col-start-3 row-start-1 flex shrink-0 items-center gap-2 justify-self-end lg:col-span-2 lg:col-start-4">
@@ -243,18 +243,18 @@ function EventRow({ e, first, showDevice, name }: {
               onClick={() => setOpen((v) => !v)}
               aria-expanded={open}
               aria-label={open ? '收起运行记录详情' : '查看运行记录详情'}
-              className="flex h-11 w-11 shrink-0 items-center justify-center text-ink-3 transition-colors hover:text-ink-2 sm:h-8 sm:w-8">
+              className="flex h-touch w-touch shrink-0 items-center justify-center text-ink-3 transition-colors hover:text-ink-2 sm:h-8 sm:w-8">
               <ChevronRight size={12} className={open ? 'rotate-90 transition-transform' : 'transition-transform'} />
             </button>
           )}
-          <span className="num shrink-0 font-mono text-[11px] text-ink-3" title={`${fmtDateTime(e.ts)} · ${e.type}`}>
+          <span className="num shrink-0 font-mono text-micro text-ink-3" title={`${fmtDateTime(e.ts)} · ${e.type}`}>
             {fmtTime(e.ts)}
           </span>
         </div>
       </div>
       {open && (
         <pre tabIndex={0} role="group" aria-label="运行记录详情数据"
-          className="num mb-2 max-h-40 overflow-auto rounded-lg bg-surface-2 p-2 font-mono text-[11px] leading-relaxed text-ink-2">
+          className="num mb-2 max-h-40 overflow-auto rounded-tile bg-surface-2 p-2 font-mono text-micro leading-relaxed text-ink-2">
           {e.payload}
         </pre>
       )}

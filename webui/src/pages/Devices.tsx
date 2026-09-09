@@ -78,7 +78,7 @@ export default function Devices() {
             <input
               id="dev-search" type="search" value={q} placeholder="按名称、编号、网关或设备类型搜索"
               onChange={(e) => setQ(e.target.value)}
-              className="input input-search min-h-11 max-w-full sm:min-h-0"
+              className="input input-search min-h-touch max-w-full sm:min-h-0"
             />
           </span>
           {q && (
@@ -107,11 +107,11 @@ export default function Devices() {
             {shown.slice(0, 300).map((d) => <DeviceRow key={d.id} d={d} />)}
           </ul>
           {shown.length > 300 && (
-            <p className="border-t border-hairline px-4 py-3 text-center text-[12px] text-ink-3">
+            <p className="border-t border-hairline px-4 py-3 text-center text-meta text-ink-3">
               仅显示前 300 台（共 {shown.length} 台匹配）；请用搜索或在线状态筛选缩小范围
             </p>
           )}
-          <p className="flex items-center gap-1.5 border-t border-hairline px-4 py-2.5 text-[12px] text-ink-3">
+          <p className="flex items-center gap-1.5 border-t border-hairline px-4 py-2.5 text-meta text-ink-3">
             <Cpu size={11} className="shrink-0" />
             关键数据来自设备上报；「等待同步」表示设备还没有上报可显示的数据。
           </p>

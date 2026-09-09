@@ -73,14 +73,14 @@ export default function EdgeDetail() {
       <BackLink to="/edges" label="网关" />
 
       <header className="mb-7 flex flex-wrap items-center gap-3">
-        <h1 className="min-w-0 max-w-full truncate font-mono text-[24px] font-semibold" title={e.edge_id}>
+        <h1 className="min-w-0 max-w-full truncate font-mono text-hero font-semibold" title={e.edge_id}>
           {e.edge_id}
         </h1>
         <Badge tone={e.online ? 'ok' : 'idle'}>{e.online ? '在线' : '离线'}</Badge>
         {e.version && (
-          <span className="min-w-0 truncate font-mono text-[11px] text-ink-3" title={`版本 ${e.version}`}>{e.version}</span>
+          <span className="min-w-0 truncate font-mono text-micro text-ink-3" title={`版本 ${e.version}`}>{e.version}</span>
         )}
-        <span className="ml-auto text-xs text-ink-3"
+        <span className="ml-auto text-meta text-ink-3"
           title={e.connected_at ? fmtDateTime(e.connected_at) : undefined}>
           {e.online ? '连接于 ' : '最后在线 '}
           {e.connected_at ? <span className="num">{timeAgo(e.connected_at)}</span> : '—'}
@@ -88,7 +88,7 @@ export default function EdgeDetail() {
       </header>
 
       {!e.online && (
-        <div className="banner mb-5 rounded-lg" role="status">
+        <div className="banner mb-5 rounded-tile" role="status">
           这个网关当前离线：下属设备暂停更新，网关离线期间不能下发操作，恢复连接后再试。其他在线网关不受影响。
         </div>
       )}
@@ -104,7 +104,7 @@ export default function EdgeDetail() {
             {f.declared.length !== f.devices.length && <KeyValue k="已发现设备" v={`${f.declared.length} 台`} />}
           </dl>
           {f.declared.length !== f.devices.length && (
-            <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
+            <p className="mt-3 border-t border-hairline pt-3 text-meta leading-relaxed text-ink-3">
               已发现设备数与当前连接数不一致：可能设备在网关重启后未再被发现，或设备已移到其他网关。
             </p>
           )}
@@ -112,9 +112,9 @@ export default function EdgeDetail() {
 
         <Panel className="lg:col-span-2"
           title={<span className="flex items-center gap-1.5"><Cpu size={14} />接入设备</span>}
-          right={<span className="text-[12px] text-ink-3">{f.onlineDevices}/{f.devices.length} 在线</span>}>
+          right={<span className="text-meta text-ink-3">{f.onlineDevices}/{f.devices.length} 在线</span>}>
           {f.devices.length === 0 ? (
-            <p className="py-8 text-center text-sm text-ink-3">该网关还没有接入设备。启动网关并接入设备后会自动显示在这里。</p>
+            <p className="py-8 text-center text-body text-ink-3">该网关还没有接入设备。启动网关并接入设备后会自动显示在这里。</p>
           ) : (
             <ul className="divide-y divide-hairline">
               {f.devices.map((d) => {
@@ -125,16 +125,16 @@ export default function EdgeDetail() {
                       {d.online ? '在线' : '离线'}
                     </Badge>
                     <Link to={`/devices/${encodeURIComponent(e.edge_id)}/${encodeURIComponent(dev)}`}
-                      className="flex min-h-11 min-w-0 flex-1 flex-col justify-center no-underline">
-                      <span className="block truncate text-[13px] font-medium hover:text-accent" title={deviceLabel(d)}>
+                      className="flex min-h-touch min-w-0 flex-1 flex-col justify-center no-underline">
+                      <span className="block truncate text-compact font-medium hover:text-accent" title={deviceLabel(d)}>
                         <span className="sr-only">{d.online ? '在线，' : '离线，'}</span>
                         {deviceLabel(d)}
                       </span>
-                      <span className="num block truncate font-mono text-[11px] text-ink-3" title={`${d.adapter || '未知设备类型'}${d.port ? ` · ${d.port}` : ''}`}>
+                      <span className="num block truncate font-mono text-micro text-ink-3" title={`${d.adapter || '未知设备类型'}${d.port ? ` · ${d.port}` : ''}`}>
                         {d.port ? `串口 ${d.port}` : '串口未报告'}
                       </span>
                     </Link>
-                    <span className="num shrink-0 font-mono text-[11px] text-ink-3 sm:text-right"
+                    <span className="num shrink-0 font-mono text-micro text-ink-3 sm:text-right"
                       title={d.online ? '最近更新' : '最后在线'}>
                       <span className="sm:hidden">最近上报 </span>
                       {(d.online ? d.updated_at : d.last_seen)
@@ -149,7 +149,7 @@ export default function EdgeDetail() {
 
         <Panel className="lg:col-span-3"
           title={<span className="flex items-center gap-1.5"><History size={14} />近期状态事件</span>}
-          right={<span className="num text-[12px] text-ink-3">{events.length} 条</span>}>
+          right={<span className="num text-meta text-ink-3">{events.length} 条</span>}>
           {evLoading && events.length === 0 ? (
             <RowSkeleton rows={5} />
           ) : evError && events.length === 0 ? (
@@ -157,15 +157,15 @@ export default function EdgeDetail() {
               hint="暂时无法加载该网关的状态事件；设备状态仍以上方清单为准。请稍后重试。"
               onRetry={() => { void refetchEvents() }} />
           ) : events.length === 0 ? (
-            <p className="py-8 text-center text-sm text-ink-3">该网关还没有状态事件。设备上报状态变化后会显示在这里；操作结果请在运行记录页查看。</p>
+            <p className="py-8 text-center text-body text-ink-3">该网关还没有状态事件。设备上报状态变化后会显示在这里；操作结果请在运行记录页查看。</p>
           ) : (
             <>
               <EventFeed events={events} limit={20} dayGrouped />
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3 text-xs">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3 text-meta">
                 <span className="text-ink-3">
                   {events.length > 20 ? `另有 ${events.length - 20} 条` : '这里只展示状态事件'}
                 </span>
-                <Link to="/activity" className="link flex min-h-11 items-center gap-0.5">
+                <Link to="/activity" className="link flex min-h-touch items-center gap-0.5">
                   查看全部运行记录 <ArrowRight size={12} />
                 </Link>
               </div>

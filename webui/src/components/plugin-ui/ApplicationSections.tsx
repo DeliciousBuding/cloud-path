@@ -55,7 +55,7 @@ function ReadContent<T>({ title, query, empty, children }: {
       hint={status === 403 ? '请联系管理员核对当前账号的访问权限。' : '暂时无法取得最新数据，请重试。'}
       onRetry={() => { void query.refetch() }} retrying={query.isFetching} />
   }
-  if (empty) return <p className="py-3 text-sm text-ink-3">暂无{title}</p>
+  if (empty) return <p className="py-3 text-body text-ink-3">暂无{title}</p>
   return children
 }
 
@@ -65,15 +65,15 @@ function parseRecord(record: AppDomainRecordView): { value: unknown; readable: b
 }
 
 function RecordDetails({ record }: { record: AppDomainRecordView }) {
-  return <details className="mt-2 min-w-0 text-xs text-ink-2">
-    <summary className="flex min-h-11 cursor-pointer items-center">查看技术详情</summary>
-    <dl className="mt-2 space-y-1 rounded-lg bg-surface-2 px-3 py-2.5">
+  return <details className="mt-2 min-w-0 text-meta text-ink-2">
+    <summary className="flex min-h-touch cursor-pointer items-center">查看技术详情</summary>
+    <dl className="mt-2 space-y-1 rounded-tile bg-surface-2 px-3 py-2.5">
       <div><dt className="inline">记录标识：</dt><dd className="num inline break-all">{record.record_id}</dd></div>
       <div><dt className="inline">分类代码：</dt><dd className="num inline break-all">{record.record_type}</dd></div>
       <div><dt className="inline">版本：</dt><dd className="inline">{record.version || '未提供'}</dd></div>
     </dl>
     <pre tabIndex={0} role="group" aria-label="记录原文"
-      className="num mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-surface-2 p-3 font-mono text-xs">{record.data_json}</pre>
+      className="num mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-tile bg-surface-2 p-3 font-mono text-meta">{record.data_json}</pre>
   </details>
 }
 
@@ -88,21 +88,21 @@ function RecordItem({ record, index, presentation }: {
     : { title: `记录 ${index + 1}`, usedKeys: [] }
   if (presentation === 'table') {
     return <tr className="border-t border-hairline align-top">
-      <td className="min-w-40 px-3 py-3 text-sm font-medium">{headline.title}</td>
-      <td className="num whitespace-nowrap px-3 py-3 text-xs text-ink-3">{appTime(record.updated_at)}</td>
-      <td className="px-3 py-3 text-sm">{parsed.readable
+      <td className="min-w-40 px-3 py-3 text-body font-medium">{headline.title}</td>
+      <td className="num whitespace-nowrap px-3 py-3 text-meta text-ink-3">{appTime(record.updated_at)}</td>
+      <td className="px-3 py-3 text-body">{parsed.readable
         ? <StructuredValue value={parsed.value} omitKeys={headline.usedKeys} />
         : <span className="text-warn">记录内容无法读取</span>}</td>
     </tr>
   }
   return <article className="min-w-0 border-t border-hairline py-5 first:border-0 first:pt-0">
     <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-      <h3 className="min-w-0 break-words text-sm font-medium [overflow-wrap:anywhere]">{headline.title}</h3>
-      <p className="shrink-0 text-xs text-ink-3">更新于 <time>{appTime(record.updated_at)}</time></p>
+      <h3 className="min-w-0 break-words text-body font-medium [overflow-wrap:anywhere]">{headline.title}</h3>
+      <p className="shrink-0 text-meta text-ink-3">更新于 <time>{appTime(record.updated_at)}</time></p>
     </div>
     {parsed.readable
-      ? <div className="min-w-0 text-sm"><StructuredValue value={parsed.value} omitKeys={headline.usedKeys} /></div>
-      : <p className="text-sm text-warn">记录内容无法读取，原文可在技术详情中核对。</p>}
+      ? <div className="min-w-0 text-body"><StructuredValue value={parsed.value} omitKeys={headline.usedKeys} /></div>
+      : <p className="text-body text-warn">记录内容无法读取，原文可在技术详情中核对。</p>}
     <RecordDetails record={record} />
   </article>
 }
@@ -117,14 +117,14 @@ function RecordsSection({ query, section }: { query: SectionQuery<AppDomainRecor
   return <Panel title={<span className="flex items-center gap-1.5"><ListTree size={14} />{section.type === 'timeline' ? '时间线' : '记录'}</span>}>
     <ReadContent title="记录" query={query} empty={rows.length === 0}>
       {presentation === 'table'
-        ? <div className="overflow-x-auto rounded-lg border border-hairline">
+        ? <div className="overflow-x-auto rounded-tile border border-hairline">
           <table className="w-full min-w-[36rem] border-collapse text-left">
-            <thead><tr className="text-xs text-ink-3"><th className="px-3 py-2 font-medium">记录</th><th className="px-3 py-2 font-medium">时间</th><th className="px-3 py-2 font-medium">内容</th></tr></thead>
+            <thead><tr className="text-meta text-ink-3"><th className="px-3 py-2 font-medium">记录</th><th className="px-3 py-2 font-medium">时间</th><th className="px-3 py-2 font-medium">内容</th></tr></thead>
             <tbody>{rows.map((record, index) => <RecordItem key={record.record_id} record={record} index={index} presentation="table" />)}</tbody>
           </table>
         </div>
         : presentation === 'cards'
-          ? <div className="grid gap-3 sm:grid-cols-2">{rows.map((record, index) => <div key={record.record_id} className="rounded-lg bg-surface-2 p-3"><RecordItem record={record} index={index} presentation="cards" /></div>)}</div>
+          ? <div className="grid gap-3 sm:grid-cols-2">{rows.map((record, index) => <div key={record.record_id} className="rounded-tile bg-surface-2 p-3"><RecordItem record={record} index={index} presentation="cards" /></div>)}</div>
           : <div className={presentation === 'timeline' ? 'border-l border-hairline pl-4' : ''}>{rows.map((record, index) => <RecordItem key={record.record_id} record={record} index={index} presentation={presentation} />)}</div>}
     </ReadContent>
   </Panel>
@@ -133,15 +133,15 @@ function RecordsSection({ query, section }: { query: SectionQuery<AppDomainRecor
 function BindingTable({ query, presentation }: { query: SectionQuery<AppBindingsView>; presentation?: unknown }) {
   return <Panel title={<span className="flex items-center gap-1.5"><Table2 size={14} />设备绑定</span>}>
     <ReadContent title="设备绑定" query={query} empty={!query.data?.bindings.length}>
-      <div className="overflow-x-auto rounded-lg border border-hairline">
-        <table className="w-full min-w-[30rem] border-collapse text-left text-sm">
-          <thead><tr className="text-xs text-ink-3"><th className="px-3 py-2 font-medium">需求</th><th className="px-3 py-2 font-medium">功能</th><th className="px-3 py-2 font-medium">实体</th></tr></thead>
+      <div className="overflow-x-auto rounded-tile border border-hairline">
+        <table className="w-full min-w-[30rem] border-collapse text-left text-body">
+          <thead><tr className="text-meta text-ink-3"><th className="px-3 py-2 font-medium">需求</th><th className="px-3 py-2 font-medium">功能</th><th className="px-3 py-2 font-medium">实体</th></tr></thead>
           <tbody>{query.data?.bindings.map((binding) => {
             const labels = bindingLabels(binding, presentation)
             return <tr key={binding.requirement_id + binding.entity_id} className="border-t border-hairline">
               <td className="px-3 py-2">{binding.requirement_id}</td>
               <td className="px-3 py-2 text-ink-2">{labels.capability}</td>
-              <td className="num px-3 py-2 font-mono text-xs">{labels.entity || binding.entity_id}</td>
+              <td className="num px-3 py-2 font-mono text-meta">{labels.entity || binding.entity_id}</td>
             </tr>
           })}</tbody>
         </table>
@@ -157,9 +157,9 @@ function ScheduleSection({ query }: { query: SectionQuery<AppJobsView> }) {
       <div className="divide-y divide-hairline">{rows.map((job: AppScheduledJobView, index) => {
         const state = ({ active: '已启用', cancelled: '已取消', paused: '已暂停' } as Record<string, string>)[job.state] ?? '状态待确认'
         return <article key={job.schedule_id} className="py-3 first:pt-0">
-          <div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-medium">计划 {index + 1}</h3><Badge tone={job.state === 'active' ? 'accent' : 'idle'}>{state}</Badge></div>
-          <p className="mt-2 text-sm">{scheduleSummary(job.cron)}<span className="ml-2 text-xs text-ink-3">{scheduleZone(job.timezone)}</span></p>
-          <p className="mt-1 text-xs text-ink-3">下次：{job.next_run_at ? appTime(job.next_run_at, job.timezone) : '尚未安排'}</p>
+          <div className="flex flex-wrap items-center gap-2"><h3 className="text-body font-medium">计划 {index + 1}</h3><Badge tone={job.state === 'active' ? 'accent' : 'idle'}>{state}</Badge></div>
+          <p className="mt-2 text-body">{scheduleSummary(job.cron)}<span className="ml-2 text-meta text-ink-3">{scheduleZone(job.timezone)}</span></p>
+          <p className="mt-1 text-meta text-ink-3">下次：{job.next_run_at ? appTime(job.next_run_at, job.timezone) : '尚未安排'}</p>
         </article>
       })}</div>
     </ReadContent>
@@ -177,7 +177,7 @@ function metricEntries(section: PluginUISection, records: AppDomainRecordView[])
 
 function MetricsSection({ section, records }: { section: PluginUISection; records: AppDomainRecordView[] }) {
   const entries = metricEntries(section, recordsForSection(records, section))
-  if (entries.length === 0) return <Panel title="指标"><p className="text-sm text-ink-3">暂无可用指标。</p></Panel>
+  if (entries.length === 0) return <Panel title="指标"><p className="text-body text-ink-3">暂无可用指标。</p></Panel>
   return <Panel title={<span className="flex items-center gap-1.5"><BarChart3 size={14} />指标</span>}>
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{entries.map((entry) => <StatTile key={entry.label} label={entry.label}
       value={typeof entry.value === 'boolean' ? (entry.value ? '是' : '否') : entry.value === undefined ? '—' : String(entry.value)} />)}</div>
@@ -189,9 +189,9 @@ function ChartSection({ section, records }: { section: PluginUISection; records:
   const firstNumeric = values.flatMap((value) => Object.entries(value).filter(([, item]) => typeof item === 'number'))[0]
   const series = firstNumeric ? values.map((value) => typeof value[firstNumeric[0]] === 'number' ? value[firstNumeric[0]] as number : 0) : []
   const max = Math.max(...series, 1)
-  if (!firstNumeric || series.length === 0) return <Panel title="趋势"><p className="text-sm text-ink-3">暂无可用数值趋势。</p></Panel>
+  if (!firstNumeric || series.length === 0) return <Panel title="趋势"><p className="text-body text-ink-3">暂无可用数值趋势。</p></Panel>
   return <Panel title={<span className="flex items-center gap-1.5"><BarChart3 size={14} />趋势</span>}>
-    <p className="mb-3 text-xs text-ink-3">最近 {series.length} 条记录中的 {recordFieldLabel(firstNumeric[0])}</p>
+    <p className="mb-3 text-meta text-ink-3">最近 {series.length} 条记录中的 {recordFieldLabel(firstNumeric[0])}</p>
     <div className="flex h-28 items-end gap-1" role="img" aria-label={recordFieldLabel(firstNumeric[0]) + '趋势'}>
       {series.slice().reverse().map((value, index) => <span key={index} title={String(value)} className="min-h-1 flex-1 rounded-t bg-accent/60" style={{ height: `${Math.max(4, value / max * 100)}%` }} />)}
     </div>
@@ -200,7 +200,7 @@ function ChartSection({ section, records }: { section: PluginUISection; records:
 
 function MarkdownSection({ text }: { text: string }) {
   const lines = text.split(/\r?\n/)
-  return <Panel title="说明"><div className="space-y-2 text-sm leading-relaxed text-ink-2">
+  return <Panel title="说明"><div className="space-y-2 text-body leading-relaxed text-ink-2">
     {lines.map((line, index) => {
       if (line.startsWith('### ')) return <h4 key={index} className="font-semibold text-ink">{line.slice(4)}</h4>
       if (line.startsWith('## ')) return <h3 key={index} className="font-semibold text-ink">{line.slice(3)}</h3>
@@ -215,14 +215,14 @@ function MarkdownSection({ text }: { text: string }) {
 function DiagnosticsSection({ instance, bindings, jobs }: { instance: PluginInstanceView; bindings: SectionQuery<AppBindingsView>; jobs: SectionQuery<AppJobsView> }) {
   const config = safeConfigEntries(instance.desired.config)
   return <Panel title={<span className="flex items-center gap-1.5"><AlertTriangle size={14} />诊断</span>}>
-    <dl className="space-y-2 text-sm">
-      <div className="flex justify-between gap-3"><dt className="text-ink-2">实例</dt><dd className="num min-w-0 truncate font-mono text-xs">{instance.desired.instance_id || instance.id}</dd></div>
+    <dl className="space-y-2 text-body">
+      <div className="flex justify-between gap-3"><dt className="text-ink-2">实例</dt><dd className="num min-w-0 truncate font-mono text-meta">{instance.desired.instance_id || instance.id}</dd></div>
       <div className="flex justify-between gap-3"><dt className="text-ink-2">运行状态</dt><dd>{instance.has_observed ? instance.observed?.state || '未提供' : '尚未上报'}</dd></div>
       <div className="flex justify-between gap-3"><dt className="text-ink-2">设置版本</dt><dd className="num">{instance.desired_revision}</dd></div>
       <div className="flex justify-between gap-3"><dt className="text-ink-2">运行状态版本</dt><dd className="num">{instance.applied_revision}</dd></div>
     </dl>
-    <details className="mt-3 text-xs text-ink-2"><summary className="flex min-h-11 cursor-pointer items-center">原始配置与绑定</summary>
-      <div className="mt-2 space-y-2 rounded-lg bg-surface-2 p-3">
+    <details className="mt-3 text-meta text-ink-2"><summary className="flex min-h-touch cursor-pointer items-center">原始配置与绑定</summary>
+      <div className="mt-2 space-y-2 rounded-tile bg-surface-2 p-3">
         {config.map((entry) => <p key={entry.key} className="break-all"><span className="text-ink-3">{entry.key}：</span>{entry.isSecret ? '密钥名称已隐藏内容' : entry.value}</p>)}
         <p>绑定：{bindings.data?.bindings.length ?? 0} 项 · 操作：{jobs.data?.job_descriptors.length ?? 0} 项</p>
       </div>
@@ -261,6 +261,6 @@ export function ApplicationSection(props: ApplicationSectionProps) {
     case 'custom':
       return <PluginUIBridge pluginId={catalog.id} version={catalog.version || instance.desired.version} instance={instance} section={section} />
     default:
-      return <div role="alert" className="rounded-lg bg-warn/12 px-3.5 py-3 text-sm text-warn">这个页面包含当前版本无法显示的内容。请更新平台或联系插件维护者。</div>
+      return <div role="alert" className="rounded-tile bg-warn/12 px-3.5 py-3 text-body text-warn">这个页面包含当前版本无法显示的内容。请更新平台或联系插件维护者。</div>
   }
 }

@@ -18,7 +18,7 @@ export function SelectField({ label, hint, value, onChange, options, className }
   const desc = hint ? `${id}-desc` : undefined
   return (
     <div className={className}>
-      <label htmlFor={id} className="mb-1.5 block text-[13px] font-medium text-ink-2">{label}</label>
+      <label htmlFor={id} className="mb-1.5 block text-compact font-medium text-ink-2">{label}</label>
       <select
         id={id}
         value={value}
@@ -28,7 +28,7 @@ export function SelectField({ label, hint, value, onChange, options, className }
       >
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
-      {desc && <p id={desc} className="mt-1.5 text-xs leading-relaxed text-ink-3 break-words">{hint}</p>}
+      {desc && <p id={desc} className="mt-1.5 text-meta leading-relaxed text-ink-3 break-words">{hint}</p>}
     </div>
   )
 }
@@ -57,12 +57,12 @@ export function CheckRow({ label, hint, checked, onChange, tone = 'plain', class
       <div className="min-w-0">
         <label
           htmlFor={id}
-          className={cn('num block text-[13px] font-medium leading-relaxed break-words',
+          className={cn('num block text-compact font-medium leading-relaxed break-words',
             tone === 'danger' ? 'text-warn' : 'text-ink')}
         >
           {label}
         </label>
-        {desc && <p id={desc} className="mt-0.5 text-xs leading-relaxed text-ink-3 break-words">{hint}</p>}
+        {desc && <p id={desc} className="mt-0.5 text-meta leading-relaxed text-ink-3 break-words">{hint}</p>}
       </div>
     </div>
   )

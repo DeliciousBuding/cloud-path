@@ -88,9 +88,9 @@ export default function ApplicationPage() {
           title={resolution.navigation.title}
           subtitle={resolution.contribution.title || resolution.plugin.id}
           actions={resolution.instances.length > 1
-            ? <label className="flex items-center gap-2 text-xs text-ink-2">
+            ? <label className="flex items-center gap-2 text-meta text-ink-2">
               <span>运行实例</span>
-              <select className="input min-h-11 max-w-[14rem]" value={selected.desired.instance_id}
+              <select className="input min-h-touch max-w-[14rem]" value={selected.desired.instance_id}
                 onChange={(event) => setInstance(event.target.value)}>
                 {resolution.instances.map((instance) => <option key={instance.id} value={instance.desired.instance_id}>
                   {instance.desired.instance_id}{instance.desired.enabled ? '' : '（已停用）'}
@@ -104,7 +104,7 @@ export default function ApplicationPage() {
             className={`btn ${page.id === resolution.page.id ? 'btn-primary' : 'btn-ghost'}`}>{page.title}</Link>)}
         </nav>}
         {selected.desired.instance_id !== requestedInstance && resolution.instances.length > 1
-          ? <Panel className="mb-5"><p className="text-sm text-ink-2">已打开默认实例。可在上方切换其他实例。</p></Panel>
+          ? <Panel className="mb-5"><p className="text-body text-ink-2">已打开默认实例。可在上方切换其他实例。</p></Panel>
           : null}
         <ApplicationConsole instance={selected} catalog={resolution.plugin} page={resolution.page}
           readOnly={authStatus !== 'in' || user?.role === 'viewer'} lifecycleKey={lifecycleKey} />

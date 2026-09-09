@@ -26,16 +26,16 @@ export function ApplicationConsole({ instance, catalog, page, readOnly, lifecycl
 
   if (!canRead) {
     return <Panel title="应用数据">
-      <p className="text-sm text-ink-2">登录后可查看当前组织的应用数据、设置和操作。</p>
+      <p className="text-body text-ink-2">登录后可查看当前组织的应用数据、设置和操作。</p>
       <Link to="/login" className="btn btn-ghost mt-3">前往登录</Link>
     </Panel>
   }
 
   return <div className="space-y-5" aria-label={page.title}>
-    {!instance.desired.enabled && <div role="status" className="rounded-lg bg-warn/12 px-3.5 py-3 text-sm text-warn">
+    {!instance.desired.enabled && <div role="status" className="rounded-tile bg-warn/12 px-3.5 py-3 text-body text-warn">
       这个应用已停用。你仍可查看历史记录和设置；操作按钮不会执行。
     </div>}
-    {instance.stale && <div role="status" className="rounded-lg bg-warn/12 px-3.5 py-3 text-sm text-warn">
+    {instance.stale && <div role="status" className="rounded-tile bg-warn/12 px-3.5 py-3 text-body text-warn">
       当前运行状态已过期，页面以最近一次收到的状态为准。
     </div>}
     {page.sections.map((section, index) => <ApplicationSection
@@ -51,7 +51,7 @@ export function ApplicationConsole({ instance, catalog, page, readOnly, lifecycl
       readOnly={readOnly}
       lifecycleKey={lifecycleKey}
     />)}
-    <p role="status" className="text-xs text-ink-3">
+    <p role="status" className="text-meta text-ink-3">
       {status === 'open' ? '实时更新已连接' : status === 'connecting' ? '正在连接实时更新，暂以定时同步为准' : '实时更新已断开，暂以定时同步为准'}
     </p>
   </div>
