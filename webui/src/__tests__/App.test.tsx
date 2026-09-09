@@ -89,6 +89,27 @@ describe('路由回落', () => {
   })
 })
 
+describe('趋势详情子路由', () => {
+  it('设备趋势详情 URL 可直接刷新，不依赖设备详情页内存状态', async () => {
+    installFetch((url) => {
+      if (url === '/api/auth/me') return stubResponse(200, me)
+      if (url === '/api/devices/edge-1/dev-9') return stubResponse(200, makeDeviceView({ online: false }))
+      if (url.includes('/api/devices/edge-1/dev-9/samples')) {
+        return stubResponse(200, {
+          samples: [{ device_id: 'edge-1/dev-9', key: 'temperature', ts: 1_780_000_000, value: 25.5, quality: 'good' }],
+        })
+      }
+      return stubResponse(404, { error: 'not found' })
+    })
+    renderApp('/devices/edge-1/dev-9/trends/temperature')
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Temperature' })).toBeInTheDocument()
+    expect(screen.getByText('设备当前离线；这里仍可查看服务器已保存的历史采样。')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /返回趋势/ })).toHaveAttribute(
+      'href', '/devices/edge-1/dev-9?tab=overview&stateView=trend')
+  })
+})
+
 describe('Schema 端点缺席时的设备详情页', () => {
   it('descriptor/capabilities 全 404 → 通用回落视图 + 操作集来自设备支持的操作', async () => {
     installFetch((url) => {

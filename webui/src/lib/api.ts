@@ -5,7 +5,7 @@
 // 任何受保护端点返回 401 → markUnauthenticated() 全局收敛（store/auth.ts → 路由守卫跳 /login）。
 import type {
   AppDomainRecordsView, AppBindingsView, AppJobsView, AppJobRunRequest, AppJobRunView, AdapterView, CommandView, CreateTokenInput, CreatedToken, CreateUserInput, DeviceView, EdgeView,
-  EventView, HealthView, MeResponse, OverviewView, PluginCatalogListResponse, PluginCatalogView,
+  EventView, HealthView, MeResponse, OverviewView, PluginCatalogListResponse, PluginCatalogView, SeriesSamplesView,
   PluginInstanceActionRequest, PluginInstanceCreateRequest, PluginInstanceDeleteRequest,
   PluginInstanceListResponse, PluginInstanceUpdateRequest, PluginInstanceView,
   PluginInstanceWriteResponse, StatsView, TokenView, UpdateUserInput, UserView,
@@ -157,6 +157,11 @@ export const api = {
   devices: () => req<{ devices: DeviceView[] }>('/api/devices'),
   device: (edgeId: string, devId: string) =>
     req<DeviceView>(`/api/devices/${encodeURIComponent(edgeId)}/${encodeURIComponent(devId)}`),
+  deviceSamples: (edgeId: string, devId: string, params: {
+    key: string; from?: number; to?: number; before?: number; limit?: number
+  }) => req<SeriesSamplesView>(
+    `/api/devices/${encodeURIComponent(edgeId)}/${encodeURIComponent(devId)}/samples${qs(params)}`,
+  ),
   events: (params?: { device?: string; since?: number; limit?: number }) =>
     req<{ events: EventView[] }>(`/api/events${qs(params ?? {})}`),
   edges: () => req<{ edges: EdgeView[] }>('/api/edges'),

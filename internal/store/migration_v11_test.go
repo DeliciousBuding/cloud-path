@@ -21,8 +21,8 @@ func TestMigrationV10ToV11PreservesDevices(t *testing.T) {
 		t.Fatalf("v10 -> v11 migration: %v", err)
 	}
 	defer s.Close()
-	if s.Version() != 11 {
-		t.Fatalf("version = %d, want 11", s.Version())
+	if s.Version() != schemaVersion {
+		t.Fatalf("version = %d, want %d", s.Version(), schemaVersion)
 	}
 	devs, err := s.ListDevicesTenant(1)
 	if err != nil || len(devs) != 1 {
@@ -69,8 +69,8 @@ func TestRecoverV11DDLAppliedVersionStale(t *testing.T) {
 		t.Fatalf("half migration recovery: %v", err)
 	}
 	defer s.Close()
-	if s.Version() != 11 {
-		t.Fatalf("version = %d, want 11", s.Version())
+	if s.Version() != schemaVersion {
+		t.Fatalf("version = %d, want %d", s.Version(), schemaVersion)
 	}
 	devs, err := s.ListDevicesTenant(1)
 	if err != nil || len(devs) != 1 || devs[0].ID != "e1/d1" {
@@ -113,8 +113,8 @@ func TestMigrationV11FailureAtomic(t *testing.T) {
 		t.Fatalf("recovery after v11 rollback: %v", err)
 	}
 	defer s.Close()
-	if s.Version() != 11 {
-		t.Fatalf("version = %d, want 11", s.Version())
+	if s.Version() != schemaVersion {
+		t.Fatalf("version = %d, want %d", s.Version(), schemaVersion)
 	}
 	if err := s.SetDeviceDescriptor("e1/d1", `{"device_id":"e1/d1"}`); err != nil {
 		t.Fatalf("recovered column not writable: %v", err)

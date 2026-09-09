@@ -38,6 +38,22 @@ export interface EventView {
   payload: string
 }
 
+/** 数值采样历史行；key 是平台不解释语义的通用序列键。 */
+export interface SeriesSampleView {
+  device_id: string
+  key: string
+  ts: number
+  value: number
+  quality?: string
+}
+
+/** GET /api/devices/{edgeID}/{deviceID}/samples 响应；samples 按时间升序。 */
+export interface SeriesSamplesView {
+  samples: SeriesSampleView[]
+  /** 非 0 时可作为下一次请求的 before 游标，读取更早的数据。 */
+  next_before?: number
+}
+
 export interface CommandView {
   id: number
   device_id: string

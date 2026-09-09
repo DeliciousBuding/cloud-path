@@ -15,6 +15,7 @@ const Setup = lazy(() => import('@/pages/Setup'))
 
 // 重路由按需加载：图表（recharts）只在设备详情用到，不拖慢首屏
 const DeviceDetail = lazy(() => import('@/pages/DeviceDetail'))
+const DeviceTrendDetail = lazy(() => import('@/pages/DeviceTrendDetail'))
 const Pillbox = lazy(() => import('@/pages/Pillbox'))
 const Activity = lazy(() => import('@/pages/Activity'))
 const Plugins = lazy(() => import('@/pages/Plugins'))
@@ -86,7 +87,11 @@ export default function App() {
             <Route element={<RequireAuth />}>
               <Route index element={<Overview />} />
               <Route path="devices" element={<Devices />} />
-              <Route path="devices/:edgeId/:deviceId" element={<DeviceDetail />} />
+              <Route path="devices/:edgeId/:deviceId">
+                <Route index element={<DeviceDetail />} />
+                {/* 序列详情是设备详情的子资源：URL 可分享/刷新，返回时仍回到趋势分区 */}
+                <Route path="trends/:seriesKey" element={<DeviceTrendDetail />} />
+              </Route>
               <Route path="pillbox" element={<Navigate to="/apps/pillbox" replace />} />
               <Route path="pillbox/:edgeId/:deviceId" element={<Pillbox />} />
               <Route path="apps/:appRoute" element={<ApplicationPage />} />

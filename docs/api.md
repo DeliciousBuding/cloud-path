@@ -47,6 +47,7 @@
 | `GET /api/commands?device=&status=&limit=` | 读 | 命令历史 |
 | `GET /api/adapters` | 读 | 适配器命令白名单（前端命令面板事实源） |
 | `GET /api/devices/{edge}/{device}/descriptor` | 读 | 单设备 Descriptor（Schema-driven UI 事实源） |
+| `GET /api/devices/{edge}/{device}/samples?key=&from=&to=&before=&limit=` | 读 | 数值采样历史（§5.1.1；设备离线仍可读） |
 | `GET /api/descriptors` | 读 | 会话可见的全部设备 Descriptor + 随行 Capability catalog |
 | `GET /api/capabilities` | 读 | Capability 列表 |
 | `GET /api/overview` | 读 | Overview 首屏聚合读面（§5.1） |
@@ -158,6 +159,25 @@ WebUI 首屏一次性聚合。所有计数来自真实 Edge 上报与 Server 权
 `[server_time - 86400, server_time]` 与同一 SQL 读快照。鉴权请求始终按租户过滤，
 只有明确的无鉴权访问使用全局视图。此窗口不改变 `/api/commands` 的历史查询或数据保留。
 聚合来源读取失败返回 `503`，不伪装成零计数；无持久层的 API-only 模式仍返回空历史列表。
+
+### 5.1.1 `GET /api/devices/{edge}/{device}/samples`（读）
+
+返回指定设备、指定序列的数值采样历史。`key` 必填；raw 数值字段用原始字段名，
+typed observation 用 `<entity_id>.<property>`。`from` / `to` 是 Unix 秒闭区间，
+`before` 是向更早翻页的排他游标；`limit` 默认 1000、上限 5000。响应按时间升序：
+
+```json
+{
+  "samples": [
+    {"device_id":"edge-1/dev-9","key":"temperature","ts":1780000000,"value":25.5,"quality":"good"}
+  ],
+  "next_before": 1779999000
+}
+```
+
+同一设备、同一序列、同一秒最多保留一条，重复上报覆盖该秒最后一次值；采样历史与设备在线态解耦，
+设备离线时仍可读取。保留期与事件一致，由后台清理；raw 字段只作为数值事实保存，不推断设备语义。
+部署本版本前未持久化的采样不会回填，历史从首次收到 state 数值开始。
 
 ### 5.2 插件目录（读）
 
