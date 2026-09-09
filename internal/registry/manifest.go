@@ -51,29 +51,32 @@ type Contributes struct {
 
 // DriverContribution is one driver provided by a Driver plugin.
 type DriverContribution struct {
-	ID                string    `yaml:"id" json:"id"`
-	Title             string    `yaml:"title,omitempty" json:"title,omitempty"`
-	Descriptor        string    `yaml:"descriptor,omitempty" json:"descriptor,omitempty"`
-	ConfigSchema      string    `yaml:"configSchema,omitempty" json:"configSchema,omitempty"`
-	Discovery         string    `yaml:"discovery,omitempty" json:"discovery,omitempty"`
-	CapabilityCatalog string    `yaml:"capabilityCatalog,omitempty" json:"capabilityCatalog,omitempty"`
-	UI                *PluginUI `yaml:"ui,omitempty" json:"ui,omitempty"`
+	ID                string            `yaml:"id" json:"id"`
+	Title             string            `yaml:"title,omitempty" json:"title,omitempty"`
+	I18n              map[string]string `yaml:"i18n,omitempty" json:"i18n,omitempty"`
+	Descriptor        string            `yaml:"descriptor,omitempty" json:"descriptor,omitempty"`
+	ConfigSchema      string            `yaml:"configSchema,omitempty" json:"configSchema,omitempty"`
+	Discovery         string            `yaml:"discovery,omitempty" json:"discovery,omitempty"`
+	CapabilityCatalog string            `yaml:"capabilityCatalog,omitempty" json:"capabilityCatalog,omitempty"`
+	UI                *PluginUI         `yaml:"ui,omitempty" json:"ui,omitempty"`
 }
 
 // ApplicationContribution is one application provided by an Application plugin.
 type ApplicationContribution struct {
-	ID           string           `yaml:"id" json:"id"`
-	Title        string           `yaml:"title,omitempty" json:"title,omitempty"`
-	Requirements []map[string]any `yaml:"requirements,omitempty" json:"requirements,omitempty"`
-	UI           *PluginUI        `yaml:"ui,omitempty" json:"ui,omitempty"`
+	ID           string            `yaml:"id" json:"id"`
+	Title        string            `yaml:"title,omitempty" json:"title,omitempty"`
+	I18n         map[string]string `yaml:"i18n,omitempty" json:"i18n,omitempty"`
+	Requirements []map[string]any  `yaml:"requirements,omitempty" json:"requirements,omitempty"`
+	UI           *PluginUI         `yaml:"ui,omitempty" json:"ui,omitempty"`
 }
 
 // ConnectorContribution is one connector provided by a Connector plugin.
 type ConnectorContribution struct {
-	ID        string `yaml:"id" json:"id"`
-	Title     string `yaml:"title,omitempty" json:"title,omitempty"`
-	Direction string `yaml:"direction,omitempty" json:"direction,omitempty"`
-	Host      string `yaml:"host,omitempty" json:"host,omitempty"`
+	ID        string            `yaml:"id" json:"id"`
+	Title     string            `yaml:"title,omitempty" json:"title,omitempty"`
+	I18n      map[string]string `yaml:"i18n,omitempty" json:"i18n,omitempty"`
+	Direction string            `yaml:"direction,omitempty" json:"direction,omitempty"`
+	Host      string            `yaml:"host,omitempty" json:"host,omitempty"`
 }
 
 // ParseManifest decodes manifest data without schema validation.

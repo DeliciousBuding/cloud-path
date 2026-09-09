@@ -37,6 +37,10 @@ export default {
         title: 'Invalid settings',
         hint: 'Some settings do not meet the requirements, such as name, length, or value range. Correct them and submit again.',
       },
+      plugin_store_unavailable: {
+        title: 'Unable to save settings',
+        hint: 'The platform configuration store is temporarily unavailable, so this change was not saved. Try again later; if the problem continues, contact an administrator.',
+      },
       plugin_instance_host_mismatch: {
         title: 'Runtime location does not match the plugin type',
         hint: 'Drivers run only on gateways; applications run only on the center service. Choose the correct runtime location when creating an instance. If an existing instance is in the wrong location, delete it and recreate it in the correct location.',

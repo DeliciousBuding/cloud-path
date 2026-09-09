@@ -406,7 +406,7 @@ export default function DeviceDetail() {
               </div>
               {stateView === 'rows' && (displayDescriptor
                 ? <StateMatrix descriptor={displayDescriptor} idx={capabilities} nowSec={nowSec} series={series} />
-                : <RawView raw={d.state} title={t('raw.title')} />)}
+                : <RawView raw={d.state} title={t('raw.genericTitle')} />)}
               {stateView === 'table' && (displayDescriptor
                 ? <StateTable descriptor={displayDescriptor} idx={capabilities} nowSec={nowSec} />
                 : <RawView raw={d.state} title={t('raw.genericTitle')} />)}

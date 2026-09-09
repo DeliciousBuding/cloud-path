@@ -189,7 +189,7 @@ func driverViews(in []api.PluginDriverContributionData) []DriverContributionView
 	}
 	out := make([]DriverContributionView, 0, len(in))
 	for _, d := range in {
-		out = append(out, DriverContributionView{ID: d.ID, Title: d.Title, Discovery: d.Discovery, UI: clonePluginUI(d.UI)})
+		out = append(out, DriverContributionView{ID: d.ID, Title: d.Title, I18n: d.I18n, Discovery: d.Discovery, UI: clonePluginUI(d.UI)})
 	}
 	return out
 }
@@ -200,7 +200,7 @@ func applicationViews(in []api.PluginApplicationContributionData) []ApplicationC
 	}
 	out := make([]ApplicationContributionView, 0, len(in))
 	for _, a := range in {
-		out = append(out, ApplicationContributionView{ID: a.ID, Title: a.Title, UI: clonePluginUI(a.UI)})
+		out = append(out, ApplicationContributionView{ID: a.ID, Title: a.Title, I18n: a.I18n, UI: clonePluginUI(a.UI)})
 	}
 	return out
 }
@@ -211,7 +211,7 @@ func connectorViews(in []api.PluginConnectorContributionData) []ConnectorContrib
 	}
 	out := make([]ConnectorContributionView, 0, len(in))
 	for _, c := range in {
-		out = append(out, ConnectorContributionView{ID: c.ID, Title: c.Title, Direction: c.Direction, Host: c.Host})
+		out = append(out, ConnectorContributionView{ID: c.ID, Title: c.Title, I18n: c.I18n, Direction: c.Direction, Host: c.Host})
 	}
 	return out
 }

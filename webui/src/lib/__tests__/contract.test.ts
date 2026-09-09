@@ -13,8 +13,8 @@ const TS_SRC = readFileSync(`${REPO_ROOT}webui/src/lib/types.ts`, 'utf8')
 describe('稳定错误码 PluginErr* 镜像', () => {
   const goCodes = [...GO_SRC.matchAll(/PluginErr\w+\s*=\s*"([^"]+)"/g)].map((m) => m[1])
 
-  it('Go 侧确实解析出了 7 个稳定码（解析器自检）', () => {
-    expect(goCodes.length).toBe(7)
+  it('Go 侧确实解析出了 11 个稳定码（解析器自检）', () => {
+    expect(goCodes.length).toBe(11)
   })
 
   it('每个 Go 码都出现在 types.ts 的 PluginErr 常量里', () => {

@@ -25,15 +25,7 @@ function pluginText(key: string, options?: Record<string, unknown>): string {
  * ① 稳定错误码 → 文案
  * ------------------------------------------------------------------ */
 
-/** 当前运行时位置规则对应的稳定码；机器码只进入技术详情，不作主文案。 */
-const PLUGIN_RUNTIME_ERR_CODES = {
-  HostMismatch: 'plugin_instance_host_mismatch',
-  KindUnsupported: 'plugin_instance_kind_unsupported',
-  KindUnavailable: 'plugin_instance_kind_unavailable',
-} as const
-
-type PluginRuntimeErrCode = typeof PLUGIN_RUNTIME_ERR_CODES[keyof typeof PLUGIN_RUNTIME_ERR_CODES]
-type MappedPluginErrCode = PluginErrCode | PluginRuntimeErrCode
+type MappedPluginErrCode = PluginErrCode
 
 export interface PluginErrorCopy {
   /** 一行标题（说清「发生了什么」） */
@@ -57,9 +49,10 @@ const ERR_META: Record<MappedPluginErrCode, Omit<PluginErrorCopy, 'title' | 'hin
   [PluginErr.EdgeOffline]: { tone: 'warn', needsPermissionConfirm: false, retryable: true },
   [PluginErr.SecretForbidden]: { tone: 'bad', needsPermissionConfirm: false, retryable: false },
   [PluginErr.InvalidConfig]: { tone: 'bad', needsPermissionConfirm: false, retryable: false },
-  [PLUGIN_RUNTIME_ERR_CODES.HostMismatch]: { tone: 'warn', needsPermissionConfirm: false, retryable: false },
-  [PLUGIN_RUNTIME_ERR_CODES.KindUnsupported]: { tone: 'warn', needsPermissionConfirm: false, retryable: false },
-  [PLUGIN_RUNTIME_ERR_CODES.KindUnavailable]: { tone: 'warn', needsPermissionConfirm: false, retryable: true },
+  [PluginErr.StoreUnavailable]: { tone: 'bad', needsPermissionConfirm: false, retryable: true },
+  [PluginErr.HostMismatch]: { tone: 'warn', needsPermissionConfirm: false, retryable: false },
+  [PluginErr.KindUnsupported]: { tone: 'warn', needsPermissionConfirm: false, retryable: false },
+  [PluginErr.KindUnavailable]: { tone: 'warn', needsPermissionConfirm: false, retryable: true },
 }
 
 const KNOWN = new Set<string>(Object.keys(ERR_META))

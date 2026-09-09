@@ -13,13 +13,7 @@ import {
 import { PluginErr } from '@/lib/types'
 import type { PluginCatalogView, PluginInstanceView } from '@/lib/types'
 
-const RUNTIME_CODES = [
-  'plugin_instance_host_mismatch',
-  'plugin_instance_kind_unsupported',
-  'plugin_instance_kind_unavailable',
-] as const
-
-const ALL_CODES = [...Object.values(PluginErr), ...RUNTIME_CODES]
+const ALL_CODES = Object.values(PluginErr)
 
 function err(status: number, code?: string, message = 'x'): ApiError {
   return new ApiError(status, message, undefined, code)
@@ -61,9 +55,9 @@ describe('稳定错误码 → 文案', () => {
     }
   })
 
-  it('10 个码全部有映射，且文案互不相同（不留「未知错误」黑洞）', () => {
-    expect(ALL_CODES).toHaveLength(10)
-    expect(Object.values(PluginErr)).toHaveLength(7)
+  it('11 个码全部有映射，且文案互不相同（不留「未知错误」黑洞）', () => {
+    expect(ALL_CODES).toHaveLength(11)
+    expect(Object.values(PluginErr)).toHaveLength(11)
     const titles = new Set<string>()
     for (const code of ALL_CODES) {
       const copy = pluginErrorCopy(err(400, code))

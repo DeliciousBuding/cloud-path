@@ -660,6 +660,10 @@ export const PluginErr = {
   EdgeOffline: 'plugin_edge_offline',
   SecretForbidden: 'plugin_secret_forbidden',
   InvalidConfig: 'plugin_invalid_config',
+  StoreUnavailable: 'plugin_store_unavailable',
+  KindUnavailable: 'plugin_instance_kind_unavailable',
+  HostMismatch: 'plugin_instance_host_mismatch',
+  KindUnsupported: 'plugin_instance_kind_unsupported',
 } as const
 
 export type PluginErrCode = typeof PluginErr[keyof typeof PluginErr]
