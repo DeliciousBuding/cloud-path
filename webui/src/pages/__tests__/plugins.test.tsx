@@ -10,6 +10,7 @@ import { installFetch, stubResponse } from '@/test/http'
 import { renderWithProviders, resetStores } from '@/test/render'
 import type { PluginCatalogView, PluginInstanceView } from '@/lib/types'
 import { useAuth } from '@/store/auth'
+import { i18n } from '@/i18n'
 import { appInstance, appUser } from '@/test/application-plane'
 
 const LOCAL_PATH = 'C:\\Users\\someone\\plugins\\acme-driver'
@@ -335,6 +336,12 @@ describe('运行项分区：desired 与 observed 永远分别渲染', () => {
               sections: [{
                 type: 'form', source: 'config', title: '提醒设置',
                 description: '配置时区、提醒开关和药格。',
+                i18n: {
+                  'zh-CN': '提醒设置',
+                  'en-US': 'Reminder settings',
+                  'zh-CN.description': '配置时区、提醒开关和药格。',
+                  'en-US.description': 'Configure the time zone, reminder switch, and compartments.',
+                },
                 fields: [
                   { key: 'app_config.timezone', label: '时区', type: 'string' },
                   { key: 'app_config.reminder.enabled', label: '提醒启用', type: 'boolean' },
@@ -383,6 +390,10 @@ describe('运行项分区：desired 与 observed 永远分别渲染', () => {
     expect(within(settings).getByText('app_config')).not.toBeVisible()
     await user.click(within(settings).getByText('完整配置（技术详情）'))
     expect(within(settings).getByText('app_config')).toBeVisible()
+
+    await act(async () => { await i18n.changeLanguage('en-US') })
+    expect(within(settings).getByText('Reminder settings')).toBeVisible()
+    expect(within(settings).getByText('Configure the time zone, reminder switch, and compartments.')).toBeVisible()
   })
 })
 

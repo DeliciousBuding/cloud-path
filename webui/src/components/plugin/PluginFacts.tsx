@@ -15,6 +15,7 @@ import {
 } from '@/lib/plugins'
 import { fmtDateTime } from '@/lib/format'
 import { resolveUIFieldLabel, resolveUIFieldValue } from '@/lib/plugin-ui'
+import { resolveLocalizedText } from '@/i18n/pluginText'
 import type {
   PluginCatalogView, PluginInstanceView, PluginPermissionsData, PluginUIField,
 } from '@/lib/types'
@@ -137,7 +138,7 @@ interface ConfigFieldGroup {
 }
 
 /** 只读取插件声明的配置字段；机器字段名和原始 JSON 不进入普通设置区。 */
-function declaredConfigGroups(catalog?: PluginCatalogView): ConfigFieldGroup[] {
+function declaredConfigGroups(catalog: PluginCatalogView | undefined, locale: string): ConfigFieldGroup[] {
   const contributions = [
     ...(catalog?.contributes.applications ?? []),
     ...(catalog?.contributes.drivers ?? []),
@@ -149,8 +150,8 @@ function declaredConfigGroups(catalog?: PluginCatalogView): ConfigFieldGroup[] {
         if (section.type !== 'form' || section.source !== 'config' || !section.fields?.length) continue
         groups.push({
           key: `${contribution.id}:${page.id}:${index}`,
-          title: section.title || page.title,
-          description: section.description,
+          title: resolveLocalizedText(section, 'title', locale) || resolveLocalizedText(page, 'title', locale),
+          description: resolveLocalizedText(section, 'description', locale),
           fields: section.fields,
         })
       }
@@ -182,20 +183,20 @@ function FieldValue({ field, value }: { field: PluginUIField; value: unknown }) 
     const items = Array.isArray(value) ? value : []
     if (items.length === 0) return <span className="text-meta text-ink-3">{t('facts.noItems')}</span>
     return (
-      <div className="space-y-2">
+      <div className="min-w-0 space-y-2">
         {items.map((item, index) => {
           const itemTitle = t('facts.arrayItem', { number: index + 1 })
           if (!isRecord(item) || !field.itemFields?.length) {
             const display = isRecord(item) ? t('facts.structuredValue') : scalarValue(field, item, t)
             return (
-              <div key={`${itemTitle}-${index}`} className="rounded-tile bg-surface-2 px-3 py-2">
+              <div key={`${itemTitle}-${index}`} className="min-w-0 rounded-tile bg-surface-2 px-3 py-2">
                 <p className="text-meta text-ink-3">{itemTitle}</p>
                 <p className="mt-0.5 text-body text-ink-2">{display}</p>
               </div>
             )
           }
           return (
-            <div key={`${itemTitle}-${index}`} className="rounded-tile bg-surface-2 px-3 py-2.5">
+            <div key={`${itemTitle}-${index}`} className="min-w-0 rounded-tile bg-surface-2 px-3 py-2.5">
               <p className="mb-2 text-meta font-medium text-ink-2">{itemTitle}</p>
               <dl className="m-0 space-y-1.5">
                 {field.itemFields.map((itemField) => (
@@ -225,8 +226,9 @@ export function ConfigTable({ config, catalog }: {
   config: Record<string, string> | undefined
   catalog?: PluginCatalogView
 }) {
-  const { t } = useTranslation('plugin')
-  const groups = declaredConfigGroups(catalog)
+  const { t, i18n } = useTranslation('plugin')
+  const locale = i18n.resolvedLanguage ?? i18n.language
+  const groups = declaredConfigGroups(catalog, locale)
   const rows = safeConfigEntries(config)
   if (groups.length === 0 && rows.length === 0) {
     return <p className="py-1 text-meta text-ink-3">{t('facts.noConfig')}</p>

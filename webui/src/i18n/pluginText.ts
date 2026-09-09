@@ -20,10 +20,24 @@ function localeCandidates(locale: string): string[] {
   return [...new Set([normalized, base, 'zh-cn', 'en-us'])]
 }
 
+function localeLike(value: string): boolean {
+  return /^(zh|en)([_-][a-z0-9]+)?$/i.test(value)
+}
+
+function i18nKey(value: string): string {
+  const trimmed = value.trim()
+  const dot = trimmed.indexOf('.')
+  if (dot < 0) return canonicalLocale(trimmed)
+  const left = trimmed.slice(0, dot)
+  const right = trimmed.slice(dot + 1)
+  if (localeLike(left)) return `${canonicalLocale(left)}.${right.toLowerCase()}`
+  if (localeLike(right)) return `${left.toLowerCase()}.${canonicalLocale(right)}`
+  return trimmed.toLowerCase()
+}
 function i18nIndex(value: I18nText | undefined): Map<string, string> {
   const index = new Map<string, string>()
   for (const [key, text] of Object.entries(value ?? {})) {
-    if (text.trim()) index.set(canonicalLocale(key), text.trim())
+    if (text.trim()) index.set(i18nKey(key), text.trim())
   }
   return index
 }
@@ -40,7 +54,7 @@ function lookupField(
       ? [`${candidate}.${field}`, `${field}.${candidate}`, ...(hasPrimaryText ? [] : [candidate])]
       : [`${candidate}.${field}`, candidate]
     for (const key of keys) {
-      const translated = index.get(key)
+      const translated = index.get(i18nKey(key))
       if (translated) return translated
     }
   }

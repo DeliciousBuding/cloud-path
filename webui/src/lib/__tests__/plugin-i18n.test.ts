@@ -36,6 +36,16 @@ describe('resolveLocalizedText', () => {
   })
 
 
+  it('emptyText 使用驼峰字段键时仍按大小写不敏感解析', () => {
+    const section = {
+      title: '当前告警', emptyText: '还没有告警记录。',
+      i18n: {
+        'en-US': 'Current alert',
+        'en-US.emptyText': 'No alert records yet.',
+      },
+    }
+    expect(resolveLocalizedText(section, 'emptyText', 'en-US')).toBe('No alert records yet.')
+  })
   it('解析字段 label/description 与枚举 valuesI18n', () => {
     const field = {
       key: 'state', label: '状态', description: '当前状态',
