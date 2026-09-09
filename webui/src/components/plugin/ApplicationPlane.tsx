@@ -1,8 +1,7 @@
 import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ReactNode } from 'react'
-import { Link } from 'react-router'
-import { Badge, ErrorState, Panel, Select } from '@/components/ui'
+import { Badge, Button, ButtonLink, ErrorState, Panel, Select } from '@/components/ui'
 import { StructuredValue } from '@/components/StructuredValue'
 import { ApplicationActions } from './ApplicationActions'
 import { RowSkeleton } from '@/components/Skeleton'
@@ -42,8 +41,8 @@ function TechnicalDetails({ children }: { children: ReactNode }) {
   const [expanded, setExpanded] = useState(false)
   const id = useId()
   return <div className="mt-2 min-w-0">
-    <button type="button" className="btn btn-ghost min-h-touch w-full sm:w-auto" aria-expanded={expanded} aria-controls={id}
-      onClick={() => setExpanded(!expanded)}>{expanded ? t('plane.collapseDetails') : t('plane.viewDetails')}</button>
+    <Button variant="ghost" className="min-h-touch w-full sm:w-auto" aria-expanded={expanded} aria-controls={id}
+      onClick={() => setExpanded(!expanded)}>{expanded ? t('plane.collapseDetails') : t('plane.viewDetails')}</Button>
     {expanded && <div id={id} className="mt-2 min-w-0 space-y-2 break-words text-meta text-ink-2 [overflow-wrap:anywhere]">{children}</div>}
   </div>
 }
@@ -130,7 +129,7 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState, desir
   const refreshing = records.isFetching || bindings.isFetching || jobs.isFetching
   if (!canRead) return <Panel title={t('plane.appData')} className="mb-5">
     <p className="text-body text-ink-2">{t('plane.loginHint')}</p>
-    <Link to="/login" className="btn btn-ghost mt-3">{t('plane.login')}</Link>
+    <ButtonLink to="/login" variant="ghost" className="mt-3">{t('plane.login')}</ButtonLink>
   </Panel>
   return <section className="mb-5 min-w-0 space-y-5" aria-label={t('plane.appData')}>
     <div className="flex flex-wrap items-center gap-2">
@@ -160,10 +159,10 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState, desir
               {draft && !recordTypes.includes(draft) && <option value={draft}>{draft}</option>}
             </Select>
           </label>
-          <button type="submit" className="btn btn-ghost">{t('plane.applyFilter')}</button>
-          {(filter || draft) && <button type="button" className="btn btn-ghost" onClick={() => {
+          <Button type="submit" variant="ghost">{t('plane.applyFilter')}</Button>
+          {(filter || draft) && <Button variant="ghost" onClick={() => {
             setFilter(''); setDraft(''); setOffset(0)
-          }}>{t('plane.clearFilter')}</button>}
+          }}>{t('plane.clearFilter')}</Button>}
         </form>
         <p className="mt-2 text-meta text-ink-3">{t('plane.filterHelp')}</p>
       </details>
@@ -172,11 +171,11 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState, desir
         {rows.map((row, index) => <RecordRow key={JSON.stringify([row.record_type, row.record_id])} record={row} number={offset + index + 1} />)}
       </ReadContent>
       <nav aria-label={t('plane.pagination')} className="mt-3 flex flex-wrap items-center gap-2 text-meta text-ink-3">
-        <button type="button" className="btn btn-ghost" disabled={offset === 0 || records.isFetching}
-          onClick={() => setOffset(Math.max(0, offset - APP_RECORD_PAGE_SIZE))}>{t('plane.previous')}</button>
+        <Button variant="ghost" disabled={offset === 0 || records.isFetching}
+          onClick={() => setOffset(Math.max(0, offset - APP_RECORD_PAGE_SIZE))}>{t('plane.previous')}</Button>
         <span>{t('plane.page', { page: offset / APP_RECORD_PAGE_SIZE + 1 })}</span>
-        <button type="button" className="btn btn-ghost" disabled={rows.length < APP_RECORD_PAGE_SIZE || records.isFetching || records.isError}
-          onClick={() => setOffset(offset + APP_RECORD_PAGE_SIZE)}>{t('plane.next')}</button>
+        <Button variant="ghost" disabled={rows.length < APP_RECORD_PAGE_SIZE || records.isFetching || records.isError}
+          onClick={() => setOffset(offset + APP_RECORD_PAGE_SIZE)}>{t('plane.next')}</Button>
       </nav>
     </Panel>
     <div className="grid min-w-0 items-start gap-5 lg:grid-cols-2">

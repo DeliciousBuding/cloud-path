@@ -166,6 +166,22 @@ type EventView struct {
 	Payload  string `json:"payload"`
 }
 
+// SeriesSampleView 是一条数值采样历史行。Key 是通用序列键；平台不解释其设备语义。
+type SeriesSampleView struct {
+	DeviceID string  `json:"device_id"`
+	Key      string  `json:"key"`
+	Ts       int64   `json:"ts"`
+	Value    float64 `json:"value"`
+	Quality  string  `json:"quality,omitempty"`
+}
+
+// SeriesSamplesView 是 GET /api/devices/{edgeID}/{deviceID}/samples 的响应。
+// Samples 按时间升序；NextBefore>0 表示还有更早的数据可翻页。
+type SeriesSamplesView struct {
+	Samples    []SeriesSampleView `json:"samples"`
+	NextBefore int64              `json:"next_before,omitempty"`
+}
+
 // CommandView 是命令行。
 type CommandView struct {
 	ID        int64  `json:"id"`

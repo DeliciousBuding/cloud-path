@@ -4,7 +4,7 @@ import {
   Ban, Boxes, Layers, PackagePlus, PackageOpen, Plus, Puzzle, Server, ShieldCheck,
 } from 'lucide-react'
 import {
-  Badge, EmptyState, ErrorState, PageHeader, Panel, Select, TabBar, TabPanel,
+  Badge, Button, EmptyState, ErrorState, PageHeader, Panel, Select, TabBar, TabPanel,
 } from '@/components/ui'
 import { RowSkeleton } from '@/components/Skeleton'
 import { InstanceForm } from '@/components/plugin/InstanceForm'
@@ -121,9 +121,9 @@ export default function Plugins() {
               : t('page.instanceSummary', { total: instances.length, normal: statusCounts.normal, attention: statusCounts.attention })
         }
         actions={!readOnly && canCreateInstance && (
-          <button type="button" className="btn btn-primary" onClick={() => startCreate()}>
+          <Button onClick={() => startCreate()}>
             <Plus size={13} /> {t('page.createInstance')}
-          </button>
+          </Button>
         )}
       />
 
@@ -210,11 +210,11 @@ export default function Plugins() {
 
                     <div className="mt-3.5 flex min-w-0 flex-wrap items-center gap-2 border-t border-hairline pt-3">
                       {canCreate ? (
-                        <button type="button" className="btn btn-primary"
+                        <Button
                           aria-label={t('page.createInstanceAria', { name: pluginDisplayName(p) })}
                           onClick={() => startCreate(p.id)}>
                           <Plus size={13} /> {t('page.createInstanceButton')}
-                        </button>
+                        </Button>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 text-meta font-medium text-ink-2">
                           <Ban size={13} className="shrink-0" /> {t('page.connectorNoInstance')}
@@ -260,9 +260,9 @@ export default function Plugins() {
                   ? t('page.noInstancesCreateHint')
                   : t('page.noInstancesInstallHint')} />
               {!readOnly && canCreateInstance && <div className="-mt-3 flex justify-center">
-                <button type="button" className="btn btn-primary" onClick={() => startCreate()}>
+                <Button onClick={() => startCreate()}>
                   <Plus size={13} /> {t('page.createFirstInstance')}
-                </button>
+                </Button>
               </div>}
             </div>
           ) : (

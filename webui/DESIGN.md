@@ -45,12 +45,17 @@ resolver 均为纯函数并有确定性单测（fallback 顺序、脏数据降�
 而非大字号——半屏大的「否」是排版错误；胶囊语义色只接 warn/bad，其余保持中性。单位经展示层单一
 出口 `unitLabel()` 人话化（s→秒、Cel→°C），科学单位（V/lux/%）原样；诊断页 raw JSON 不受影响。
 
-计数/频次图必须零基线（TrendChart `zeroBase`）：负轴或悬空基线会夸大差异，属数据可视化谎言；
+计数/频次图必须零基线（`TimeSeriesChart` `zeroBase`）：负轴或悬空基线会夸大差异，属数据可视化谎言；
 窄高 sparkline 模式（`hideY`）连同横向网格省去，峰值由标题说人话；X 轴刻度粒度由调用方传入
 （分桶图传时分，秒对 ≥1 分钟的桶是噪音）。
 
 设备概览首屏三段：KPI 行 → [最近事件 2/3 | 设备状况 1/3] → 操作历史通栏置底（限 8 条 + 控制页
 出口）。操作历史放右栏会拉到 20 行、把左栏踢出一大片空洞。
+
+趋势卡片显示会话内实时采样；点击整张波形卡进入设备详情的子路由
+`/devices/:edgeId/:deviceId/trends/:seriesKey`。详情页使用 REST 历史（按秒保存、游标分页），
+不依赖设备在线态，设备离线时仍能查看已保存采样；大图用 `TimeSeriesChart` 的 Brush 做视窗缩放，
+明细表按页读取更早数据。通用图表契约见 [`src/components/charts/README.md`](src/components/charts/README.md)。
 
 运行实例状态词汇覆盖两套后端事实源：edge pluginhost.State（大写 STOPPED/HEALTHY…）与 server
 AppHost 的 appruntime.InstanceState（小写 running/stopping/failed…，internal/appruntime/types.go）；
@@ -151,10 +156,12 @@ unicode-range 只接管 CJK，拉丁/数字仍走 Geist；可复现构建见 web
 ### 10.12 组件库与复用边界
 
 - 四层职责固定：token（`webui/src/index.css` 的 `@theme`）→ primitive（`webui/src/components/ui.tsx`）→ 领域组件（`webui/src/components/**`）→ 页面组合（`webui/src/pages/**`）。页面负责数据与组合，不复制控件行为。
-- 可复用控件必须进入 primitive 或领域组件层，并带行为测试；不要在两个页面各写一份按钮、下拉、弹层或键盘逻辑。
-- 页面不得直接写 `<select>`；统一走 `Select` primitive。原生 `<button>` / `<input>` 只允许用于语义明确的专用控件（如 checkbox、range、file），且仍须消费 token 类。
+- primitive 是自建组件库，不引入第三方 UI kit。当前公开面覆盖布局/状态、导航、表单和反馈：`Panel / PageHeader / StatTile / EmptyState / ErrorState`、`TabBar / TabPanel / Segmented / BackLink`、`Button / IconButton / ButtonLink`、`Input / Textarea / Checkbox / Radio / Select / TextField`、`Badge / StatusDot / KeyValue / Spinner`。
+- 可复用控件必须进入 primitive 或领域组件层，并带行为测试；不要在两个页面各写一份按钮、下拉、弹层或键盘逻辑。领域组件只负责业务语义，不能复制 primitive 的交互和样式。
+- 动作统一走 `Button / IconButton / ButtonLink`：`variant` 只允许 `primary / ghost / quiet / bare / danger / danger-ghost`，`size` 只允许 `sm / md / lg`。原生 `<button>` 只保留给导航、分段选择、`<details>` 这类语义明确的专用控件，并仍须消费 token 类。
+- 表单控件统一走 `Input / Textarea / Checkbox / Radio / Select`。业务源码不得直写 `<input>`、`<textarea>`、`<select>`；`scripts/check_design_tokens.py` 会直接拒绝这类漂移，primitive 文件是唯一例外。
 - primitive 负责交互与无障碍，领域组件负责业务语义，页面负责数据与布局；跨层直写原生控件或裸样式视为设计系统漂移。
-- `scripts/check_design_tokens.py` 同时守 token 与 `<select>` 边界；新增 primitive 行为必须有组件测试。
+- `scripts/check_design_tokens.py` 同时守 token、原生表单控件和 `<select>` 边界；新增 primitive 行为必须有组件测试。
 
 ### 10.13 设计 token（2026-09-09 收口）
 

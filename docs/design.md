@@ -29,7 +29,7 @@
 | 串口 | go.bug.st/serial | 跨平台、无 CGO |
 | 前端 | React 19 + TypeScript + Vite 6 | 现代 SPA 标准栈，`strict` + `noUnusedLocals` |
 | 路由 | React Router 7 | 声明式 SPA 路由 + 路由级懒加载 |
-| 样式 | Tailwind CSS 4 + 自建设计系统 | 语义 token 在 `webui/src/index.css`，浅/深主题、手写原语组件，无组件库依赖 |
+| 样式 | Tailwind CSS 4 + 自建 primitive 组件库 | 语义 token 在 `webui/src/index.css`，浅/深主题；Button/Input/Select 等原语统一在 `webui/src/components/ui.tsx`，无第三方 UI kit 依赖 |
 | 数据层 | TanStack Query 5（REST）+ zustand 5（WS 实时态） | 查询缓存与实时推送分离 |
 | 图表 | recharts | 漂移趋势（按需加载 chunk） |
 | 图标 | lucide-react | 线性图标，随 `currentColor` |
@@ -153,10 +153,16 @@ INDEX idx_events_device_ts(device_id, ts), idx_commands_status(status, created_a
 -- v2（schema_v2.sql）：补齐检索索引
 INDEX idx_events_ts(ts)                          -- ?since= 与保留期清理
 INDEX idx_commands_device(device_id, created_at) -- 设备详情页命令历史
+
+-- v12（migrate_v12.go）：数值采样历史（按设备/序列/秒）
+observation_samples(tenant_id, device_id, series_key, ts, value, quality, PK(tenant_id,device_id,series_key,ts))
+
+-- v13（migrate_v13.go）：失败/超时操作的人工处理时间
+commands.handled_at INTEGER NULL
 ```
 
 迁移是有序表（`internal/store/store.go` 的 `migrations`）：新增版本追加一项，**永不修改已发布项**。
-当前 `PRAGMA user_version = 11`（v0.2.20 持久化最后已知 Descriptor）；上面的 v1/v2 只是基础表示意，
+当前 `PRAGMA user_version = 13`（v0.2.20 持久化最后已知 Descriptor，v12 增加数值采样历史，v13 增加失败操作处理状态）；上面的 v1/v2 只是基础表示意，
 完整迁移见 `internal/store/migrate_v*.go`。连接池上限 4 + WAL + `busy_timeout(5000)`，避免 `database is locked`。
 
 ## 并发与稳定性不变量
@@ -206,6 +212,7 @@ INDEX idx_commands_device(device_id, created_at) -- 设备详情页命令历史
 | `/` | 概览 | 在线设备/网关、运行实例、近 24 小时失败操作、需要关注的状态、设备与事件 |
 | `/devices` | 设备 | 全部设备列表（WS 快照优先，REST 轮询兜底） |
 | `/devices/:edgeId/:deviceId` | 设备详情 | 声明驱动的观测概览、能力、命令控制、事件与历史、技术诊断 |
+| `/devices/:edgeId/:deviceId/trends/:seriesKey` | 趋势详情 | 单序列历史波形、时间范围、Brush 缩放与采样明细；REST 历史读取，离线设备仍可查看 |
 | `/activity` | 运行记录 | 状态记录与操作记录、设备/类型筛选、实时与历史合并；`/events` 为兼容重定向 |
 | `/edges` | 网关（Edge） | 在线/离线网关、版本、最后在线、所辖设备跳转 |
 | `/plugins` | 应用与插件 | 默认实例列表、按需查看已安装与目录 |
@@ -215,7 +222,8 @@ INDEX idx_commands_device(device_id, created_at) -- 设备详情页命令历史
 | `/setup` / `/login` | 初始化 / 登录 | 首装向导与账号登录；实时通道跟随登录态 |
 
 设备操作只保留设备详情一个入口，控制分区可用 `?tab=controls` 直达；其它分区同样由明确的
-`tab` 查询参数选择，未知值回落概览。旧 `/pillbox` 链接跳设备列表，带设备的旧链接跳对应
+`tab` 查询参数选择，未知值回落概览。趋势详情是设备详情的子资源路由，卡片点击进入独立可刷新页面；
+历史采样走 REST，与设备在线态解耦。旧 `/pillbox` 链接跳设备列表，带设备的旧链接跳对应
 设备控制区，不再把设备事件与实体观测包装成业务记录。应用结果位于运行实例详情。
 
 概览的失败统计与最新 20 条预览使用同一次 `server_time` 采样的闭区间
@@ -226,11 +234,12 @@ INDEX idx_commands_device(device_id, created_at) -- 设备详情页命令历史
 概览把实时故障与历史失败分开：网关/设备离线等实时问题随真实状态恢复自动消失，不提供“已读”；近 24 小时的失败/超时操作属于历史记录，可在运行记录中单条或批量标记为已处理。标记后不再进入概览待处理计数，但原始记录仍保留，并可用 `handled=unhandled|handled` 筛选。批量操作在无筛选时覆盖窗口内全部未处理项，有筛选时只覆盖当前列表。
 
 状态管理：zustand 持有 WS 实时快照（设备 map + 事件环形缓冲 300 条 + 会话级漂移历史 240 点 +
-ack map）；TanStack Query 管 REST（设备/事件/命令/统计）。`store/ws.ts` 是单例连接，
+ack map）；TanStack Query 管 REST（设备/事件/命令/统计/数值采样历史）。`store/ws.ts` 是单例连接，
 自带指数退避重连（1→15s + 抖动）与令牌变更重连。
 
 数据获取约定：页面**同时**消费实时层与 REST（`useDevices`/`useEdges` 合并两者），
 因此实时通道断开时面板仍可用；事件流用 `mergeEvents` 按 `设备+时间+类型` 去重合并。
+趋势详情以 REST 历史为基线，叠加当前会话 WS 点；历史读取不要求设备在线。
 
 开发态：Vite dev server（:5173）代理 `/api` `/ws` `/healthz` 到 :8080；
 生产态：`vite build` → `webui/dist` → `go:embed`（构建标签 `embed_ui`，未启用时有 stub 兜底，

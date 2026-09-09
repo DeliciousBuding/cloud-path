@@ -42,7 +42,7 @@ var schemaV8 string
 
 // migration 是一次 schema 迁移：ddl 与 PRAGMA user_version 在同一写事务内原子提交；
 // custom 用于需自行管理事务或形状探测的迁移：v4/v11 条件补列、v5 users 表重建
-// （需开关 PRAGMA foreign_keys）、v7/v8 幂等 DDL + 逐表校验 + foreign_key_check。
+// （需开关 PRAGMA foreign_keys）、v7/v8/v9-v13 幂等 DDL + 逐表校验 + foreign_key_check。
 // 由实现自行在同一专用连接上管理事务与版本标记，但必须同样保证 DDL 与 user_version 原子提交。
 type migration struct {
 	version int
@@ -64,6 +64,7 @@ var migrations = []migration{
 	{version: 10, custom: migrateV10},
 	{version: 11, custom: migrateV11},
 	{version: 12, custom: migrateV12},
+	{version: 13, custom: migrateV13},
 }
 
 // schemaVersion 是当前 schema 版本（迁移表最后一项）。

@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useParams, useSearchParams } from 'react-router'
+import { useParams, useSearchParams } from 'react-router'
 import { Boxes, Layers3, ShieldAlert } from 'lucide-react'
-import { BackLink, EmptyState, ErrorState, PageHeader, Panel, Select } from '@/components/ui'
+import { BackLink, ButtonLink, EmptyState, ErrorState, PageHeader, Panel, Select } from '@/components/ui'
 import { ApiError } from '@/lib/api'
 import { PageSkeleton } from '@/components/Skeleton'
 import { ApplicationConsole } from '@/components/plugin-ui/ApplicationConsole'
@@ -14,7 +14,7 @@ import { useAuth } from '@/store/auth'
 
 function ApplicationLink() {
   const { t } = useTranslation('plugins')
-  return <Link to="/plugins" className="btn btn-ghost mt-4">{t('application.openPlugins')}</Link>
+  return <ButtonLink to="/plugins" variant="ghost" className="mt-4">{t('application.openPlugins')}</ButtonLink>
 }
 
 export default function ApplicationPage() {
@@ -52,7 +52,7 @@ export default function ApplicationPage() {
   switch (resolution.kind) {
     case 'auth-required':
       return <><BackLink to="/plugins" label={t('application.back')} /><EmptyState icon={<ShieldAlert size={24} />}
-        title={t('application.authRequired')} hint={t('application.authRequiredHint')} action={<Link to="/login" className="btn btn-primary">{t('application.login')}</Link>} /></>
+        title={t('application.authRequired')} hint={t('application.authRequiredHint')} action={<ButtonLink to="/login">{t('application.login')}</ButtonLink>} /></>
     case 'not-found':
       return <><BackLink to="/plugins" label={t('application.back')} /><EmptyState icon={<Layers3 size={24} />}
         title={t('application.notFound')} hint={t('application.notFoundHint', { route: resolution.route })} action={<ApplicationLink />} /></>
@@ -110,8 +110,8 @@ export default function ApplicationPage() {
             : undefined}
         />
         {pages.length > 1 && <nav className="mb-5 flex min-w-0 flex-wrap gap-2" aria-label={t('application.pagesAria')}>
-          {pages.map((page) => <Link key={page.id} to={pageLink(page.id)}
-            className={`btn ${page.id === resolution.page.id ? 'btn-primary' : 'btn-ghost'}`}>{resolveLocalizedText(page, 'title', locale) ?? page.title}</Link>)}
+          {pages.map((page) => <ButtonLink key={page.id} to={pageLink(page.id)}
+            variant={page.id === resolution.page.id ? 'primary' : 'ghost'}>{resolveLocalizedText(page, 'title', locale) ?? page.title}</ButtonLink>)}
         </nav>}
         {selected.desired.instance_id !== requestedInstance && resolution.instances.length > 1
           ? <Panel className="mb-5"><p className="text-body text-ink-2">{t('application.defaultInstance')}</p></Panel>

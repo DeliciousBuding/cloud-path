@@ -3,9 +3,9 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import {Activity, ArrowRight, Braces, Command, Grid3x3, History, LayoutDashboard, RadioTower, Sparkles, Zap} from 'lucide-react'
+import {Activity, ArrowRight, Braces, Command, Grid3x3, History, LayoutDashboard, Maximize2, RadioTower, Sparkles, Zap} from 'lucide-react'
 import {
-  BackLink, Badge, EmptyState, ErrorState, KeyValue, Panel, Segmented, Select, StatusDot, TabBar, TabPanel,
+  BackLink, Badge, Button, EmptyState, ErrorState, KeyValue, Panel, Segmented, Select, StatusDot, TabBar, TabPanel,
 } from '@/components/ui'
 import type { TabItem } from '@/components/ui'
 import {
@@ -13,7 +13,7 @@ import {
 } from '@/components/SchemaRenderer'
 import { ActionPanel } from '@/components/ActionPanel'
 import { CommandHistory } from '@/components/CommandHistory'
-import { TrendChart } from '@/components/TrendChart'
+import { TimeSeriesChart } from '@/components/charts'
 import { EventFeed, eventDisplayLabel } from '@/components/EventFeed'
 import { RowSkeleton } from '@/components/Skeleton'
 import { api, isNotFound } from '@/lib/api'
@@ -29,6 +29,7 @@ import {
 } from '@/lib/descriptor'
 import type { SummaryValue } from '@/lib/descriptor'
 import { fmtDateTime, mergeEvents, optionLabel, payloadLabel, timeAgo } from '@/lib/format'
+import { orderSeriesKeys, seriesLabel, seriesUnit } from '@/lib/series'
 
 const DESCRIPTOR_SOURCE_KEY: Record<DescriptorSource, string> = {
   ws: 'source.ws', inline: 'source.inline', rest: 'source.rest', bulk: 'source.bulk', none: 'source.none', error: 'source.error',
@@ -63,6 +64,7 @@ import { usePageTitle } from '@/hooks/usePageTitle'
 
 type Tab = 'overview' | 'controls' | 'events' | 'advanced'
 type AdvancedView = 'state' | 'capabilities' | 'diagnostics'
+type StateView = 'rows' | 'table' | 'trend'
 
 /**
  * 设备详情（Schema 驱动，四分区职责正交）：
@@ -107,7 +109,14 @@ export default function DeviceDetail() {
     return next
   })
   const [kindFilter, setKindFilter] = useState('')
-  const [stateView, setStateView] = useState<'rows' | 'table' | 'trend'>('rows')
+  const requestedStateView = searchParams.get('stateView')
+  const stateView: StateView = requestedStateView === 'trend' || requestedStateView === 'table' ? requestedStateView : 'rows'
+  const setStateView = (value: StateView) => setSearchParams((previous) => {
+    const next = new URLSearchParams(previous)
+    if (value === 'rows') next.delete('stateView')
+    else next.set('stateView', value)
+    return next
+  })
   const [rangeMin, setRangeMin] = useState(0)
   const [chartKind, setChartKind] = useState<'area' | 'line'>('area')
 
@@ -222,54 +231,9 @@ export default function DeviceDetail() {
     [events, kindFilter],
   )
 
-  // 序列键 = raw 顶层字段名（entity.property 点分）：按 Descriptor 声明的 Entity 序排，
-  // 让设备自己认为重要的观测（时钟/温度…）排在趋势选择器前面，而不是字母序。
-  const seriesKeys = useMemo(() => {
-    const keys = Object.keys(series).sort()
-    if (!descriptor) return keys
-    const order = new Map<string, number>()
-    descriptor.entities.forEach((e, i) => order.set(e.entity_id, i))
-    const rank = (k: string) => {
-      const dot = k.lastIndexOf('.')
-      return dot > 0 ? (order.get(k.slice(0, dot)) ?? 999) : 998
-    }
-    return keys.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
-  }, [series, descriptor])
-
-  /** 序列键展示名：实体中文名 · 属性中文名；Descriptor 缺席时回落属性词典/humanize */
-  const seriesLabel = (k: string): string => {
-    const dot = k.lastIndexOf('.')
-    if (dot <= 0) return propertyLabel(k)
-    const entId = k.slice(0, dot)
-    const prop = k.slice(dot + 1)
-    const ent = descriptor?.entities.find((e) => e.entity_id === entId || e.unique_key === entId)
-    if (!ent) return propertyLabel(prop)
-    const cap = ent.observations?.[prop]?.capability ?? ent.capabilities[0]
-    return `${entityTitle(ent)} · ${propertyLabel(prop, cap, capabilities)}`
-  }
-
-  /** 序列单位：声明里的人话单位（°C / 秒…）；趋势图右上角直接标签与 Tooltip 共用。
-   *  键形态与 StateTile 火花线同一回落链：entity.property 点分 / 裸实体 id / 裸属性名 */
-  const seriesUnit = (k: string): string | undefined => {
-    const dot = k.lastIndexOf('.')
-    if (dot > 0) {
-      const ent = descriptor?.entities.find((e) => e.entity_id === k.slice(0, dot) || e.unique_key === k.slice(0, dot))
-      return unitLabel(ent?.observations?.[k.slice(dot + 1)]?.unit)
-    }
-    const ents = descriptor?.entities ?? []
-    // raw 键是适配器别名（如 uptime_s ↔ entity uptime）：精确匹配优先，前缀别名兜底
-    const exact = ents.find((e) => e.entity_id === k || e.unique_key === k)
-    const cand = exact ? [exact] : ents.filter((e) => k.startsWith(`${e.entity_id}_`))
-    for (const e of cand) {
-      const u = unitLabel(primaryObservation(e, capabilities)?.unit)
-      if (u) return u
-    }
-    for (const e of ents) {
-      const u = unitLabel(e.observations?.[k]?.unit)
-      if (u) return u
-    }
-    return undefined
-  }
+  // 序列键 = raw 顶层字段名（entity.property 点分）：排序规则收敛在 lib/series.ts，
+  // 设备详情与趋势详情共用同一展示推导。
+  const seriesKeys = useMemo(() => orderSeriesKeys(Object.keys(series), descriptor), [series, descriptor])
 
   // 详情未到手时三态分明：加载中（骨架）/ 404（未注册空态）/ 其它失败（错误态 + 重试）。
   // 少一个加载态，首帧就会闪「设备未注册」；少一个 404 判定，「这台设备没接入」会被误报成「server 挂了」。
@@ -368,10 +332,10 @@ export default function DeviceDetail() {
               <Panel
                 title={<span className="flex items-center gap-1.5"><Activity size={14} />{t('detail.overview.recentEvents')}</span>}
                 right={
-                  <button type="button" onClick={() => setTab('events')}
-                    className="link flex items-center gap-0.5 text-meta">
+                  <Button variant="quiet" onClick={() => setTab('events')}
+                    className="flex items-center gap-0.5 text-meta">
                     {t('detail.overview.viewRecord')} <ArrowRight size={12} />
-                  </button>
+                  </Button>
                 }>
                 {events.length === 0
                   ? <p className="py-6 text-center text-body text-ink-3">{t('detail.overview.noEvents')}</p>
@@ -440,21 +404,35 @@ export default function DeviceDetail() {
                         const pts = rangeMin > 0
                           ? (series[k] ?? []).filter((pt) => pt.t >= nowSec - rangeMin * 60)
                           : (series[k] ?? [])
+                        const unit = seriesUnit(k, descriptor, capabilities)
                         return (
-                          <div key={k} className="card min-w-0 p-3.5">
+                          <Link
+                            key={k}
+                            to={`/devices/${encodeURIComponent(edgeId)}/${encodeURIComponent(deviceId)}/trends/${encodeURIComponent(k)}?kind=${chartKind}`}
+                            aria-label={t('detail.state.openTrendDetail', { label: seriesLabel(k, descriptor, capabilities) })}
+                            className="card group block min-w-0 p-3.5 transition-colors hover:border-accent/40"
+                          >
                             <div className="flex items-baseline justify-between gap-2">
                               <span className="min-w-0 truncate text-meta font-medium text-ink-2">
-                                {seriesLabel(k)}
+                                {seriesLabel(k, descriptor, capabilities)}
                               </span>
                               <span className="flex shrink-0 items-baseline gap-1.5">
                                 <span className="num text-compact font-semibold tracking-[-0.01em]">
                                   {pts.length ? formatValue(pts[pts.length - 1].v) : '—'}
                                 </span>
                                 <span className="num text-meta text-ink-3">{t('detail.state.points', { count: pts.length })}</span>
+                                <Maximize2 size={12} className="text-ink-3 transition-colors group-hover:text-accent" aria-hidden="true" />
                               </span>
                             </div>
-                            <TrendChart points={pts} kind={chartKind} height={104} unit={seriesUnit(k)} />
-                          </div>
+                            <TimeSeriesChart
+                              points={pts}
+                              kind={chartKind}
+                              height={104}
+                              unit={unit}
+                              emptyLabel={unit ? t('trend.samplingWithUnit', { unit }) : t('trend.sampling')}
+                              ariaLabel={seriesLabel(k, descriptor, capabilities)}
+                            />
+                          </Link>
                         )
                       })}
                     </div>

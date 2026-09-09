@@ -4,7 +4,7 @@
 import { useEffect, useId, useState } from 'react'
 import { Check, Copy, ShieldAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Badge, KeyValue } from '@/components/ui'
+import { Badge, Button, Input, KeyValue } from '@/components/ui'
 import { fmtDateTime } from '@/lib/format'
 import type { CreatedToken } from '@/lib/types'
 
@@ -57,24 +57,23 @@ export function SecretPanel({ secret, onClose }: { secret: CreatedToken; onClose
       </label>
       <div className="flex gap-2">
         {/* 只读输入框（不是文本节点）：可全选复制，也不会被当成正文重复朗读 */}
-        <input
+        <Input
           id={`${id}-secret`}
           readOnly
           value={secret.token}
           spellCheck={false}
           autoComplete="off"
           aria-describedby={`${id}-status`}
-          className="num min-w-0 flex-1 rounded-tile border border-hairline bg-surface-2 px-3 py-2 font-mono text-meta break-all outline-none focus:border-accent"
+          compact className="num min-w-0 flex-1 font-mono break-all"
         />
-        <button
-          type="button"
+        <Button
           autoFocus
           onClick={() => void copy()}
           aria-label={t('secret.copyAria')}
-          className="btn btn-primary shrink-0"
+          className="shrink-0"
         >
           {copied ? <Check size={14} /> : <Copy size={14} />}{copied ? t('secret.copied') : t('secret.copy')}
-        </button>
+        </Button>
       </div>
       <p id={`${id}-status`} role="status" aria-live="polite" className="mt-2 text-meta leading-relaxed text-ink-3 break-words">
         {copied ? t('secret.status.copied') : copyFailed ? t('secret.status.failed') : t('secret.status.idle')}
@@ -88,9 +87,9 @@ export function SecretPanel({ secret, onClose }: { secret: CreatedToken; onClose
       </dl>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <button type="button" className="btn btn-ghost" onClick={onClose} aria-label={t('secret.closeAria')}>
+        <Button variant="ghost" onClick={onClose} aria-label={t('secret.closeAria')}>
           {t('secret.close')}
-        </button>
+        </Button>
         <Badge tone="warn">{t('secret.badges.hidden')}</Badge>
         <Badge tone="idle">{t('secret.badges.keep')}</Badge>
       </div>

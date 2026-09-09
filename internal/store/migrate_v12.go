@@ -5,48 +5,28 @@ import (
 	"database/sql"
 )
 
-// schemaV12 为 commands 增加“已处理”时间。只用于人工确认失败/超时操作已查看或已处理，
-// 不改变命令自身的执行状态；原始记录仍保留在运行记录中。
-const schemaV12 = `ALTER TABLE commands ADD COLUMN handled_at INTEGER`
+// schemaV12 建通用数值采样历史表 observation_samples。
+//
+// 边界：本表只保存“设备上报过的数值事实”，不把 raw 字段名解释成设备语义，
+// 也不替代当前状态表 device_state。主键 (tenant_id, device_id, series_key, ts)
+// 把每台设备、每条序列的历史采样限制到每秒一条；同一秒重复上报时以最后一次为准。
+const schemaV12 = `
+CREATE TABLE IF NOT EXISTS observation_samples(
+  tenant_id INTEGER NOT NULL REFERENCES tenant(id),
+  device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+  series_key TEXT NOT NULL,
+  ts INTEGER NOT NULL,
+  value REAL NOT NULL,
+  quality TEXT NOT NULL DEFAULT 'good',
+  PRIMARY KEY(tenant_id, device_id, series_key, ts)
+);
+CREATE INDEX IF NOT EXISTS idx_observation_samples_device_key_ts
+  ON observation_samples(tenant_id, device_id, series_key, ts);
+CREATE INDEX IF NOT EXISTS idx_observation_samples_tenant_ts
+  ON observation_samples(tenant_id, ts);
+`
 
-// migrateV12 幂等补齐 handled_at。SQLite 不支持 ADD COLUMN IF NOT EXISTS，
-// 因此先按列探测；DDL 与 PRAGMA user_version 在同一 BEGIN IMMEDIATE 事务内提交。
+// migrateV12 幂等新增数值采样历史表。纯新增表，不改写既有设备/事件/命令数据。
 func migrateV12(ctx context.Context, conn *sql.Conn) error {
-	if err := beginImmediate(ctx, conn); err != nil {
-		return err
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			rollback(ctx, conn)
-		}
-	}()
-
-	cur, err := readUserVersion(ctx, conn)
-	if err != nil {
-		return err
-	}
-	if cur >= 12 {
-		return nil
-	}
-	ok, err := hasColumn(ctx, conn, "commands", "handled_at")
-	if err != nil {
-		return err
-	}
-	if !ok {
-		if _, err := conn.ExecContext(ctx, schemaV12); err != nil {
-			return err
-		}
-	}
-	if err := setUserVersion(ctx, conn, 12); err != nil {
-		return err
-	}
-	if err := callMigrationHook(12, "before_commit"); err != nil {
-		return err
-	}
-	if err := commit(ctx, conn); err != nil {
-		return err
-	}
-	committed = true
-	return nil
+	return applyIdempotentDDL(ctx, conn, 12, schemaV12, []string{"observation_samples"})
 }

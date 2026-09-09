@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { ChevronRight } from 'lucide-react'
 import type { EventView } from '@/lib/types'
-import { Badge } from './ui'
+import { Badge, IconButton } from './ui'
 import { useCapabilityIndex } from '@/hooks/useDescriptor'
 import { useDevices } from '@/hooks/useDevices'
 import { cn } from '@/lib/cn'
@@ -307,14 +307,14 @@ function EventRow({ e, first, showDevice, name }: {
         )}
         <div className="col-start-3 row-start-1 flex shrink-0 items-center gap-2 justify-self-end lg:col-span-2 lg:col-start-4">
           {hasPayload && (
-            <button
-              type="button"
-              onClick={() => setOpen((v) => !v)}
+            <IconButton
+              label={open ? t('event.collapse') : t('event.expand')}
+              size="sm" className="shrink-0 text-ink-3"
               aria-expanded={open}
-              aria-label={open ? t('event.collapse') : t('event.expand')}
-              className="flex h-touch w-touch shrink-0 items-center justify-center text-ink-3 transition-colors hover:text-ink-2 sm:h-8 sm:w-8">
+              onClick={() => setOpen((v) => !v)}
+            >
               <ChevronRight size={12} className={open ? 'rotate-90 transition-transform' : 'transition-transform'} />
-            </button>
+            </IconButton>
           )}
           <span className="num shrink-0 font-mono text-micro text-ink-3" title={`${fmtDateTime(e.ts)} · ${e.type}`}>
             {fmtTime(e.ts)}

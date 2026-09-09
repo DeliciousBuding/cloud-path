@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { FormEvent } from 'react'
 import { Braces, Save } from 'lucide-react'
-import { Button, Select, TextField } from '@/components/ui'
+import { Button, Checkbox, Select, TextField } from '@/components/ui'
 import { PluginErrorNote } from '@/components/plugin/PluginFacts'
 import { useUpdateInstance } from '@/hooks/usePlugins'
 import { safeConfigEntries } from '@/lib/plugins'
@@ -161,7 +161,7 @@ export function PluginConfigForm({ instance, section, readOnly }: {
         }
         if (field.type === 'boolean') {
           return <label key={field.key} className="flex min-h-touch items-center gap-2 self-end text-body text-ink-2">
-            <input type="checkbox" checked={value === 'true'} disabled={common.disabled}
+            <Checkbox checked={value === 'true'} disabled={common.disabled}
               onChange={(event) => setValues((current) => ({ ...current, [field.key]: String(event.target.checked) }))} />
             <span>{common.label}</span>
           </label>
