@@ -18,7 +18,7 @@
 
 参考实现：<https://github.com/DeliciousBuding/cloud-path-driver-stcb>（STC-B，串口，14 entity）。
 
-## 2. 必须实现的契约
+## 2. 必须实现的接口
 
 Driver Protocol v1 的接口在
 `sdk/go/cloudpath/v1/driver.DriverServer`。一个最小但完整的 Driver 需要：
@@ -50,7 +50,7 @@ Server，最终出现在 `GET /api/capabilities` 与前端 Schema 驱动 UI 上�
 
 ## 3. Manifest（plugin.yaml）
 
-`plugin.yaml` 是安装/信任/权限披露的机器契约，一经发布字段不得随意改变：
+`plugin.yaml` 是安装/信任/权限披露的机器可读声明，一经发布字段不得随意改变：
 
 - `id`：稳定且与 `go.mod` module、二进制名保持可推导关系。
 - `contributes.drivers[0].id`：稳定 driver id，等于 `Describe().DriverID`，

@@ -207,7 +207,7 @@ export default function Settings() {
               </p>
 
               <details className="mt-4 border-t border-hairline pt-3 text-xs text-ink-2">
-                <summary className="cursor-pointer select-none">账号详情</summary>
+                <summary className="flex min-h-11 cursor-pointer select-none items-center">账号详情</summary>
                 <dl className="mt-2.5 space-y-2.5">
                   <KeyValue k="登录账号" v={<span className="font-mono">{user.username}</span>} />
                   {isAdmin && (
@@ -297,7 +297,7 @@ export default function Settings() {
         className="mt-6 rounded-xl border border-hairline bg-surface p-4"
         onToggle={(e) => setDiagnosticsOpen(e.currentTarget.open)}
       >
-        <summary className="flex cursor-pointer select-none flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-ink-2">
+        <summary className="flex min-h-11 cursor-pointer select-none flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-ink-2">
           <span className="flex items-center gap-1.5"><Activity size={14} />高级诊断</span>
           <span className="text-xs font-normal text-ink-3">连接、记录与接入方式</span>
         </summary>

@@ -18,9 +18,8 @@ import (
 // Sentinel errors returned by the plugin control plane. Callers can compare
 // with errors.Is to distinguish stable failure modes without matching text.
 var (
-	ErrNotFound                       = errors.New("plugincontrol: not found")
-	ErrInvalidState                   = errors.New("plugincontrol: invalid instance state")
-	ErrPermissionConfirmationRequired = errors.New("plugincontrol: permission confirmation required")
+	ErrNotFound     = errors.New("plugincontrol: not found")
+	ErrInvalidState = errors.New("plugincontrol: invalid instance state")
 )
 
 // IsolationNames are the stable, persisted isolation values. They intentionally

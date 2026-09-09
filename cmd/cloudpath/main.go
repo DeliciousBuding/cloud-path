@@ -612,8 +612,6 @@ func errorCode(err error) string {
 		return "ERR_HOST_RUNTIME_UNAVAILABLE"
 	case errors.Is(err, registry.ErrPermissionConfirmationRequired):
 		return "ERR_PERMISSION_CONFIRMATION_REQUIRED"
-	case errors.Is(err, plugincontrol.ErrPermissionConfirmationRequired):
-		return "ERR_PERMISSION_CONFIRMATION_REQUIRED"
 	case errors.Is(err, registry.ErrRateLimited):
 		return "ERR_RATE_LIMITED"
 	case errors.Is(err, registry.ErrUnsafeArtifact):
@@ -653,7 +651,6 @@ func installErrorCode(err error) int {
 func pluginErrorCode(err error) int {
 	switch {
 	case errors.Is(err, registry.ErrPermissionConfirmationRequired),
-		errors.Is(err, plugincontrol.ErrPermissionConfirmationRequired),
 		errors.Is(err, registry.ErrInvalidManifest),
 		errors.Is(err, registry.ErrCoreIncompatible),
 		errors.Is(err, registry.ErrProtocolIncompatible):

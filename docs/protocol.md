@@ -33,6 +33,27 @@ CloudPath 的公共设备模型是 **Device / Entity / Capability / Observation 
 
 ---
 
+## RPC 与 Schema 契约层次
+
+- `proto/cloudpath/v1/*.proto` 是 Driver/Application Protocol v1 的语言无关文本，不是 protoc 输入。当前可执行实现是 Go SDK 的手写 struct + JSON codec；`scripts/check_contract.py` 同时校验 proto 字段/服务方法与 Go SDK，防止两套文本各自漂移。
+- `spec/plugin-manifest.schema.json` 是 Manifest 的运行时 schema，发布二进制通过 `pluginschema.go` 内嵌；`spec/descriptor.schema.json` 与 `spec/capability.schema.json` 是设备/能力公开 schema，`sdk/go/model` 是它们的 Go 校验实现。schema ↔ Go 字段集合由同一门禁守。
+- 不在冻结 schema 中的 TS 旧字段（Capability action `command`/`primary`、Event `title`/`description`）只是 WebUI 兼容读取，不进入 Go/Edge 生产转换；新 Driver 不应依赖。嵌套 `Entity.observations` 省略 `entity_id` 是上下文省略，独立 Observation 仍可携带它。
+
+| 协议面 | 当前接入状态 |
+|---|---|
+| Driver `Initialize` / `Describe` / `ConfigureInstance` / `OpenDevice` / `CloseDevice` / `Watch` / `Execute` / `Health` / `Shutdown` | 当前 Edge Plugin Host / external driver 路径已接入 |
+| Driver `Discover` / `DiscoveryEvent` | SDK 与 conformance harness 已定义；当前生产 Edge 宿主不调用，属未来/可选发现层 |
+| `WatchRequest.resume_from_sequence`、`max_buffered`、`InitializeResponse.replay_supported` | 协议保留；当前 Edge 宿主不请求/不依赖 replay，不能当成已交付能力 |
+| `CommandProgress` / `Diagnostic` | 协议保留；当前 external driver 消费路径不处理，属未来/诊断扩展 |
+| Application `Initialize` / `Describe` / `ConfigureInstance` / `ValidateBinding` / `HandleEvents` / `RunJob` / `Health` / `Shutdown` | 当前 AppHost/appruntime 已接入；`RunJob` 服务手动/调度任务 |
+| Application `HandleRequest` | SDK/appruntime 路径存在；当前没有公开 `/api/plugins/...` 路由，属未来层 |
+| `ApplicationDescriptor.declarative_only` | 字段保留；当前没有独立声明式执行器，Application 仍需 process `entrypoint` |
+| `SendNotification` effect | 协议识别；Core 无通知通道，fail-closed 返回 `not_implemented` |
+
+`InitializeRequest` 的 `handshake_cookie` / `node_id` / `host_info` 为协议保留字段；当前 Host 只发送 launch/protocol/runtime 字段，业务不得依赖这些字段存在。
+
+---
+
 ## 平台 WebSocket：插件控制面
 
 插件控制面复用 edge ↔ server 的版本 1 信封，新增四类向后兼容消息。旧实现遇到未知消息只记录并忽略，不因新增类型断开连接。完整权威划分见 [Plugin Control Plane Synchronization](architecture/control-plane-sync.md)。
@@ -88,7 +109,7 @@ UI 都跑在 Server 侧。本消息就是这条通道；没有它，装了新 Dr
 - **全量覆盖语义**：一次上报即本 Edge 当前全部声明者，Server 整体替换该 Edge 的文档集。
   没有增量/删除消息，因此插件停用或卸载后不会在 catalog 里留下幽灵能力；
 - 文档随连接生命周期存在：Edge 断线即清理，重连必须重报；
-- 每条文档按 `spec/capability.schema.json` 校验，非法文档单条跳过；声明者形状/规模超限
+- 每条文档按 `spec/capability.schema.json` 的字段/枚举语义校验（Go 侧由 `sdk/go/model.Validate` 实现，parity 由 `scripts/check_contract.py` 守），非法文档单条跳过；声明者形状/规模超限
   （>64 声明者或单声明者 >256 条）则整批拒绝并保留旧文档（fail-closed）；
 - 同一 Capability ID 同时来自 Server 进程内适配器与 Edge 上报时，**以进程内为准**：
   平台契约不被插件改写；

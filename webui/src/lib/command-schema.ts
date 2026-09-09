@@ -359,5 +359,13 @@ export function commandForm(schema: Schema): CommandForm | null {
     return { fields: [], choices }
   }
   const fields = commandFields(schema)
-  return fields ? { fields } : null
+  if (fields) return { fields }
+  const emptyObject = (schema.type === undefined || schema.type === 'object')
+    && (schema.properties === undefined || (object(schema.properties) && Object.keys(schema.properties).length === 0))
+    && (schema.required === undefined || (Array.isArray(schema.required) && schema.required.length === 0))
+    && schema.additionalProperties !== true && !object(schema.additionalProperties)
+  if (!containsCombinator(schema) && unsupportedSchemaKeywords(schema).length === 0 && emptyObject) {
+    return { fields: [] }
+  }
+  return null
 }

@@ -2,12 +2,12 @@
 
 最后更新：2026-09-09
 
-> 状态：当前安全契约。租户隔离、本地 secret provider、保留期与硬配额已落地；中心 KMS/Vault、
+> 状态：当前安全边界。租户隔离、本地 secret provider、保留期与硬配额已实现；中心 KMS/Vault、
 > 分布式配额等扩展属于目标态。
 
 ## 1. 设计目标
 
-CloudPath 的租户隔离不仅是“查询时带 tenant id”，还必须保证单个租户不能耗尽全局内存、SQLite、WebSocket 或审计容量。最低安全闭环包括：
+CloudPath 的租户隔离不仅是“查询时带 tenant id”，还必须保证单个租户不能耗尽全局内存、SQLite、WebSocket 或审计容量。最低安全要求包括：
 
 1. 明文插件 secret 不跨 Server/WS/SQLite 边界；
 2. 每租户数据按各自保留期清理，不误删其他租户；
@@ -74,7 +74,7 @@ CloudPath 的租户隔离不仅是“查询时带 tenant id”，还必须保证
 | current device state | 常驻 | 设备删除时清理 |
 | plugin observed projection | 30 天 | desired 不随 observed 清理 |
 
-每个字段可为 NULL，表示继承 Server 默认值；不能用 0 表示无限。需要无限保留时必须在未来版本设计独立权限与存储预算，当前不提供。
+每个字段可为 NULL，表示继承 Server 默认值；不能用 0 表示无限。需要无限保留时必须在后续版本设计独立权限与存储预算，当前不提供。
 
 ### 3.2 Sweeper
 

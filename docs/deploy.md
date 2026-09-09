@@ -3,7 +3,7 @@
 最后更新：2026-09-09
 
 > 本文面向部署者，覆盖本地、Docker、edge 容器与反向代理。安全基线见
-> [security.md](security.md)，HTTP 契约见 [api.md](api.md)，源码入口见
+> [security.md](security.md)，HTTP API 见 [api.md](api.md)，源码入口见
 > [README](../README.md)。
 
 ## 1. 前置条件
@@ -90,15 +90,19 @@ curl -fsS http://127.0.0.1:8080/healthz
 > `POST /api/auth/setup` 会 403。应在 server 容器内走回环，或设 `CLOUDPATH_SETUP_TOKEN`
 > 后带 `X-Cloudpath-Setup-Token` 头首装（详见 `deploy/compose/README.md`）。
 
-## 4. edge 容器（可选）
+## 4. edge 容器（可选，仅 Linux 手动启动）
 
-镜像同时包含 `cloudpath-edge`。Linux 上可用 compose overlay 启动：
+镜像同时包含 `cloudpath-edge`。容器形态只用于 Linux 串口直通，且**只手动启动**；
+不要为它配置开机自启，也不要依赖 Docker 守护进程自动拉起。
+
+从仓库根目录执行：
 
 ```bash
-cd deploy
 # 按实际设备修改 deploy/edge.example.yaml，例如端口/边 ID/设备名
-docker compose -f docker-compose.yml -f docker-compose.edge.yml up -d --build
-docker compose -f docker-compose.yml -f docker-compose.edge.yml ps
+docker compose -f deploy/compose/docker-compose.yml -f deploy/docker-compose.edge.yml up -d --build
+docker compose -f deploy/compose/docker-compose.yml -f deploy/docker-compose.edge.yml ps
+# 停止
+docker compose -f deploy/compose/docker-compose.yml -f deploy/docker-compose.edge.yml down
 ```
 
 要点：
@@ -110,6 +114,8 @@ docker compose -f docker-compose.yml -f docker-compose.edge.yml ps
 - Linux 真实串口需要在 `deploy/docker-compose.edge.yml` 中取消注释并填写
   `devices` 映射；Windows 建议在宿主机直接运行
   `.\bin\cloudpath-edge.exe -config edge.yaml`。
+- Edge overlay 使用非 root 镜像、`cap_drop: ALL`、`read_only` 与 `tmpfs: /tmp`；
+  不设置自动重启，长期运行由使用者显式保持容器/进程。
 - 启动后再查 `/healthz` 与 `/api/edges`，确认 edge 注册成功。
 
 ## 5. 反向代理部署（TLS）
@@ -168,8 +174,8 @@ CLOUDPATH_ALLOWED_ORIGINS=console.example.com
 
 ```bash
 docker build -t cloudpath:local .
-docker compose -f docker-compose.yml down
-docker compose -f docker-compose.yml up -d
+docker compose -f deploy/compose/docker-compose.yml down
+docker compose -f deploy/compose/docker-compose.yml up -d
 ```
 
 - 保留同一数据卷可保留设备/事件/命令；schema 由 store 自动迁移。

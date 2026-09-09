@@ -1,4 +1,4 @@
-# ADR-0001：能力中心的多契约插件模型
+# ADR-0001：能力中心的多类型插件模型
 
 状态：已接受
 日期：2026-09-03
@@ -10,7 +10,7 @@
 
 ## 决定
 
-采用 **Device / Entity / Capability** 为核心，插件按契约分三型：
+采用 **Device / Entity / Capability** 为核心，插件按职责分三型：
 
 - **Driver Plugin**（跑在 Edge）：设备发现、连接、协议解析、能力映射、设备动作。
 - **Application Plugin**（跑在 Server）：业务对象、绑定、规则、任务、仪表盘、领域 API。
@@ -25,7 +25,7 @@
 ## 备选方案
 
 - 全部设备都是 Driver Plugin：无法表达「业务应用与设备解耦」。
-- 单一万能插件接口：契约过度泛化，难以演进与做 conformance test。
+- 单一万能插件接口：接口过度泛化，难以演进与做 conformance test。
 
 ## 后果
 

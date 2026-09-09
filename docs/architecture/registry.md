@@ -1,8 +1,8 @@
-# Plugin Registry 与 CLI 契约
+# Plugin Registry 与 CLI
 
 最后更新：2026-09-09
 
-> Registry 索引、CLI 与供应链验证的实现契约。发现通道与信任链见
+> Registry 索引、CLI 与供应链验证的实现规则。发现通道与信任链见
 > [github-ecosystem.md](github-ecosystem.md)。
 
 ## 1. Registry Manifest（索引项）

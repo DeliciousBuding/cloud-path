@@ -2,8 +2,8 @@
 
 最后更新：2026-09-09
 
-> 部署者前置阅读。安全模型 SSOT 为 [api.md](api.md)；本文把契约落到
-> 实际操作、风险分级和部署检查点。若代码/契约更新，以 [api.md](api.md) 和
+> 部署者前置阅读。安全模型以 [api.md](api.md) 为准；本文把规则落到
+> 实际操作、风险分级和部署检查点。若代码/接口更新，以 [api.md](api.md) 和
 > 当前 `cmd/cloudpath-server` 的帮助输出为准。
 
 ## 1. 暴露面
@@ -129,7 +129,7 @@ python -c "import secrets; print(secrets.token_hex(32))"
 ## 7. 输入与资源防护
 
 - 命令白名单由适配器声明；`cmd` 必须命中白名单，`args` 长度/字符校验，
-  `edge_id`、设备归属校验（契约见 [api.md](api.md)）。
+  `edge_id`、设备归属校验（接口见 [api.md](api.md)）。
 - `-cmd-rate` 默认 20 次/分/设备；`-login-rate` 默认 5 次/分/IP，超限返回
   `429 + Retry-After`。
 - 请求体、WS 读限和 SQLite 连接均有上限/超时；部署时无需自行加全局

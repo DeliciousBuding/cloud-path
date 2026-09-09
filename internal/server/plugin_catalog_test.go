@@ -100,6 +100,23 @@ func TestPluginsAPIFromProjection(t *testing.T) {
 	}
 }
 
+func TestPluginsAPIContainsServerHostedApplication(t *testing.T) {
+	srv, _, _, _, a, _ := setupPluginPlane(t)
+	installServerPlugins(t, srv, map[string]string{"io.test.server-app": "Application"})
+
+	rec := servePlugin(t, srv, http.MethodGet, "/api/plugins", "", a, "tenant-a", string(api.RoleViewer))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list plugins = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var list struct {
+		Plugins []plugincatalog.PluginView `json:"plugins"`
+	}
+	decodeJSON(t, rec, &list)
+	if len(list.Plugins) != 1 || list.Plugins[0].ID != "io.test.server-app" || list.Plugins[0].Kind != "Application" {
+		t.Fatalf("server-hosted application missing from catalog: %+v", list.Plugins)
+	}
+}
+
 // TestPluginInstancesDesiredObservedSeparation 锁定不变量 5：
 // desired 与 observed 分别呈现；未上报时 Observed 必须为 null；
 // 上报后 Drift/Stale 由真实 revision 与上报时间计算，绝不因 desired enabled 虚报健康。

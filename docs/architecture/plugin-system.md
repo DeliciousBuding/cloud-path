@@ -1,20 +1,20 @@
-# Plugin System 设计与运行时契约
+# Plugin System 设计与运行时
 
 最后更新：2026-09-09
 
 > 状态：Manifest、SDK 与进程运行时以当前代码、`spec/` 和
-> [how-to-build-driver.md](how-to-build-driver.md) 为准。本文说明多契约边界、控制面同步与故障语义；
+> [how-to-build-driver.md](how-to-build-driver.md) 为准。本文说明多类型插件边界、控制面同步与故障语义；
 > 明确标注“目标态”的内容不得当成当前能力。
 
-## 1. 统一平台，多个契约
+## 1. 统一平台，多类插件
 
-插件仓库根目录的 `plugin.yaml` 是安装与信任的机器契约。Manifest 的 `kind` 决定贡献类型：
+插件仓库根目录的 `plugin.yaml` 是安装与信任的机器可读声明。Manifest 的 `kind` 决定贡献类型：
 
 | kind | Protocol | 默认宿主 | 当前状态 |
 |---|---|---|---|
 | `Driver` | Driver Protocol v1 | Edge Plugin Host | 已实现 |
 | `Application` | Application Protocol v1 | Server AppHost | 已实现 |
-| `Connector` | Manifest contribution only | Edge 或 Server，由贡献声明决定 | 安装契约可校验，运行时待实现 |
+| `Connector` | Manifest contribution only | Edge 或 Server，由贡献声明决定 | 安装声明可校验，运行时待实现 |
 
 UI 贡献不是独立可执行插件类型，也不使用 `views` Manifest 字段；Core 通过
 Descriptor/Capability schema 渲染通用界面。Transform/WASM 属于后续目标态，不在当前 `kind` 枚举中。
@@ -90,7 +90,7 @@ instance 和 scope。数据写入插件 namespaced store 或插件专属数据�
 
 ### Connector Plugin
 
-Connector 目前只有 Manifest 贡献契约，没有进程运行时。合法形状是：
+Connector 目前只有 Manifest 贡献声明，没有进程运行时。合法形状是：
 
 ```yaml
 contributes:
@@ -280,4 +280,4 @@ spec/                   Manifest/Capability JSON Schema
 testing/plugin-harness  conformance runner + mock Core
 ```
 
-每个 Driver 必须通过 handshake/版本协商、Descriptor 稳定性、配置迁移、重连/重复/乱序/背压、命令幂等/超时/取消、崩溃退出、权限越界以及多实例/多设备测试。Core CI 还要以 mock 插件执行黑盒 wire test，避免同一 SDK 的 client/server 自测掩盖契约错误。
+每个 Driver 必须通过 handshake/版本协商、Descriptor 稳定性、配置迁移、重连/重复/乱序/背压、命令幂等/超时/取消、崩溃退出、权限越界以及多实例/多设备测试。Core CI 还要以 mock 插件执行黑盒 wire test，避免同一 SDK 的 client/server 自测掩盖协议错误。

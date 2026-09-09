@@ -69,7 +69,7 @@ export function TokenRow({ token: t }: { token: TokenView }) {
       </dl>
 
       <details className="mt-3 text-xs text-ink-2">
-        <summary className="cursor-pointer">技术详情</summary>
+        <summary className="flex min-h-11 cursor-pointer items-center">技术详情</summary>
         <dl className="mt-2 space-y-2">
           <KeyValue k="令牌 ID" v={<span className="font-mono">{t.id}</span>} />
           <KeyValue k="识别前缀" v={t.prefix} mono />

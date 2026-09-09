@@ -27,6 +27,8 @@ industry-specific semantics are hard-coded.
 ## Dependencies
 
 - **Go 1.26.3 or newer** (the checkout's `go.mod` declares `go 1.26.3`).
+- **Core `>=0.2.8 <0.3.0`.** The application uses the existing durable
+  `schedule_job` / `cancel_job` effects for restart-safe miss checks.
 - **Only the public CloudPath SDK and protocol schema.** The code imports
   these packages from `github.com/DeliciousBuding/cloud-path` and nothing else
   from the Core repository:
@@ -95,10 +97,13 @@ Field rules:
   (0-9 each). Omitted fields default to the quiet minimum (`freq: 1`,
   `duration: 1`); out-of-range values are rejected.
 
-The application owns the window state machine. It derives today's concrete
-`start` / `end` timestamps from the instance config and timezone whenever the
-`window-check` job runs; Core does not parse compartment schedules or synthesize
-window ticks.
+The application owns the window state machine. Core runs `window-check` every
+minute; the app derives today's concrete `start` / `end` timestamps from the
+instance config and timezone and never asks Core to parse compartment schedules
+or synthesize window ticks. A fresh open also arms the occurrence-qualified
+durable task `window-miss-<window>@<date>`. Core dispatches durable tasks with
+`JobID == ScheduleID`, so the app handles that prefix separately from the
+automatic `window-check` job.
 
 ## Binding
 
@@ -122,22 +127,34 @@ mapped back to their compartment.
 
 The runtime is a process-based `ApplicationService` (Application Protocol v1):
 
-1. **Window start** — when the `window-check` job observes the configured
-   start time, the app opens the window, emits an `UpsertDomainRecord`
-   (`window`, `state=opened`), a `RequestCommand` to the bound buzzer entity
-   (action `buzzer` with the configured freq/duration steps), and a
-   `ScheduleTask` for the generic durable cron path.
+1. **Window start** — when the automatic `window-check` job observes the
+   configured start time, the app opens the window and emits an
+   `UpsertDomainRecord` (`window`, `record_id=<window>@<date>`,
+   `state=opened`), a `RequestCommand` to the bound buzzer entity (action
+   `buzzer` with the configured freq/duration steps and an
+   occurrence-qualified idempotency key), and a durable `ScheduleTask` named
+   `window-miss-<window>@<date>`.
 2. **Completion** — on a key `press` event for the compartment while its
-   window is open, the app marks the window `completed` and cancels the
-   `window-check` task.
-3. **Missed** — when the job observes the configured end time without a
-   completion, the app records `state=missed`, cancels the task and emits a
-   notification. If the first observation is already past the end, it records
-   the miss without replaying a stale reminder.
-4. **Idempotency** — repeated jobs (same `IdempotencyKey` or the same daily
-   occurrence) and duplicate key presses do not emit duplicate effects. The
-   state machine is scoped per configured day, so the next day's occurrence can
-   open again.
+   window is open, the app marks the occurrence `completed` and cancels its
+   durable miss task. The occurrence is reconstructed from the event timestamp
+   and config, so a plugin restart does not lose a confirmation that still
+   falls inside the window.
+3. **Missed** — the durable miss task observes the configured end time without
+   a completion, records `state=missed`, cancels itself and emits a
+   notification. Completion cancellation is the durable fact that prevents a
+   restart after completion from producing a false miss.
+4. **Idempotency** — repeated automatic jobs, repeated durable dispatches,
+   duplicate key presses and cross-day occurrences have distinct
+   occurrence-qualified record/command/task identities; same-occurrence repeats
+   do not emit duplicate effects. A first `window-check` observation already
+   past the end stays quiet instead of fabricating a miss: the app has no
+   plugin-to-Core read API to distinguish a restart after completion from a
+   late start. A late mid-window observation (more than one minute after start)
+   records the occurrence but suppresses the stale reminder and does not arm a
+   second miss task. A restart inside the first minute after start remains
+   ambiguous and may re-arm the miss task. The Application Protocol has no
+   plugin-to-Core state read, so this case cannot be distinguished from a fresh
+   open.
 
 Effects are limited to the Core-approved closed set: `UpsertDomainRecord`,
 `DeleteDomainRecord`, `RequestCommand`, `ScheduleTask`,
@@ -175,9 +192,11 @@ go test ./... -count=20   # idempotency / flake soak
 ```
 
 The suite covers the descriptor requirements, config/binding validation, the
-window reminder effect, key-press-driven completion, missed-window recording,
-duplicate-event idempotency, rejection of driver coupling, invalid config,
-graceful shutdown, and manifest identity / requirements drift.
+window reminder effect, occurrence-qualified records/commands/tasks,
+key-press-driven completion with and without warm state, durable missed-window
+recording, restart/no-false-miss behavior, duplicate-event idempotency,
+cross-day identity, rejection of driver coupling, invalid config, graceful
+shutdown, and manifest identity / requirements drift.
 
 Inside the monorepo, the repository-level gates additionally cover the whole
 tree:

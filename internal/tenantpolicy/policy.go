@@ -6,8 +6,6 @@ package tenantpolicy
 import (
 	"errors"
 	"fmt"
-	"sync"
-	"time"
 )
 
 var (
@@ -119,95 +117,3 @@ func (e *QuotaError) Error() string {
 }
 func (e *QuotaError) Unwrap() error { return ErrQuotaExceeded }
 func (e *QuotaError) Code() string  { return "quota_" + string(e.Resource) }
-
-// Counter atomically admits and releases concurrent resources such as Edge or
-// browser WebSocket connections. A release function is idempotent.
-type Counter struct {
-	mu    sync.Mutex
-	usage map[counterKey]int
-}
-
-type counterKey struct {
-	tenant   string
-	resource Resource
-}
-
-func NewCounter() *Counter { return &Counter{usage: make(map[counterKey]int)} }
-
-func (c *Counter) Acquire(tenant string, resource Resource, limit int) (release func(), err error) {
-	if tenant == "" || resource == "" || limit <= 0 {
-		return nil, ErrInvalidPolicy
-	}
-	key := counterKey{tenant: tenant, resource: resource}
-	c.mu.Lock()
-	current := c.usage[key]
-	if current >= limit {
-		c.mu.Unlock()
-		return nil, &QuotaError{Tenant: tenant, Resource: resource, Limit: limit, Usage: current}
-	}
-	c.usage[key] = current + 1
-	c.mu.Unlock()
-
-	var once sync.Once
-	return func() {
-		once.Do(func() {
-			c.mu.Lock()
-			if n := c.usage[key]; n <= 1 {
-				delete(c.usage, key)
-			} else {
-				c.usage[key] = n - 1
-			}
-			c.mu.Unlock()
-		})
-	}, nil
-}
-
-func (c *Counter) Usage(tenant string, resource Resource) int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.usage[counterKey{tenant: tenant, resource: resource}]
-}
-
-// WindowLimiter is an in-memory fixed-window limiter for high-rate resources
-// such as events. It is tenant/resource scoped and uses an injectable clock.
-type WindowLimiter struct {
-	mu     sync.Mutex
-	now    func() time.Time
-	window time.Duration
-	hits   map[counterKey]windowState
-}
-
-type windowState struct {
-	start time.Time
-	count int
-}
-
-func NewWindowLimiter(window time.Duration, now func() time.Time) *WindowLimiter {
-	if window <= 0 {
-		window = time.Minute
-	}
-	if now == nil {
-		now = time.Now
-	}
-	return &WindowLimiter{now: now, window: window, hits: make(map[counterKey]windowState)}
-}
-
-func (l *WindowLimiter) Allow(tenant string, resource Resource, limit int) error {
-	if tenant == "" || resource == "" || limit <= 0 {
-		return ErrInvalidPolicy
-	}
-	key := counterKey{tenant: tenant, resource: resource}
-	now := l.now()
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	state := l.hits[key]
-	if state.start.IsZero() || now.Sub(state.start) >= l.window || now.Before(state.start) {
-		state = windowState{start: now}
-	}
-	if state.count >= limit {
-		return &QuotaError{Tenant: tenant, Resource: resource, Limit: limit, Usage: state.count}
-	}
-	state.count++
-	l.hits[key] = state
-	return nil
-}

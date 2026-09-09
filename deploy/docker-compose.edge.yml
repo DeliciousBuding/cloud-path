@@ -1,11 +1,15 @@
-# Edge 容器叠加文件。与 deploy/docker-compose.yml 一起启动：
-#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.edge.yml up -d --build
+# Edge 容器叠加文件。必须与 L0 compose 一起使用，且只手动启动：
+#   docker compose -f deploy/compose/docker-compose.yml -f deploy/docker-compose.edge.yml up -d
+#   docker compose -f deploy/compose/docker-compose.yml -f deploy/docker-compose.edge.yml down
+#
+# 刻意不设置自动重启：Docker 守护进程/主机重启后不得自动拉起 Edge。
+# Edge 的启动边界见 deploy/edge/README.md；这里由使用者显式 up/down。
 name: cloudpath
 
 services:
   edge:
-    image: cloudpath:local
-    restart: unless-stopped
+    image: ${CLOUDPATH_IMAGE:-cloudpath:local}
+    restart: "no"
     entrypoint: ["/app/cloudpath-edge"]
     command: ["-config", "/config/edge.yaml", "-log-level", "info", "-log-format", "json"]
     environment:
@@ -13,9 +17,17 @@ services:
       CLOUDPATH_LOG_FORMAT: "${CLOUDPATH_LOG_FORMAT:-json}"
       CLOUDPATH_TOKEN: "${CLOUDPATH_TOKEN:-}"
     volumes:
-      - ./edge.example.yaml:/config/edge.yaml:ro
-    # 与基础 compose 一起启动时，server 会先经健康检查；不强制声明 depends_on，
-    # 以便该 overlay 也可单独做 compose config 校验。
+      - ../edge.example.yaml:/config/edge.yaml:ro
+    # 不声明 depends_on：Edge 的启动顺序由使用者显式控制，不与 Server 健康检查绑定。
     # Linux 直通真实串口时取消注释并改成实际设备路径。
     # devices:
     #   - "/dev/ttyUSB0:/dev/ttyUSB0"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 512m
+    pids_limit: 128

@@ -13,6 +13,11 @@ option go_package = "github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/a
 // 硬约束：ApplicationEffect 只能表达 Core 允许的操作
 // （领域记录 upsert/delete、请求命令、计划任务、通知）。
 // 不得返回任意 SQL、系统命令、文件路径操作或全局凭据请求。
+//
+// 当前生产接入：AppHost / appruntime 调用 Initialize / Describe / ConfigureInstance /
+// ValidateBinding / HandleEvents / RunJob / Health / Shutdown。
+// HandleRequest 只有 SDK/runtime 路径，当前没有公开 HTTP 子路由；
+// declarative_only 没有独立执行器；SendNotification 当前 fail-closed。
 
 // ApplicationService 由插件进程暴露，Core 作为客户端调用。
 // HandleEvents 是 bidi-streaming：Core 推 ApplicationEvent，插件回 ApplicationEffect。
@@ -22,7 +27,7 @@ service ApplicationService {
   rpc ConfigureInstance(ConfigureInstanceRequest) returns (ConfigureInstanceResponse);
   rpc ValidateBinding(ValidateBindingRequest) returns (ValidateBindingResponse);
   rpc HandleEvents(stream ApplicationEvent) returns (stream ApplicationEffect);
-  rpc HandleRequest(PluginHTTPRequest) returns (PluginHTTPResponse);
+  rpc HandleRequest(PluginHTTPRequest) returns (PluginHTTPResponse); // 当前无公开 HTTP 子路由
   rpc RunJob(RunJobRequest) returns (RunJobResponse);
   rpc Health(HealthRequest) returns (HealthResponse);
   rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
@@ -86,7 +91,7 @@ message ApplicationDescriptor {
   repeated string schema_versions = 3;         // ApplicationEvent/Effect 数据 schema 版本集合
   repeated RequirementDescriptor requirements = 4;
   repeated JobDescriptor jobs = 5;
-  bool declarative_only = 6;                   // true 表示不启动 process 后端
+  bool declarative_only = 6;                   // 字段保留；当前没有声明式执行器，仍需 process entrypoint
 }
 
 message RequirementDescriptor {
@@ -245,6 +250,7 @@ message CancelScheduledTask {
   string schedule_id = 1;
 }
 
+// 协议识别；当前 Core 没有通知通道，执行 fail-closed。
 message SendNotification {
   string title = 1;
   string body = 2;

@@ -3,7 +3,7 @@
 最后更新：2026-09-08
 
 > 本文定义 CloudPath 的公开仓库组合、命名、插件孵化/拆仓策略和公开边界。插件发现与信任链见
-> [github-ecosystem.md](github-ecosystem.md)，插件运行契约见 [plugin-system.md](plugin-system.md)。
+> [github-ecosystem.md](github-ecosystem.md)，插件运行时见 [plugin-system.md](plugin-system.md)。
 
 ## 1. 名称层级
 
@@ -23,7 +23,7 @@
 | 仓库 | 职责 | 源码状态 / 创建条件 |
 |---|---|---|
 | `cloud-path` | Core、Server、Edge、WebUI、公共 API/Schema、Go SDK、测试 harness | 当前主仓库 |
-| `cloud-path-registry` | 精选插件索引、发布者策略、digest/attestation 元数据；不存二进制 | Registry 契约稳定后 |
+| `cloud-path-registry` | 精选插件索引、发布者策略、digest/attestation 元数据；不存二进制 | Registry 接口稳定后 |
 | `cloud-path-driver-stcb` | STC-B Driver Plugin；板级容错、串口协议、Capability 映射 | 已拆仓，独立维护 |
 | [cloud-path-app-scheduled-compartment](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment) | 硬件无关的定时隔间 Application Plugin | 独立维护；现役源码入口 |
 | [cloud-path-app-button-indicator](https://github.com/DeliciousBuding/cloud-path-app-button-indicator) | 按键指示 Application Plugin | 独立维护；现役源码入口 |
@@ -65,7 +65,7 @@ cloud-path-connector-home-assistant
 - Device/Entity/Capability/Observation/Event/Command 通用模型；
 - Edge、Server、WebUI、认证/租户、Plugin Host 与 Registry 客户端；
 - versioned 协议、Schema、SDK、conformance harness；
-- 孵化或契约演示用 reference plugin（放 `examples/`；拆仓后不再是现役应用的源码事实源）。
+- 孵化或协议演示用 reference plugin（放 `examples/`；拆仓后不再是现役应用的源码事实源）。
 
 核心仓库不拥有：
 
@@ -95,7 +95,7 @@ Application ─X→ Driver ID / 端口 / 厂商字段
 
 拆仓使用 `git filter-repo`/subtree 保留相关历史；核心仓库删除编译期 import，仅保留安装示例和 Registry 指针。
 
-**拆仓后以独立仓库为源码事实源**：修复、配置契约、SDK 依赖与发布在各应用仓维护。
+**拆仓后以独立仓库为源码事实源**：修复、配置格式、SDK 依赖与发布在各应用仓维护。
 Core 的 `examples/scheduled-compartment` 与 [split 生成器](../../deploy/split/README.md)
 只保留参考 / 历史 bootstrap；[Go 模板](../../templates/go-plugin/README.md)仅供新插件起步。
 这些材料不自动跟随独立应用演进，不得重新生成或复制覆盖现役应用。
@@ -109,7 +109,7 @@ Core 的 `examples/scheduled-compartment` 与 [split 生成器](../../deploy/spl
 | 无凭据的 Docker/反代/配置示例 | 公开 |
 | 架构、公开 API、安全模型、威胁边界 | 公开 |
 | 设备清单、串口号、真实 edge/site id、板测日志 | 不公开，`.local/` |
-| 路线图、未发布计划、内部验收证据 | 不公开，`.local/` 或私有文档家 |
+| 路线图、未发布计划、内部验证证据 | 不公开，`.local/` 或私有文档家 |
 | 课程 BSP/课件/模板、厂商不可再分发 SDK | 不公开，不进任何公开仓库 |
 | token/password/cookie/私钥/生产 URL/IP/内部昵称 | 不公开，secret store；仓库只写 key 名和 example |
 | 云服务运营控制面、计费、内部告警与拓扑 | 默认不公开，闭源增值 |

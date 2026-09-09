@@ -1171,6 +1171,79 @@ func (s *Server) dispatchDeviceCommandWithHook(ctx context.Context, tenantID int
 	return id, nil
 }
 
+// installationStatuses 返回中心服务托管的 Application 插件公开事实。
+// 与 Edge 上报的安装物同形，供只读插件目录统一展示；不包含本地路径、启动参数或 secret。
+func (h *AppHost) installationStatuses() []api.PluginInstallationStatusData {
+	if h == nil || !h.cfg.Enabled {
+		return nil
+	}
+	lock, err := registry.LoadLockFile(h.cfg.LockPath)
+	if err != nil {
+		return nil
+	}
+	out := make([]api.PluginInstallationStatusData, 0, len(lock.Plugins))
+	for _, locked := range lock.Plugins {
+		manifestPath := filepath.Join(h.cfg.PluginsDir, registry.SafePluginID(locked.ID), "plugin.yaml")
+		manifest, err := registry.LoadManifest(manifestPath)
+		if err != nil {
+			continue
+		}
+		kind, err := pluginhost.ParseKind(manifest.Kind)
+		if err != nil || kind != pluginhost.KindApplication {
+			continue
+		}
+		out = append(out, installationStatusFromManifest(manifest, locked))
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].PluginID != out[j].PluginID {
+			return out[i].PluginID < out[j].PluginID
+		}
+		return out[i].Version < out[j].Version
+	})
+	return out
+}
+
+func installationStatusFromManifest(m *registry.Manifest, locked registry.LockedPlugin) api.PluginInstallationStatusData {
+	if m == nil {
+		return api.PluginInstallationStatusData{}
+	}
+	out := api.PluginInstallationStatusData{
+		PluginID: m.ID, Version: m.Version, Kind: m.Kind, Protocol: m.Protocol,
+		Digest: locked.Digest, TrustMode: string(locked.Mode), Verified: locked.Verified,
+		VerifiedPublisher: locked.VerifiedPublisher,
+		Permissions: api.PluginPermissionsData{
+			Hardware:   append([]string(nil), m.Permissions.Hardware...),
+			Network:    append([]string(nil), m.Permissions.Network...),
+			Filesystem: append([]string(nil), m.Permissions.Filesystem...),
+			Secrets:    append([]string(nil), m.Permissions.Secrets...),
+		},
+		Capabilities: append([]string(nil), m.Capabilities...),
+	}
+	if m.Contributes != nil {
+		out.Contributions = api.PluginContributionsData{
+			Drivers:      make([]api.PluginDriverContributionData, 0, len(m.Contributes.Drivers)),
+			Applications: make([]api.PluginApplicationContributionData, 0, len(m.Contributes.Applications)),
+			Connectors:   make([]api.PluginConnectorContributionData, 0, len(m.Contributes.Connectors)),
+		}
+		for _, d := range m.Contributes.Drivers {
+			out.Contributions.Drivers = append(out.Contributions.Drivers, api.PluginDriverContributionData{
+				ID: d.ID, Title: d.Title, Discovery: d.Discovery,
+			})
+		}
+		for _, a := range m.Contributes.Applications {
+			out.Contributions.Applications = append(out.Contributions.Applications, api.PluginApplicationContributionData{
+				ID: a.ID, Title: a.Title,
+			})
+		}
+		for _, c := range m.Contributes.Connectors {
+			out.Contributions.Connectors = append(out.Contributions.Connectors, api.PluginConnectorContributionData{
+				ID: c.ID, Title: c.Title, Direction: c.Direction, Host: c.Host,
+			})
+		}
+	}
+	return out
+}
+
 // InstalledApplicationPlugins 返回已安装的 Application kind 插件集合（pluginID → version）。
 func InstalledApplicationPlugins(pluginsDir, lockPath string) (map[string]string, error) {
 	lock, err := registry.LoadLockFile(lockPath)

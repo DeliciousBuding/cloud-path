@@ -77,7 +77,7 @@ export function UserRow({ user: u }: { user: UserView }) {
       </div>
 
       <details className="mt-3 text-xs text-ink-2">
-        <summary className="cursor-pointer">技术详情</summary>
+        <summary className="flex min-h-11 cursor-pointer items-center">技术详情</summary>
         <dl className="mt-2 space-y-2">
           <KeyValue k="成员 ID" v={<span className="font-mono">{u.id}</span>} />
           <KeyValue k="登录账号" v={u.username} mono />

@@ -26,7 +26,7 @@ export function PluginErrorNote({ error, className }: { error: unknown; classNam
       <p className="mt-0.5 text-[12px] leading-relaxed break-words opacity-90">{copy.hint}</p>
       {copy.code && (
         <details className="mt-2 min-w-0">
-          <summary className="cursor-pointer text-[12px] opacity-80">技术详情</summary>
+          <summary className="flex min-h-11 cursor-pointer items-center text-[12px] opacity-80">技术详情</summary>
           <p className="num mt-1 break-all text-[12px] opacity-70">错误码 {copy.code}</p>
         </details>
       )}
@@ -140,7 +140,7 @@ export function InstanceFacts({ v, catalog }: { v: PluginInstanceView; catalog?:
         </dd>
       </div>
       <details className="min-w-0 border-t border-hairline pt-2.5 text-xs text-ink-2">
-        <summary className="cursor-pointer">技术详情</summary>
+        <summary className="flex min-h-11 cursor-pointer items-center">技术详情</summary>
         <div className="mt-2 space-y-1.5">
           <div className="flex min-w-0 items-baseline justify-between gap-2">
             <dt className="shrink-0">实例 ID</dt>

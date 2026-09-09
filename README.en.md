@@ -2,7 +2,7 @@
 
 # CloudPath
 
-**A cloud-native, plugin-driven IoT control plane** for connecting devices through edge agents,
+**A plugin-driven IoT control plane** for connecting devices through edge agents,
 with real-time visibility, remote control, tenant isolation, and an embedded WebUI.
 
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/)
@@ -76,7 +76,7 @@ them to overwrite an independently maintained application.
 **Identity-chain boundary:** command and event routing currently assumes globally unique
 `entity_id`. `(device_key, entity_id)` is not yet threaded through binding and routing, so reuse
 of an `entity_id` across multiple boards of the same model can make entity binding or event
-routing ambiguous. Until that contract and multi-board hardware evidence exist, use the
+routing ambiguous. Until that interface and multi-board hardware evidence exist, use the
 single-board boundary or require the Driver to keep `entity_id` globally unique.
 
 ## Quick start (local)
@@ -123,47 +123,35 @@ Open <http://127.0.0.1:8080>. Account login uses the session cookie and the real
 channel. Tenant-token login is REST-only because browsers cannot attach custom headers to
 WebSocket connections; the UI reports that boundary explicitly.
 
-## Current implementation and boundaries
+## Current status and boundaries
 
-The current codebase includes:
+The current codebase includes Server, Edge, plugin CLI, embedded WebUI, account/RBAC/tenant
+isolation, device supervision and offline buffering, external Driver Plugin Host, Application
+Runtime, SQLite persistence, Registry CLI, and release/deployment assets. See
+[docs/architecture.md](docs/architecture.md) for the full current-versus-target list.
 
-- Server, Edge, and plugin CLI; embedded WebUI; WebSocket state/event/command paths.
-- Account setup/login/logout, session cookies, RBAC (`admin` / `operator` / `viewer`), tenant
-  tokens, audit records, retention, rate limits, and tenant isolation.
-- Device supervision with reconnect backoff, offline event buffering, replay, and SQLite
-  hydration after restart.
-- Driver Plugin Host, Registry install/update controls, desired/observed reconciliation, and
-  secret handle resolution on Edge.
-- Application Protocol v1, AppHost, capability bindings, domain records, durable scheduled jobs,
-  and manual application actions.
-- Descriptor/Capability-driven device views and command forms.
+Not current capabilities: Connector runtime and notification delivery (`SendNotification` fails
+closed with `not_implemented`), Transform/WASM, multi-Server scaling, distributed quotas,
+centralized KMS/Vault, MQTT/Modbus gateways, remote OTA, time-series analytics, and arbitrary
+third-party React bundles in the main WebUI.
 
-Not current capabilities:
-
-- Connector runtime and notification delivery. `SendNotification` fails closed with
-  `not_implemented`.
-- Transform/WASM runtime.
-- Multi-Server scaling, distributed quotas, centralized KMS/Vault, MQTT/Modbus gateways,
-  remote OTA orchestration, and time-series analytics.
-- Arbitrary third-party React bundles in the main WebUI.
-
-Real-hardware acceptance is separate from implementation. Protocol tests, mocked plugins, CI,
+Real-hardware verification is separate from implementation. Protocol tests, mocked plugins, CI,
 or a merged source change do not prove a new multi-board hardware path. Evidence must include
 the real board log, command acknowledgement, and device event.
 
 ## Docs
 
 - [README.md](README.md) - Chinese product and operations guide
-- [docs/design.md](docs/design.md) - technical SSOT
-- [webui/DESIGN.md](webui/DESIGN.md) - WebUI presentation and interaction SSOT
+- [docs/design.md](docs/design.md) - technical design
+- [webui/DESIGN.md](webui/DESIGN.md) - WebUI presentation and interaction design
 - [docs/architecture.md](docs/architecture.md) - architecture and current-versus-target boundary
-- [docs/protocol.md](docs/protocol.md) - WebSocket protocol and DTO contract
+- [docs/protocol.md](docs/protocol.md) - WebSocket protocol and DTOs
 - [docs/api.md](docs/api.md) - HTTP API, authentication, RBAC, limits
 - [docs/security.md](docs/security.md) - security and operations baseline
 - [docs/deploy.md](docs/deploy.md) - local, container, and reverse-proxy deployment
-- [docs/architecture/plugin-system.md](docs/architecture/plugin-system.md) - plugin runtime and contracts
+- [docs/architecture/plugin-system.md](docs/architecture/plugin-system.md) - plugin runtime and protocols
 - [docs/architecture/github-ecosystem.md](docs/architecture/github-ecosystem.md) - discovery and trust
-- [docs/architecture/registry.md](docs/architecture/registry.md) - Registry and CLI contract
+- [docs/architecture/registry.md](docs/architecture/registry.md) - Registry and CLI
 - [docs/architecture/how-to-build-driver.md](docs/architecture/how-to-build-driver.md) - Driver implementation guide
 - [docs/architecture/capability-model.md](docs/architecture/capability-model.md) - Device/Entity/Capability model
 - [docs/architecture/control-plane-sync.md](docs/architecture/control-plane-sync.md) - desired/observed synchronization

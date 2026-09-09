@@ -31,7 +31,6 @@ func TestErrorCodeStable(t *testing.T) {
 		{registry.ErrNotFound, "ERR_NOT_FOUND"},
 		{plugincontrol.ErrNotFound, "ERR_NOT_FOUND"},
 		{plugincontrol.ErrInvalidState, "ERR_INVALID_STATE"},
-		{plugincontrol.ErrPermissionConfirmationRequired, "ERR_PERMISSION_CONFIRMATION_REQUIRED"},
 	}
 	for _, tc := range cases {
 		if got := errorCode(tc.err); got != tc.code {

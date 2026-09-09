@@ -3,7 +3,6 @@ package auth
 import (
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -36,11 +35,6 @@ func NewTenantToken() (plain, hash, prefix string, err error) {
 func HashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
-}
-
-// VerifyTokenHash 常数时间比较两个 token hash。
-func VerifyTokenHash(a, b string) bool {
-	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
 // IsTenantToken 判断 token 是否为租户令牌形状（cp_ 前缀）。

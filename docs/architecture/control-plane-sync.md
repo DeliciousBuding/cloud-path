@@ -2,11 +2,11 @@
 
 最后更新：2026-09-09
 
-> 状态：当前控制面契约。Server desired/Edge applied/observed 投影、单调 revision、幂等 ack、
-> 离线执行缓存、secret handle 与审计边界均已落地；跨 Server、集中 KMS 等扩展见
+> 状态：当前控制面行为。Server desired/Edge applied/observed 投影、单调 revision、幂等 ack、
+> 离线执行缓存、secret handle 与审计边界均已实现；跨 Server、集中 KMS 等扩展见
 > [architecture.md](../architecture.md) §11。
 
-## 1. 问题与第一性结论
+## 1. 问题与设计结论
 
 插件系统需要同时回答四个问题：
 
@@ -205,8 +205,8 @@ Server 在 Edge hello 成功后发送当前完整快照；期望态变更后再�
 ## 9. 模块边界与验证
 
 共享写点的归属固定为：`internal/store/**` 负责 schema/migration/repository，Edge 运行时负责本地
-applied cache 与 reconcile，Server 负责路由、WS ingest/downlink、Catalog 投影和审计。契约变更先改
+applied cache 与 reconcile，Server 负责路由、WS ingest/downlink、Catalog 投影和审计。接口变更先改
 API DTO 与协议测试，再跨模块集成。
 
 控制面验证覆盖断网、重连、重复消息、跨租户、stale boot、权限扩大、secret 吊销的 WS + SQLite
-链路。它证明软件契约和进程行为，不替代 Connector 运行时验证、真板硬件验收或线上部署证据。
+链路。它证明软件行为和进程行为，不替代 Connector 运行时验证、真板硬件验证或线上部署证据。

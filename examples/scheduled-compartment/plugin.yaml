@@ -9,7 +9,7 @@ entrypoint: cloud-path-app-scheduled-compartment
 compatibility:
   # Core compatibility range. The registry installer fails closed without it
   # (ERR_CORE_INCOMPATIBLE), so a published manifest must always declare it.
-  core: ">=0.1.0 <0.3.0"
+  core: ">=0.2.8 <0.3.0" # durable schedule_job is required for restart-safe miss checks
 requirements:
   - id: reminder-output
     capability: cloudpath.dev/capability/buzzer@1

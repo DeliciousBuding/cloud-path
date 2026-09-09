@@ -30,6 +30,17 @@ docker compose -f docker-compose.yml up -d --build
 curl -fsS http://127.0.0.1:8080/healthz
 ```
 
+## Edge 容器（可选，手动）
+
+仅 Linux 串口直通需要；从仓库根目录手动启动，不配置开机自启：
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml -f deploy/docker-compose.edge.yml up -d --build
+docker compose -f deploy/compose/docker-compose.yml -f deploy/docker-compose.edge.yml down
+```
+
+Edge 使用同一镜像；真实串口需在 `deploy/docker-compose.edge.yml` 中取消注释 `devices`。容器刻意不设置自动重启。
+
 ## Application 插件（可选）
 
 在 `.env` 中设 `CLOUDPATH_APP_HOST=true`，重建 server 后启用应用宿主。

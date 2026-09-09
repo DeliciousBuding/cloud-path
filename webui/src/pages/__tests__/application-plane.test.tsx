@@ -186,6 +186,14 @@ describe('应用数据读取和通用展示', () => {
     expect(http.to('/app-b/records')[0]?.url).toBe('/api/plugin-instances/app-b/records?limit=20&offset=0')
   })
 
+  it('期望停用且观察态未知时显示设置已停用，不冒充应用未运行', async () => {
+    installFetch((url) => appResponse(url, { running: false }))
+    renderWithProviders(<ApplicationPlane instanceID="app-a" desiredEnabled={false} runtimeState="unknown" />)
+    expect(await screen.findByText('设置已停用')).toBeVisible()
+    expect(screen.getByText(/设置已停用，应用不会运行/)).toBeVisible()
+    expect(screen.queryByText('应用未运行')).not.toBeInTheDocument()
+  })
+
   it('应用停止保留历史和计划，重连后重新读取运行态', async () => {
     let running = false
     installFetch((url) => appResponse(url, { running }))
@@ -200,7 +208,7 @@ describe('应用数据读取和通用展示', () => {
     act(() => useLive.setState({ status: 'open', connectionEpoch: 1 }))
     expect(await screen.findByText('应用运行中')).toBeVisible()
     expect(await screen.findByText('入口信号')).toBeVisible()
-    expect(screen.getByText('任务 1')).toBeVisible()
+    expect(screen.getByText('检查窗口')).toBeVisible()
   })
 
   it('取消计划不会被渲染成仍要执行的时间，未知规则不被猜成每天', async () => {

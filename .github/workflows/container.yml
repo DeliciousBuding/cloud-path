@@ -5,8 +5,8 @@ name: container
 # the registry (see deploy/compose/README.md). This is a public GitHub repo, so
 # GHCR storage and the Linux runners are free for standard workflows.
 #
-#   push to main  -> ghcr.io/<owner>/cloudpath:latest
-#   push a v* tag -> ghcr.io/<owner>/cloudpath:<tag> and :latest
+#   push to main  -> ghcr.io/<owner>/cloudpath:sha-<full-sha>
+#   push a v* tag -> ghcr.io/<owner>/cloudpath:<tag>
 #
 # The Dockerfile builds BOTH binaries in one stage and defaults its entrypoint
 # to the server; the edge service just overrides entrypoint (see the compose
@@ -49,13 +49,14 @@ jobs:
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           IMAGE="ghcr.io/${OWNER}/cloudpath"
           if [ "${{ github.ref_type }}" = "tag" ]; then
-            TAGS="${IMAGE}:${{ github.ref_name }},${IMAGE}:latest"
-          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            TAGS="${IMAGE}:latest"
+            VERSION="${{ github.ref_name }}"
+            TAGS="${IMAGE}:${VERSION}"
           else
-            TAGS="${IMAGE}:${{ github.sha }}"
+            VERSION="${{ github.sha }}"
+            TAGS="${IMAGE}:sha-${VERSION}"
           fi
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
@@ -73,6 +74,6 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          build-args: VERSION=${{ github.ref_name }}
+          build-args: VERSION=${{ steps.meta.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

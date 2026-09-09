@@ -1,12 +1,12 @@
 # CloudPath 技术设计（当前实现）
 
-本文是 CloudPath 的技术 SSOT：技术栈、进程模型、目录、契约、存储、前端数据与行为边界、安全、测试与验证边界。WebUI 的呈现、排版、布局与交互 SSOT 见 [webui/DESIGN.md](../webui/DESIGN.md)。
-设备侧协议契约见 [protocol.md](protocol.md)；架构状态分层见 [architecture.md](architecture.md)；
+本文是 CloudPath 的技术设计基线：技术栈、进程模型、目录、接口、存储、前端数据与行为边界、安全、测试与验证边界。WebUI 的呈现、排版、布局与交互设计见 [webui/DESIGN.md](../webui/DESIGN.md)。
+设备侧协议见 [protocol.md](protocol.md)；架构状态分层见 [architecture.md](architecture.md)；
 面向使用者的说明见根 [README.md](../README.md)。
 
 > 状态：以当前 `main` 为实现基线，最新发布版本为 `v0.2.20`。外部 Driver Host、Registry、
-> Application Runtime 与多租户隔离已落地；目标态与未实现项见 [architecture.md](architecture.md) §11。
-> 历史里程碑和实现偏差记录只用于解释演进，不代表当前缺口。
+> Application Runtime 与多租户隔离已实现；目标态与未实现项见 [architecture.md](architecture.md) §11。
+> 历史记录用于解释设计取舍，不代表当前缺口。
 
 ## 当前基线与范围
 
@@ -22,7 +22,7 @@
 | 层 | 选型 | 理由 |
 |---|---|---|
 | 语言 | Go 1.26 | 单二进制、跨平台交叉编译（server 可直接上 VPS/arm64） |
-| HTTP 路由 | chi v5 | 轻量惯用，中间件生态好 |
+| HTTP 路由 | chi v5 | 轻量惯用，中间件支持好 |
 | WebSocket | coder/websocket | context 原生、活跃维护；edge↔server 与 server↔浏览器共用 |
 | 存储 | SQLite（modernc.org/sqlite） | 纯 Go 零 CGO，交叉编译无负担；WAL + busy_timeout |
 | 日志 | stdlib `log/slog` | 结构化日志，零依赖，支持 text/json |
@@ -55,7 +55,7 @@
                   React 管理台（浏览器，WS 实时 + REST 历史）
 ```
 
-要点：账号会话下 **edge→server→浏览器全链路 WebSocket**，状态变化实时到达面板；REST 承担历史
+要点：账号会话下 **edge→server→浏览器 WebSocket 链路**，状态变化实时到达面板；REST 承担历史
 查询与管理操作。服务令牌会话没有浏览器实时通道，边界见 [api.md](api.md#57-已知边界当前接受)。命令走 server→edge 的 WS 下行，带 ack 回执落库，前端按 `command_id` 结算。外部 Driver
 拥有硬件连接与协议解析；内置 `demo` 仅用于无硬件参考，不承载具体设备语义。
 
@@ -114,7 +114,7 @@ type Adapter interface {                              // examples/demo 实现
 外部 Driver 通过 Driver Protocol v1 桥接为 `device.Adapter`；`Raw` 只保留兼容与诊断用途，主路径使用
 Descriptor / Entity / Capability / Observation。核心与前端都不对具体设备做分支判断。
 
-## API 契约
+## API 接口
 
 ### WS 消息信封（edge↔server、server↔浏览器统一）
 
@@ -191,7 +191,7 @@ INDEX idx_commands_device(device_id, created_at) -- 设备详情页命令历史
    设备打开后立即 `sync` + `dump`（掉电后 RTC 需要重新对时）。
 7. **断线不丢事件**：离线期间事件进有界缓冲（512 条，超限丢最旧），重连后回放；
    状态消息幂等，重连即强制补报一次（`onServerOnline`）。
-8. **命令闭环**：`pending → sent → ok|failed|timeout`；90 秒未回执由 sweeper 标 `timeout`；
+8. **命令状态**：`pending → sent → ok|failed|timeout`；90 秒未回执由 sweeper 标 `timeout`；
    前端按钮跟踪 `command_id` 的 ack，另有 15 秒超时兜底提示。
 9. **重启不空白**：server 启动从 SQLite 水合设备与最后状态，一律标离线，等 edge 重新上报。
 10. **输入收口**：命令白名单（适配器声明）、参数长度 ≤64 UTF-8 字节且不含换行/NUL、
@@ -213,8 +213,8 @@ INDEX idx_commands_device(device_id, created_at) -- 设备详情页命令历史
 
 ## 前端（React Router 7）
 
-> WebUI 的呈现、排版、布局与交互 SSOT 是 [`webui/DESIGN.md`](../webui/DESIGN.md)；
-> 本节只保留路由、数据获取、行为契约与安全边界。
+> WebUI 的呈现、排版、布局与交互设计以 [`webui/DESIGN.md`](../webui/DESIGN.md) 为准；
+> 本节只保留路由、数据获取、行为规则与安全边界。
 
 | 路由 | 页面 | 内容 |
 |---|---|---|
@@ -251,7 +251,7 @@ server 退化为 API-only 并返回可读提示）。
 
 ### 设备命令与应用实例边界
 
-设备动作的 `title` / `description` / `destructive` / `confirmation` 往返契约在
+设备动作的 `title` / `description` / `destructive` / `confirmation` 往返字段在
 [protocol.md](protocol.md#capabilities)；HTTP 写面、RBAC 和 Application Data Plane 在
 [api.md](api.md) 与[应用输入与操作契约](#应用输入与操作契约)。
 
@@ -322,15 +322,15 @@ devices:
 |---|---|---|
 | 协议解析 | `cloud-path-driver-stcb/plugin/parser_test.go`（独立仓） | 黄金样本（真实捕获行：损坏分隔符、噪声前缀、越界值）、事件归一、漂移回绕、HHMM 校验、标签 |
 | 存储 | `internal/store/store_test.go` | 迁移到当前版本 + 幂等、设备/状态生命周期、事件过滤、命令过滤与超时、保留期清理（不误删在途命令）、统计、limit 夹取 |
-| 服务链路 | `internal/server/server_test.go` | WS 全链路（快照→hello→state fan-out+落库→REST 命令→edge 收令→ack 落库+广播→白名单拒绝）、令牌鉴权、重启水合、healthz |
+| 服务链路 | `internal/server/server_test.go` | WS 完整链路（快照→hello→state fan-out+落库→REST 命令→edge 收令→ack 落库+广播→白名单拒绝）、令牌鉴权、重启水合、healthz |
 | 服务加固 | `internal/server/hardening_test.go` | 适配器/统计端点、nil-store 不 panic、命令限流、参数校验、未知设备与离线 edge、命令设备过滤、查询参数夹取、保留期、edge_id 校验、重连挤占不误标离线、安全头、SPA 回落与路径穿越、未路由 `/api/*` 与缺失 `/assets/*` 回 404 而非 index.html、鉴权形态三档如实上报 |
 | Origin 策略 | `internal/server/origin_test.go` | 开发策略放行 localhost/无 Origin、拒绝外站；显式清单生效且防后缀伪装 |
 | 边缘运行时 | `internal/edge/{config_test.go,wsclient_test.go}` | 配置默认值/`${ENV}` 展开/各类错误、离线只缓冲事件、在线入队、队满回落缓冲、缓冲溢出丢最旧、回放（含部分回放）、状态 diff 抑制与心跳兜底、重连强制补报 |
 | 前端 | `pnpm exec tsc --noEmit` + `pnpm test` | 类型门禁（`strict` + `noUnusedLocals`）与 Vitest 行为回归；不把源码 class/样式扫描当行为测试 |
-| 契约 | `scripts/check_contract.py`（`task check:contract`） | Go `internal/api/types.go` ↔ TS `webui/src/lib/types.ts` 同名类型的 JSON 字段集合一致（含 `extends` 平面化）；`--self-test` 是解析器红队自检 |
+| 类型一致性 | `scripts/check_contract.py`（`task check:contract`） | Go `internal/api/types.go` ↔ TS `webui/src/lib/types.ts` 同名类型的 JSON 字段集合一致（含 `extends` 平面化）；`--self-test` 是解析器红队自检 |
 | e2e | 真机手工清单 | 见下；验证证据按发布/真板记录另行归档，不写入公开仓 |
 
-参考设备真机回归清单（使用任意已声明动作的真实 Driver；多设备现场 E2E 另列验收）：
+参考设备真机回归清单（使用任意已声明动作的真实 Driver；多设备现场 E2E 另列验证）：
 
 1. `task build` 出双二进制；启动 server 后内嵌管理台可见，无设备时是空状态而非报错。
 2. 启动 edge 后，网关与设备出现在管理台；`GET /api/edges`、`GET /api/devices` 与界面一致。
@@ -358,7 +358,7 @@ devices:
 | `GET /api/devices/{id}` 单段路径 | `/api/devices/{edgeID}/{deviceID}` 两段 | 设备键本身含 `/`，单段需要转义，两段更直白 |
 | `GET /api/devices/{id}/events` | `GET /api/events?device=` | 事件是全局资源，统一入口便于跨设备查询与筛选 |
 | 样式用 shadcn/ui | 自建原语组件（`components/ui.tsx`）+ CSS 变量 | shadcn 引入 radix 全家桶与额外约定；本项目只需 Badge/Panel/StatTile 等少量原语，自建更轻且主题可控 |
-| Vite 7 | Vite 6 | 定稿时 Vite 7 尚未发布/生态未跟上；6 已满足需求 |
+| Vite 7 | Vite 6 | 定稿时 Vite 7 尚未发布、工具链未跟上；6 已满足需求 |
 | `examples/pillbox` 承载业务语义 | 不设业务示例包，语义留在适配器的标签层 | 核心与示例都保持行业无关，避免平台绑定具体业务 |
 | 前端命令按钮硬编码 | 由 `GET /api/adapters` 白名单驱动 | 新增适配器零前端改动，且与 server 校验同源 |
 | 未规划保留期/限流/Origin 策略 | 三者均已实现并测试 | 长时间运行与对外暴露的实际需要 |
@@ -369,6 +369,6 @@ devices:
 1. **不含任何第三方厂商固件/SDK/库/课件**：`firmware/` 只放协议参考说明；设备侧代码不进本仓库。
 2. **核心设备/行业无关**：具体设备语义只存在于外部 Driver 插件；内置 `demo` 仅作无硬件参考。
 3. **私有信息不入库**：构想、设备清单、验证证据只写 `.local/`（gitignored）。
-4. **契约三处同步**：`internal/api/types.go` ↔ `webui/src/lib/types.ts` ↔ 本文档的 WS 信封表；
-   HTTP 路由与 DTO 的文档家是 `api.md`。同一条契约只允许一个文档落点，别处只放指针。
+4. **类型定义三处同步**：`internal/api/types.go` ↔ `webui/src/lib/types.ts` ↔ 本文档的 WS 信封表；
+   HTTP 路由与 DTO 的文档家是 `api.md`。同一份接口定义只允许一个文档落点，别处只放指针。
    代码那一半由 `scripts/check_contract.py` 机器守（CI `public-boundary`）：同名类型字段集不一致就失败。

@@ -17,15 +17,22 @@ import (
 // Manifest identity of the reference application. These must mirror
 // examples/scheduled-compartment/plugin.yaml.
 const (
-	pluginIDValue   = "io.github.deliciousbuding.cloud-path-app-scheduled-compartment"
-	pluginVersion   = "0.2.0"
-	jobWindowCheck  = "window-check"
-	windowCheckCron = "* * * * *"
-	buzzerAction    = "buzzer"
-	displayCap      = "cloudpath.dev/capability/display-text@1"
-	buzzerCap       = "cloudpath.dev/capability/buzzer@1"
-	keyCap          = "cloudpath.dev/capability/key@1"
+	pluginIDValue       = "io.github.deliciousbuding.cloud-path-app-scheduled-compartment"
+	pluginVersion       = "0.2.0"
+	jobWindowCheck      = "window-check"
+	jobWindowMissPrefix = "window-miss-"
+	windowCheckCron     = "* * * * *"
+	buzzerAction        = "buzzer"
+	displayCap          = "cloudpath.dev/capability/display-text@1"
+	buzzerCap           = "cloudpath.dev/capability/buzzer@1"
+	keyCap              = "cloudpath.dev/capability/key@1"
 )
+
+// windowFreshOpenGrace bounds when the first observation of an already-started
+// window is still treated as a fresh open. A later observation may be a plugin
+// restart or a late start; it records the occurrence but does not replay a
+// stale reminder or create a second durable miss task.
+const windowFreshOpenGrace = time.Minute
 
 // window state values stored in domain records.
 const (
@@ -42,14 +49,16 @@ const keyPressEvent = keyCap + "/press"
 
 // windowTrack is the in-memory runtime state for one scheduled window instance.
 type windowTrack struct {
-	ID             string
-	Compartment    string
-	Start          time.Time
-	End            time.Time
-	State          string
-	OpenedAt       time.Time
-	ClosedAt       time.Time
-	ReminderEntity string
+	ID                string
+	OccurrenceID      string
+	Compartment       string
+	Start             time.Time
+	End               time.Time
+	State             string
+	OpenedAt          time.Time
+	ClosedAt          time.Time
+	ReminderEntity    string
+	MissTaskScheduled bool
 }
 
 // instanceState is the per-plugin-instance runtime state.
@@ -150,7 +159,7 @@ func (s *Service) Describe(context.Context) (*application.ApplicationDescriptor,
 			{ID: "local-display", Capability: displayCap, Cardinality: "zero-or-one"},
 		},
 		Jobs: []application.JobDescriptor{
-			{ID: jobWindowCheck, Title: "Check for missed windows", InputSchemaJSON: `{"type":"object","properties":{"window_id":{"type":"string"}}}`},
+			{ID: jobWindowCheck, Title: "Open due windows and schedule deadline checks", InputSchemaJSON: `{"type":"object","properties":{"window_id":{"type":"string"}}}`},
 		},
 		DeclarativeOnly: false,
 	}, nil
@@ -278,8 +287,9 @@ func (s *Service) onCapabilityEvent(instanceID string, ev *application.Capabilit
 }
 
 // onKeyEvent interprets a key press on a bound compartment entity as the user
-// confirming that compartment. The business meaning of the generic key@1
-// event lives entirely here.
+// confirming that compartment. The occurrence is reconstructed from the event
+// time and configuration, so a plugin restart does not discard a confirmation
+// that still falls inside the configured window.
 func (s *Service) onKeyEvent(instanceID string, ev *application.CapabilityEvent) error {
 	s.mu.Lock()
 	st := s.instance(instanceID)
@@ -288,22 +298,29 @@ func (s *Service) onKeyEvent(instanceID string, ev *application.CapabilityEvent)
 		s.mu.Unlock()
 		return nil // not a bound compartment entity
 	}
-	var active *windowTrack
-	for _, w := range st.windows {
-		if w.Compartment == compID && w.State == windowOpened {
-			active = w
-			break
-		}
+	occurred := parseOccurred(ev.OccurredAt)
+	if occurred.IsZero() {
+		occurred = s.now()
 	}
-	if active == nil {
+	occurrence, ok := windowForCompartmentAt(st, compID, occurred)
+	if !ok {
 		s.mu.Unlock()
-		return nil // no active window for this compartment; idempotent
+		return nil // press is outside a configured window; idempotent
 	}
-	active.State = windowCompleted
-	active.ClosedAt = parseOccurred(ev.OccurredAt)
+	key := occurrenceKey(occurrence.OccurrenceID)
+	if existing := st.windows[key]; existing != nil {
+		if existing.State != windowOpened {
+			s.mu.Unlock()
+			return nil // already completed or missed
+		}
+		occurrence = existing
+	}
+	occurrence.State = windowCompleted
+	occurrence.ClosedAt = occurred
+	st.windows[key] = occurrence
 	effects := []application.ApplicationEffectUnion{
-		windowRecord(active),
-		cancelTaskEffect(active.ID),
+		windowRecord(occurrence),
+		cancelMissTaskEffect(occurrence.OccurrenceID),
 	}
 	s.mu.Unlock()
 
@@ -313,7 +330,7 @@ func (s *Service) onKeyEvent(instanceID string, ev *application.CapabilityEvent)
 func (s *Service) onRequestCompleted(_ string, ev *application.RequestCompleted) error {
 	// RequestCompleted acknowledges the reminder command lifecycle. It does not
 	// change the schedule state machine: only a key press completes a window
-	// and the window-check job records a missed window. It is handled so the
+	// and the durable miss task records an expired window. It is handled so the
 	// stream stays healthy and is intentionally a no-op for state.
 	_ = ev
 	return nil
@@ -392,19 +409,29 @@ func (s *Service) HandleRequest(_ context.Context, req *application.PluginHTTPRe
 	}, nil
 }
 
-// RunJob executes the window-check job. It owns the window state machine:
-// opening a window when its configured start has arrived, and recording a miss
-// once its configured end has passed. The injectable clock keeps the test
-// boundary deterministic. RunJob is idempotent per IdempotencyKey and the
-// occurrence state prevents duplicate automatic/durable dispatches.
+// RunJob executes either the automatic window opener or one durable miss
+// check. Core dispatches durable schedule_job rows with JobID == ScheduleID, so
+// miss checks arrive as window-miss-<occurrence>. Keeping opening and missing
+// as separate jobs removes the old automatic-vs-durable duplicate dispatch.
 func (s *Service) RunJob(_ context.Context, req *application.RunJobRequest) (*application.RunJobResponse, error) {
 	if req == nil {
 		return nil, status.Errorf(status.CodeInvalidArgument, "nil job request")
 	}
-	if req.JobID != jobWindowCheck {
+	switch {
+	case req.JobID == jobWindowCheck:
+		return s.runWindowCheck(req)
+	case strings.HasPrefix(req.JobID, jobWindowMissPrefix):
+		return s.runWindowMiss(req)
+	default:
 		return nil, status.Errorf(status.CodeUnimplemented, "job %q is not implemented", req.JobID)
 	}
+}
 
+// runWindowCheck is Core's automatic minute job. It opens each configured
+// occurrence once and, for a fresh open, arms a durable miss task whose id is
+// scoped to the occurrence date. Late observations are recorded without
+// replaying a stale reminder or re-arming a cancelled miss task.
+func (s *Service) runWindowCheck(req *application.RunJobRequest) (*application.RunJobResponse, error) {
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
@@ -431,8 +458,8 @@ func (s *Service) RunJob(_ context.Context, req *application.RunJobRequest) (*ap
 	now := s.now()
 	local := now.In(tz)
 	today := local.Format("2006-01-02")
-	for key := range st.windows {
-		if !strings.HasPrefix(key, today+"|") {
+	for key, w := range st.windows {
+		if w == nil || w.Start.In(tz).Format("2006-01-02") != today {
 			delete(st.windows, key)
 		}
 	}
@@ -451,7 +478,8 @@ func (s *Service) RunJob(_ context.Context, req *application.RunJobRequest) (*ap
 			continue
 		}
 
-		key := today + "|" + spec.ID
+		occurrenceID := makeOccurrenceID(today, spec.ID)
+		key := occurrenceKey(occurrenceID)
 		w := st.windows[key]
 		if now.Before(start) {
 			continue
@@ -461,20 +489,142 @@ func (s *Service) RunJob(_ context.Context, req *application.RunJobRequest) (*ap
 				continue // already opened or completed for this occurrence
 			}
 			w = &windowTrack{
-				ID: spec.ID, Compartment: spec.Compartment, Start: start, End: end,
-				State: windowOpened, OpenedAt: now, ReminderEntity: reminderEntity(st),
+				ID: spec.ID, OccurrenceID: occurrenceID, Compartment: spec.Compartment,
+				Start: start, End: end, State: windowOpened, OpenedAt: now,
+				ReminderEntity: reminderEntity(st),
 			}
 			st.windows[key] = w
-			effects = append(effects, s.windowStartEffects(st, w)...)
+			effects = append(effects, windowRecord(w))
+
+			// A fresh minute boundary is the only safe time to replay the
+			// reminder. After that the observation may be a restart; record the
+			// occurrence but do not reactivate a cancelled miss task.
+			if !now.After(start.Add(windowFreshOpenGrace)) {
+				if w.ReminderEntity != "" {
+					effects = append(effects, reminderEffect(st, w))
+				}
+				w.MissTaskScheduled = true
+				effects = append(effects, missTaskEffect(w))
+			}
 			continue
 		}
-		if w != nil && w.State != windowOpened {
-			continue // already completed or missed for this occurrence
+		if w == nil || w.State != windowOpened || w.MissTaskScheduled {
+			continue // no in-memory occurrence, already closed, or durable miss owns it
 		}
+
+		// Fallback for a late-started occurrence that never armed a durable
+		// miss task. Restarts have no in-memory w and therefore do not produce
+		// a false missed record.
+		w.State = windowMissed
+		w.ClosedAt = now
+		missed = append(missed, spec.ID)
+		effects = append(effects, windowRecord(w), cancelMissTaskEffect(w.OccurrenceID), missedNotificationEffect(w))
+	}
+	sort.Strings(missed)
+	body := resultJSON(missed)
+	if req.IdempotencyKey != "" {
+		st.jobs[req.IdempotencyKey] = body
+	}
+	s.mu.Unlock()
+
+	for _, u := range effects {
+		if err := s.sendEffect(req.PluginInstanceID, u); err != nil {
+			return nil, err
+		}
+	}
+	return &application.RunJobResponse{JobID: req.JobID, Status: status.New(), ResultJSON: body}, nil
+}
+
+// runWindowMiss is the durable deadline check armed when a window opens. Its
+// schedule id and effect ids are occurrence-qualified, so a restart cannot
+// confuse today's miss with another day. Completion cancels this task, making
+// that cancellation the durable "completed" fact available through the
+// existing Application Protocol.
+func (s *Service) runWindowMiss(req *application.RunJobRequest) (*application.RunJobResponse, error) {
+	var args struct {
+		WindowID       string `json:"window_id"`
+		OccurrenceDate string `json:"occurrence_date"`
+	}
+	if err := json.Unmarshal([]byte(req.ArgsJSON), &args); err != nil {
+		return nil, status.Errorf(status.CodeInvalidArgument, "invalid window-miss args: %v", err)
+	}
+	args.WindowID = strings.TrimSpace(args.WindowID)
+	args.OccurrenceDate = strings.TrimSpace(args.OccurrenceDate)
+	if args.WindowID == "" || args.OccurrenceDate == "" {
+		return nil, status.Errorf(status.CodeInvalidArgument, "window_id and occurrence_date are required")
+	}
+
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil, status.Errorf(status.CodeUnavailable, "plugin is shutting down")
+	}
+	st := s.instance(req.PluginInstanceID)
+	if st.config == nil {
+		s.mu.Unlock()
+		return &application.RunJobResponse{JobID: req.JobID, Status: status.New(), ResultJSON: resultJSON(nil)}, nil
+	}
+	if req.IdempotencyKey != "" {
+		if prev, ok := st.jobs[req.IdempotencyKey]; ok {
+			s.mu.Unlock()
+			return &application.RunJobResponse{JobID: req.JobID, Status: status.New(), ResultJSON: prev}, nil
+		}
+	}
+
+	cfg := st.config
+	tz, err := time.LoadLocation(cfg.Timezone)
+	if err != nil {
+		s.mu.Unlock()
+		return &application.RunJobResponse{JobID: req.JobID, Status: status.New(), ResultJSON: resultJSON(nil)}, nil
+	}
+	var spec *WindowSpec
+	for i := range cfg.Schedule {
+		if cfg.Schedule[i].ID == args.WindowID {
+			spec = &cfg.Schedule[i]
+			break
+		}
+	}
+	if spec == nil {
+		s.mu.Unlock()
+		return nil, status.Errorf(status.CodeInvalidArgument, "window %q is not configured", args.WindowID)
+	}
+	date, err := time.ParseInLocation("2006-01-02", args.OccurrenceDate, tz)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, status.Errorf(status.CodeInvalidArgument, "occurrence_date %q is invalid: %v", args.OccurrenceDate, err)
+	}
+	startClock, startOK := parseHHMM(spec.Start)
+	endClock, endOK := parseHHMM(spec.End)
+	if !startOK || !endOK {
+		s.mu.Unlock()
+		return nil, status.Errorf(status.CodeInvalidArgument, "window %q has an invalid schedule", spec.ID)
+	}
+	start := time.Date(date.Year(), date.Month(), date.Day(), startClock.Hour(), startClock.Minute(), 0, 0, tz)
+	end := time.Date(date.Year(), date.Month(), date.Day(), endClock.Hour(), endClock.Minute(), 0, 0, tz)
+	occurrenceID := makeOccurrenceID(args.OccurrenceDate, spec.ID)
+	if req.JobID != missScheduleID(occurrenceID) {
+		s.mu.Unlock()
+		return nil, status.Errorf(status.CodeInvalidArgument, "job %q does not match occurrence %q", req.JobID, occurrenceID)
+	}
+	now := s.now()
+	if now.Before(end) {
+		s.mu.Unlock()
+		return &application.RunJobResponse{JobID: req.JobID, Status: status.New(), ResultJSON: resultJSON(nil)}, nil
+	}
+
+	key := occurrenceKey(occurrenceID)
+	w := st.windows[key]
+	var effects []application.ApplicationEffectUnion
+	var missed []string
+	if w != nil && w.State == windowCompleted {
+		effects = append(effects, cancelMissTaskEffect(occurrenceID))
+	} else if w != nil && w.State == windowMissed {
+		// already converged; cancellation was emitted by the first run
+	} else {
 		if w == nil {
 			w = &windowTrack{
-				ID: spec.ID, Compartment: spec.Compartment, Start: start, End: end,
-				State: windowMissed, ClosedAt: now,
+				ID: spec.ID, OccurrenceID: occurrenceID, Compartment: spec.Compartment,
+				Start: start, End: end, State: windowMissed, ClosedAt: now,
 			}
 			st.windows[key] = w
 		} else {
@@ -482,7 +632,7 @@ func (s *Service) RunJob(_ context.Context, req *application.RunJobRequest) (*ap
 			w.ClosedAt = now
 		}
 		missed = append(missed, spec.ID)
-		effects = append(effects, windowRecord(w), cancelTaskEffect(w.ID), missedNotificationEffect(w))
+		effects = append(effects, windowRecord(w), cancelMissTaskEffect(occurrenceID), missedNotificationEffect(w))
 	}
 	sort.Strings(missed)
 	body := resultJSON(missed)
@@ -542,27 +692,34 @@ func (s *Service) instance(id string) *instanceState {
 	return st
 }
 
-func (s *Service) windowStartEffects(st *instanceState, w *windowTrack) []application.ApplicationEffectUnion {
-	effects := []application.ApplicationEffectUnion{windowRecord(w)}
-	if w.ReminderEntity != "" {
-		policy := Reminder{Freq: 1, Duration: 1}
-		if st != nil && st.config != nil {
-			policy = st.config.ResolvedReminder()
-		}
-		effects = append(effects, &application.RequestCommand{
-			EntityID:       w.ReminderEntity,
-			Action:         buzzerAction,
-			ArgsJSON:       mustJSON(map[string]int{"freq": policy.Freq, "duration": policy.Duration}),
-			IdempotencyKey: "reminder-" + w.ID,
-			Deadline:       w.End.UTC().Format(time.RFC3339),
-		})
+func reminderEffect(st *instanceState, w *windowTrack) *application.RequestCommand {
+	policy := defaultReminder
+	if st != nil && st.config != nil {
+		policy = st.config.ResolvedReminder()
 	}
-	effects = append(effects, &application.ScheduleTask{
-		ScheduleID:  "window-check-" + w.ID,
-		Cron:        windowCheckCron,
-		PayloadJSON: mustJSON(map[string]any{"window_id": w.ID}),
-	})
-	return effects
+	return &application.RequestCommand{
+		EntityID:       w.ReminderEntity,
+		Action:         buzzerAction,
+		ArgsJSON:       mustJSON(map[string]int{"freq": policy.Freq, "duration": policy.Duration}),
+		IdempotencyKey: "reminder-" + w.OccurrenceID,
+		Deadline:       w.End.UTC().Format(time.RFC3339),
+	}
+}
+
+func missTaskEffect(w *windowTrack) *application.ScheduleTask {
+	return &application.ScheduleTask{
+		ScheduleID: missScheduleID(w.OccurrenceID),
+		Cron:       windowCheckCron,
+		PayloadJSON: mustJSON(map[string]string{
+			"window_id":       w.ID,
+			"occurrence_date": w.Start.Format("2006-01-02"),
+			"occurrence_id":   w.OccurrenceID,
+		}),
+	}
+}
+
+func cancelMissTaskEffect(occurrenceID string) *application.CancelScheduledTask {
+	return &application.CancelScheduledTask{ScheduleID: missScheduleID(occurrenceID)}
 }
 
 // validateBindings enforces the declared requirement cardinalities and rejects
@@ -669,6 +826,48 @@ func keyToCompartment(st *instanceState, entity string) string {
 // binding order. The application gives business meaning to the key: the
 // Driver only reports a generic key press.
 
+// windowForCompartmentAt reconstructs the configured occurrence containing at.
+// It is the restart-safe fallback for key confirmation: no read API is needed
+// because the event timestamp and bounded config are sufficient to identify
+// the occurrence.
+func windowForCompartmentAt(st *instanceState, compID string, at time.Time) (*windowTrack, bool) {
+	if st == nil || st.config == nil {
+		return nil, false
+	}
+	tz, err := time.LoadLocation(st.config.Timezone)
+	if err != nil {
+		return nil, false
+	}
+	local := at.In(tz)
+	date := local.Format("2006-01-02")
+	for _, spec := range st.config.Schedule {
+		if spec.Compartment != compID {
+			continue
+		}
+		startClock, startOK := parseHHMM(spec.Start)
+		endClock, endOK := parseHHMM(spec.End)
+		if !startOK || !endOK {
+			continue
+		}
+		start := time.Date(local.Year(), local.Month(), local.Day(), startClock.Hour(), startClock.Minute(), 0, 0, tz)
+		end := time.Date(local.Year(), local.Month(), local.Day(), endClock.Hour(), endClock.Minute(), 0, 0, tz)
+		if at.Before(start) || !at.Before(end) {
+			continue
+		}
+		return &windowTrack{
+			ID: spec.ID, OccurrenceID: makeOccurrenceID(date, spec.ID), Compartment: spec.Compartment,
+			Start: start, End: end, State: windowOpened, ReminderEntity: reminderEntity(st),
+		}, true
+	}
+	return nil, false
+}
+
+func makeOccurrenceID(date, windowID string) string { return windowID + "@" + date }
+
+func occurrenceKey(occurrenceID string) string { return occurrenceID }
+
+func missScheduleID(occurrenceID string) string { return jobWindowMissPrefix + occurrenceID }
+
 func activeCount(st *instanceState) int {
 	n := 0
 	for _, w := range st.windows {
@@ -690,6 +889,7 @@ func parseOccurred(s string) time.Time {
 func windowRecord(w *windowTrack) *application.UpsertDomainRecord {
 	data := map[string]any{
 		"id":              w.ID,
+		"occurrence_id":   w.OccurrenceID,
 		"compartment":     w.Compartment,
 		"start":           w.Start.UTC().Format(time.RFC3339),
 		"end":             w.End.UTC().Format(time.RFC3339),
@@ -700,14 +900,10 @@ func windowRecord(w *windowTrack) *application.UpsertDomainRecord {
 	}
 	return &application.UpsertDomainRecord{
 		RecordType: "window",
-		RecordID:   w.ID,
+		RecordID:   w.OccurrenceID,
 		DataJSON:   mustJSON(data),
 		Version:    "1",
 	}
-}
-
-func cancelTaskEffect(windowID string) *application.CancelScheduledTask {
-	return &application.CancelScheduledTask{ScheduleID: "window-check-" + windowID}
 }
 
 func missedNotificationEffect(w *windowTrack) *application.SendNotification {

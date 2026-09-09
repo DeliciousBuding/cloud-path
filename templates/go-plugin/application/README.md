@@ -95,7 +95,7 @@ Push a `v*` tag; `.github/workflows/release.yml` builds linux/amd64,
 linux/arm64 and windows/amd64 binaries, writes a `sha256` checksum for each,
 attaches `plugin.yaml`, and creates a GitHub Release.
 
-## Publish to the ecosystem
+## Publish to the Registry
 
 After a release:
 
@@ -104,4 +104,4 @@ After a release:
    is shown by `cloudpath plugin inspect` as a reviewed plugin.
 
 See `docs/architecture/{plugin-system,github-ecosystem,registry}.md` in the
-cloud-path core repository for the contracts.
+cloud-path core repository for the documentation.

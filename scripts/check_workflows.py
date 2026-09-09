@@ -19,7 +19,9 @@ Checked invariants:
 * ``ci.yml``: ubuntu + windows matrix, race detector only on Linux, gofmt gate,
   frozen pnpm install, typecheck/test/build, public audit and link check;
 * ``release.yml``: triggered by ``v*`` tags, builds linux/arm64 (mandatory for
-  the native arm64 production host), produces checksums and publishes a release.
+  the native arm64 production host), produces checksums and publishes a release;
+* ``ci.yml`` and ``release.yml`` platform matrices match
+  ``scripts/build_matrix.py``'s ``PLATFORMS`` declaration.
 
 Usage:
     python scripts/check_workflows.py                 # .github/workflows
@@ -29,6 +31,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import ast
 import pathlib
 import re
 import sys
@@ -53,6 +56,9 @@ SECRET_ASSIGN_RE = re.compile(
     r"(?i)^\s*(?:[A-Za-z0-9_.-]*(?:token|password|secret|api[_-]?key)[A-Za-z0-9_.-]*)\s*:\s*['\"]?[A-Za-z0-9_\-]{12,}"
 )
 ALLOWED_SECRET_VALUE_RE = re.compile(r"\$\{\{\s*secrets\.")
+MATRIX_PLATFORM_RE = re.compile(
+    r"^\s*-\s*id:\s*\S+\s*$\n^\s*platform:\s*(\S+)\s*$", re.MULTILINE
+)
 
 
 @dataclass(frozen=True)
@@ -237,6 +243,60 @@ def race_is_linux_only(text: str) -> bool:
     return True
 
 
+def parse_declared_platforms(source: str) -> tuple[str, ...]:
+    """Read the ordered PLATFORMS tuple without importing build_matrix.py."""
+    tree = ast.parse(source)
+    value_node = None
+    for node in tree.body:
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == "PLATFORMS":
+            value_node = node.value
+        elif isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "PLATFORMS" for target in node.targets
+        ):
+            value_node = node.value
+    if value_node is None:
+        raise ValueError("PLATFORMS declaration not found")
+    raw = ast.literal_eval(value_node)
+    if not isinstance(raw, tuple) or not raw:
+        raise ValueError("PLATFORMS must be a non-empty tuple")
+    platforms: list[str] = []
+    for item in raw:
+        if not (isinstance(item, tuple) and len(item) == 2 and all(isinstance(v, str) for v in item)):
+            raise ValueError(f"PLATFORMS entry is not an (os, arch) string tuple: {item!r}")
+        platforms.append(f"{item[0]}/{item[1]}")
+    return tuple(platforms)
+
+
+def parse_workflow_platforms(source: str) -> tuple[str, ...]:
+    """Extract the platform values from an include-style workflow matrix."""
+    return tuple(match.group(1).strip("'\"") for match in MATRIX_PLATFORM_RE.finditer(source))
+
+
+def check_matrix_consistency(repo_root: pathlib.Path = REPO_ROOT) -> list[Problem]:
+    """Keep the duplicated workflow matrices aligned with their code SSOT."""
+    script = repo_root / "scripts" / "build_matrix.py"
+    try:
+        expected = parse_declared_platforms(script.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError, TypeError, ValueError) as exc:
+        return [Problem("scripts/build_matrix.py", f"cannot read PLATFORMS: {exc}")]
+
+    problems: list[Problem] = []
+    for workflow_name in ("ci.yml", "release.yml"):
+        path = repo_root / ".github" / "workflows" / workflow_name
+        try:
+            actual = parse_workflow_platforms(path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            problems.append(Problem(workflow_name, f"cannot read workflow matrix: {exc}"))
+            continue
+        if actual != expected:
+            problems.append(Problem(
+                workflow_name,
+                "matrix platforms drift from scripts/build_matrix.py: "
+                f"expected {expected}, found {actual}",
+            ))
+    return problems
+
+
 def file_specific_checks(path: pathlib.Path, text: str, profile: str = "core") -> list[Problem]:
     problems: list[Problem] = []
     name = path.name
@@ -398,6 +458,46 @@ def self_test() -> int:
         else:
             errors.append("the core profile did not notice a missing windows leg")
 
+        # Matrix SSOT: both workflow copies must match build_matrix.py exactly.
+        expected_matrix = (
+            "linux/arm64", "linux/amd64", "windows/amd64",
+            "windows/arm64", "darwin/amd64", "darwin/arm64",
+        )
+        fake_repo = tmp / "matrix-repo"
+        (fake_repo / "scripts").mkdir(parents=True)
+        (fake_repo / "scripts" / "build_matrix.py").write_text(
+            "PLATFORMS: tuple[tuple[str, str], ...] = (\n"
+            "    (\"linux\", \"arm64\"), (\"linux\", \"amd64\"),\n"
+            "    (\"windows\", \"amd64\"), (\"windows\", \"arm64\"),\n"
+            "    (\"darwin\", \"amd64\"), (\"darwin\", \"arm64\"),\n"
+            ")\n",
+            encoding="utf-8",
+        )
+        fake_workflows = fake_repo / ".github" / "workflows"
+        fake_workflows.mkdir(parents=True)
+        matrix_entries = "".join(
+            f"          - id: {platform.replace('/', '-')}\n"
+            f"            platform: {platform}\n"
+            for platform in expected_matrix
+        )
+        for workflow_name in ("ci.yml", "release.yml"):
+            (fake_workflows / workflow_name).write_text(
+                "jobs:\n  build:\n    strategy:\n      matrix:\n        include:\n"
+                + matrix_entries,
+                encoding="utf-8",
+            )
+        if check_matrix_consistency(fake_repo):
+            errors.append("matrix SSOT check rejected matching workflow matrices")
+        (fake_workflows / "ci.yml").write_text(
+            (fake_workflows / "ci.yml").read_text(encoding="utf-8").replace(
+                "linux/arm64", "linux/386"
+            ),
+            encoding="utf-8",
+        )
+        drift = check_matrix_consistency(fake_repo)
+        if not any(p.path == "ci.yml" and "drift" in p.message for p in drift):
+            errors.append("matrix SSOT check did not catch a drifted CI matrix")
+
     finally:
         import shutil
 
@@ -457,6 +557,12 @@ def main(argv: list[str]) -> int:
         print(f"  {'FAIL' if problems else 'OK  '} {f} [{effective}]")
         for p in problems:
             print(f"       - {p.message}")
+    if not args.paths:
+        matrix_problems = check_matrix_consistency(REPO_ROOT)
+        for p in matrix_problems:
+            print(f"  FAIL {p.path}")
+            print(f"       - {p.message}")
+        all_problems.extend(matrix_problems)
     if all_problems:
         print(f"workflow check FAILED ({len(all_problems)} problem(s), mode: {mode})")
         return 1

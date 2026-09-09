@@ -306,6 +306,13 @@ describe('普通参数表单模型', () => {
     expect(form?.fields.find((field) => field.key === 'duration')).toMatchObject({ type: 'integer' })
   })
 
+  it('空对象 schema 是无参数操作，不回落 JSON', () => {
+    expect(commandForm({ type: 'object', properties: {} })).toEqual({ fields: [] })
+    expect(commandForm({})).toEqual({ fields: [] })
+    expect(commandForm({ type: 'object', additionalProperties: true })).toBeNull()
+    expect(commandForm({ type: 'object', required: ['x'], properties: {} })).toBeNull()
+  })
+
   it('平铺对象直接生成字段，数组字段生成可读输入', () => {
     const form = commandForm({
       type: 'object', required: ['digits'],

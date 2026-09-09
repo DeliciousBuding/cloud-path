@@ -146,7 +146,7 @@ def parse_artifact_name(name: str) -> tuple[str, str, str] | None:
     base, version, goos, goarch = m.groups()
     if BINARY_BASENAME_INVERSE.get(base) is None:
         return None
-    if name.endswith(".exe") and goos != "windows":
+    if name.endswith(".exe") != (goos == "windows"):
         return None
     return version, goos, goarch
 
@@ -242,6 +242,12 @@ def self_test() -> int:
         errors.append("linux artifact must not end with .exe")
     if ".." in artifact_name("server", "a/../b", "linux", "arm64"):
         errors.append("version must be sanitized against path traversal")
+    for bad_name in (
+        "cloudpath-server_v0.1.0_windows_arm64",
+        "cloudpath-edge_v0.1.0_linux_arm64.exe",
+    ):
+        if parse_artifact_name(bad_name) is not None:
+            errors.append(f"artifact name accepted with wrong .exe suffix: {bad_name}")
 
     # 4. The WebUI precondition really triggers (run from a temp copy of the tree).
     import tempfile

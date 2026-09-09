@@ -573,7 +573,7 @@ export default function DeviceDetail() {
               </div>
               {descriptor && (
                 <details className="mt-3">
-                  <summary className="cursor-pointer select-none text-[12px] text-ink-3 transition-colors hover:text-ink-2">
+                  <summary className="flex min-h-11 cursor-pointer select-none items-center text-[12px] text-ink-3 transition-colors hover:text-ink-2">
                     设备说明原始数据
                   </summary>
                   <JsonBlock className="mt-1.5" value={descriptor} maxHeight="max-h-56" label="设备说明原始数据" />

@@ -29,6 +29,7 @@
   "definitions": {
     "Property": {
       "type": "object",
+      "description": "冻结字段；WebUI 的 widget/min/max 等旧提示不属于本 schema。",
       "properties": {
         "type": {"type": "string"},
         "unit": {"type": "string", "description": "统一单位代码，不得用本地化文本"},
@@ -36,9 +37,14 @@
         "quality": {"type": "array", "items": {"enum": ["good", "uncertain", "bad", "unavailable"]}}
       }
     },
-    "EventDecl": {"type": "object", "properties": {"payloadSchema": {"type": "object"}}},
+    "EventDecl": {
+      "type": "object",
+      "description": "冻结字段；WebUI 的 title/description 旧展示提示不属于本 schema。",
+      "properties": {"payloadSchema": {"type": "object"}}
+    },
     "ActionDecl": {
       "type": "object",
+      "description": "冻结字段；WebUI 的 command/primary 旧兼容字段不属于本 schema。",
       "properties": {
         "title": {"type": "string"},
         "description": {"type": "string"},

@@ -46,6 +46,7 @@ export function appResponse(url: string, options: {
   if (path.pathname.endsWith('/bindings')) return stubResponse(200, { instance_id: id, running, bindings: running ? [appBinding] : [] })
   if (path.pathname.endsWith('/jobs')) return stubResponse(200, {
     instance_id: id, running, jobs: running ? ['minute-check'] : [], scheduled: options.scheduled ?? [appSchedule],
+    job_descriptors: running ? [{ id: 'minute-check', title: '检查窗口', input_schema_json: '{}', manual_only: false }] : [],
   })
   if (url === '/api/descriptors') return stubResponse(200, appPresentation)
   if (url === '/api/plugins') return stubResponse(200, { plugins: [{

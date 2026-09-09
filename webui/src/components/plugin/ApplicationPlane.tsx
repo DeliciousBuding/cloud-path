@@ -122,13 +122,13 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState, desir
   return <section className="mb-5 min-w-0 space-y-5" aria-label="应用数据">
     <div className="flex flex-wrap items-center gap-2">
       <h2 className="text-[15px] font-semibold">应用数据</h2>
-      {runningState !== 'unknown' && <Badge tone={runningState === 'running' ? 'ok' : runningState === 'conflict' ? 'warn' : 'idle'}>{runningState === 'running' ? '应用运行中' : runningState === 'conflict' ? '状态冲突' : '应用未运行'}</Badge>}
+      {runningState !== 'unknown' && <Badge tone={runningState === 'running' ? 'ok' : runningState === 'conflict' ? 'warn' : 'idle'}>{runningState === 'running' ? '应用运行中' : runningState === 'conflict' ? '状态冲突' : desiredEnabled ? '应用未运行' : '设置已停用'}</Badge>}
       <p role="status" className="text-xs text-ink-3">{status === 'open' ? '实时更新已连接'
         : status === 'connecting' ? '正在连接实时更新，暂以定时同步为准' : '实时更新已断开，暂以定时同步为准'}</p>
       {refreshing && <span className="text-xs text-ink-3">正在同步…</span>}
     </div>
     {runningConflict && <p className="text-sm text-ink-2">运行状态来源不一致，暂时无法确认应用是否正在运行。</p>}
-    {runningState === 'stopped' && <p className="text-sm text-ink-2">应用当前未运行。设备连接和临时任务会暂时清空，已保存的记录和计划仍可查看。</p>}
+    {runningState === 'stopped' && <p className="text-sm text-ink-2">{desiredEnabled ? '应用当前未运行。设备连接和临时任务会暂时清空，已保存的记录和计划仍可查看。' : '设置已停用，应用不会运行；已保存的记录和计划仍可查看。'}</p>}
     <Panel title="应用操作">
       {(jobs.isPending || jobs.isError) && <ReadContent title="应用操作" query={jobs} empty={false}>{null}</ReadContent>}
       <ApplicationActions instanceID={instanceID} jobs={jobs.data} running={actionRunning} conflict={runningConflict} desiredEnabled={desiredEnabled}
@@ -184,10 +184,14 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState, desir
       <ReadContent title="定时任务" query={jobs} empty={!jobs.data?.jobs.length && !jobs.data?.scheduled.length}>
         <p className="mb-4 text-xs text-ink-3">临时任务随应用启停，保存的计划会保留。排定时间不代表已经执行成功。</p>
         <h3 className="text-sm font-medium">临时任务</h3>
-        {jobs.data?.jobs.length ? <ul className="mb-4 divide-y divide-hairline">{jobs.data.jobs.map((job, index) => <li key={job} className="py-3">
-          <p className="text-sm">任务 {index + 1}</p>
-          <TechnicalDetails><p>任务标识：{job}</p></TechnicalDetails>
-        </li>)}</ul> : <p className="mb-4 mt-2 text-xs text-ink-3">暂无临时任务</p>}
+        {jobs.data?.jobs.length ? <ul className="mb-4 divide-y divide-hairline">{jobs.data.jobs.map((job) => {
+          const descriptor = jobs.data?.job_descriptors?.find((item) => item.id === job)
+          const title = descriptor?.title?.trim() || '后台任务'
+          return <li key={job} className="py-3">
+            <p className="break-words text-sm font-medium [overflow-wrap:anywhere]">{title}</p>
+            <TechnicalDetails><p>任务标识：{job}</p></TechnicalDetails>
+          </li>
+        })}</ul> : <p className="mb-4 mt-2 text-xs text-ink-3">暂无临时任务</p>}
         <h3 className="text-sm font-medium">已保存的计划</h3>
         {jobs.data?.scheduled.length ? jobs.data.scheduled.map((job, index) => <ScheduledRow key={job.schedule_id} job={job} number={index + 1} />)
           : <p className="mt-2 text-xs text-ink-3">暂无已保存的计划</p>}

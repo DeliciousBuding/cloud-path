@@ -611,7 +611,7 @@ export function CapabilityBrowser({ descriptor, idx = EMPTY_INDEX, className }: 
                   <details>
                     <summary
                       title={`版本 ${parsed.version ?? doc.metadata?.version ?? '—'}`}
-                      className="cursor-pointer select-none text-[12px] text-ink-3 transition-colors hover:text-ink-2">
+                      className="flex min-h-11 cursor-pointer select-none items-center text-[12px] text-ink-3 transition-colors hover:text-ink-2">
                       数据结构
                     </summary>
                     <JsonBlock className="mt-1.5" value={doc.spec} maxHeight="max-h-48" label={`${ref} 完整数据`} />

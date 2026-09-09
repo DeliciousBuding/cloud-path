@@ -1,8 +1,8 @@
 # Changelog
 
-本文件记录**发布工程**层面的变更：版本、发布产物、命名规范与部署物料。
+本文件记录发布与工程变更：版本、发布产物、命名规范与部署物料。
 产品能力的实现事实以 [docs/](docs/) 下各文档与代码为准；本文件不复述功能清单，
-也不把尚未合并/尚未验证的目标态写成已发布内容。
+也不把尚未发布或尚未验证的目标态写成已发布内容。
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循
 [SemVer](https://semver.org/lang/zh-CN/)。仓库 tag 形状为 `v*`，由
@@ -80,7 +80,7 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 主题：**插件实例重配置与身份收口**。真机升级暴露「PATCH 返回成功、applied revision 前进，旧进程却继续运行」；
 排查发现另有三处同源缺陷（实例身份在某个平面上被部分折叠），在原质量范围内一并收口，未新增架构。
 
-### 契约变更（读面不再对用户说谎）
+### 接口变更（读面不再误导用户）
 
 - `GET /api/stats`：`auth_enabled: bool` → `auth_mode ∈ account|token|open`，报告 server **实际执行**的鉴权形态。
   此前账号模式被设置页显示为「未启用（本机模式）」。字段在 [docs/api.md](docs/api.md) §2.2，档位定义见 §1。
@@ -112,25 +112,25 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 - `.gitattributes` 补 `*.yml text eol=lf`（此前只写 `*.yaml`），并统一 YAML 行尾，避免同一文件在不同检出环境中产生无意义 diff；零语义改动由 `yaml.safe_load` 前后比对证明。
 - 消除 `TestOverviewTenantIsolation` 的偶发闪断（tenant-b 事件断言前补一次等待），恢复稳定回归。
 - 18 二进制 + `checksums.txt` 与多架构 GHCR 镜像已发布；`linux/arm64` 镜像来源提交与 tag 一致。
-- 发布源码同树 CI 覆盖 Linux race、Windows 与六平台构建/产物校验；Go tests、`go vet` / `gofmt`、
-  WebUI typecheck/test/build、契约漂移门禁、公开审计与链接检查均通过。
+- 发布源码在同一源码树的 CI 覆盖 Linux race、Windows 与六平台构建/产物校验；Go tests、`go vet` / `gofmt`、
+  WebUI typecheck/test/build、类型一致性门禁、公开审计与链接检查均通过。
 
-### 验证边界（不外推）
+### 验证范围
 
 - 重配置、重启后配置恢复、退出失败与跨租户隔离已有**真实子进程**回归，并以变异测试证明回归有效
   （`instanceKey` 退回裸 id、去掉 edge 过滤，均先红后绿）。
-- 「不靠 Edge 重启」的**真机热更新后验在部署之后**进行，本节不代表其已通过；此前用受控 Edge 重启恢复版本一致，
-  不作为补丁验收证据。
+- 「不靠 Edge 重启」的**真机热更新验证在部署之后**进行，本节不代表其已通过；此前用受控 Edge 重启恢复版本一致，
+  不作为补丁验证证据。
 - 无第二种硬件，设备侧证据仍来自既有 STC-B 单链路；未接步进电机实物，不宣称电机物理动作完成。
-- 生产浏览器 UI 验收需登录后进行，本轮只有测试、`tsc`/构建与真实 API/硬件证据，不冒充新 UI 已在浏览器验收。
+- 生产浏览器 UI 验证需登录后进行；本版本只有测试、`tsc`/构建与真实 API/硬件证据，不声称新 UI 已在浏览器验证。
 
-## v0.2.15 — 应用输入与操作契约
+## v0.2.15 — 应用输入与操作接口
 
 - 新增可选实体观测上报、显式应用绑定及手动作业声明/HTTP调用，详见
-  [设计契约](docs/design.md#应用输入与操作契约) 与 [应用操作 API](docs/api.md#551-应用手动操作operator)。
+  [设计](docs/design.md#应用输入与操作契约) 与 [应用操作 API](docs/api.md#551-应用手动操作operator)。
 - 管理台按运行中插件声明生成操作表单，区分受理结果与设备回执；旧 raw 状态与自动任务保持兼容。
 - 依赖观测事件或 manual_only 语义的应用要求 Core >=0.2.15，不可安装到会忽略该标记的旧宿主。
-- 发布资产命名、六平台矩阵与校验和约定不变。测试/CI 与部署/真板验收分别出证据，本节不代表现场验收通过。
+- 发布资产命名、六平台矩阵与校验和约定不变。测试/CI 与部署/真板验证分别出证据，本节不代表现场验证通过。
 
 ## v0.2.18 — 2026-09-09
 
@@ -145,7 +145,7 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 ### 验证边界
 
 - 本版本由 Go 单测、集成回归与涉及插件进程的真实子进程用例覆盖；不代表新增多板真机 E2E，真板证据仍按单板链路与
-  `docs/architecture/how-to-build-driver.md` 的硬件验收要求分别出具。
+  `docs/architecture/how-to-build-driver.md` 的硬件验证要求分别出具。
 
 ## v0.2.19 — 2026-09-09
 
@@ -171,15 +171,15 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 | `v0.2.4` | 已发布（2026-09-05） | Edge applier 修复：实例状态文件收敛后才持久化——失败 apply 不再把不可满足的版本写进 replay 状态（2026-09-05 生产 Edge 无法自举事故的根因），重启照常回放最后可满足配置 |
 | `v0.2.5` | 已发布（2026-09-05） | appruntime 修复：domain-record effect 去重键内容化——upsert 恢复真语义（此前同一记录的后续更新全被幂等去重吞掉，真板实测 reminder_state 恒空）；真板 E2E 增加提醒命令失败路径（freq=9→固件 badarg→RequestCompleted(failed)→应用落痕） |
 | `v0.2.6` | 已发布（2026-09-05） | AppHost 修复×2（生产环境实测某应用实例持续失败）：共享插件进程停一个实例不再连带杀兄弟（新增 StopInstanceStreamOnly，Shutdown RPC 只留给最后实例）；reconcile 自愈——desired 未变但实际态失活的实例按 stop+start 重建会话 |
-| `v0.2.7` | 已发布（2026-09-05） | Application Data Plane：`/api/plugin-instances/{id}/records|bindings|jobs` 通用读面（分页/过滤/租户隔离）+ WS `domain_record` 实时投影（created/updated）；契约 docs/api.md §5.5 |
+| `v0.2.7` | 已发布（2026-09-05） | Application Data Plane：`/api/plugin-instances/{id}/records|bindings|jobs` 通用读面（分页/过滤/租户隔离）+ WS `domain_record` 实时投影（created/updated）；接口见 docs/api.md §5.5 |
 | `v0.2.8` | 已发布（2026-09-05） | Durable Scheduler：schema v10 `scheduled_jobs` + 5 字段 cron 解析器 + claim-then-dispatch 调度循环（重启零重复、missed-run policy skip/run_once、停机不漂移节奏）；`schedule_job`/`cancel_job` 从簿记变真 primitive |
 | `v0.2.9` | 已发布（2026-09-05） | appruntime 修复：事件流开启即派发初始 `InstanceLifecycle` 事件——RunJob/RunRequest 早于任何设备事件到达时，应用侧 effect writer 尚未注册，其产生的 effect 此前被静默丢弃（button-indicator bootstrap 实测抓出） |
-| `v0.2.10` | 已发布（2026-09-05） | appruntime 修复：实例停机/启动失败即移除记录——此前 failed 记录永远占位，AppHost reconcile 的进程内自愈每轮撞 `ErrInstanceExists`（真板实测：自愈实际只在 server 整体重启时生效）；Stop→Start 重建成为受测契约 |
+| `v0.2.10` | 已发布（2026-09-05） | appruntime 修复：实例停机/启动失败即移除记录——此前 failed 记录永远占位，AppHost reconcile 的进程内自愈每轮撞 `ErrInstanceExists`（真板实测：自愈实际只在 server 整体重启时生效）；Stop→Start 重建成为受测行为 |
 | `v0.2.11` | 已发布（2026-09-05） | 绑定确定性修复（真板实测根因）：Edge descriptor 实体按 EntityID 排序、Server appCandidates 按 (device, entity) 排序——此前 map 随机迭代让 Binder first-match 每次绑到不同实体（button-indicator 重启后绑到 key2，用户按 K1 全部静默丢弃），且 descriptor 指纹每拍抖动导致整份 descriptor 每 poll 周期重发；AppHost 事件路由增加 dispatch/unrouted 观测日志（静默丢弃盲区） |
-| `v0.2.12` | 已发布（2026-09-06） | Application Plane Web 三读面与实时/重连恢复；身份及只读权限隔离；中心服务宿主展示与概览活跃统计修复；容器 AppHost 持久化路径统一。发布源码经前端测试、Go tests/vet、CI 和真实浏览器隔离联调验证；本次浏览器设备输入为合成设备，不代表新增真板验收 |
-| `v0.2.13` | 已发布（2026-09-07） | Driver 动作 RPC 透传可选标题、说明与危险确认元数据；`oneOf`/`anyOf`/`allOf` 三态校验；Host 完成认证连接计数后再发布 `ready`。18 二进制 + checksums.txt 与容器镜像已发布，linux/arm64 镜像来源提交与 tag 一致。发布源码同树 CI（含 Linux race、Windows、六平台）与 WebUI typecheck/test/build 通过；浏览器验证限于既有隔离联调，不代表新增真板验收或 Edge/Driver 更新后验完成 |
-| `v0.2.14` | 已发布（2026-09-07） | 插件实例重配置与身份收口：既有实例变更不再被静默忽略、重启后在 `HEALTHY` 前恢复已应用配置、退出失败不冒充成功、实例身份统一带租户键并如实标记 drift；另修 `auth_mode`、未路由 404、首装会话三处会说谎的读面。详见 [§v0.2.14](#v0214--2026-09-07)。**验证边界**：真机「不靠 Edge 重启」的热更新后验在部署之后进行，本行不代表其已通过 |
-| `v0.2.15` | 已发布（2026-09-08） | 应用输入与操作契约：实体观测上报、显式绑定、手动作业声明/HTTP 调用；详见 [§v0.2.15](#v0215--应用输入与操作契约) |
+| `v0.2.12` | 已发布（2026-09-06） | Application Plane Web 三读面与实时/重连恢复；身份及只读权限隔离；中心服务宿主展示与概览活跃统计修复；容器 AppHost 持久化路径统一。发布源码经前端测试、Go tests/vet、CI 和真实浏览器隔离联调验证；本次浏览器设备输入为合成设备，不代表新增真板验证 |
+| `v0.2.13` | 已发布（2026-09-07） | Driver 动作 RPC 透传可选标题、说明与危险确认元数据；`oneOf`/`anyOf`/`allOf` 三态校验；Host 完成认证连接计数后再发布 `ready`。18 二进制 + checksums.txt 与容器镜像已发布，linux/arm64 镜像来源提交与 tag 一致。发布源码同树 CI（含 Linux race、Windows、六平台）与 WebUI typecheck/test/build 通过；浏览器验证限于既有隔离联调，不代表新增真板验证或 Edge/Driver 更新后验完成 |
+| `v0.2.14` | 已发布（2026-09-07） | 插件实例重配置与身份收口：既有实例变更不再被静默忽略、重启后在 `HEALTHY` 前恢复已应用配置、退出失败不伪装成成功、实例身份统一带租户键并如实标记 drift；另修 `auth_mode`、未路由 404、首装会话三处会误导用户的读面。详见 [§v0.2.14](#v0214--2026-09-07)。**验证范围**：真机「不靠 Edge 重启」的热更新验证在部署之后进行，本行不代表其已通过 |
+| `v0.2.15` | 已发布（2026-09-08） | 应用输入与操作接口：实体观测上报、显式绑定、手动作业声明/HTTP 调用；详见 [§v0.2.15](#v0215--应用输入与操作接口) |
 | `v0.2.18` | 已发布（2026-09-09） | 控制面稳定性：命令断线/超时终态、Ping 死锁与 SQLite 抖动、执行器独占绑定、AppHost 失败投影；详见 [§v0.2.18](#v0218--2026-09-09) |
 | `v0.2.19` | 已发布（2026-09-09） | `purge=true` 事务化清除插件实例私有数据；详见 [§v0.2.19](#v0219--2026-09-09) |
 | `v0.2.20` | 已发布（2026-09-09） | 持久化设备最后已知 Descriptor（schema v11），离线重启后可水合并恢复 Application 绑定；详见 [§v0.2.20](#v0220--2026-09-09) |

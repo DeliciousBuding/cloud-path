@@ -33,7 +33,7 @@ const STATUS_FILTERS = [
 
 /** 下拉共用的样式（390px：min-w-0 + max-w-full，长设备名靠 option 自身截断） */
 // 原生 select/option 不吃 CSS 截断：select 自身限宽 + overflow-hidden，option 文本另在 optionLabel 里收敛
-const SELECT_CLS = 'min-w-0 max-w-full overflow-hidden rounded-full border border-hairline bg-surface px-3 py-1.5 text-xs font-medium outline-none transition-colors focus:border-accent'
+const SELECT_CLS = 'min-h-11 min-w-0 max-w-full overflow-hidden rounded-full border border-hairline bg-surface px-3 py-1.5 text-xs font-medium outline-none transition-colors focus:border-accent sm:min-h-0'
 
 /**
  * 活动页：事件与命令历史（/api/events、/api/commands），带设备 / 边缘 / 状态过滤。
@@ -177,7 +177,7 @@ export default function Activity() {
 
           {tab === 'events' && typeOptions.length > 0 && (
             <details className="border-t border-hairline pt-3">
-              <summary className="cursor-pointer select-none text-[12px] font-medium text-ink-2">
+              <summary className="flex min-h-11 cursor-pointer select-none items-center text-[12px] font-medium text-ink-2">
                 按事件类型筛选
                 {types.size > 0 && <span className="ml-1 text-accent">已选 {types.size} 项</span>}
               </summary>

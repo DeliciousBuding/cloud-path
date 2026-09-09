@@ -19,7 +19,11 @@ func TestAuditMetadataRedaction(t *testing.T) {
 		String("session_id", "sess-1").
 		String("scopes", "read,write")
 
-	raw := m.JSON()
+	rawBytes, err := json.Marshal(m.Map())
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := string(rawBytes)
 	if strings.Contains(raw, "supersecret") || strings.Contains(raw, "cp_plain") ||
 		strings.Contains(raw, "hunter2") || strings.Contains(raw, "cp_session=abc") ||
 		strings.Contains(raw, "Bearer xyz") || strings.Contains(raw, "sess-1") {

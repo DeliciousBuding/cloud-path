@@ -2,9 +2,9 @@
 
 # CloudPath · 云径
 
-**云原生、插件驱动的互联物联网控制平台（Cloud-Native IoT Control Plane）**：
-以「中心控制面 + 边缘代理」的边云协同一体化架构，将任意设备接入云端、实时可视化并远程控制；
-设备无关、边缘自治，新设备 = 一个 Driver 插件。
+**中心服务 + 边缘代理的物联网控制平台（IoT Control Plane）**：
+设备通过 Edge 接入，浏览器查看状态并远程控制。平台不识别具体硬件，
+新设备由 Driver 插件提供。
 
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
@@ -18,18 +18,18 @@
 
 ## 这是什么
 
-CloudPath 把「插上一台设备 → 上云看到它 → 远程控制它」做成**可开箱即用的云原生基础设施**，
-而非某块开发板的上位机。
+CloudPath 把「接入设备 → 查看状态 → 远程控制」做成一套可本地运行、也可部署到公网的系统，
+不是某块开发板的专用上位机。
 
-- **云原生 · 边云协同**：中心控制面（Server）是 **期望态 / 租户 / 审计的唯一权威**；边缘代理（Edge）是
+- **中心服务与边缘代理**：中心服务（Server）是 **期望态 / 租户 / 审计的唯一权威**；边缘代理（Edge）是
   **观测态的唯一权威**并保存最后成功 applied 快照。边缘自治：断网继续运行，重连仅应用最终快照、不回放中间副作用。
 - **设备无关 · 插件驱动**：核心（`internal/*`）不识别任何具体硬件；新设备 = 一个 Driver 插件。
-- **分布式 Hub-Spoke**：多边缘节点 + 单中心控制面，天然中心-边缘拓扑；当前为单 Server 部署，
+- **中心-边缘拓扑**：多边缘节点 + 单中心服务；当前为单 Server 部署，
   多 Server 横向扩展仍属目标态。
 - **设备身份** = `(tenant_id, edge_id, device_id)`；线上传输键 `<edge_id>/<device_id>`。
-- **全链路实时**：账号会话下 edge → server → 浏览器全程 WebSocket；REST 承担历史查询与管理操作。
+- **实时链路**：账号会话下 edge → server → 浏览器走 WebSocket；REST 承担历史查询与管理操作。
   租户令牌会话只有 REST，无浏览器实时通道（见下文边界）。
-- **单二进制 · 零 CGO**：WebUI `go:embed` 进 server；SQLite 用 `modernc.org/sqlite`，交叉编译 Linux/arm64 无需工具链。
+- **单二进制与零 CGO**：WebUI `go:embed` 进 server；SQLite 用 `modernc.org/sqlite`，交叉编译 Linux/arm64 无需工具链。
 
 ```text
         ┌──────────────────────────────────────────────────────────┐
@@ -77,8 +77,8 @@ UI 贡献不是独立的可执行插件类型：当前由 Descriptor/Capability 
 split/scaffold 重新生成并覆盖已独立演进的应用。可安装版本、资产与摘要以各仓 Release 为准，
 源码合并不等于已发布。
 
-Core >= v0.2.15 的类型化 `property-observed`、手动任务与显式 `app_bindings` 契约见
-[应用输入与操作契约](docs/design.md#应用输入与操作契约)；应用依赖范围以各自 `plugin.yaml` 和 `go.mod` 为准。
+Core >= v0.2.15 的类型化 `property-observed`、手动任务与显式 `app_bindings` 接口见
+[应用输入与操作接口](docs/design.md#应用输入与操作契约)；应用依赖范围以各自 `plugin.yaml` 和 `go.mod` 为准。
 
 能力模型、控制面同步语义与租户安全边界见
 [docs/architecture/capability-model.md](docs/architecture/capability-model.md)、
@@ -129,8 +129,7 @@ cp edge.example.yaml edge.yaml    # edge.yaml 是本地私有配置，不入库
 ```
 
 - **没有硬件**：直接用母版里的内置 `adapter: demo`（无需串口）。设备会真实上线并持续
-  上报进程内状态，命令真实执行并返回结果，可验证「Edge 接入 / 多机接入 / 命令闭环 /
-  断线重连」全链路。
+  上报进程内状态，命令真实执行并返回结果，可验证 Edge 接入、多机接入、命令状态和断线重连。
 - **有真实串口设备**：先安装并启用对应 Driver Plugin，再在 `edge.yaml` 启用
   `plugin_host`，填写 `port`（Windows `COM3`、Linux `/dev/ttyUSB0`、macOS
   `/dev/cu.usbserial-*`）与 `adapter: stcb`。串口不存在时设备保持 offline，Edge 按
@@ -162,7 +161,7 @@ curl -fsS "http://127.0.0.1:8080/api/events?limit=10"     # 事件流（新→�
 curl -fsS http://127.0.0.1:8080/api/edges                 # 网关在线状态
 ```
 
-命令闭环是 `pending → sent → ok|failed|timeout`；90 秒未回执由后台 sweeper 标为 `timeout`，前端按 `command_id` 结算回执。事件与终态命令默认保留 30 天。
+命令状态是 `pending → sent → ok|failed|timeout`；90 秒未回执由后台 sweeper 标为 `timeout`，前端按 `command_id` 结算回执。事件与终态命令默认保留 30 天。
 
 ### 界面
 
@@ -379,7 +378,7 @@ L1 内网/反代（`-allowed-origins` + 建议令牌 + TLS）→ L2 公网（令
 | `task dev:server` / `dev:edge` / `dev:web` | 开发模式（:8080 / edge / Vite :5173） |
 | `task test` | Go 单测 + 前端 typecheck/组件测试 |
 | `task test:race` | 带竞态检测（需 cgo，Linux/CI 用） |
-| `task test:web` / `test:templates` | 前端 frozen install 全链路 / Go 插件模板全链路 |
+| `task test:web` / `test:templates` | 前端 frozen install 完整流程 / Go 插件模板完整流程 |
 | `task vet` / `lint` | go vet + gofmt 门禁 / 全量静态检查 |
 | `task audit:public` / `check:links` / `check:workflows` | 公开边界 / Markdown 链接 / workflow 结构门禁 |
 | `task selftest:scripts` | 发布脚本自测（架构断言 + 构建矩阵） |
@@ -403,7 +402,7 @@ task verify                            # 发布前聚合门禁
 ```text
 cloud-path/
 ├── cmd/            cloudpath（插件 CLI）· cloudpath-server · cloudpath-edge
-├── internal/       api（REST/WS 契约）· auth · server · edge · store(SQLite) · device
+├── internal/       api（REST/WS 类型）· auth · server · edge · store(SQLite) · device
 │                   pluginhost · plugincontrol · edgedriverhost · plugincatalog
 │                   application · appruntime · registry · secrethandle · audit
 │                   tenantpolicy · model · logx
@@ -416,7 +415,7 @@ cloud-path/
 ├── webui/          React 19 SPA（构建产物被 server 内嵌）
 ├── deploy/         systemd · nginx · edge 分发 · split 拆仓生成器
 ├── scripts/        门禁脚本（Python 3 stdlib only）
-├── docs/           设计与契约 SSOT
+├── docs/           设计与协议说明
 └── firmware/       设备侧协议参考说明（不含厂商固件/库）
 ```
 
@@ -430,62 +429,27 @@ cloud-path/
 
 ---
 
-## 当前真实能力与边界
+## 当前状态与边界
 
-> 目标态不冒充当前态。以下内容以基线代码与本机实测为准；不确定的一律指向 [docs/](docs/)。
+> 未实现的能力不写成现状。完整的当前实现与目标态见 [docs/architecture.md](docs/architecture.md)。
 
-**当前实现（IMPLEMENTED；不等同真板 VERIFIED）**
+当前实现包括单二进制 Server（内嵌 WebUI）、Edge、插件 CLI、账号/RBAC/多租户、
+设备监督与离线缓冲、外部 Driver Plugin Host、Application Runtime、命令与事件持久化、
+Registry CLI、WebUI，以及发布和部署物料。代码和测试能证明软件行为，不等于真板验证。
 
-- 单二进制 server（内嵌 WebUI）+ edge + 插件 CLI；全链路 WebSocket 实时链路；
-  命令闭环（pending→sent→ok/failed/timeout）与事件/命令 SQLite 持久化、保留期清理。
-- 账号模式：setup/login/logout/me、会话 cookie、RBAC（admin/operator/viewer）、
-  用户管理、租户令牌（scopes `read|write|admin|edge`，明文一次）；审计日志
-  （actor/tenant/action/outcome/request_id/remote_ip）。
-- 设备监督（拔插退避重开）、离线事件有界缓冲与重连回放、断线指数退避重连、
-  重启后从 SQLite 水合（一律先标离线，等 edge 重新上报）。
-- 参考 Driver `stcb` 已拆为独立 Driver Plugin [`cloud-path-driver-stcb`](https://github.com/DeliciousBuding/cloud-path-driver-stcb)
-  （Driver Protocol v1；Core 生产二进制不再 blank import STC-B，经 GitHub discover/install 由 Edge 的 Plugin Host 运行）。
-- 内置参考演示适配器 `demo`（无硬件，`ping/set/dump/noop`，server/edge 双端同源注册，`/api/adapters` 与白名单同一事实源）。
-- Application 插件在[独立仓库](docs/architecture/repository-strategy.md)维护；
-  Core 示例与拆仓生成器仅保留作参考 / 历史 bootstrap，不作为现役应用更新源。
-- 外部 Driver Plugin Host：desired-state + `plugins.lock` 监督插件进程；
-  Registry CLI 的 search/inspect/install/enable/disable/update/remove/host 与信任锚校验。
-- 外部 Driver 多实例多设备映射与实例串口注入：每个 `(driver, device_id)` 独立逻辑实例，
-  `ConfigureInstance` 与 `OpenDevice` 携带同一设备的 `port/baud/name/extra`；协议级回归测试覆盖
-  三设备隔离、命令路由、故障隔离与重连（`internal/edge/external_driver_fleet_test.go`）。
-- 插件控制面全链路：Server desired 权威（写面 REST + 9 个稳定错误码 + RBAC/配额/审计/WS
-  同链路推送）→ Edge reconcile（单调 revision、幂等 ack、离线跑 last-applied、重连只收敛最终
-  快照）→ observed 上报投影（脱敏）→ UI desired/observed 双栏诚实呈现（drift/stale/last-ack）。
-- `GET /api/overview` 聚合读面与 WebUI Overview/Activity/Plugins 产品信息架构；
-  账号密码登录（会话 cookie，实时通道跟随登录态）。
-- `secret://<name>` handle 边界（本地 provider、租户/实例隔离、未声明 fail-closed；明文 secret
-  永不进 Server DB / WS / 审计 / 日志 / UI）。
-- WebUI：概览/设备/详情/运行记录/应用与插件（目录·实例·desired/observed）/网关/设置 + 管理页
-  （成员、权限和访问令牌），浅色/深色双主题。
-- 发布工程：全平台构建矩阵、架构断言门禁、CI（Linux+Windows）、Release + checksums、
-  systemd/nginx 部署物料与 SOP。
+**真板证据边界**
 
-### 真板 E2E 缺口
+- 多实例多设备映射和串口注入已有协议级回归测试，但尚未完成同一外部 Driver 驱动多块真板、
+  覆盖拔插、重连和命令 ACK 的现场 E2E。
+- 现有 STC-B 单板链路可用于回归；新结论必须附真板日志、命令 ACK 和设备事件。
+- 命令和事件路由目前假设 `entity_id` 全局唯一，`(device_key, entity_id)` 尚未贯穿绑定与路由。
+  多板链路在协议和真板证据补齐前不算已验证。
 
-- 多实例多设备映射与插件实例串口注入已有实现和协议级回归测试，但尚未完成同一外部 Driver
-  驱动多块真板、覆盖拔插/重连/命令 ACK 的现场 E2E。模拟插件测试、CI 通过或单板历史验收都不能替代
-  这项证据。
-- 现有 STC-B 单板链路可用于回归；新结论必须附真板日志、命令 ACK 与设备事件，不用代码存在推断硬件完成。
-- **身份链边界**：命令/事件当前只保证 `entity_id` 全局唯一，`(device_key, entity_id)` 尚未贯穿绑定与路由；
-  同租户同型号多板若复用 `entity_id`，实体绑定/事件路由可能不确定。当前可用边界是单板，或由 Driver 保证
-  `entity_id` 全局唯一；多板链路在协议与真板证据补齐前不写成 VERIFIED。
+**尚未实现**
 
-### 尚未实现 / 目标态（不要当现状使用）
-
-- **令牌会话的实时通道**：用租户服务令牌登录的 WebUI 只有 REST，无 `/ws` 实时推送
-  （浏览器 WebSocket 无法携带自定义 header）；账号密码会话功能完整。当前接受此限制，UI 诚实呈现。
-- **中心 Secret Store**：当前明确不做（见上）；secret 一律 `secret://<name>` handle + Edge 本地
-  provider 解析，未来可替换 Vault/KMS 而不改 desired 协议。
-- **Connector / 通知**：Manifest 已有 Connector 贡献契约，但进程宿主没有 Connector 运行时；
-  Application 的 `SendNotification` effect 当前 fail-closed 返回 `not_implemented`。
-- **Transform/WASM**：仍在设计阶段，不在当前 `kind` 枚举中。
-- MQTT/Modbus 等协议接入、远程 OTA 编排、时序聚合与业务分析（目标态规划，见
-  [docs/architecture.md](docs/architecture.md)）。
+Connector/通知运行时、Transform/WASM、MQTT/Modbus 接入、远程 OTA、时序聚合、中心 KMS/Vault、
+分布式配额和多 Server 仍未实现。租户令牌会话只有 REST，没有浏览器实时通道。
+完整列表见 [docs/architecture.md](docs/architecture.md) §11。
 
 ---
 
@@ -493,16 +457,16 @@ cloud-path/
 
 | 文档 | 内容 |
 |---|---|
-| [docs/design.md](docs/design.md) | 技术 SSOT：技术栈、进程模型、存储、行为契约、安全、测试 |
-| [webui/DESIGN.md](webui/DESIGN.md) | WebUI 呈现、排版、布局与交互 SSOT |
+| [docs/design.md](docs/design.md) | 技术设计：技术栈、进程模型、存储、行为边界、安全、测试 |
+| [webui/DESIGN.md](webui/DESIGN.md) | WebUI 呈现、排版、布局与交互设计 |
 | [docs/architecture.md](docs/architecture.md) | 架构总览与「当前实现 vs 目标态」 |
-| [docs/protocol.md](docs/protocol.md) | Edge ↔ Server 线上协议契约（信封、消息、DTO） |
-| [docs/api.md](docs/api.md) | REST/WS 契约、鉴权三级模型、限流与安全头 |
+| [docs/protocol.md](docs/protocol.md) | Edge ↔ Server 线上协议（信封、消息、DTO） |
+| [docs/api.md](docs/api.md) | REST/WS API、鉴权三级模型、限流与安全头 |
 | [docs/security.md](docs/security.md) | 安全与运维基线（L0/L1/L2、令牌、检查表） |
 | [docs/deploy.md](docs/deploy.md) | 部署指南（本地/容器/反代） |
-| [docs/architecture/plugin-system.md](docs/architecture/plugin-system.md) | 插件运行时与协议契约 |
+| [docs/architecture/plugin-system.md](docs/architecture/plugin-system.md) | 插件运行时与协议 |
 | [docs/architecture/github-ecosystem.md](docs/architecture/github-ecosystem.md) | GitHub Topic 发现与信任链 |
-| [docs/architecture/registry.md](docs/architecture/registry.md) | Registry 索引与 `cloudpath plugin` CLI 契约 |
+| [docs/architecture/registry.md](docs/architecture/registry.md) | Registry 索引与 `cloudpath plugin` CLI |
 | [docs/architecture/how-to-build-driver.md](docs/architecture/how-to-build-driver.md) | 新增 Driver 的操作入口 |
 | [docs/architecture/capability-model.md](docs/architecture/capability-model.md) | Device/Entity/Capability 模型 |
 | [docs/architecture/control-plane-sync.md](docs/architecture/control-plane-sync.md) | 声明式快照 + 单调 revision 同步语义 |

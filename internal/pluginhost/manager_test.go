@@ -92,12 +92,6 @@ func (healthyChecker) Check(context.Context, pluginhost.HealthTarget) (pluginhos
 	return pluginhost.HealthHealthy, nil
 }
 
-type degradedChecker struct{}
-
-func (degradedChecker) Check(context.Context, pluginhost.HealthTarget) (pluginhost.Health, error) {
-	return pluginhost.HealthDegraded, nil
-}
-
 type toggleChecker struct {
 	mu       sync.Mutex
 	degraded bool

@@ -174,7 +174,7 @@ export function DesiredObserved({ v }: { v: PluginInstanceView }) {
       </div>
     </div>
     <details className="min-w-0 text-xs text-ink-2">
-      <summary className="cursor-pointer">技术详情</summary>
+      <summary className="flex min-h-11 cursor-pointer items-center">技术详情</summary>
       <dl className="mt-2 space-y-1 rounded-lg bg-surface-2 px-3 py-2.5">
         <div><dt className="inline">设置版本：</dt><dd className="num inline">{v.desired_revision}</dd></div>
         <div><dt className="inline">运行状态版本：</dt><dd className="num inline">{v.applied_revision}</dd></div>

@@ -227,10 +227,15 @@ func (a *testApp) waitEffects(least int, idle time.Duration) []*application.Appl
 
 func (a *testApp) runJob(jobID, idem string) *application.RunJobResponse {
 	a.t.Helper()
+	return a.runJobWithArgs(jobID, `{"window_id":"w-morning"}`, idem)
+}
+
+func (a *testApp) runJobWithArgs(jobID, argsJSON, idem string) *application.RunJobResponse {
+	a.t.Helper()
 	resp, err := a.cli.RunJob(a.ctx, &application.RunJobRequest{
 		PluginInstanceID: testInstance,
 		JobID:            jobID,
-		ArgsJSON:         `{"window_id":"w-morning"}`,
+		ArgsJSON:         argsJSON,
 		IdempotencyKey:   idem,
 	})
 	if err != nil {
@@ -391,16 +396,7 @@ func TestWindowReminderEffect(t *testing.T) {
 	}
 	effects := a.waitEffects(3, 60*time.Millisecond)
 
-	var gotRequest *application.RequestCommand
-	var gotUpsert bool
-	for _, e := range effects {
-		if u, ok := e.Union.(*application.RequestCommand); ok {
-			gotRequest = u
-		}
-		if u, ok := e.Union.(*application.UpsertDomainRecord); ok && u.RecordType == "window" {
-			gotUpsert = true
-		}
-	}
+	gotRequest := requestCommandOf(effects)
 	if gotRequest == nil {
 		t.Fatal("expected a RequestCommand(buzzer) effect")
 	}
@@ -420,11 +416,25 @@ func TestWindowReminderEffect(t *testing.T) {
 	if args.Freq != defaultReminder.Freq || args.Duration != defaultReminder.Duration {
 		t.Fatalf("buzzer args = %+v, want default reminder policy %+v", args, defaultReminder)
 	}
-	if gotRequest.IdempotencyKey != "reminder-w-morning" {
-		t.Fatalf("idempotency = %q, want reminder-w-morning", gotRequest.IdempotencyKey)
+	if gotRequest.IdempotencyKey != "reminder-w-morning@2026-09-03" {
+		t.Fatalf("idempotency = %q, want occurrence-qualified key", gotRequest.IdempotencyKey)
 	}
-	if !gotUpsert {
-		t.Fatal("expected a window UpsertDomainRecord effect")
+	if got := recordIDOf(effects, "w-morning"); got != "w-morning@2026-09-03" {
+		t.Fatalf("record id = %q, want occurrence-qualified id", got)
+	}
+	task := scheduleTaskOf(effects)
+	if task == nil {
+		t.Fatal("expected a durable miss ScheduleTask")
+	}
+	if task.ScheduleID != "window-miss-w-morning@2026-09-03" || task.Cron != windowCheckCron {
+		t.Fatalf("miss task = %+v", task)
+	}
+	var payload map[string]string
+	if err := json.Unmarshal([]byte(task.PayloadJSON), &payload); err != nil {
+		t.Fatalf("miss payload %q: %v", task.PayloadJSON, err)
+	}
+	if payload["window_id"] != "w-morning" || payload["occurrence_date"] != "2026-09-03" {
+		t.Fatalf("miss payload = %+v", payload)
 	}
 	if got := windowStateOf(effects, "w-morning"); got != windowOpened {
 		t.Fatalf("window state = %q, want %q", got, windowOpened)
@@ -450,8 +460,11 @@ func TestKeyPressCompletesWindow(t *testing.T) {
 	if got := windowStateOf(effects, "w-morning"); got != windowCompleted {
 		t.Fatalf("window state = %q, want %q", got, windowCompleted)
 	}
-	if !hasCancelTask(effects, "window-check-w-morning") {
-		t.Fatal("expected a CancelScheduledTask for the completed window")
+	if got := recordIDOf(effects, "w-morning"); got != "w-morning@2026-09-03" {
+		t.Fatalf("record id = %q, want occurrence-qualified id", got)
+	}
+	if !hasCancelTask(effects, "window-miss-w-morning@2026-09-03") {
+		t.Fatalf("expected occurrence-qualified CancelScheduledTask, effects=%+v", effects)
 	}
 }
 
@@ -465,9 +478,10 @@ func TestMissedWindowRecord(t *testing.T) {
 	}
 	_ = a.waitEffects(3, 60*time.Millisecond)
 
-	// advance the clock past the window end and run the window-check job
+	// advance the clock past the window end and run the durable miss job
 	a.now = time.Date(2026, 9, 3, 0, 31, 0, 0, time.UTC) // 08:31 Asia/Shanghai
-	resp := a.runJob("window-check", "job-missed-1")
+	const missID = "window-miss-w-morning@2026-09-03"
+	resp := a.runJobWithArgs(missID, `{"window_id":"w-morning","occurrence_date":"2026-09-03"}`, "job-missed-1")
 	if !resp.Status.IsOK() {
 		t.Fatalf("RunJob status: %s", resp.Status)
 	}
@@ -478,20 +492,26 @@ func TestMissedWindowRecord(t *testing.T) {
 	if got := windowStateOf(effects, "w-morning"); got != windowMissed {
 		t.Fatalf("window state = %q, want %q", got, windowMissed)
 	}
-	if !hasCancelTask(effects, "window-check-w-morning") {
-		t.Fatal("expected CancelScheduledTask for missed window")
+	if !hasCancelTask(effects, missID) {
+		t.Fatal("expected CancelScheduledTask for the occurrence-qualified miss task")
 	}
 	if !hasNotification(effects) {
 		t.Fatal("expected a SendNotification for the missed window")
 	}
 
-	// idempotency: a second RunJob with the same key must not re-emit effects
-	resp2 := a.runJob("window-check", "job-missed-1")
+	// idempotency: the same key returns the stored result without re-emitting.
+	resp2 := a.runJobWithArgs(missID, `{"window_id":"w-morning","occurrence_date":"2026-09-03"}`, "job-missed-1")
 	if resp2.ResultJSON != resp.ResultJSON {
 		t.Fatalf("idempotent result mismatch: %s vs %s", resp2.ResultJSON, resp.ResultJSON)
 	}
 	if dup := a.recvEffects(40 * time.Millisecond); len(dup) != 0 {
-		t.Fatalf("duplicate RunJob emitted %d effects", len(dup))
+		t.Fatalf("duplicate miss job emitted %d effects", len(dup))
+	}
+
+	// A different dispatch key for the already-missed occurrence is also a no-op.
+	_ = a.runJobWithArgs(missID, `{"window_id":"w-morning","occurrence_date":"2026-09-03"}`, "job-missed-2")
+	if dup := a.recvEffects(40 * time.Millisecond); len(dup) != 0 {
+		t.Fatalf("duplicate occurrence miss emitted %d effects", len(dup))
 	}
 }
 
@@ -505,6 +525,9 @@ func TestDuplicateJobIdempotent(t *testing.T) {
 	if n := countRequestCommand(start); n != 1 {
 		t.Fatalf("window start emitted %d RequestCommand, want 1", n)
 	}
+	if n := countScheduleTask(start); n != 1 {
+		t.Fatalf("window start emitted %d ScheduleTask, want 1", n)
+	}
 
 	// Same idempotency key returns the stored result without re-emitting.
 	second := a.runJob("window-check", "job-open-1")
@@ -515,9 +538,7 @@ func TestDuplicateJobIdempotent(t *testing.T) {
 		t.Fatalf("duplicate idempotency key emitted %d effects", len(dup))
 	}
 
-	// A different key for the same occurrence is also a no-op after the window
-	// has already opened. This models automatic minute-loop + durable cron
-	// dispatching the same job independently.
+	// A different automatic-minute key for the same occurrence is also a no-op.
 	_ = a.runJob("window-check", "job-open-2")
 	if dup := a.recvEffects(40 * time.Millisecond); len(dup) != 0 {
 		t.Fatalf("duplicate occurrence emitted %d effects", len(dup))
@@ -545,9 +566,10 @@ func TestDuplicateJobIdempotent(t *testing.T) {
 	}
 }
 
-func TestWindowCheckAfterEndRecordsMissedWithoutReminder(t *testing.T) {
-	// First job observation is already past the configured end. The app must
-	// record a miss, not replay a stale reminder.
+func TestLateObservationDoesNotFabricateMissed(t *testing.T) {
+	// A first observation after the window has ended may be a restart after a
+	// completed window. The app has no read API for its durable records, so it
+	// must not fabricate a missed event from memory alone.
 	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 0, 31, 0, 0, time.UTC))
 	defer a.close()
 	a.openStream()
@@ -556,15 +578,133 @@ func TestWindowCheckAfterEndRecordsMissedWithoutReminder(t *testing.T) {
 	if !resp.Status.IsOK() {
 		t.Fatalf("RunJob status: %s", resp.Status)
 	}
-	effects := a.waitEffects(3, 60*time.Millisecond)
-	if got := windowStateOf(effects, "w-morning"); got != windowMissed {
-		t.Fatalf("window state = %q, want %q", got, windowMissed)
+	if resp.ResultJSON != `{"missed":[]}` {
+		t.Fatalf("late observation result = %s, want empty missed list", resp.ResultJSON)
+	}
+	if effects := a.recvEffects(60 * time.Millisecond); len(effects) != 0 {
+		t.Fatalf("late observation emitted %d effects, want none", len(effects))
+	}
+}
+
+func TestLateObservationRecordsOpenedWithoutStaleReminder(t *testing.T) {
+	// Restarting mid-window records the occurrence but does not replay a stale
+	// reminder or arm a second miss task. The key-press path still completes it.
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 0, 5, 0, 0, time.UTC)) // 08:05
+	defer a.close()
+	a.openStream()
+
+	_ = a.runJob("window-check", "job-late-mid-window")
+	effects := a.waitEffects(1, 60*time.Millisecond)
+	if got := windowStateOf(effects, "w-morning"); got != windowOpened {
+		t.Fatalf("late mid-window state = %q, want %q", got, windowOpened)
 	}
 	if n := countRequestCommand(effects); n != 0 {
-		t.Fatalf("late observation emitted %d stale reminders", n)
+		t.Fatalf("late mid-window emitted %d stale reminders", n)
 	}
-	if !hasCancelTask(effects, "window-check-w-morning") || !hasNotification(effects) {
-		t.Fatalf("late observation effects = %+v", effects)
+	if n := countScheduleTask(effects); n != 0 {
+		t.Fatalf("late mid-window emitted %d miss tasks, want 0", n)
+	}
+}
+
+func TestRestartKeyPressCompletesOccurrence(t *testing.T) {
+	// No warm window-check state: the event timestamp plus bounded config must
+	// still identify and complete the current occurrence.
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 0, 5, 0, 0, time.UTC))
+	defer a.close()
+	a.openStream()
+
+	a.send(1, &application.CapabilityEvent{
+		RequirementID: "compartments", EntityID: c1, EventType: keyPressEvent,
+		OccurredAt: "2026-09-03T08:06:00+08:00",
+	})
+	effects := a.waitEffects(2, 60*time.Millisecond)
+	if got := windowStateOf(effects, "w-morning"); got != windowCompleted {
+		t.Fatalf("restart key press state = %q, want %q", got, windowCompleted)
+	}
+	if !hasCancelTask(effects, "window-miss-w-morning@2026-09-03") {
+		t.Fatalf("restart key press did not cancel the occurrence task: %+v", effects)
+	}
+}
+
+func TestRestartAfterCompletionDoesNotFabricateMissed(t *testing.T) {
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC))
+	a.openStream()
+	_ = a.runJob("window-check", "first-run")
+	_ = a.waitEffects(3, 60*time.Millisecond)
+	a.send(1, &application.CapabilityEvent{
+		RequirementID: "compartments", EntityID: c1, EventType: keyPressEvent,
+		OccurredAt: "2026-09-03T08:05:00+08:00",
+	})
+	_ = a.waitEffects(2, 60*time.Millisecond)
+	a.close()
+
+	// The durable miss task was cancelled by the completion effect. After a
+	// restart the automatic opener sees no warm state and must stay quiet.
+	b := mustConfigureAndBind(t, time.Date(2026, 9, 3, 0, 31, 0, 0, time.UTC))
+	defer b.close()
+	b.openStream()
+	_ = b.runJob("window-check", "restart-check")
+	if effects := b.recvEffects(60 * time.Millisecond); len(effects) != 0 {
+		t.Fatalf("restart emitted %d false effects, want none", len(effects))
+	}
+}
+
+func TestMissJobAfterRestartRecordsMissed(t *testing.T) {
+	// The miss task payload is self-contained. Even with no warm occurrence
+	// state, the durable deadline job can reconstruct and record the miss.
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 0, 31, 0, 0, time.UTC))
+	defer a.close()
+	a.openStream()
+
+	const missID = "window-miss-w-morning@2026-09-03"
+	_ = a.runJobWithArgs(missID, `{"window_id":"w-morning","occurrence_date":"2026-09-03"}`, "restart-miss")
+	effects := a.waitEffects(3, 60*time.Millisecond)
+	if got := windowStateOf(effects, "w-morning"); got != windowMissed {
+		t.Fatalf("restart miss state = %q, want %q", got, windowMissed)
+	}
+	if !hasCancelTask(effects, missID) || !hasNotification(effects) {
+		t.Fatalf("restart miss effects = %+v", effects)
+	}
+}
+
+func TestAutomaticJobDefersMissToDurableTask(t *testing.T) {
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC))
+	defer a.close()
+	a.openStream()
+	_ = a.runJob("window-check", "open")
+	_ = a.waitEffects(3, 60*time.Millisecond)
+
+	a.now = time.Date(2026, 9, 3, 0, 31, 0, 0, time.UTC)
+	_ = a.runJob("window-check", "automatic-after-end")
+	if effects := a.recvEffects(60 * time.Millisecond); len(effects) != 0 {
+		t.Fatalf("automatic job duplicated durable miss work: %+v", effects)
+	}
+
+	const missID = "window-miss-w-morning@2026-09-03"
+	_ = a.runJobWithArgs(missID, `{"window_id":"w-morning","occurrence_date":"2026-09-03"}`, "durable-miss")
+	effects := a.waitEffects(3, 60*time.Millisecond)
+	if got := windowStateOf(effects, "w-morning"); got != windowMissed {
+		t.Fatalf("durable miss state = %q, want %q", got, windowMissed)
+	}
+}
+
+func TestMissJobBeforeEndDoesNotMiss(t *testing.T) {
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 0, 29, 0, 0, time.UTC))
+	defer a.close()
+	a.openStream()
+
+	const missID = "window-miss-w-morning@2026-09-03"
+	args := `{"window_id":"w-morning","occurrence_date":"2026-09-03"}`
+	_ = a.runJobWithArgs(missID, args, "early-miss")
+	if effects := a.recvEffects(60 * time.Millisecond); len(effects) != 0 {
+		t.Fatalf("early miss job emitted %d effects, want none", len(effects))
+	}
+
+	a.now = time.Date(2026, 9, 3, 0, 31, 0, 0, time.UTC)
+	_ = a.runJobWithArgs(missID, args, "deadline-miss")
+	effects := a.waitEffects(3, 60*time.Millisecond)
+	if got := windowStateOf(effects, "w-morning"); got != windowMissed {
+		t.Fatalf("deadline miss state = %q, want %q", got, windowMissed)
 	}
 }
 
@@ -578,6 +718,9 @@ func TestWindowCheckOpensAgainOnNextDay(t *testing.T) {
 	if n := countRequestCommand(dayOne); n != 1 {
 		t.Fatalf("day 1 emitted %d RequestCommand, want 1", n)
 	}
+	dayOneRecord := recordIDOf(dayOne, "w-morning")
+	dayOneCommand := requestCommandOf(dayOne)
+	dayOneTask := scheduleTaskOf(dayOne)
 	a.send(1, &application.CapabilityEvent{
 		RequirementID: "compartments", EntityID: c1, EventType: keyPressEvent,
 		OccurredAt: "2026-09-03T08:05:00+08:00",
@@ -592,6 +735,15 @@ func TestWindowCheckOpensAgainOnNextDay(t *testing.T) {
 	}
 	if got := windowStateOf(dayTwo, "w-morning"); got != windowOpened {
 		t.Fatalf("day 2 window state = %q, want %q", got, windowOpened)
+	}
+	dayTwoRecord := recordIDOf(dayTwo, "w-morning")
+	dayTwoCommand := requestCommandOf(dayTwo)
+	dayTwoTask := scheduleTaskOf(dayTwo)
+	if dayOneRecord == dayTwoRecord || dayOneCommand == nil || dayTwoCommand == nil ||
+		dayOneCommand.IdempotencyKey == dayTwoCommand.IdempotencyKey ||
+		dayOneTask == nil || dayTwoTask == nil || dayOneTask.ScheduleID == dayTwoTask.ScheduleID {
+		t.Fatalf("cross-day identities collide: records=%q/%q commands=%+v/%+v tasks=%+v/%+v",
+			dayOneRecord, dayTwoRecord, dayOneCommand, dayTwoCommand, dayOneTask, dayTwoTask)
 	}
 }
 
@@ -700,20 +852,72 @@ func TestGracefulShutdown(t *testing.T) {
 // --- helpers ---
 
 func windowStateOf(effects []*application.ApplicationEffect, id string) string {
+	m, ok := windowDataOf(effects, id)
+	if !ok {
+		return ""
+	}
+	state, _ := m["state"].(string)
+	return state
+}
+
+func windowDataOf(effects []*application.ApplicationEffect, id string) (map[string]any, bool) {
 	for _, e := range effects {
 		u, ok := e.Union.(*application.UpsertDomainRecord)
-		if !ok || u.RecordType != "window" || u.RecordID != id {
+		if !ok || u.RecordType != "window" {
 			continue
 		}
 		var m map[string]any
 		if json.Unmarshal([]byte(u.DataJSON), &m) != nil {
 			continue
 		}
-		if s, ok := m["state"].(string); ok {
-			return s
+		if u.RecordID == id || m["id"] == id || m["occurrence_id"] == id {
+			return m, true
 		}
 	}
+	return nil, false
+}
+
+func recordIDOf(effects []*application.ApplicationEffect, windowID string) string {
+	for _, e := range effects {
+		u, ok := e.Union.(*application.UpsertDomainRecord)
+		if !ok || u.RecordType != "window" {
+			continue
+		}
+		var m map[string]any
+		if json.Unmarshal([]byte(u.DataJSON), &m) != nil || m["id"] != windowID {
+			continue
+		}
+		return u.RecordID
+	}
 	return ""
+}
+
+func requestCommandOf(effects []*application.ApplicationEffect) *application.RequestCommand {
+	for _, e := range effects {
+		if u, ok := e.Union.(*application.RequestCommand); ok {
+			return u
+		}
+	}
+	return nil
+}
+
+func scheduleTaskOf(effects []*application.ApplicationEffect) *application.ScheduleTask {
+	for _, e := range effects {
+		if u, ok := e.Union.(*application.ScheduleTask); ok {
+			return u
+		}
+	}
+	return nil
+}
+
+func countScheduleTask(effects []*application.ApplicationEffect) int {
+	n := 0
+	for _, e := range effects {
+		if _, ok := e.Union.(*application.ScheduleTask); ok {
+			n++
+		}
+	}
+	return n
 }
 
 func countRequestCommand(effects []*application.ApplicationEffect) int {

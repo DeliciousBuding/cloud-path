@@ -12,6 +12,11 @@ option go_package = "github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/d
 //
 // 语义唯一真理：docs/architecture/plugin-system.md §5 Driver Protocol v1、
 // docs/architecture/capability-model.md（Observation/Event/Command）。
+//
+// 当前生产接入：Edge Plugin Host 调用 Initialize / Describe / ConfigureInstance /
+// OpenDevice / CloseDevice / Watch / Execute / Health / Shutdown。
+// Discover / DiscoveryEvent、Watch resume/max_buffered、CommandProgress / Diagnostic
+// 已定义但当前生产 Edge 不调用或不消费，属未来/可选层；不得把它们当成已交付能力。
 
 // DriverService 由插件进程暴露，Host/Core 作为客户端调用。
 // 注意流方向：
@@ -22,7 +27,7 @@ service DriverService {
   rpc Initialize(InitializeRequest) returns (InitializeResponse);
   rpc Describe(DescribeRequest) returns (DriverDescriptor);
   rpc ConfigureInstance(ConfigureInstanceRequest) returns (ConfigureInstanceResponse);
-  rpc Discover(DiscoverRequest) returns (stream DiscoveryEvent);
+  rpc Discover(DiscoverRequest) returns (stream DiscoveryEvent); // 当前生产 Edge 未调用
   rpc OpenDevice(OpenDeviceRequest) returns (OpenDeviceResponse);
   rpc CloseDevice(CloseDeviceRequest) returns (CloseDeviceResponse);
   rpc Watch(WatchRequest) returns (stream DriverMessage);
@@ -78,7 +83,7 @@ message InitializeRequest {
 message InitializeResponse {
   uint32 negotiated_protocol_version = 1;      // 双方共同支持的最大版本；0 表示协商失败
   Status status = 2;
-  bool replay_supported = 3;                   // 是否支持从最后确认 sequence 续传
+  bool replay_supported = 3;                   // 协议保留；当前 Edge 宿主不请求 replay
   string runtime_id = 4;                       // 插件运行时自报标识（用于诊断）
 }
 
@@ -213,9 +218,9 @@ message CloseDeviceResponse {
 
 message WatchRequest {
   string plugin_instance_id = 1;
-  uint64 resume_from_sequence = 2;             // >0 表示请求续传；需 InitializeResponse.replay_supported
+  uint64 resume_from_sequence = 2;             // 协议保留；当前 Edge 宿主不请求续传
   repeated string device_ids = 3;              // 空 = 该 instance 全部设备
-  uint32 max_buffered = 4;                     // Host 声明的排队容量提示（背压协商）
+  uint32 max_buffered = 4;                     // 协议保留；当前 Edge 宿主未使用
 }
 
 message DriverMessage {
@@ -307,6 +312,7 @@ message Event {
   string correlation_id = 6;                   // 与命令/其他事件的关联
 }
 
+// 协议保留；当前 external driver 消费路径不处理。
 message CommandProgress {
   string command_id = 1;
   string idempotency_key = 2;
@@ -319,6 +325,7 @@ message CommandProgress {
   string error_code = 9;                       // FAILED/TIMED_OUT/CANCELLED 时给出
 }
 
+// 协议保留；当前 external driver 消费路径不处理。
 message Diagnostic {
   string level = 1;                            // debug|info|warn|error
   string message = 2;

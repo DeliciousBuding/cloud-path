@@ -37,9 +37,7 @@ FORBIDDEN_SUFFIXES = {
     ".doc", ".docx", ".ppt", ".pptx",
 }
 
-ALLOWED_SPECIAL_FILES = {
-    "deploy/config.env.example",
-}
+ALLOWED_SPECIAL_FILES: set[str] = set()
 
 
 def tracked_files() -> list[str]:
@@ -85,7 +83,7 @@ def audit_paths(paths: list[str]) -> list[Finding]:
 
 
 def self_test() -> int:
-    safe = ["README.md", "deploy/config.env.example"]
+    safe = ["README.md"]
     if audit_paths(safe):
         print("self-test failed: safe repository files triggered findings")
         return 1

@@ -2,7 +2,7 @@
 
 最后更新：2026-09-09
 
-> 本文定义 CloudPath 的设备无关模型。它是 Driver 与 Application 解耦的核心契约。
+> 本文定义 CloudPath 的设备无关模型。它是 Driver 与 Application 解耦的核心模型。
 
 ## 1. 为什么不能长期依赖 `State.Raw`
 
@@ -224,4 +224,4 @@ Capability v1 一旦发布，不原地改变字段语义；破坏性变化发布
 
 ## 10. 展示层
 
-WebUI 的呈现契约、排版、布局与交互设计已移至 [`webui/DESIGN.md`](../../webui/DESIGN.md)。
+WebUI 的呈现规则、排版、布局与交互设计已移至 [`webui/DESIGN.md`](../../webui/DESIGN.md)。

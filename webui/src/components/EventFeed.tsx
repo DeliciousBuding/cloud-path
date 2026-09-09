@@ -63,6 +63,11 @@ const EVENT_LABEL_FALLBACK: Record<string, string> = {
   'temperature high': '温度过高',
   'air quality bad': '空气质量异常',
   'operation failed': '操作失败',
+  probed: '探测完成',
+  'setpoint changed': '设定值已更新',
+  'setpoint-changed': '设定值已更新',
+  toggled: '开关状态已切换',
+  'command completed': '操作已完成',
 }
 
 /** 通用命令展示词典：声明 title 缺席时优先于 humanize，未知命令仍回落 humanize。 */

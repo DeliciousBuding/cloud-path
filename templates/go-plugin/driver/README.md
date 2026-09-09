@@ -90,7 +90,7 @@ attaches `plugin.yaml`, and creates a GitHub Release. The checksums are what
 the CloudPath Registry and `cloudpath plugin install` verify before executing
 the binary.
 
-## Publish to the ecosystem
+## Publish to the Registry
 
 After a release:
 
@@ -103,4 +103,4 @@ After a release:
    `verifiedPublisher` are what establish trust.
 
 See `docs/architecture/{plugin-system,github-ecosystem,registry}.md` in the
-cloud-path core repository for the contracts.
+cloud-path core repository for the documentation.

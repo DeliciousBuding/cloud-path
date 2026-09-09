@@ -432,6 +432,7 @@ func (pr pluginProjection) Installations(tenant string) ([]api.PluginInstallatio
 		return []api.PluginInstallationStatusData{}, nil
 	}
 	p := s.plugin
+	serverRows := s.appHost.installationStatuses()
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	ids, err := p.matchTenantsLocked(tenant)
@@ -448,6 +449,16 @@ func (pr pluginProjection) Installations(tenant string) ([]api.PluginInstallatio
 			for _, in := range ep.installations {
 				out = append(out, in)
 			}
+		}
+	}
+	seen := make(map[string]bool, len(out))
+	for _, in := range out {
+		seen[in.PluginID] = true
+	}
+	for _, in := range serverRows {
+		if !seen[in.PluginID] {
+			out = append(out, in)
+			seen[in.PluginID] = true
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {

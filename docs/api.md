@@ -1,8 +1,8 @@
-# CloudPath HTTP API 契约
+# CloudPath HTTP API
 
 最后更新：2026-09-09
 
-> 管理台与自动化客户端的唯一 HTTP 契约 SSOT。边缘节点走 WebSocket 协议，见 `protocol.md`。
+> 管理台与自动化客户端的 HTTP API 事实源。边缘节点走 WebSocket 协议，见 `protocol.md`。
 > 基础路径：管理台同源（默认 `http://127.0.0.1:8080`）。所有 JSON 为 UTF-8。
 
 ## 1. 安全模型（三级）
@@ -112,12 +112,12 @@
 
 ## 4. 版本与兼容
 
-- 契约变更随 `docs/design.md` 实现偏差记录同步；WS envelope `v` 字段独立演进（`protocol.md`）。
+- 接口变更随 `docs/design.md` 实现偏差记录同步；WS envelope `v` 字段独立演进（`protocol.md`）。
 - 旧客户端（仅服务令牌）在账号模式下继续可用（令牌等价 admin）。
 
 ## 5. 插件控制面与聚合读面
 
-> desired/observed 同步语义 SSOT：[architecture/control-plane-sync.md](architecture/control-plane-sync.md)；
+> desired/observed 同步语义以 [architecture/control-plane-sync.md](architecture/control-plane-sync.md) 为准；
 > WS 侧 desired/status/ack 消息见 [protocol.md](protocol.md)。
 > 不变量：**Desired 只由 Server 权威写入，Observed 只由 Edge 真实上报**，二者永远分开呈现，
 > 绝不把「期望启用」渲染成「实际健康」。
@@ -201,7 +201,7 @@ WebUI 首屏一次性聚合。所有计数来自真实 Edge 上报与 Server 权
 ### 5.5 Application Data Plane（viewer 只读）
 
 应用产出（领域记录、绑定、任务）的**设备无关、业务无关**读面。`app_domain_records`
-是 Application 数据 SSOT——本节只读不写，不建第二套业务 store，也没有任何业务特例
+是 Application 数据的唯一事实源——本节只读不写，不建第二套业务 store，也没有任何业务特例
 API（没有 `/api/pillbox/*`，永远不会有）。
 
 | 方法 路径 | 权限 | 说明 |

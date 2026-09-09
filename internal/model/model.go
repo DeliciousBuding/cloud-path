@@ -5,8 +5,6 @@
 package model
 
 import (
-	"time"
-
 	sdkmodel "github.com/DeliciousBuding/cloud-path/sdk/go/model"
 )
 
@@ -85,8 +83,3 @@ type (
 	ActionDecl         = sdkmodel.ActionDecl
 	Descriptor         = sdkmodel.Descriptor
 )
-
-// NewCommand 构造一条 CREATED 状态的 Command。
-func NewCommand(commandID, idempotencyKey, entityID, action string, args map[string]any, deadline time.Time, actor string) Command {
-	return sdkmodel.NewCommand(commandID, idempotencyKey, entityID, action, args, deadline, actor)
-}

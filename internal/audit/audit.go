@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"strings"
 )
 
@@ -117,18 +116,6 @@ func (m *Metadata) put(key string, val any) {
 
 // Map 返回已构建的 metadata 映射（只读使用）。
 func (m *Metadata) Map() map[string]any { return m.m }
-
-// JSON 把 metadata 序列化为 JSON 对象；失败回落 "{}"。
-func (m *Metadata) JSON() string {
-	if len(m.m) == 0 {
-		return "{}"
-	}
-	b, err := json.Marshal(m.m)
-	if err != nil {
-		return "{}"
-	}
-	return string(b)
-}
 
 // MaxRequestIDLen 是请求方传入 X-Request-ID 的长度上限。
 const MaxRequestIDLen = 128

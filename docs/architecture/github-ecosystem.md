@@ -1,11 +1,11 @@
-# GitHub 插件生态与信任链
+# GitHub 插件发现与信任链
 
 最后更新：2026-09-03
 
 > 本文定义 CloudPath 插件如何通过 GitHub 被发现、验证与分发。配套决策见
 > [adr/0002-github-plugin-discovery.md](adr/0002-github-plugin-discovery.md)。
 
-## 1. 命名与发现契约
+## 1. 命名与发现规则
 
 | 维度 | 约定 |
 |---|---|
@@ -47,7 +47,7 @@ Registry 记录：plugin id、版本、来源仓库、资产 digest、`verifiedP
 ## 5. 参考先例
 
 - `home-assistant-custom-component`：topic 发现 + manifest 声明，社区量大、质量靠维护者把关。
-- `grafana-plugin`：官方 Registry + 签名，插件市场闭环。
+- `grafana-plugin`：官方 Registry + 签名，形成完整插件市场流程。
 - `krew`（k8s 插件）：索引仓库 + manifest + checksums，CLI 安装。
 - `gh-extension`：GitHub 仓库 + `gh extension install`。
 

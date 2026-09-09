@@ -182,7 +182,7 @@ export default function Plugins() {
                     </div>
 
                     <details className="mt-3.5 min-w-0 border-t border-hairline pt-3 text-xs text-ink-2">
-                      <summary className="cursor-pointer">技术详情</summary>
+                      <summary className="flex min-h-11 cursor-pointer items-center">技术详情</summary>
                       <dl className="mt-2 space-y-1.5">
                         <div className="kv"><dt>插件标识</dt>
                           <dd className="num min-w-0 truncate font-mono" title={p.id}>{p.id}</dd></div>
@@ -279,7 +279,7 @@ export default function Plugins() {
                 <label htmlFor="instance-location" className="flex min-w-0 shrink-0 items-center gap-2 whitespace-nowrap text-[13px] font-medium text-ink-2">
                   <Server size={14} className="shrink-0" /> 运行位置
                 </label>
-                <select id="instance-location" className="input max-w-full text-[13px] sm:w-72"
+                <select id="instance-location" className="input min-h-11 max-w-full text-[13px] sm:min-h-0 sm:w-72"
                   value={edgeFilter} onChange={(e) => setEdgeFilter(e.target.value)}>
                   <option value="all">全部运行位置（{instances.length}）</option>
                   {edgeOptions.map((edge) => (

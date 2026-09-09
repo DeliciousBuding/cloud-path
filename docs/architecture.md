@@ -3,8 +3,8 @@
 最后更新：2026-09-09
 
 > 状态：**当前实现与目标态分列**。外部 Driver Host、Registry、Application Runtime 与多租户隔离
-> 已落地；Connector/Transform 运行时、集中 Secret Store、分布式配额和跨 Server 部署仍是目标态。
-> 当前契约以 [design.md](design.md)、`spec/` 和代码为准；目标态见 §11。
+> 已实现；Connector/Transform 运行时、集中 Secret Store、分布式配额和跨 Server 部署仍是目标态。
+> 当前接口以 [design.md](design.md)、`spec/` 和代码为准；目标态见 §11。
 >
 > 插件控制面期望态/实际态同步见 [control-plane-sync.md](architecture/control-plane-sync.md)；租户保留期、配额与插件秘密边界见 [tenant-security-policy.md](architecture/tenant-security-policy.md)。
 
@@ -33,11 +33,11 @@ CloudPath 是一个以 **Device / Entity / Capability** 为核心的通用 IoT �
 
 第一个板卡和“定时分格提醒”只作为 reference driver / reference application；两者必须可以独立替换。
 
-## 3. 第一性原则
+## 3. 设计原则
 
 1. **核心零设备认知**：移除全部设备插件后，Core 仍可编译、启动和管理插件。
 2. **业务零硬件依赖**：Application Plugin 依赖 Capability，不依赖某个 Driver ID。
-3. **契约多型而非万能接口**：Driver、Application、Connector 使用不同的最小协议。
+3. **接口按类型拆分**：Driver、Application、Connector 使用各自的最小协议，不做一个万能接口。
 4. **描述优先**：配置、状态、命令和页面优先使用声明式 Schema；任意代码扩展是后备能力。
 5. **进程隔离**：可执行第三方插件在独立进程运行，不能直接链接进 Core 地址空间。
 6. **最小权限**：插件声明串口、网络、文件、秘密和系统能力；安装时展示并确认权限差异。
@@ -106,7 +106,7 @@ UI 贡献不是独立可执行插件类型。当前 WebUI 由 Descriptor/Capabil
 ## 6. 核心领域模型
 
 ```text
-PluginDefinition        可安装的软件与契约
+PluginDefinition        可安装的软件与声明
   └─ PluginInstallation 某节点上已验证的版本
        └─ PluginInstance 某租户/节点的一份配置与运行实例
 
@@ -138,7 +138,7 @@ DISCOVERED → INSPECTED → DOWNLOADED → VERIFIED → INSTALLED
 
 安装软件、创建实例、启用实例是三件独立操作：下载插件不会自动执行；安装后也不会未经配置访问硬件或网络。
 
-## 8. GitHub 生态
+## 8. GitHub 发现
 
 CloudPath 使用双通道发现：
 
@@ -156,14 +156,14 @@ Topic 只是候选集合，不是信任证明。CLI 搜到仓库后还必须检�
 - 一个插件进程可托管多个 Plugin Instance 和多台设备，而不是一设备一进程。
 - Host 负责健康检查、日志、崩溃检测、指数退避、资源统计和优雅退出。
 
-详细契约见 [architecture/plugin-system.md](architecture/plugin-system.md)。
+详细说明见 [architecture/plugin-system.md](architecture/plugin-system.md)。
 
 ## 10. 当前实现
 
 | 能力 | 当前状态 | 边界 |
 |---|---|---|
 | 设备扩展 | 外部 Driver Plugin + Driver Protocol v1，由 Edge Plugin Host 运行；内置 `demo` 仅作无硬件参考 | 同一外部 Driver 的多实例多设备映射与串口注入已实现；命令/事件身份链仍以全局唯一 `entity_id` 为前提，`(device_key, entity_id)` 未贯穿；多块真板现场 E2E 尚未完成 |
-| 状态模型 | Descriptor / Entity / Capability + typed Observation；`State.Raw` 仅保留兼容与诊断 | 旧 raw 读面继续可用，不冒充 typed 语义 |
+| 状态模型 | Descriptor / Entity / Capability + typed Observation；`State.Raw` 仅保留兼容与诊断 | 旧 raw 读面继续可用，不伪装成 typed 语义 |
 | UI | Descriptor / Capability 驱动设备视图、能力动作与命令表单 | 任意第三方 React bundle 注入仍是非目标 |
 | STC-B | 已拆为独立 Driver Plugin [`cloud-path-driver-stcb`](https://github.com/DeliciousBuding/cloud-path-driver-stcb)，Core 生产二进制不再内置 STC-B | 发布版本以插件仓库 tag 为准 |
 | 业务应用 | Server AppHost + `internal/appruntime` + Application Protocol v1，支持 Capability 绑定、领域记录、任务与手动操作 | 参考应用已拆为独立仓库；旧 bootstrap 仅作历史参考 |
@@ -171,11 +171,11 @@ Topic 只是候选集合，不是信任证明。CLI 搜到仓库后还必须检�
 | 插件发现与安装 | GitHub Topic 开放发现 + Registry CLI（search/inspect/install/enable/disable/update/remove/host），校验 Manifest、digest、兼容范围并写 `plugins.lock` | Registry 是信任增强通道，不替代摘要与权限校验 |
 | 多租户 | 账号/RBAC、tenant token、审计、设备和插件实例按 `tenant_id` 隔离；浏览器 WS 快照与 fan-out 按租户过滤 | 单 Server 部署；分布式全局配额与跨 Server 调度未实现 |
 
-## 11. 目标态与后续演进
+## 11. 目标态与后续工作
 
 以下能力不是当前实现，不能按现状使用：
 
-- **Connector / Transform Runtime**：Connector 已有 Manifest 契约，运行时待实现；Transform/WASM 仍在设计阶段。
+- **Connector / Transform Runtime**：Connector 已有 Manifest 声明，运行时待实现；Transform/WASM 仍在设计阶段。
 - **强隔离与集中秘密**：当前是受用户授权的本地进程插件与 Edge 本地 secret provider；中心 KMS/Vault、远程 secret 分发、自动轮换尚未实现。
 - **横向扩展**：多 Server 全局配额、分布式 limiter、跨节点调度与一致性尚未实现。
 - **协议与数据扩展**：MQTT/Modbus 等接入网关、远程 OTA 编排、时序聚合和业务分析不在当前基线。
@@ -183,7 +183,7 @@ Topic 只是候选集合，不是信任证明。CLI 搜到仓库后还必须检�
 
 ## 12. 决策记录
 
-- [ADR-0001：能力中心的多契约插件模型](architecture/adr/0001-capability-centered-plugins.md)
+- [ADR-0001：能力中心的多类型插件模型](architecture/adr/0001-capability-centered-plugins.md)
 - [ADR-0002：GitHub Topic + Registry 混合发现](architecture/adr/0002-github-plugin-discovery.md)
 
 
@@ -193,4 +193,4 @@ Topic 只是候选集合，不是信任证明。CLI 搜到仓库后还必须检�
 - v1 不承诺不受信任插件的强 OS 沙箱；初期定位为“经用户授权的本地代码”，但仍执行进程隔离与权限披露。
 - v1 不做中心化付费插件商店。
 - v1 不把 MQTT、Modbus 或某个厂商协议提升为核心模型。
-- 不为了未来可能性提前实现全部 Connector/Transform 类型；先锁定契约，再用第二个真实插件验证抽象。
+- 不为了未来可能性提前实现全部 Connector/Transform 类型；先锁定接口，再用第二个真实插件验证抽象。

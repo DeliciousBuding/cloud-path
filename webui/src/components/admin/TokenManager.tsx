@@ -69,7 +69,7 @@ export function TokenManager() {
       <div className="mt-4 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
         <p>完整令牌只在创建时显示一次。请立即保存；如果遗失，请吊销后重新创建。</p>
         <details className="mt-1.5">
-          <summary className="cursor-pointer">技术详情</summary>
+          <summary className="flex min-h-11 cursor-pointer items-center">技术详情</summary>
           <p className="mt-1 break-words">列表只保留识别码和基本信息，不保存可再次显示的完整令牌。</p>
         </details>
       </div>

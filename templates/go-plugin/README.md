@@ -21,7 +21,7 @@ Each template builds and tests on its own (`go build ./...`, `go vet ./...`,
 `go test ./... -count=1`) and depends only on stdlib + the public CloudPath SDK
 (`sdk/go/cloudpath/v1/*`). It imports no `internal/*` package.
 
-## End-to-end path: copy -> rename -> test -> release -> topic -> registry
+## Workflow: copy -> rename -> test -> release -> topic -> registry
 
 1. **Copy.** Copy the `driver/` or `application/` directory into a new Git
    repository (for example `cloud-path-driver-stcb`).
@@ -84,6 +84,6 @@ Each template builds and tests on its own (`go build ./...`, `go vet ./...`,
 
 - `docs/architecture/plugin-system.md` (protocol/manifest/runtime)
 - `docs/architecture/github-ecosystem.md` (discovery, trust)
-- `docs/architecture/registry.md` (Registry + CLI contract)
+- `docs/architecture/registry.md` (Registry + CLI)
 - `docs/architecture/repository-strategy.md` (repo naming, split gate)
 - `spec/plugin-manifest.schema.json` (manifest JSON Schema)

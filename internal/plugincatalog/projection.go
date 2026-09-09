@@ -103,35 +103,6 @@ func (c *projectionCatalog) Plugin(tenant, id string) (PluginView, bool, error) 
 	return PluginView{}, false, nil
 }
 
-func (c *projectionCatalog) Instances(tenant string) ([]InstanceView, error) {
-	rows, err := c.src.Instances(tenant)
-	if err != nil {
-		return nil, err
-	}
-	views := make([]InstanceView, 0, len(rows))
-	for _, in := range rows {
-		views = append(views, instanceViewFromProjection(in))
-	}
-	sortInstanceViews(views)
-	return capList(views), nil
-}
-
-func (c *projectionCatalog) Instance(tenant, id string) (InstanceView, bool, error) {
-	if id == "" {
-		return InstanceView{}, false, nil
-	}
-	rows, err := c.src.Instances(tenant)
-	if err != nil {
-		return InstanceView{}, false, err
-	}
-	for _, in := range rows {
-		if in.InstanceID == id {
-			return instanceViewFromProjection(in), true, nil
-		}
-	}
-	return InstanceView{}, false, nil
-}
-
 // InstanceViews 构造契约视图（GET /api/plugin-instances 的载荷）。
 // desired 与 observed 永远分开呈现：无 observed 时 Observed 为 nil。
 func InstanceViews(src ProjectionSource, tenant string) ([]api.PluginInstanceView, error) {
@@ -241,28 +212,6 @@ func connectorViews(in []api.PluginConnectorContributionData) []ConnectorContrib
 	return out
 }
 
-// instanceViewFromProjection 映射为本包的历史 InstanceView 形状（系统页/CLI 复用）。
-// 未观测时 state/health 恒为 unknown，绝不按 desired_enabled 虚报。
-func instanceViewFromProjection(in ProjectionInstance) InstanceView {
-	view := InstanceView{
-		Tenant: in.Tenant, EdgeID: in.EdgeID, ID: in.InstanceID,
-		Plugin: in.PluginID, Version: in.Version,
-		DesiredEnabled: in.Enabled, ConfigPresent: in.ConfigPresent,
-		DataPreserved: true, Stale: in.Stale, Drift: in.Drift,
-		Metrics: MetricsView{
-			CPUTime: -1, RSSBytes: -1, Handles: -1, Goroutines: -1,
-			MessageRate: in.MessageRate, RestartCount: in.RestartCount, LastHealthy: in.LastHealthy,
-		},
-	}
-	if !in.HasObserved || !in.EdgeOnline {
-		view.ObservedState, view.Health = "unknown", "unknown"
-		return view
-	}
-	view.ObservedState = orUnknown(in.State)
-	view.Health = orUnknown(in.Health)
-	return view
-}
-
 // cloneConfig 复制配置 map，避免把内部缓存的引用透出到响应。
 func cloneConfig(in map[string]string) map[string]string {
 	if len(in) == 0 {
@@ -273,20 +222,4 @@ func cloneConfig(in map[string]string) map[string]string {
 		out[k] = v
 	}
 	return out
-}
-
-func orUnknown(s string) string {
-	if s == "" {
-		return "unknown"
-	}
-	return s
-}
-
-func sortInstanceViews(views []InstanceView) {
-	sort.Slice(views, func(i, j int) bool {
-		if views[i].EdgeID != views[j].EdgeID {
-			return views[i].EdgeID < views[j].EdgeID
-		}
-		return views[i].ID < views[j].ID
-	})
 }

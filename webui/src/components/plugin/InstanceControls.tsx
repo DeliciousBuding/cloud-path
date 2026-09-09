@@ -85,7 +85,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
 
       {variant === 'detail' && (
         <details className="mt-3 border-t border-hairline pt-3">
-          <summary className="cursor-pointer text-xs text-ink-2">更多操作</summary>
+          <summary className="flex min-h-11 cursor-pointer items-center text-xs text-ink-2">更多操作</summary>
           <button
             type="button" className="btn btn-danger-ghost mt-2" disabled={busy}
             onClick={() => { setPurge(false); setDeleteOpen(true) }}

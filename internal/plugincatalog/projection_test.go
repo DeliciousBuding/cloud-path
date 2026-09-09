@@ -140,7 +140,7 @@ func TestInstanceViewsTenantScopeAndErrors(t *testing.T) {
 }
 
 // TestProjectionCatalogReadsRealSource 锁定目录读面来自注入的投影源：
-// 安装物/实例都可查，nil 源返回空目录且不 panic。
+// 安装物可查，nil 源返回空目录且不 panic。
 func TestProjectionCatalogReadsRealSource(t *testing.T) {
 	src := sampleProjection()
 	c := NewProjectionCatalog(src)
@@ -161,46 +161,18 @@ func TestProjectionCatalogReadsRealSource(t *testing.T) {
 	if _, ok, err := c.Plugin("tenant-b", "io.github.acme.driver"); err != nil || ok {
 		t.Fatalf("跨租户插件查询应未找到: ok=%v err=%v", ok, err)
 	}
-	instances, err := c.Instances("tenant-a")
-	if err != nil || len(instances) != 2 {
-		t.Fatalf("instances = %+v err=%v", instances, err)
-	}
-	for _, in := range instances {
-		switch in.ID {
-		case "box1":
-			if in.ObservedState != "HEALTHY" || in.Health != "HEALTHY" || !in.ConfigPresent ||
-				in.EdgeID != "e1" || in.Metrics.RestartCount != 1 || in.Metrics.MessageRate != 2.5 {
-				t.Fatalf("box1 legacy 视图错误: %+v", in)
-			}
-			if in.Metrics.CPUTime != -1 || in.Metrics.Handles != -1 || in.Metrics.Goroutines != -1 {
-				t.Fatalf("不可观测指标必须标 -1: %+v", in.Metrics)
-			}
-		case "box2":
-			// 无 observed 或 edge 离线：state/health 恒 unknown，绝不按 desired 虚报。
-			if in.ObservedState != "unknown" || in.Health != "unknown" || !in.Stale || !in.Drift {
-				t.Fatalf("box2 legacy 视图错误: %+v", in)
-			}
-		}
-	}
-	single, ok, err := c.Instance("tenant-a", "box2")
-	if err != nil || !ok || single.EdgeID != "e2" {
-		t.Fatalf("单实例查询 = %+v ok=%v err=%v", single, ok, err)
-	}
 
 	empty := NewProjectionCatalog(nil)
 	if list, err := empty.Plugins("tenant-a"); err != nil || len(list) != 0 {
 		t.Fatalf("nil 源目录应为空: %+v %v", list, err)
 	}
-	if list, err := empty.Instances("tenant-a"); err != nil || len(list) != 0 {
-		t.Fatalf("nil 源实例应为空: %+v %v", list, err)
-	}
-	if _, ok, err := empty.Instance("tenant-a", "box1"); err != nil || ok {
-		t.Fatalf("nil 源单实例应未找到: ok=%v err=%v", ok, err)
+	if _, ok, err := empty.Plugin("tenant-a", "box1"); err != nil || ok {
+		t.Fatalf("nil 源单插件应未找到: ok=%v err=%v", ok, err)
 	}
 }
 
-// TestObservedNotTrustedWhenEdgeOffline 锁定：edge 离线时即使有 observed 投影，
-// 历史 InstanceView 也必须呈现 unknown（投影过期只标记，不虚报健康）。
+// TestObservedNotTrustedWhenEdgeOffline 锁定 API 契约视图：
+// edge 离线时历史观测只标 stale，不虚报在线；原始 observed 仍保留供 UI 解释。
 func TestObservedNotTrustedWhenEdgeOffline(t *testing.T) {
 	src := stubProjection{instances: map[string][]ProjectionInstance{
 		"tenant-a": {{
@@ -210,25 +182,15 @@ func TestObservedNotTrustedWhenEdgeOffline(t *testing.T) {
 			DesiredRevision: 1, AppliedRevision: 1,
 		}},
 	}}
-	views, err := NewProjectionCatalog(src).Instances("tenant-a")
-	if err != nil || len(views) != 1 {
-		t.Fatalf("instances = %+v err=%v", views, err)
-	}
-	if views[0].ObservedState != "unknown" || views[0].Health != "unknown" || !views[0].Stale {
-		t.Fatalf("edge 离线时虚报了 observed: %+v", views[0])
-	}
-	// 契约视图仍保留最后一次真实上报（标 stale），供 UI 显示「未上报/过期」。
 	apiViews, err := InstanceViews(src, "tenant-a")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if apiViews[0].Observed == nil || apiViews[0].Observed.State != "HEALTHY" || !apiViews[0].Stale {
-		t.Fatalf("契约视图应保留真实上报并标 stale: %+v", apiViews[0])
+	if len(apiViews) != 1 || apiViews[0].Observed == nil || apiViews[0].Observed.State != "HEALTHY" || !apiViews[0].Stale {
+		t.Fatalf("契约视图应保留真实上报并标 stale: %+v", apiViews)
 	}
 }
 
-// TestSanitizeDetail 锁定暗卷 10 的最后一道闸：本机绝对路径与疑似凭据必须被脱敏，
-// 且长度有界。
 func TestSanitizeDetail(t *testing.T) {
 	// 红队字面量拆开书写，避免 public_audit 静态扫描误报；运行期值不变，仍覆盖路径脱敏路径。
 	winPath := "open C:" + `\Users\ding\secrets\api.txt: denied`

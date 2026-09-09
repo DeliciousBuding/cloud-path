@@ -72,7 +72,9 @@ export function InstanceRow({ v, catalog, onEdit }: {
                 {status.summary}
               </p>
               <p className="mt-0.5 break-words text-[12px] text-ink-3">
-                {v.observed?.health ? '健康：' + hl.label : '健康状态未上报'}
+                {v.observed?.health
+                  ? (hl.tone === 'idle' ? '健康状态暂未提供' : '健康：' + hl.label)
+                  : '健康状态未上报'}
                 {v.stale ? ' · 状态可能不是最新' : ''}
               </p>
             </>
@@ -94,7 +96,7 @@ export function InstanceRow({ v, catalog, onEdit }: {
       )}
 
       <details className="mt-3 min-w-0 text-xs text-ink-2">
-        <summary className="cursor-pointer">技术详情</summary>
+        <summary className="flex min-h-11 cursor-pointer items-center">技术详情</summary>
         <dl className="mt-2 space-y-1 rounded-lg bg-surface-2 px-3 py-2.5">
           <div><dt className="inline">运行位置：</dt><dd className="inline">{hostLocation}</dd></div>
           <div><dt className="inline">运行方式：</dt><dd className="inline">{isolationLabel(v.desired.isolation)}</dd></div>

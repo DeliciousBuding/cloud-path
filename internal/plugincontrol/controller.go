@@ -168,30 +168,6 @@ func (c *Controller) Remove(opts RemoveOptions) (RemoveResult, error) {
 	return RemoveResult{Purged: false, DataPreserved: true, DataPath: dataPath}, nil
 }
 
-// UpdateCheck is the pre-install gate for upgrades: it validates the incoming
-// manifest contract and rejects permission expansion unless confirmed.
-// It performs no state or lockfile mutation.
-func (c *Controller) UpdateCheck(pluginID string, incoming *registry.Manifest, confirm bool) ([]string, error) {
-	if pluginID == "" || incoming == nil {
-		return nil, fmt.Errorf("%w: update check requires plugin id and incoming manifest", ErrInvalidState)
-	}
-	existing, err := registry.LoadManifest(c.manifestPath(pluginID))
-	if err != nil {
-		return nil, fmt.Errorf("%w: installed plugin %s: %v", registry.ErrNotFound, pluginID, err)
-	}
-	if existing.ID != pluginID {
-		return nil, fmt.Errorf("%w: plugin id mismatch %q vs %q", registry.ErrInvalidManifest, existing.ID, pluginID)
-	}
-	if err := registry.ValidateManifestContract(incoming, c.opts.CoreVersion, c.opts.SupportedProtocol); err != nil {
-		return nil, err
-	}
-	added := registry.PermissionExpansion(&existing.Permissions, &incoming.Permissions)
-	if len(added) > 0 && !confirm {
-		return added, fmt.Errorf("%w: permissions would expand: %s", ErrPermissionConfirmationRequired, strings.Join(added, ", "))
-	}
-	return added, nil
-}
-
 // ApplyUpdateOptions selects the instance whose desired version is advanced
 // after a successful install/update.
 type ApplyUpdateOptions struct {
