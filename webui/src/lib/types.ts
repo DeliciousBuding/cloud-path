@@ -452,8 +452,6 @@ export interface PluginDriverContributionData {
 export interface PluginApplicationContributionData {
   id: string
   title?: string
-  /** Optional JSON Schema string for the configuration form; raw JSON remains an advanced fallback. */
-  configSchema?: string
   ui?: PluginUIContribution
 }
 

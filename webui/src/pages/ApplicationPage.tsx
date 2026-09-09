@@ -107,7 +107,6 @@ export default function ApplicationPage() {
           ? <Panel className="mb-5"><p className="text-sm text-ink-2">已打开默认实例。可在上方切换其他实例。</p></Panel>
           : null}
         <ApplicationConsole instance={selected} catalog={resolution.plugin} page={resolution.page}
-          configSchema={resolution.contribution.configSchema}
           readOnly={authStatus !== 'in' || user?.role === 'viewer'} lifecycleKey={lifecycleKey} />
       </>
     }

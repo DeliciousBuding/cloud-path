@@ -9,11 +9,10 @@ import { applicationRunningState } from '@/lib/application-plane'
 import { ApplicationSection } from './ApplicationSections'
 import type { PluginCatalogView, PluginInstanceView, PluginUIPage } from '@/lib/types'
 
-export function ApplicationConsole({ instance, catalog, page, configSchema, readOnly, lifecycleKey }: {
+export function ApplicationConsole({ instance, catalog, page, readOnly, lifecycleKey }: {
   instance: PluginInstanceView
   catalog: PluginCatalogView
   page: PluginUIPage
-  configSchema?: string
   readOnly: boolean
   lifecycleKey: string
 }) {
@@ -48,7 +47,6 @@ export function ApplicationConsole({ instance, catalog, page, configSchema, read
       bindings={bindings}
       jobs={jobs}
       presentation={presentation}
-      configSchema={configSchema}
       running={actionRunning}
       readOnly={readOnly}
       lifecycleKey={lifecycleKey}

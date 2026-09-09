@@ -8,7 +8,6 @@ import { Braces, Save } from 'lucide-react'
 import { Button, TextField } from '@/components/ui'
 import { PluginErrorNote } from '@/components/plugin/PluginFacts'
 import { useUpdateInstance } from '@/hooks/usePlugins'
-import { appJobSchema } from '@/lib/application-actions'
 import { safeConfigEntries } from '@/lib/plugins'
 import type { PluginInstanceView, PluginUIField, PluginUISection } from '@/lib/types'
 
@@ -75,37 +74,6 @@ function setPath(config: Record<string, string>, key: string, value: unknown): R
   return { ...config, [root]: JSON.stringify(rootValue) }
 }
 
-function schemaFields(schemaText: string | undefined): PluginUIField[] {
-  if (!schemaText) return []
-  const { schema } = appJobSchema(schemaText)
-  if (!schema) return []
-  const properties = isRecord(schema.properties) ? schema.properties : {}
-  const required = new Set(Array.isArray(schema.required)
-    ? schema.required.filter((item): item is string => typeof item === 'string') : [])
-  return Object.entries(properties).flatMap(([key, raw]) => {
-    if (!isRecord(raw)) return []
-    const type = typeof raw.type === 'string' && ['string', 'number', 'integer', 'boolean', 'select', 'textarea'].includes(raw.type)
-      ? raw.type as PluginUIField['type'] : undefined
-    const enumValues = Array.isArray(raw.enum)
-      ? raw.enum.filter((item): item is string | number | boolean =>
-        typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') : undefined
-    return [{
-      key,
-      label: typeof raw.title === 'string' ? raw.title : undefined,
-      type: enumValues?.length ? 'select' : type,
-      description: typeof raw.description === 'string' ? raw.description : undefined,
-      placeholder: typeof raw.examples === 'string' ? raw.examples : undefined,
-      required: required.has(key) ? true : undefined,
-      enum: enumValues,
-      minimum: typeof raw.minimum === 'number' ? raw.minimum : undefined,
-      maximum: typeof raw.maximum === 'number' ? raw.maximum : undefined,
-      pattern: typeof raw.pattern === 'string' ? raw.pattern : undefined,
-      default: raw.default,
-      secret: raw.format === 'secret' || raw.secret === true,
-    }]
-  })
-}
-
 function fieldValue(config: Record<string, string>, field: PluginUIField): string {
   const value = getPath(config, field.key)
   if (value === undefined || value === null) return field.default === undefined ? '' : String(field.default)
@@ -130,16 +98,12 @@ function validateField(field: PluginUIField, value: string): string | undefined 
   return undefined
 }
 
-export function PluginConfigForm({ instance, section, configSchema, readOnly }: {
+export function PluginConfigForm({ instance, section, readOnly }: {
   instance: PluginInstanceView
   section: PluginUISection
-  configSchema?: string
   readOnly: boolean
 }) {
-  const fields = useMemo(
-    () => (section.fields?.length ? section.fields : schemaFields(configSchema)),
-    [configSchema, section.fields],
-  )
+  const fields = useMemo(() => section.fields ?? [], [section.fields])
   const [values, setValues] = useState<Record<string, string>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState<unknown>(null)

@@ -37,7 +37,6 @@ export interface ApplicationSectionProps {
   bindings: SectionQuery<AppBindingsView>
   jobs: SectionQuery<AppJobsView>
   presentation?: unknown
-  configSchema?: string
   running?: boolean
   readOnly: boolean
   lifecycleKey: string
@@ -232,7 +231,7 @@ function DiagnosticsSection({ instance, bindings, jobs }: { instance: PluginInst
 }
 
 export function ApplicationSection(props: ApplicationSectionProps) {
-  const { instance, catalog, section, records, bindings, jobs, presentation, configSchema, running, readOnly, lifecycleKey } = props
+  const { instance, catalog, section, records, bindings, jobs, presentation, running, readOnly, lifecycleKey } = props
   const rows = records.data?.records ?? []
   switch (section.type) {
     case 'status':
@@ -254,7 +253,7 @@ export function ApplicationSection(props: ApplicationSectionProps) {
     case 'chart':
       return <ChartSection section={section} records={rows} />
     case 'form':
-      return <Panel title="设置"><PluginConfigForm instance={instance} section={section} configSchema={configSchema} readOnly={readOnly} /></Panel>
+      return <Panel title="设置"><PluginConfigForm instance={instance} section={section} readOnly={readOnly} /></Panel>
     case 'markdown':
       return <MarkdownSection text={section.text ?? ''} />
     case 'diagnostics':

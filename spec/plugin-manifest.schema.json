@@ -66,8 +66,7 @@
               "id": {"type": "string", "description": "Stable connector contribution id (distinct from the plugin id)."},
               "title": {"type": "string"},
               "direction": {"type": "string"},
-              "host": {"type": "string"},
-              "ui": {"type": "object", "description": "Reserved for future Connector UI; current Core rejects it."}
+              "host": {"type": "string"}
             }
           }
         }

@@ -590,7 +590,6 @@ function normalizeApplicationContribution(raw: unknown): PluginApplicationContri
   return {
     id,
     title: str(o.title) || undefined,
-    configSchema: str(o.configSchema) || undefined,
     ui: normalizePluginUI(o.ui),
   }
 }
