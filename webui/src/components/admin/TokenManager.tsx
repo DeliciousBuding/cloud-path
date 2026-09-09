@@ -1,25 +1,43 @@
-// 服务令牌面板（docs/api.md §3.3）：列表（只有 prefix/元数据）+ 创建 + 吊销。
+// 服务令牌面板（docs/api.md §3.3）：TanStack Table + shadcn 风格工具栏 + 抽屉创建。
 //
-// 明文的唯一落点是下面的 `secret` 组件 state：
+// 明文的唯一落点仍是下面的 `secret` 组件 state：
 //   - 创建响应到达 → setSecret(created) → SecretPanel 一次性展示
 //   - 关闭面板 → setSecret(null) → DOM 里再无任何明文
 //   - 组件卸载（切页/登出）→ state 随之消失
 // 刻意不走 useMutation：mutationCache 会保留结果对象，超出「组件内存」的范围。
-// 也刻意不写 localStorage/sessionStorage/URL/console/toast —— admin-tokens 测试对此做反向断言。
-import { useState } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
+import { createColumnHelper } from '@tanstack/react-table'
 import { KeyRound, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button, Panel } from '@/components/ui'
-import { RowSkeleton } from '@/components/Skeleton'
+import { Badge } from '@/components/ui'
+import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
+import { TableCell, TableRow } from '@/components/ui/table'
+import { DataTable, DataTableColumnHeader, DataTableToolbar, useDataTable, dataTableFeatures } from '@/components/data-table'
 import { CreateTokenForm } from './CreateTokenForm'
 import { ErrorNote } from './ErrorNote'
 import { SecretPanel } from './SecretPanel'
-import { TokenRow } from './TokenRow'
+import { TokenActions } from './TokenActions'
 import { ADMIN_TOKENS_KEY, useAdminTokens } from '@/hooks/useAdmin'
 import { adminErrorMessage } from '@/lib/admin'
+import { fmtDateTime, timeAgo } from '@/lib/format'
 import { toast } from '@/store/toast'
-import type { CreatedToken } from '@/lib/types'
+import type { CreatedToken, TokenScope, TokenView } from '@/lib/types'
+
+const tokenColumn = createColumnHelper<typeof dataTableFeatures, TokenView>()
+
+type TokenState = 'valid' | 'expired' | 'revoked'
+
+function tokenState(token: TokenView): TokenState {
+  if (token.revoked_at) return 'revoked'
+  if (token.expires_at && token.expires_at * 1000 <= Date.now()) return 'expired'
+  return 'valid'
+}
+
+function scopeTone(scope: TokenScope): string {
+  return scope === 'admin' || scope === 'edge' ? 'text-warn' : 'text-ink-2'
+}
 
 export function TokenManager() {
   const { t } = useTranslation('admin')
@@ -28,6 +46,109 @@ export function TokenManager() {
   const tokens = data?.tokens ?? []
   const [creating, setCreating] = useState(false)
   const [secret, setSecret] = useState<CreatedToken | null>(null)
+  const [query, setQuery] = useState('')
+  const deferredQuery = useDeferredValue(query)
+  const [statusFilter, setStatusFilter] = useState<string[]>([])
+  const [scopeFilter, setScopeFilter] = useState<string[]>([])
+
+  const filtered = useMemo(() => {
+    const q = deferredQuery.trim().toLowerCase()
+    return tokens.filter((token) => {
+      if (statusFilter.length > 0 && !statusFilter.includes(tokenState(token))) return false
+      if (scopeFilter.length > 0 && !(token.scopes ?? []).some((scope) => scopeFilter.includes(scope))) return false
+      if (!q) return true
+      const haystack = `${token.name} ${token.prefix} ${(token.scopes ?? []).join(' ')}`.toLowerCase()
+      return q.split(/\s+/).filter(Boolean).every((word) => haystack.includes(word))
+    })
+  }, [tokens, deferredQuery, statusFilter, scopeFilter])
+
+  const counts = useMemo(() => {
+    const state = { valid: 0, expired: 0, revoked: 0 }
+    const scopes: Record<string, number> = { read: 0, write: 0, admin: 0, edge: 0 }
+    for (const token of tokens) {
+      state[tokenState(token)] += 1
+      for (const scope of token.scopes ?? []) scopes[scope] = (scopes[scope] ?? 0) + 1
+    }
+    return { state, scopes }
+  }, [tokens])
+
+  const columns = useMemo(() => tokenColumn.columns([
+    tokenColumn.accessor('name', {
+      id: 'name',
+      enableHiding: false,
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t('tokenManager.columns.name')} />,
+      meta: { label: t('tokenManager.columns.name'), cellClassName: 'min-w-[12rem]' },
+      cell: ({ row }) => (
+        <div className="min-w-0">
+          <p className="truncate font-semibold" title={row.original.name || t('tokenManager.unnamed')}>
+            {row.original.name || t('tokenManager.unnamed')}
+          </p>
+          <p className="mt-1 truncate font-mono text-meta text-ink-3" title={row.original.prefix}>{row.original.prefix}</p>
+        </div>
+      ),
+    }),
+    tokenColumn.accessor((row) => (row.scopes ?? []).join(','), {
+      id: 'scopes',
+      header: t('tokenManager.columns.scopes'),
+      enableSorting: false,
+      meta: { label: t('tokenManager.columns.scopes'), cellClassName: 'min-w-[10rem]' },
+      cell: ({ row }) => (row.original.scopes ?? []).length > 0 ? (
+        <div className="flex flex-wrap gap-x-2 gap-y-1 text-meta">
+          {(row.original.scopes ?? []).map((scope) => (
+            <span key={scope} className={scopeTone(scope)}>
+              {t(`tokenRow.scopes.${scope}`, { defaultValue: t('tokenRow.scopes.other') })}
+            </span>
+          ))}
+        </div>
+      ) : <span className="text-meta text-ink-3">{t('tokenRow.noScopes')}</span>,
+    }),
+    tokenColumn.accessor((row) => tokenState(row), {
+      id: 'status',
+      header: t('tokenManager.columns.status'),
+      enableSorting: false,
+      meta: { label: t('tokenManager.columns.status'), cellClassName: 'min-w-[5rem]' },
+      cell: ({ row }) => {
+        const state = tokenState(row.original)
+        const tone = state === 'valid' ? 'ok' : state === 'expired' ? 'warn' : 'bad'
+        return <Badge tone={tone}>{t(`tokenRow.states.${state}`)}</Badge>
+      },
+    }),
+    tokenColumn.accessor('created_at', {
+      id: 'createdAt',
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t('tokenManager.columns.createdAt')} />,
+      meta: { label: t('tokenManager.columns.createdAt'), cellClassName: 'num min-w-[9rem] whitespace-nowrap font-mono text-meta text-ink-2' },
+      cell: ({ row }) => <span className="num whitespace-nowrap font-mono text-meta text-ink-2">{fmtDateTime(row.original.created_at)}</span>,
+    }),
+    tokenColumn.accessor((row) => row.last_used_at ?? 0, {
+      id: 'lastUsed',
+      header: t('tokenManager.columns.lastUsed'),
+      enableSorting: false,
+      meta: { label: t('tokenManager.columns.lastUsed'), cellClassName: 'min-w-[7rem] whitespace-nowrap text-meta text-ink-2' },
+      cell: ({ row }) => row.original.last_used_at ? (
+        <span className="whitespace-nowrap text-meta text-ink-2" title={fmtDateTime(row.original.last_used_at)}>
+          {timeAgo(row.original.last_used_at)}
+        </span>
+      ) : <span className="whitespace-nowrap text-meta text-ink-3">{t('tokenRow.neverUsed')}</span>,
+    }),
+    tokenColumn.accessor((row) => row.expires_at ?? 0, {
+      id: 'expires',
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t('tokenManager.columns.expires')} />,
+      meta: { label: t('tokenManager.columns.expires'), cellClassName: 'num min-w-[9rem] whitespace-nowrap font-mono text-meta text-ink-2' },
+      cell: ({ row }) => row.original.expires_at ? (
+        <span className="num whitespace-nowrap font-mono text-meta text-ink-2">{fmtDateTime(row.original.expires_at)}</span>
+      ) : <span className="whitespace-nowrap text-meta text-ink-3">{t('tokenRow.neverExpires')}</span>,
+    }),
+    tokenColumn.display({
+      id: 'actions',
+      header: () => <span className="block text-right">{t('tokenManager.columns.actions')}</span>,
+      enableSorting: false,
+      meta: { label: t('tokenManager.columns.actions'), cellClassName: 'w-[6rem] min-w-[6rem] whitespace-nowrap' },
+      enableHiding: false,
+      cell: ({ row }) => <div className="text-right"><TokenActions token={row.original} /></div>,
+    }),
+  ]), [t])
+
+  const table = useDataTable({ columns, data: filtered, getRowId: (row) => String(row.id) })
 
   const onCreated = (created: CreatedToken) => {
     setSecret(created)
@@ -39,6 +160,12 @@ export function TokenManager() {
     }))
   }
 
+  const resetFilters = () => {
+    setQuery('')
+    setStatusFilter([])
+    setScopeFilter([])
+  }
+
   return (
     <Panel
       title={<span className="flex items-center gap-1.5"><KeyRound size={14} />{t('tokenManager.title')}</span>}
@@ -46,7 +173,7 @@ export function TokenManager() {
         <Button
           variant={creating ? 'ghost' : 'primary'}
           aria-expanded={creating}
-          onClick={() => setCreating((v) => !v)}
+          onClick={() => setCreating((value) => !value)}
         >
           {!creating && <Plus size={14} />}{creating ? t('tokenManager.collapse') : t('tokenManager.create')}
         </Button>
@@ -54,28 +181,76 @@ export function TokenManager() {
     >
       {secret && <SecretPanel secret={secret} onClose={() => setSecret(null)} />}
 
-      {creating && (
-        <CreateTokenForm onCreated={onCreated} onCancel={() => setCreating(false)} />
-      )}
+      <Drawer open={creating} onOpenChange={setCreating}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>{t('tokenManager.create')}</DrawerTitle>
+            <DrawerDescription>{t('tokenManager.createHint')}</DrawerDescription>
+          </DrawerHeader>
+          <CreateTokenForm onCreated={onCreated} onCancel={() => setCreating(false)} />
+        </DrawerContent>
+      </Drawer>
 
       {isError ? (
         <ErrorNote message={adminErrorMessage(error)} onRetry={() => void refetch()} />
-      ) : isPending ? (
-        <RowSkeleton rows={2} />
-      ) : tokens.length === 0 ? (
-        <p className="py-6 text-center text-body text-ink-3">{t('tokenManager.empty')}</p>
       ) : (
-        <ul className="divide-y divide-hairline" aria-label={t('tokenManager.listAria')}>
-          {tokens.map((tok) => <TokenRow key={tok.id} token={tok} />)}
-        </ul>
+        <>
+          <DataTableToolbar
+            table={table}
+            search={{
+              value: query,
+              onChange: setQuery,
+              label: t('tokenManager.search.label'),
+              placeholder: t('tokenManager.search.placeholder'),
+            }}
+            filters={[
+              {
+                id: 'status',
+                label: t('tokenManager.columns.status'),
+                selected: statusFilter,
+                singleSelect: true,
+                onChange: setStatusFilter,
+                options: [
+                  { value: 'valid', label: t('tokenRow.states.valid'), count: counts.state.valid },
+                  { value: 'expired', label: t('tokenRow.states.expired'), count: counts.state.expired },
+                  { value: 'revoked', label: t('tokenRow.states.revoked'), count: counts.state.revoked },
+                ],
+              },
+              {
+                id: 'scope',
+                label: t('tokenManager.columns.scopes'),
+                selected: scopeFilter,
+                onChange: setScopeFilter,
+                options: (['read', 'write', 'admin', 'edge'] as TokenScope[]).map((scope) => ({
+                  value: scope,
+                  label: t(`tokenRow.scopes.${scope}`),
+                  count: counts.scopes[scope] ?? 0,
+                })),
+              },
+            ]}
+            resultCount={filtered.length}
+            onReset={resetFilters}
+          />
+          <DataTable
+            table={table}
+            ariaLabel={t('tokenManager.listAria')}
+            empty={tokens.length === 0 ? t('tokenManager.empty') : t('tokenManager.noMatches')}
+            loading={isPending}
+            loadingRows={3}
+            minWidthClassName="min-w-[58rem]"
+            footer={filtered.some((token) => token.revoked_at) ? (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={table.getVisibleLeafColumns().length} className="px-3 py-3 text-meta leading-relaxed text-ink-3">
+                  {t('tokenRow.revokedHint')}
+                </TableCell>
+              </TableRow>
+            ) : undefined}
+          />
+        </>
       )}
 
       <div className="mt-4 border-t border-hairline pt-3 text-meta leading-relaxed text-ink-3">
         <p>{t('tokenManager.hint')}</p>
-        <details className="mt-1.5">
-          <summary className="flex min-h-touch cursor-pointer items-center">{t('tokenManager.details')}</summary>
-          <p className="mt-1 break-words">{t('tokenManager.detailsHint')}</p>
-        </details>
       </div>
     </Panel>
   )

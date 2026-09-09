@@ -2,10 +2,11 @@ export default {
   app: { name: 'CloudPath', overviewAria: 'CloudPath 概览', tagline: 'CloudPath · 连接和管理你的设备' },
   actions: {
     refresh: '刷新', retry: '重试', cancel: '取消', save: '保存', close: '关闭', delete: '删除', edit: '编辑',
-    create: '新建', search: '搜索', clear: '清除', more: '更多', view: '查看', back: '返回', loading: '正在加载…', none: '—',
+    create: '新建', search: '搜索', clear: '清除', more: '更多', view: '查看', columns: '显示列', asc: '升序', desc: '降序', hide: '隐藏', back: '返回', loading: '正在加载…', none: '—',
     logout: '登出', logoutTitle: '退出当前账号',
   },
   status: { online: '在线', offline: '离线', unknown: '状态待确认', connected: '已连接', connecting: '连接中', disconnected: '已断开' },
+  table: { rows: '{{count}} 行' },
   theme: {
     light: '浅色外观', dark: '深色外观', system: '跟随系统', label: '外观主题', switchTo: '切换为{{label}}',
     switchTitle: '当前：{{current}} · 点击切换为{{next}}',

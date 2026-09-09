@@ -29,7 +29,8 @@
 | 串口 | go.bug.st/serial | 跨平台、无 CGO |
 | 前端 | React 19 + TypeScript + Vite 6 | 现代 SPA 标准栈，`strict` + `noUnusedLocals` |
 | 路由 | React Router 7 | 声明式 SPA 路由 + 路由级懒加载 |
-| 样式 | Tailwind CSS 4 + 自建 primitive 组件库 | 语义 token 在 `webui/src/index.css`，浅/深主题；Button/Input/Select 等原语统一在 `webui/src/components/ui.tsx`，无第三方 UI kit 依赖 |
+| 样式 | Tailwind CSS 4 + 自建 primitive + shadcn/Radix 交互原语 | 语义 token 在 `webui/src/index.css`；Button/Input/Select 等基础原语在 `webui/src/components/ui.tsx`，Dialog/Drawer/Menu/Popover/Table 等复杂交互采用 shadcn 结构 + Radix，视觉仍由 CloudPath token 控制 |
+| 表格 | TanStack Table 9 | 列定义、排序、列可见性与筛选工具栏复用，避免每页手搓 `<table>` |
 | 数据层 | TanStack Query 5（REST）+ zustand 5（WS 实时态） | 查询缓存与实时推送分离 |
 | 图表 | recharts | 漂移趋势（按需加载 chunk） |
 | 图标 | lucide-react | 线性图标，随 `currentColor` |
@@ -353,7 +354,7 @@ devices:
 |---|---|---|
 | `GET /api/devices/{id}` 单段路径 | `/api/devices/{edgeID}/{deviceID}` 两段 | 设备键本身含 `/`，单段需要转义，两段更直白 |
 | `GET /api/devices/{id}/events` | `GET /api/events?device=` | 事件是全局资源，统一入口便于跨设备查询与筛选 |
-| 样式用 shadcn/ui | 自建原语组件（`components/ui.tsx`）+ CSS 变量 | shadcn 引入 radix 全家桶与额外约定；本项目只需 Badge/Panel/StatTile 等少量原语，自建更轻且主题可控 |
+| 样式用 shadcn/ui | 基础原语自建（`components/ui.tsx`）+ 复杂交互采用 shadcn/Radix | 简单控件保留自建以控制视觉和体积；Dialog/Drawer/Menu/Popover/Table 的焦点、portal 与定位行为交给成熟原语，避免重复手搓 |
 | Vite 7 | Vite 6 | 定稿时 Vite 7 尚未发布、工具链未跟上；6 已满足需求 |
 | `examples/pillbox` 承载业务语义 | 不设业务示例包，语义留在适配器的标签层 | 核心与示例都保持行业无关，避免平台绑定具体业务 |
 | 前端命令按钮硬编码 | 由 `GET /api/adapters` 白名单驱动 | 新增适配器零前端改动，且与 server 校验同源 |

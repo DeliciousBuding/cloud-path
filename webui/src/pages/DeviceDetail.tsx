@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { createColumnHelper } from '@tanstack/react-table'
 import {Activity, ArrowRight, Braces, Command, Grid3x3, History, LayoutDashboard, Maximize2, RadioTower, Sparkles, Zap} from 'lucide-react'
 import {
   BackLink, Badge, Button, EmptyState, ErrorState, KeyValue, Panel, Segmented, Select, StatusDot, TabBar, TabPanel,
@@ -16,6 +17,7 @@ import { CommandHistory } from '@/components/CommandHistory'
 import { TimeSeriesChart } from '@/components/charts'
 import { EventFeed, eventDisplayLabel } from '@/components/EventFeed'
 import { RowSkeleton } from '@/components/Skeleton'
+import { StaticDataTable, dataTableFeatures } from '@/components/data-table'
 import { api, isNotFound } from '@/lib/api'
 import { useLive } from '@/store/ws'
 import { useNow } from '@/hooks/useNow'
@@ -595,6 +597,13 @@ export default function DeviceDetail() {
   )
 }
 
+type StateRow = {
+  e: import('@/lib/types').DescriptorEntity
+  o: import('@/lib/types').Observation
+}
+
+const stateColumn = createColumnHelper<typeof dataTableFeatures, StateRow>()
+
 /** 表格形态：全 Entity 观测的密集行（运维扫读用）；质量/ stale 只标异常 */
 function StateTable({ descriptor, idx, nowSec }: {
   descriptor: import('@/lib/types').DeviceDescriptor
@@ -602,47 +611,65 @@ function StateTable({ descriptor, idx, nowSec }: {
   nowSec: number
 }) {
   const { t } = useTranslation('devices')
-  const rows = descriptor.entities.flatMap((e) =>
-    observationsOf(e).map((o) => ({ e, o })))
-  if (!rows.length) return <p className="py-6 text-center text-body text-ink-3">{t('detail.stateTable.empty')}</p>
+  const rows = useMemo(
+    () => descriptor.entities.flatMap((e) => observationsOf(e).map((o) => ({ e, o }))),
+    [descriptor.entities],
+  )
+  const columns = useMemo(() => stateColumn.columns([
+    stateColumn.accessor((row) => entityTitle(row.e), {
+      id: 'entity',
+      header: t('detail.stateTable.entity'),
+      meta: { label: t('detail.stateTable.entity'), cellClassName: 'whitespace-nowrap' },
+    }),
+    stateColumn.accessor((row) => propertyLabel(row.o.property, row.o.capability, idx), {
+      id: 'property',
+      header: t('detail.stateTable.property'),
+      meta: { label: t('detail.stateTable.property'), cellClassName: 'whitespace-nowrap text-ink-2' },
+    }),
+    stateColumn.accessor((row) => row.o.value, {
+      id: 'value',
+      header: t('detail.stateTable.value'),
+      meta: { label: t('detail.stateTable.value'), headerClassName: 'text-right', cellClassName: 'num text-right font-medium' },
+      cell: ({ row }) => (
+        <>
+          {widgetFor(row.original.o, idx) === 'timestamp' ? formatTimestamp(row.original.o.value) : displayStateValue(row.original.o.value, t)}
+          {row.original.o.unit && <span className="ml-0.5 font-normal text-ink-3">{unitLabel(row.original.o.unit)}</span>}
+        </>
+      ),
+    }),
+    stateColumn.accessor((row) => row.o.quality ?? 'good', {
+      id: 'quality',
+      header: t('detail.stateTable.quality'),
+      meta: { label: t('detail.stateTable.quality') },
+      cell: ({ row }) => row.original.o.quality && row.original.o.quality !== 'good'
+        ? <Badge tone={qualityTone(row.original.o.quality)}>{t(`quality.${row.original.o.quality}`)}</Badge>
+        : <span className="text-ink-3">—</span>,
+    }),
+    stateColumn.accessor((row) => row.o.received_at ?? '', {
+      id: 'received',
+      header: t('detail.stateTable.received'),
+      meta: { label: t('detail.stateTable.received'), headerClassName: 'text-right', cellClassName: 'num whitespace-nowrap text-right font-mono text-micro text-ink-3' },
+      cell: ({ row }) => (
+        <>
+          {row.original.o.received_at ? formatTimestamp(row.original.o.received_at) : '—'}
+          {row.original.o.received_at && isStaleObs(row.original.o, nowSec) && (
+            <Badge tone="warn" className="ml-1">{t('detail.stateTable.stale')}</Badge>
+          )}
+        </>
+      ),
+    }),
+  ]), [idx, nowSec, t])
+
   return (
-    <div className="card overflow-x-auto" tabIndex={0} role="region" aria-label={t('detail.stateTable.aria')}>
-      <table className="w-full min-w-[44rem] border-collapse text-left text-meta">
-        <thead>
-          <tr className="border-b border-hairline text-meta text-ink-3">
-            <th className="px-3 py-2 font-medium">{t('detail.stateTable.entity')}</th>
-            <th className="px-3 py-2 font-medium">{t('detail.stateTable.property')}</th>
-            <th className="px-3 py-2 text-right font-medium">{t('detail.stateTable.value')}</th>
-            <th className="px-3 py-2 font-medium">{t('detail.stateTable.quality')}</th>
-            <th className="px-3 py-2 text-right font-medium">{t('detail.stateTable.received')}</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-hairline">
-          {rows.map(({ e, o }) => (
-            <tr key={`${e.entity_id}.${o.property}`}>
-              <td className="whitespace-nowrap px-3 py-1.5">{entityTitle(e)}</td>
-              <td className="whitespace-nowrap px-3 py-1.5 text-ink-2">
-                {propertyLabel(o.property, o.capability, idx)}
-              </td>
-              <td className="num px-3 py-1.5 text-right font-medium">
-                {widgetFor(o, idx) === 'timestamp' ? formatTimestamp(o.value) : displayStateValue(o.value, t)}
-                {o.unit && <span className="ml-0.5 font-normal text-ink-3">{unitLabel(o.unit)}</span>}
-              </td>
-              <td className="px-3 py-1.5">
-                {o.quality && o.quality !== 'good'
-                  ? <Badge tone={qualityTone(o.quality)}>{t(`quality.${o.quality}`)}</Badge>
-                  : <span className="text-ink-3">—</span>}
-              </td>
-              <td className="num whitespace-nowrap px-3 py-1.5 text-right font-mono text-micro text-ink-3">
-                {o.received_at ? formatTimestamp(o.received_at) : '—'}
-                {o.received_at && isStaleObs(o, nowSec) && (
-                  <Badge tone="warn" className="ml-1">{t('detail.stateTable.stale')}</Badge>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <StaticDataTable<StateRow>
+      ariaLabel={t('detail.stateTable.aria')}
+      columns={columns}
+      data={rows}
+      getRowId={(row) => `${row.e.entity_id}.${row.o.property}`}
+      empty={t('detail.stateTable.empty')}
+      minWidthClassName="min-w-[44rem]"
+      containerClassName="card"
+      tableClassName="text-meta"
+    />
   )
 }

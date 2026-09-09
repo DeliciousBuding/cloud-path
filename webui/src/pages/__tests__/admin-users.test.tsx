@@ -242,7 +242,7 @@ describe('TestNonAdminCannotSeeManagement', () => {
 
     expect(await screen.findByText('需要管理员权限')).toBeInTheDocument()
     expect(screen.queryByRole('list', { name: '成员列表' })).toBeNull()
-    expect(screen.queryByRole('list', { name: '访问令牌列表' })).toBeNull()
+    expect(screen.queryByRole('table', { name: '访问令牌列表' })).toBeNull()
     expect(screen.queryByRole('button', { name: '添加成员' })).toBeNull()
     expect(screen.queryByRole('button', { name: '创建访问令牌' })).toBeNull()
     expect(screen.queryByRole('button', { name: /编辑成员/ })).toBeNull()

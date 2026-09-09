@@ -7,6 +7,7 @@ import {
   BackLink, Badge, EmptyState, ErrorState, PageHeader, Panel, Segmented, StatTile, StatusDot,
 } from '@/components/ui'
 import { TimeSeriesChart, summarizeSeries } from '@/components/charts'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { api, isNotFound } from '@/lib/api'
 import { fmtDateTime, fmtTime } from '@/lib/format'
 import { formatValue } from '@/lib/descriptor'
@@ -214,28 +215,28 @@ export default function DeviceTrendDetail() {
               : (
                 <>
                   <div className="overflow-x-auto">
-                    <table aria-label={t('detail.trendDetail.tableTitle')} className="w-full min-w-[34rem] border-collapse text-left text-meta">
-                      <thead>
-                        <tr className="border-b border-hairline text-ink-3">
-                          <th className="px-2 py-2 font-medium">{t('detail.trendDetail.tableTime')}</th>
-                          <th className="px-2 py-2 text-right font-medium">{t('detail.trendDetail.tableValue')}</th>
-                          <th className="px-2 py-2 font-medium">{t('detail.trendDetail.tableQuality')}</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-hairline">
+                    <Table aria-label={t('detail.trendDetail.tableTitle')} className="min-w-[34rem] text-meta">
+                      <TableHeader className="border-0 bg-transparent">
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="px-2 py-2">{t('detail.trendDetail.tableTime')}</TableHead>
+                          <TableHead className="px-2 py-2 text-right">{t('detail.trendDetail.tableValue')}</TableHead>
+                          <TableHead className="px-2 py-2">{t('detail.trendDetail.tableQuality')}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {pageSamples.map((sample) => (
-                          <tr key={sample.ts}>
-                            <td className="num whitespace-nowrap px-2 py-1.5 text-ink-2">{fmtDateTime(sample.ts)}</td>
-                            <td className="num px-2 py-1.5 text-right font-medium">
+                          <TableRow key={sample.ts}>
+                            <TableCell className="num whitespace-nowrap px-2 py-1.5 text-ink-2">{fmtDateTime(sample.ts)}</TableCell>
+                            <TableCell className="num px-2 py-1.5 text-right font-medium">
                               {formatValue(sample.value)}{unit && <span className="ml-1 font-normal text-ink-3">{unit}</span>}
-                            </td>
-                            <td className="px-2 py-1.5 text-ink-2">
+                            </TableCell>
+                            <TableCell className="px-2 py-1.5 text-ink-2">
                               {sample.quality ? t(QUALITY_KEYS[sample.quality] ?? 'quality.good') : '—'}
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3">
                     <div className="flex items-center gap-2">

@@ -2,10 +2,11 @@ export default {
   app: { name: 'CloudPath', overviewAria: 'CloudPath overview', tagline: 'CloudPath · Connect and manage your devices' },
   actions: {
     refresh: 'Refresh', retry: 'Retry', cancel: 'Cancel', save: 'Save', close: 'Close', delete: 'Delete', edit: 'Edit',
-    create: 'Create', search: 'Search', clear: 'Clear', more: 'More', view: 'View', back: 'Back', loading: 'Loading…', none: '—',
+    create: 'Create', search: 'Search', clear: 'Clear', more: 'More', view: 'View', columns: 'Columns', asc: 'Ascending', desc: 'Descending', hide: 'Hide', back: 'Back', loading: 'Loading…', none: '—',
     logout: 'Sign out', logoutTitle: 'Sign out of this account',
   },
   status: { online: 'Online', offline: 'Offline', unknown: 'Status unknown', connected: 'Connected', connecting: 'Connecting', disconnected: 'Disconnected' },
+  table: { rows: '{{count}} rows' },
   theme: {
     light: 'Light appearance', dark: 'Dark appearance', system: 'Use system setting', label: 'Appearance', switchTo: 'Switch to {{label}}',
     switchTitle: 'Current: {{current}} · Switch to {{next}}',

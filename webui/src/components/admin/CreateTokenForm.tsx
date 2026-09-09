@@ -58,7 +58,7 @@ export function CreateTokenForm({ onCreated, onCancel }: {
   }
 
   return (
-    <form onSubmit={submit} aria-label={t('createToken.formAria')} className="mb-4 border-b border-hairline pb-4">
+    <form onSubmit={submit} aria-label={t('createToken.formAria')}>
       <TextField
         label={t('createToken.name.label')} value={name} error={nameErr} autoComplete="off"
         hint={t('createToken.name.hint')}

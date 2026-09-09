@@ -299,7 +299,7 @@ describe('危险动作与确认结果', () => {
     expect(http.calls).toHaveLength(0)
 
     await user.click(screen.getByRole('button', { name: '恢复出厂' }))
-    fireEvent.keyDown(window, { key: 'Escape' })
+    fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(http.calls).toHaveLength(0)
   })
