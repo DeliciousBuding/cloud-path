@@ -236,7 +236,7 @@ func TestProjectionCatalogProjectsUIAndRejectsRouteConflict(t *testing.T) {
 		Navigation: &api.PluginUINavigationData{Title: "药盒提醒", I18n: map[string]string{"en-US": "Pillbox reminders"}, Route: "pillbox"},
 		Pages: []api.PluginUIPageData{{
 			ID: "home", Title: "药盒提醒", I18n: map[string]string{"en-US": "Pillbox reminders"},
-			Sections: []api.PluginUISectionData{{Type: "status"}, {Type: "custom", Entry: "ui/index.html", Scopes: []string{"instance.read"}, Fields: []map[string]any{{"label": "C:\\secret\\ui"}}}},
+			Sections: []api.PluginUISectionData{{Type: "status", I18n: map[string]string{"en-US": "Status"}}, {Type: "custom", Entry: "ui/index.html", Scopes: []string{"instance.read"}, Fields: []map[string]any{{"label": "C:\\secret\\ui"}}}},
 		}},
 	}
 	src := stubProjection{installations: map[string][]api.PluginInstallationStatusData{
@@ -257,6 +257,7 @@ func TestProjectionCatalogProjectsUIAndRejectsRouteConflict(t *testing.T) {
 		t.Fatalf("UI i18n 未投影: %+v", views[0].Contributes.Applications[0].UI)
 	}
 	views[0].Contributes.Applications[0].UI.Pages[0].Sections[0].Type = "mutated"
+	views[0].Contributes.Applications[0].UI.Pages[0].Sections[0].I18n["en-US"] = "mutated"
 	views[0].Contributes.Applications[0].UI.Navigation.I18n["en-US"] = "mutated"
 	views[0].Contributes.Applications[0].UI.Pages[0].I18n["en-US"] = "mutated"
 	again, err := c.Plugins("tenant-a")
@@ -266,7 +267,7 @@ func TestProjectionCatalogProjectsUIAndRejectsRouteConflict(t *testing.T) {
 	if again[0].Contributes.Applications[0].UI.Pages[0].Sections[0].Type != "status" {
 		t.Fatal("UI 投影必须深拷贝，响应改动不得污染源数据")
 	}
-	if again[0].Contributes.Applications[0].UI.Navigation.I18n["en-US"] != "Pillbox reminders" || again[0].Contributes.Applications[0].UI.Pages[0].I18n["en-US"] != "Pillbox reminders" {
+	if again[0].Contributes.Applications[0].UI.Navigation.I18n["en-US"] != "Pillbox reminders" || again[0].Contributes.Applications[0].UI.Pages[0].I18n["en-US"] != "Pillbox reminders" || again[0].Contributes.Applications[0].UI.Pages[0].Sections[0].I18n["en-US"] != "Status" {
 		t.Fatal("UI i18n 投影必须深拷贝，响应改动不得污染源数据")
 	}
 	if got := again[0].Contributes.Applications[0].UI.Pages[0].Sections[1].Fields[0]["label"]; got != "[path]" {

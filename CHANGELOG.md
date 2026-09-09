@@ -36,6 +36,13 @@ shasum -a 256 -c checksums.txt --ignore-missing      # macOS
 certutil -hashfile <文件> SHA256                      # Windows（逐项对照）
 ```
 
+## v0.2.29 — 2026-09-10
+
+- 插件 UI：运行实例详情的设置区按 manifest 的 `form` 字段结构化展示；`app_config`、机器键和原始 JSON 收进技术详情，不再直接占据普通设置区。
+- 插件 UI：补齐 `schedule.source=records` 与 `recordType` 过滤，`source=jobs` 的持久调度视图保持兼容。
+- 插件 i18n：导航、页面、分区、字段标签/说明和枚举展示值支持 `i18n` / `valuesI18n`；安装投影补齐 page description 与 section title/description/emptyText，避免英文界面继续落到中文原文。
+- 同步插件版本：scheduled-compartment `v0.2.10`、hall-pillbox `v0.1.8`、button-indicator `v0.1.8`、environment-guard `v0.1.6`、music-player `v0.2.6`、sensor-alert `v0.1.7`。
+
 ## v0.2.28 — 2026-09-10
 
 - 插件 UI：配置表单新增通用数组编辑器（`array` + `itemFields` + `minItems/maxItems`），药格、日程等结构化配置不再要求用户手写 JSON。

@@ -10,6 +10,7 @@ import { Button, Checkbox, IconButton, Input, Select, Textarea, TextField } from
 import { PluginErrorNote } from '@/components/plugin/PluginFacts'
 import { useUpdateInstance } from '@/hooks/usePlugins'
 import { safeConfigEntries } from '@/lib/plugins'
+import { resolveUIFieldDescription, resolveUIFieldLabel, resolveUIFieldValue } from '@/lib/plugin-ui'
 import type { PluginInstanceView, PluginUIField, PluginUISection } from '@/lib/types'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -93,7 +94,7 @@ function validateField(field: PluginUIField, value: unknown, t: (key: string, op
       const record = isRecord(item) ? item : {}
       for (const itemField of field.itemFields ?? []) {
         const itemError = validateField(itemField, record[itemField.key], t)
-        if (itemError) return `${itemField.label || itemField.key}：${itemError}`
+        if (itemError) return `${resolveUIFieldLabel(itemField) || itemField.key}：${itemError}`
       }
     }
     return undefined
@@ -146,13 +147,13 @@ function ArrayField({ field, value, disabled, error, onChange }: {
   const { t } = useTranslation('plugin')
   const items = Array.isArray(value) ? value : []
   const itemFields = field.itemFields ?? []
-  const message = error || field.description
+  const message = error || resolveUIFieldDescription(field)
   const updateItem = (index: number, key: string, next: unknown) => {
     onChange(items.map((item, current) => current === index && isRecord(item) ? { ...item, [key]: next } : item))
   }
   return <div className="min-w-0 sm:col-span-2">
     <div className="mb-2 flex items-center justify-between gap-3">
-      <label className="text-compact font-medium text-ink-2">{field.label || field.key}{field.required ? ' *' : ''}</label>
+      <label className="text-compact font-medium text-ink-2">{resolveUIFieldLabel(field) || field.key}{field.required ? ' *' : ''}</label>
       <Button type="button" variant="ghost" size="sm" disabled={disabled}
         onClick={() => onChange([...items, emptyArrayItem(itemFields)])}><Plus size={13} />{t('config.addItem')}</Button>
     </div>
@@ -174,18 +175,18 @@ function ArrayField({ field, value, disabled, error, onChange }: {
               if (itemField.type === 'boolean') return <label key={itemField.key} className="flex min-h-touch items-center gap-2 self-end text-body text-ink-2">
                 <Checkbox checked={itemValue === true || itemValue === 'true'} disabled={disabled}
                   onChange={(event) => updateItem(index, itemField.key, event.target.checked)} />
-                <span>{itemField.label || itemField.key}</span>
+                <span>{resolveUIFieldLabel(itemField) || itemField.key}</span>
               </label>
               if (itemField.enum?.length || itemField.type === 'select') return <label key={itemField.key} className="min-w-0 text-compact font-medium text-ink-2">
-                <span className="mb-1.5 block">{itemField.label || itemField.key}{itemField.required ? ' *' : ''}</span>
+                <span className="mb-1.5 block">{resolveUIFieldLabel(itemField) || itemField.key}{itemField.required ? ' *' : ''}</span>
                 <Select className="w-full" value={textValue} disabled={disabled} required={itemField.required}
                   onChange={(event) => updateItem(index, itemField.key, event.target.value)}>
                   <option value="">{t('config.select')}</option>
-                  {(itemField.enum ?? []).map((option) => <option key={String(option)} value={String(option)}>{itemField.values?.[String(option)] ?? String(option)}</option>)}
+                  {(itemField.enum ?? []).map((option) => <option key={String(option)} value={String(option)}>{resolveUIFieldValue(itemField, option) ?? String(option)}</option>)}
                 </Select>
               </label>
               return <label key={itemField.key} className="min-w-0 text-compact font-medium text-ink-2">
-                <span className="mb-1.5 block">{itemField.label || itemField.key}{itemField.required ? ' *' : ''}</span>
+                <span className="mb-1.5 block">{resolveUIFieldLabel(itemField) || itemField.key}{itemField.required ? ' *' : ''}</span>
                 <Input className="w-full" disabled={disabled} required={itemField.required}
                   type={itemField.type === 'number' || itemField.type === 'integer' ? 'number' : 'text'}
                   value={textValue} placeholder={itemField.placeholder}
@@ -254,12 +255,12 @@ export function PluginConfigForm({ instance, section, readOnly }: {
         const value = values[field.key]
         const textValue = typeof value === 'string' ? value : value === undefined || value === null ? '' : String(value)
         const common = {
-          label: field.label || field.key,
-          hint: field.description,
+          label: resolveUIFieldLabel(field) || field.key,
+          hint: resolveUIFieldDescription(field),
           error: errors[field.key],
           disabled: readOnly || update.isPending,
         }
-        const message = common.error || field.description
+        const message = common.error || resolveUIFieldDescription(field)
         const messageId = message ? `${field.key}-message` : undefined
         if (field.type === 'array') {
           return <ArrayField key={field.key} field={field} value={value} disabled={common.disabled} error={common.error}
@@ -282,13 +283,13 @@ export function PluginConfigForm({ instance, section, readOnly }: {
               aria-invalid={common.error ? true : undefined} aria-describedby={messageId}
               onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))}>
               <option value="">{t('config.select')}</option>
-              {(field.enum ?? []).map((option) => <option key={String(option)} value={String(option)}>{field.values?.[String(option)] ?? String(option)}</option>)}
+              {(field.enum ?? []).map((option) => <option key={String(option)} value={String(option)}>{resolveUIFieldValue(field, option) ?? String(option)}</option>)}
             </Select>
             {message && <p id={messageId} className={common.error ? 'mt-1.5 text-meta text-bad' : 'mt-1.5 text-meta leading-relaxed text-ink-3'}>{message}</p>}
           </label>
         }
         if (field.type === 'textarea') {
-          return <TextareaField key={field.key} label={common.label} hint={field.description} error={common.error}
+          return <TextareaField key={field.key} label={common.label} hint={common.hint} error={common.error}
             disabled={common.disabled} required={field.required} value={textValue} rows={4}
             autoComplete="off" spellCheck={false}
             placeholder={field.secret ? t('config.secretPlaceholder') : field.placeholder}

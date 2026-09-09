@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { i18n } from '@/i18n'
 import { resolveLocalizedText } from '@/i18n/pluginText'
+import { resolveUIFieldDescription, resolveUIFieldLabel, resolveUIFieldValue } from '@/lib/plugin-ui'
 import {
   capabilityLabel, commandDecl, entityTitle, indexCapabilities, normalizeCapabilityDocs, normalizeDescriptor,
 } from '@/lib/descriptor'
@@ -34,6 +35,19 @@ describe('resolveLocalizedText', () => {
     expect(resolveLocalizedText(action, 'description', 'en-US')).toBe('Open the compartment')
   })
 
+
+  it('解析字段 label/description 与枚举 valuesI18n', () => {
+    const field = {
+      key: 'state', label: '状态', description: '当前状态',
+      i18n: { 'en-US': 'Status', 'en-US.description': 'Current state' },
+      values: { opened: '待取药' },
+      valuesI18n: { opened: { 'en-US': 'Waiting for pickup', 'zh-CN': '待取药' } },
+    }
+    expect(resolveUIFieldLabel(field, 'en-US')).toBe('Status')
+    expect(resolveUIFieldDescription(field, 'en-US')).toBe('Current state')
+    expect(resolveUIFieldValue(field, 'opened', 'en-US')).toBe('Waiting for pickup')
+    expect(resolveUIFieldValue(field, 'opened', 'zh-CN')).toBe('待取药')
+  })
   it('locale key 大小写和连字符宽容', () => {
     expect(resolveLocalizedText({ i18n: { EN_us: 'English' } }, 'title', 'en-US')).toBe('English')
   })

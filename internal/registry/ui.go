@@ -46,17 +46,18 @@ type UIDevice struct {
 
 // UISection is a Core-rendered, allowlisted UI primitive.
 type UISection struct {
-	Type         string           `yaml:"type" json:"type"`
-	Title        string           `yaml:"title,omitempty" json:"title,omitempty"`
-	Description  string           `yaml:"description,omitempty" json:"description,omitempty"`
-	EmptyText    string           `yaml:"emptyText,omitempty" json:"emptyText,omitempty"`
-	Source       string           `yaml:"source,omitempty" json:"source,omitempty"`
-	RecordType   string           `yaml:"recordType,omitempty" json:"recordType,omitempty"`
-	Presentation string           `yaml:"presentation,omitempty" json:"presentation,omitempty"`
-	Text         string           `yaml:"text,omitempty" json:"text,omitempty"`
-	Entry        string           `yaml:"entry,omitempty" json:"entry,omitempty"`
-	Scopes       []string         `yaml:"scopes,omitempty" json:"scopes,omitempty"`
-	Fields       []map[string]any `yaml:"fields,omitempty" json:"fields,omitempty"`
+	Type         string            `yaml:"type" json:"type"`
+	Title        string            `yaml:"title,omitempty" json:"title,omitempty"`
+	Description  string            `yaml:"description,omitempty" json:"description,omitempty"`
+	EmptyText    string            `yaml:"emptyText,omitempty" json:"emptyText,omitempty"`
+	Source       string            `yaml:"source,omitempty" json:"source,omitempty"`
+	RecordType   string            `yaml:"recordType,omitempty" json:"recordType,omitempty"`
+	Presentation string            `yaml:"presentation,omitempty" json:"presentation,omitempty"`
+	Text         string            `yaml:"text,omitempty" json:"text,omitempty"`
+	Entry        string            `yaml:"entry,omitempty" json:"entry,omitempty"`
+	Scopes       []string          `yaml:"scopes,omitempty" json:"scopes,omitempty"`
+	I18n         map[string]string `yaml:"i18n,omitempty" json:"i18n,omitempty"`
+	Fields       []map[string]any  `yaml:"fields,omitempty" json:"fields,omitempty"`
 }
 
 const (

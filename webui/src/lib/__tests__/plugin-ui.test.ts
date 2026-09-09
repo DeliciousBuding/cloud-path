@@ -101,6 +101,30 @@ describe('plugin UI normalization and asset URLs', () => {
     expect(ui?.pages?.[0]?.i18n).toEqual({ 'en-US': 'Home' })
   })
 
+
+  it('preserves section and field i18n, including enum value translations', () => {
+    const ui = normalizePluginUI({
+      apiVersion: 1,
+      navigation: { title: '示例', route: 'example' },
+      pages: [{ id: 'home', title: '首页', sections: [{
+        type: 'form',
+        title: '设置',
+        description: '配置说明',
+        emptyText: '暂无设置',
+        i18n: { 'en-US': 'Settings', 'en-US.description': 'Configuration', 'en-US.emptyText': 'No settings' },
+        fields: [{
+          key: 'state', label: '状态', description: '当前状态',
+          i18n: { 'en-US': 'Status', 'en-US.description': 'Current state' },
+          values: { opened: '待取药' },
+          valuesI18n: { opened: { 'en-US': 'Waiting for pickup' } },
+        }],
+      }] }],
+    })
+    const section = ui?.pages?.[0]?.sections[0]
+    expect(section?.i18n).toMatchObject({ 'en-US': 'Settings', 'en-US.description': 'Configuration' })
+    expect(section?.fields?.[0]?.i18n).toMatchObject({ 'en-US': 'Status', 'en-US.description': 'Current state' })
+    expect(section?.fields?.[0]?.valuesI18n?.opened).toEqual({ 'en-US': 'Waiting for pickup' })
+  })
   it('normalizeCatalog drops malformed UI contributions without dropping the plugin', () => {
     const list = normalizeCatalog({ plugins: [{
       ...plugin(), contributes: { applications: [{

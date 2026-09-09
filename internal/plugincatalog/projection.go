@@ -292,6 +292,7 @@ func cloneUISections(in []api.PluginUISectionData) []api.PluginUISectionData {
 		clone := section
 		clone.Text = SanitizeDetail(section.Text)
 		clone.Scopes = append([]string(nil), section.Scopes...)
+		clone.I18n = cloneI18n(section.I18n)
 		clone.Fields = sanitizeUIFields(section.Fields)
 		out = append(out, clone)
 	}

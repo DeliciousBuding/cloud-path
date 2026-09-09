@@ -4,6 +4,7 @@
 //   - 插件只声明 route/slug、白名单 section 和 package-relative custom entry；
 //   - 任意远程 URL、绝对路径、`..`、未知 section、未知 scope 一律丢弃或 fail-closed；
 //   - 这里不读取 cookie/localStorage，也不把插件字段拼成 HTML。
+import { resolveLocalizedText } from '@/i18n/pluginText'
 import type {
   PluginApplicationContributionData, PluginCatalogDriverView, PluginCatalogView, PluginInstanceView, PluginUIContribution,
   PluginUIField, PluginUIFieldType, PluginUINavigation, PluginUIPage, PluginUIPresentation,
@@ -82,6 +83,17 @@ function safeEntry(value: unknown): string | undefined {
   return parts.join('/')
 }
 
+function normalizeValuesI18n(raw: unknown): Record<string, Record<string, string>> | undefined {
+  if (!record(raw)) return undefined
+  const out: Record<string, Record<string, string>> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    const normalized = normalizeI18n(value)
+    if (key.trim() && normalized) out[key] = normalized
+    if (Object.keys(out).length >= 64) break
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
 function normalizeField(raw: unknown, depth = 0): PluginUIField | null {
   if (!record(raw) || depth > 2) return null
   const key = text(raw.key)
@@ -94,6 +106,7 @@ function normalizeField(raw: unknown, depth = 0): PluginUIField | null {
     label: text(raw.label),
     type: type && FIELD_TYPE_SET.has(type) ? type as PluginUIFieldType : undefined,
     description: text(raw.description),
+    i18n: normalizeI18n(raw.i18n),
     placeholder: text(raw.placeholder),
     required: raw.required === true ? true : undefined,
     minimum: finite(raw.minimum),
@@ -123,6 +136,7 @@ function normalizeField(raw: unknown, depth = 0): PluginUIField | null {
     }
     if (Object.keys(values).length > 0) field.values = values
   }
+  field.valuesI18n = normalizeValuesI18n(raw.valuesI18n)
   if (Array.isArray(raw.enum)) {
     const options = raw.enum.filter((item): item is string | number | boolean =>
       typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean')
@@ -143,6 +157,7 @@ function normalizeSection(raw: unknown): PluginUISection | null {
     title: text(raw.title)?.slice(0, 80),
     description: text(raw.description)?.slice(0, 240),
     emptyText: text(raw.emptyText)?.slice(0, 160),
+    i18n: normalizeI18n(raw.i18n),
     source: source && SOURCE_SET.has(source) ? source as PluginUISource : undefined,
     recordType: text(raw.recordType ?? raw.record_type)?.slice(0, 64),
     presentation: presentation && PRESENTATION_SET.has(presentation)
@@ -212,6 +227,20 @@ export function normalizePluginUI(raw: unknown): PluginUIContribution | undefine
     pages: pages && pages.length > 0 ? pages : undefined,
     device,
   }
+}
+
+export function resolveUIFieldLabel(field: PluginUIField, locale?: string): string | undefined {
+  return resolveLocalizedText({ label: field.label, description: field.description, i18n: field.i18n }, 'label', locale)
+}
+
+export function resolveUIFieldDescription(field: PluginUIField, locale?: string): string | undefined {
+  return resolveLocalizedText({ label: field.label, description: field.description, i18n: field.i18n }, 'description', locale)
+}
+
+export function resolveUIFieldValue(field: PluginUIField, value: unknown, locale?: string): string | undefined {
+  const key = String(value)
+  const fallback = field.values?.[key]
+  return resolveLocalizedText({ label: fallback, i18n: field.valuesI18n?.[key] }, 'label', locale) ?? fallback
 }
 
 export type ApplicationUIReadableStatus = 'loading' | 'in' | 'out' | 'open'
