@@ -21,6 +21,7 @@ export const PLUGIN_UI_SOURCES: readonly PluginUISource[] = [
 ]
 export const PLUGIN_UI_PRESENTATIONS: readonly PluginUIPresentation[] = ['list', 'timeline', 'table', 'cards']
 export const PLUGIN_UI_FIELD_TYPES: readonly PluginUIFieldType[] = ['string', 'number', 'integer', 'boolean', 'select', 'textarea']
+export const PLUGIN_UI_FIELD_FORMATS = ['text', 'time', 'number', 'percent', 'duration'] as const
 /** 自定义 iframe 只能通过 Core 的 bridge 调用这些收窄能力。 */
 export const PLUGIN_UI_SCOPE_ALLOWLIST = [
   'instance.read', 'bindings.read', 'jobs.read', 'records.read', 'jobs.run', 'config.write',
@@ -32,6 +33,7 @@ const SECTION_SET = new Set<string>(PLUGIN_UI_SECTION_TYPES)
 const SOURCE_SET = new Set<string>(PLUGIN_UI_SOURCES)
 const PRESENTATION_SET = new Set<string>(PLUGIN_UI_PRESENTATIONS)
 const FIELD_TYPE_SET = new Set<string>(PLUGIN_UI_FIELD_TYPES)
+const FIELD_FORMAT_SET = new Set<string>(PLUGIN_UI_FIELD_FORMATS)
 const SCOPE_SET = new Set<string>(PLUGIN_UI_SCOPE_ALLOWLIST)
 const ROUTE_RE = /^[a-z0-9][a-z0-9-]{0,62}$/
 
@@ -73,6 +75,8 @@ function normalizeField(raw: unknown): PluginUIField | null {
   const key = text(raw.key)
   if (!key || key.length > 120) return null
   const type = text(raw.type)
+  const format = text(raw.format)
+  const precision = finite(raw.precision)
   const field: PluginUIField = {
     key,
     label: text(raw.label),
@@ -84,6 +88,21 @@ function normalizeField(raw: unknown): PluginUIField | null {
     maximum: finite(raw.maximum),
     pattern: text(raw.pattern),
     secret: raw.secret === true ? true : undefined,
+    unit: text(raw.unit)?.slice(0, 16),
+    precision: precision !== undefined && Number.isInteger(precision) && precision >= 0 && precision <= 6 ? precision : undefined,
+    format: format && FIELD_FORMAT_SET.has(format) ? format as PluginUIField['format'] : undefined,
+    primary: raw.primary === true ? true : undefined,
+    hideWhenEmpty: raw.hideWhenEmpty === true ? true : undefined,
+  }
+  if (record(raw.values)) {
+    const values: Record<string, string> = {}
+    for (const [rawKey, rawValue] of Object.entries(raw.values)) {
+      const keyLabel = text(rawKey)
+      const valueLabel = text(rawValue)
+      if (keyLabel && valueLabel && keyLabel.length <= 80 && valueLabel.length <= 80) values[keyLabel] = valueLabel
+      if (Object.keys(values).length >= 64) break
+    }
+    if (Object.keys(values).length > 0) field.values = values
   }
   if (Array.isArray(raw.enum)) {
     const options = raw.enum.filter((item): item is string | number | boolean =>
@@ -102,6 +121,9 @@ function normalizeSection(raw: unknown): PluginUISection | null {
   const presentation = text(raw.presentation)
   const section: PluginUISection = {
     type: type as PluginUISectionType,
+    title: text(raw.title)?.slice(0, 80),
+    description: text(raw.description)?.slice(0, 240),
+    emptyText: text(raw.emptyText)?.slice(0, 160),
     source: source && SOURCE_SET.has(source) ? source as PluginUISource : undefined,
     recordType: text(raw.recordType ?? raw.record_type)?.slice(0, 64),
     presentation: presentation && PRESENTATION_SET.has(presentation)
@@ -148,7 +170,7 @@ function normalizePage(raw: unknown): PluginUIPage | null {
   const sections = raw.sections.slice(0, 32).map(normalizeSection)
     .filter((item): item is PluginUISection => item !== null)
   if (sections.length === 0) return null
-  return { id, title: title.slice(0, 80), i18n: normalizeI18n(raw.i18n), sections }
+  return { id, title: title.slice(0, 80), description: text(raw.description)?.slice(0, 240), i18n: normalizeI18n(raw.i18n), sections }
 }
 
 /** 宽容归一化 UI contribution；非法字段安全丢弃，未知结构不会进入渲染树。 */

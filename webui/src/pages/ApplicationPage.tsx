@@ -96,7 +96,7 @@ export default function ApplicationPage() {
         <BackLink to="/plugins" label={t('application.back')} />
         <PageHeader
           title={navigationTitle}
-          subtitle={applicationTitle}
+          subtitle={resolution.page.description || applicationTitle}
           actions={resolution.instances.length > 1
             ? <label className="flex items-center gap-2 text-meta text-ink-2">
               <span>{t('application.instance')}</span>

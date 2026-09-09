@@ -85,11 +85,11 @@ describe('插件列表只读权限', () => {
     useAuth.setState({ status: 'in', user: appUser })
     route({ catalog: [], instances: [appInstance('app-a', 'app-a'), appInstance('app-b', 'server/app-b'), instance()] })
     const { container } = renderWithProviders(<Plugins />)
-    expect(screen.getByRole('tab', { name: /运行项/ })).toHaveAttribute('aria-selected', 'true')
-    await gotoTab(/可用插件/)
+    expect(screen.getByRole('tab', { name: /正在运行/ })).toHaveAttribute('aria-selected', 'true')
+    await gotoTab(/插件来源/)
     expect(await screen.findByText('没有可用插件')).toBeInTheDocument()
     expect(screen.getByText('安装插件后会显示在这里。列表为空不会影响已经添加的运行项。')).toBeInTheDocument()
-    await gotoTab(/运行项/)
+    await gotoTab(/正在运行/)
     expect((await screen.findAllByText('平台服务')).length).toBeGreaterThanOrEqual(2)
     expect(screen.getAllByText('状态待确认').length).toBeGreaterThan(0)
     expect(screen.getAllByText(/网关 edge-a/).length).toBeGreaterThan(0)
@@ -103,7 +103,7 @@ describe('插件列表只读权限', () => {
     useAuth.setState({ status: 'in', user: appUser })
     const http = route({ instances: [instance()] })
     const { container } = renderWithProviders(<Plugins />)
-    await gotoTab(/运行项/)
+    await gotoTab(/正在运行/)
     expect(await screen.findByText('保存的设置')).toBeInTheDocument()
     for (const name of ['新建运行项', '创建并保存', '编辑', '保存修改']) {
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
@@ -119,7 +119,7 @@ describe('插件列表只读权限', () => {
     useAuth.setState({ status: 'in', user: { ...appUser, role: 'admin' } })
     const http = route({ instances: [instance()] })
     const { container } = renderWithProviders(<Plugins />)
-    const user = await gotoTab(/运行项/)
+    const user = await gotoTab(/正在运行/)
     await user.click(await screen.findByRole('button', { name: entry }))
     expect(await screen.findByRole('button', { name: submit })).toBeInTheDocument()
     act(() => useAuth.setState({ user: appUser }))
@@ -138,8 +138,8 @@ describe('插件面分区', () => {
   it('两个分区都在，运行项优先且目录按需呈现插件声明事实', async () => {
     route({ catalog: CATALOG })
     renderWithProviders(<Plugins />)
-    await gotoTab(/可用插件/)
-    for (const n of ['可用插件', '运行项']) {
+    await gotoTab(/插件来源/)
+    for (const n of ['插件来源', '正在运行']) {
       expect(screen.getByRole('tab', { name: new RegExp(n) })).toBeInTheDocument()
     }
     expect(await screen.findByText('io.github.acme.driver')).toBeInTheDocument()
@@ -157,7 +157,7 @@ describe('插件面分区', () => {
   it('安全边界：目录里的 source（可能是本机绝对路径）绝不渲染', async () => {
     route({ catalog: CATALOG })
     const { container } = renderWithProviders(<Plugins />)
-    await gotoTab(/可用插件/)
+    await gotoTab(/插件来源/)
     await screen.findByText('io.github.acme.driver')
     expect(container.textContent).not.toContain(LOCAL_PATH)
     expect(container.textContent).not.toContain('someone')
@@ -166,7 +166,7 @@ describe('插件面分区', () => {
   it('目录明确声明「这不代表正在运行」，不与实际状态混淆', async () => {
     route({ catalog: CATALOG })
     renderWithProviders(<Plugins />)
-    await gotoTab(/可用插件/)
+    await gotoTab(/插件来源/)
     await screen.findByText(/不代表.*运行/)
   })
 
@@ -182,13 +182,13 @@ describe('插件面分区', () => {
     route({ catalog: [application, CATALOG[0], connector] })
     const user = userEvent.setup()
     renderWithProviders(<Plugins />)
-    await gotoTab(/可用插件/)
+    await gotoTab(/插件来源/)
 
     expect(await screen.findByText('连接器不能创建运行项')).toBeVisible()
     expect(screen.queryByRole('button', { name: /创建.*MQTT/ })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /创建运行项：示例应用/ }))
-    expect(screen.getByRole('tab', { name: /运行项/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: /正在运行/ })).toHaveAttribute('aria-selected', 'true')
     expect(await screen.findByRole('combobox', { name: '要运行什么' })).toHaveValue(application.id)
   })
 
@@ -207,14 +207,14 @@ describe('插件面分区', () => {
   it('目录为空 / 加载失败都是设计过的状态', async () => {
     route({ catalog: [] })
     const first = renderWithProviders(<Plugins />)
-    await gotoTab(/可用插件/)
+    await gotoTab(/插件来源/)
     expect(await screen.findByText('没有可用插件')).toBeInTheDocument()
 
     first.unmount()
     installFetch((url) => (url === '/api/plugins'
       ? stubResponse(500, { error: 'boom' }) : stubResponse(404, {})))
     renderWithProviders(<Plugins />)
-    await gotoTab(/可用插件/)
+    await gotoTab(/插件来源/)
     expect(await screen.findByRole('alert')).toBeInTheDocument()
     expect(screen.getByText('无法加载可用插件')).toBeInTheDocument()
   })
@@ -230,7 +230,7 @@ describe('运行项分区：desired 与 observed 永远分别渲染', () => {
       })],
     })
     renderWithProviders(<Plugins />)
-    await gotoTab(/运行项/)
+    await gotoTab(/正在运行/)
     const user = userEvent.setup()
     expect(await screen.findByText('保存的设置')).toBeInTheDocument()
     expect(screen.getByText('当前运行情况')).toBeInTheDocument()
@@ -247,7 +247,7 @@ describe('运行项分区：desired 与 observed 永远分别渲染', () => {
   it('反向断言：desired.enabled=true 且无 observed 时，界面不出现「运行中/健康」', async () => {
     route({ instances: [instance({ has_observed: false, observed: undefined })] })
     renderWithProviders(<Plugins />)
-    await gotoTab(/运行项/)
+    await gotoTab(/正在运行/)
     expect((await screen.findAllByText('状态待确认')).length).toBeGreaterThan(0)
     expect(screen.getByText('已启用')).toBeInTheDocument()
     expect(screen.queryByText('运行中')).not.toBeInTheDocument()
@@ -259,7 +259,7 @@ describe('运行项分区：desired 与 observed 永远分别渲染', () => {
   it('stale=true → 实际状态明确标记过期，而不是当前在线事实', async () => {
     route({ instances: [instance({ stale: true })] })
     renderWithProviders(<Plugins />)
-    await gotoTab(/运行项/)
+    await gotoTab(/正在运行/)
     expect((await screen.findAllByText('状态可能已过期')).length).toBeGreaterThan(0)
   })
 
@@ -326,7 +326,7 @@ describe('写操作按稳定错误码呈现', () => {
     const http = route({ instances: [instance()], patch: { error: 'plugin_quota_exceeded' } }, 400)
     const user = userEvent.setup()
     renderWithProviders(<Plugins />)
-    await gotoTab(/运行项/)
+    await gotoTab(/正在运行/)
     await user.click(await screen.findByRole('button', { name: /停用/ }))
     expect(await screen.findByRole('alert')).toHaveTextContent('已经达到数量上限')
     expect(screen.getByText(/本次保存未生效/)).toBeInTheDocument()
@@ -338,7 +338,7 @@ describe('写操作按稳定错误码呈现', () => {
     route({ instances: [instance()], patch: { error: 'plugin_edge_offline' } }, 409)
     const user = userEvent.setup()
     renderWithProviders(<Plugins />)
-    await gotoTab(/运行项/)
+    await gotoTab(/正在运行/)
     await user.click(await screen.findByRole('button', { name: /停用/ }))
     expect(await screen.findByRole('alert')).toHaveTextContent('目标网关当前离线')
     expect(screen.getByText(/重新连接后会自动同步最新设置/)).toBeInTheDocument()
@@ -348,7 +348,7 @@ describe('写操作按稳定错误码呈现', () => {
     const http = route({ instances: [instance()], patch: { error: 'plugin_permission_confirmation_required' } }, 400)
     const user = userEvent.setup()
     renderWithProviders(<Plugins />)
-    await gotoTab(/运行项/)
+    await gotoTab(/正在运行/)
     await user.click(await screen.findByRole('button', { name: /停用/ }))
 
     const dialog = await screen.findByRole('dialog')
@@ -379,7 +379,7 @@ describe('写操作按稳定错误码呈现', () => {
     })
     const user = userEvent.setup()
     renderWithProviders(<Plugins />)
-    await gotoTab(/运行项/)
+    await gotoTab(/正在运行/)
     await user.click(await screen.findByRole('button', { name: /停用/ }))
     const patch = http.to('/api/plugin-instances/').filter((c) => c.method === 'PATCH')
     expect(patch).toHaveLength(1)
@@ -439,14 +439,14 @@ describe('运行项分区的空态与错误态', () => {
   it('没有运行项 → 说明怎么建，而不是空白', async () => {
     route({ instances: [] })
     renderWithProviders(<Plugins />)
-    await gotoTab(/运行项/)
+    await gotoTab(/正在运行/)
     expect(await screen.findByText('还没有运行项')).toBeInTheDocument()
   })
 
   it('没有可用插件 → 不提供无法完成的创建入口', async () => {
     route({ catalog: [], instances: [] })
     renderWithProviders(<Plugins />)
-    await gotoTab(/运行项/)
+    await gotoTab(/正在运行/)
     expect(await screen.findByText('还没有运行项')).toBeInTheDocument()
     expect(screen.getByText(/先安装.*插件/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /新建/ })).not.toBeInTheDocument()
@@ -456,7 +456,7 @@ describe('运行项分区的空态与错误态', () => {
     installFetch((url) => (url === '/api/plugin-instances'
       ? stubResponse(503, { error: 'store unavailable' }) : stubResponse(200, { plugins: [] })))
     renderWithProviders(<Plugins />)
-    await gotoTab(/运行项/)
+    await gotoTab(/正在运行/)
     expect(await screen.findByRole('alert')).toBeInTheDocument()
     expect(screen.getByText('无法加载运行项')).toBeInTheDocument()
   })
@@ -468,7 +468,7 @@ describe('运行项分区的空态与错误态', () => {
       return stubResponse(404, {})
     })
     renderWithProviders(<Plugins />)
-    await gotoTab(/运行项/)
+    await gotoTab(/正在运行/)
     expect(await screen.findByText('还没有运行项')).toBeInTheDocument()
   })
 })

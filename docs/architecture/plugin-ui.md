@@ -111,7 +111,7 @@ Connector 暂不接受 `ui`；manifest 校验直接拒绝，避免把未实现�
 
 ## 5. 页面结构
 
-每个 Application page 由白名单 section 组成。当前契约支持：
+每个 Application page 由白名单 section 组成。`page.description` 用一句话说明业务用途；`section.title`、`section.description`、`section.emptyText` 用于把通用渲染器变成可读的业务界面。当前契约支持：
 
 | type | 用途 | 数据源 |
 |---|---|---|
@@ -126,6 +126,8 @@ Connector 暂不接受 `ui`；manifest 校验直接拒绝，避免把未实现�
 | `chart` | 时序趋势 | records |
 | `markdown` | 受限 Markdown 说明，禁止 HTML | inline |
 | `custom` | 受控自定义页面，见 §7 | custom |
+
+`fields` 用于声明主视图真正要展示的字段。字段可以带 `label`、`unit`、`precision`、`format`（`text` / `time` / `number` / `percent` / `duration`）、`values`（机器值到用户文案的映射）和 `hideWhenEmpty`；未声明的字段不会进入指标卡或记录主视图，完整原始数据仍在“更多信息”中。
 
 通用 section 示例：
 

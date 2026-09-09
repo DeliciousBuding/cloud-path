@@ -22,10 +22,11 @@ type PluginUINavigationData struct {
 
 // PluginUIPageData is one Application page declaration.
 type PluginUIPageData struct {
-	ID       string                `json:"id"`
-	Title    string                `json:"title"`
-	I18n     map[string]string     `json:"i18n,omitempty"`
-	Sections []PluginUISectionData `json:"sections"`
+	ID          string                `json:"id"`
+	Title       string                `json:"title"`
+	Description string                `json:"description,omitempty"`
+	I18n        map[string]string     `json:"i18n,omitempty"`
+	Sections    []PluginUISectionData `json:"sections"`
 }
 
 // PluginUIDeviceData extends a Driver's device detail page.
@@ -36,6 +37,9 @@ type PluginUIDeviceData struct {
 // PluginUISectionData is one allowlisted Core-rendered section.
 type PluginUISectionData struct {
 	Type         string           `json:"type"`
+	Title        string           `json:"title,omitempty"`
+	Description  string           `json:"description,omitempty"`
+	EmptyText    string           `json:"emptyText,omitempty"`
 	Source       string           `json:"source,omitempty"`
 	RecordType   string           `json:"recordType,omitempty"`
 	Presentation string           `json:"presentation,omitempty"`

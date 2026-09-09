@@ -1,8 +1,8 @@
 export default {
   page: {
-    title: 'Applications & plugins', loading: 'Loading…', pluginCount: '{{count}} plugins available',
+    title: 'Apps', loading: 'Loading…', pluginCount: '{{count}} plugins available',
     instanceSummary: 'Setups: {{total}} active · {{normal}} running normally · {{attention}} need attention',
-    createInstance: 'Create setup', tabInstances: 'Active setups', tabCatalog: 'Available plugins', tabAria: 'Applications and plugins sections',
+    createInstance: 'Create setup', tabInstances: 'Active', tabCatalog: 'Plugin sources', tabAria: 'Apps sections',
     catalogLoadFailed: 'Unable to load available plugins',
     catalogLoadFailedHint: 'Available plugins cannot be loaded right now. Existing setups are unaffected. Try again later.',
     noPlugins: 'No plugins available', noPluginsHint: 'Installed plugins will appear here. An empty list does not affect existing setups.',
@@ -27,7 +27,7 @@ export default {
     contributionDriver: 'Device driver', contributionApplication: 'Application', contributionConnector: 'Connector',
   },
   detail: {
-    title: 'Setup {{id}}', titleFallback: 'Setup', back: 'Applications & plugins',
+    title: 'Setup {{id}}', titleFallback: 'Setup', back: 'Apps',
     loadFailed: 'Unable to load setup', notFound: 'Setup not found',
     notFoundHint: 'Could not find {{id}}. It may have been deleted or may not belong to this organization. Refresh the list and try again.',
     savedAndObserved: 'Saved settings and current status', basicInfo: 'Basic information', permissions: 'Permissions',
@@ -39,7 +39,7 @@ export default {
     editSettings: 'Edit settings', currentStatus: 'Current status', actions: 'Actions', showDetails: 'View settings, permissions, and secrets',
   },
   application: {
-    openPlugins: 'View applications and plugins', fallbackTitle: 'Application', back: 'Applications & plugins',
+    openPlugins: 'View apps', fallbackTitle: 'Application', back: 'Apps',
     permissionDenied: 'Permission denied', loadFailed: 'Unable to load application',
     permissionDeniedHint: 'This account cannot view this application or its status. Contact an administrator to review access.',
     loadFailedHint: 'The application page or active setups cannot be loaded right now. Try again.',

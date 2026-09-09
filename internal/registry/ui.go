@@ -32,10 +32,11 @@ type UINavigation struct {
 
 // UIPage is one declarative page under an Application route.
 type UIPage struct {
-	ID       string            `yaml:"id" json:"id"`
-	Title    string            `yaml:"title" json:"title"`
-	I18n     map[string]string `yaml:"i18n,omitempty" json:"i18n,omitempty"`
-	Sections []UISection       `yaml:"sections" json:"sections"`
+	ID          string            `yaml:"id" json:"id"`
+	Title       string            `yaml:"title" json:"title"`
+	Description string            `yaml:"description,omitempty" json:"description,omitempty"`
+	I18n        map[string]string `yaml:"i18n,omitempty" json:"i18n,omitempty"`
+	Sections    []UISection       `yaml:"sections" json:"sections"`
 }
 
 // UIDevice extends a Driver's device detail page.
@@ -46,6 +47,9 @@ type UIDevice struct {
 // UISection is a Core-rendered, allowlisted UI primitive.
 type UISection struct {
 	Type         string           `yaml:"type" json:"type"`
+	Title        string           `yaml:"title,omitempty" json:"title,omitempty"`
+	Description  string           `yaml:"description,omitempty" json:"description,omitempty"`
+	EmptyText    string           `yaml:"emptyText,omitempty" json:"emptyText,omitempty"`
 	Source       string           `yaml:"source,omitempty" json:"source,omitempty"`
 	RecordType   string           `yaml:"recordType,omitempty" json:"recordType,omitempty"`
 	Presentation string           `yaml:"presentation,omitempty" json:"presentation,omitempty"`
