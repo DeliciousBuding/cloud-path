@@ -8,7 +8,7 @@ import { fmtDateTime } from '@/lib/format'
 import type { DeviceView } from '@/lib/types'
 
 /**
- * 设备列表行：Name / Edge / 关键读数 / Status / Last Seen。
+ * 设备列表行：Name / 网关 / 关键读数 / Status / Last Seen。
  * 1440px 视口起显示关键读数列（声明主观测至多两条）；窄屏把读数与最近上报收在同一行，
  * 避免「状态点 + 状态文字」和「读数标题」重复占用扫读空间。
  *
@@ -46,7 +46,7 @@ export function DeviceRow({ d }: { d: DeviceView }) {
         </span>
       </div>
 
-      {/* Edge */}
+      {/* 网关 */}
       <div className="num col-span-2 min-w-0 truncate text-xs text-ink-2 lg:col-span-1" title={`${d.edge_id}${d.adapter ? ` · 设备类型 ${d.adapter}` : ''}${d.port ? ` · ${d.port}` : ''}`}>
         <span className="text-ink-3 lg:hidden">网关 </span>
         {d.edge_id || '—'}

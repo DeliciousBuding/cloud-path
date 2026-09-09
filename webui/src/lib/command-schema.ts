@@ -1,4 +1,4 @@
-// 命令输入使用的 JSON Schema 子集：不代入 default，不转换类型；支持组合，不解析引用。
+// 操作输入使用的 JSON Schema 子集：不代入 default，不转换类型；支持组合，不解析引用。
 // 不支持的关键字显式反馈，仍允许 JSON 编辑；设备端才是完整契约的最终裁决者。
 import { argsError } from './format'
 

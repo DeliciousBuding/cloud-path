@@ -43,16 +43,16 @@ function displayStateValue(value: unknown): string {
 
 function descriptorErrorCopy(status: number | null): { title: string; hint: string } {
   if (status === 504) return {
-    title: '设备功能读取超时',
-    hint: '读取设备功能超时，暂时无法显示操作与功能信息。请稍后重试。',
+    title: '设备能力读取超时',
+    hint: '读取设备能力超时，暂时无法显示操作与能力信息。请稍后重试。',
   }
   if (status === 502 || status === 503) return {
-    title: '设备功能暂时不可用',
-    hint: '设备功能服务暂时不可用，暂时无法显示操作与功能信息。请稍后重试。',
+    title: '设备能力暂时不可用',
+    hint: '设备能力服务暂时不可用，暂时无法显示操作与能力信息。请稍后重试。',
   }
   return {
-    title: '设备功能加载失败',
-    hint: '暂时无法加载设备功能与操作信息，请检查服务后重试。',
+    title: '设备能力加载失败',
+    hint: '暂时无法加载设备能力与操作信息，请检查服务后重试。',
   }
 }
 import { isStaleObs } from '@/components/SchemaRenderer'
@@ -63,10 +63,10 @@ type AdvancedView = 'state' | 'capabilities' | 'diagnostics'
 
 /**
  * 设备详情（Schema 驱动，四分区职责正交）：
- *   概览（人看）/ 设备操作（执行）/ 记录（时间线）/ 高级（状态、功能与诊断）
+ *   概览（人看）/ 设备操作（执行）/ 记录（时间线）/ 高级（状态、能力与诊断）
  *
  * human-first：默认视图只有展示名 + 当前值 + 单位 + 状态 + 新鲜度；
- * 机器 ID / Capability URI / raw JSON 只出现在「高级」里的功能与诊断区（按需展开）。
+ * 机器 ID / Capability URI / raw JSON 只出现在「高级」里的能力与诊断区（按需展开）。
  * 页面不认识任何设备字段名：一切由 Descriptor + Capability 声明推导，缺席走通用回落。
  */
 export default function DeviceDetail() {
@@ -134,7 +134,7 @@ export default function DeviceDetail() {
       ? '所属网关当前离线，操作暂不可用。网关离线期间不能下发操作，恢复连接后再试。'
       : '设备当前离线，操作暂不可用。请检查设备供电和串口连接，设备恢复后会自动刷新。'
 
-  // 命令白名单唯一事实源是后端 /api/adapters；前端不自建清单
+  // 操作白名单唯一事实源是后端 /api/adapters；前端不自建清单
   const adapterCommands = useMemo(() => {
     const a = adapters?.adapters?.find((x) => x.name === d?.adapter)
     return a?.commands ?? []
@@ -160,7 +160,7 @@ export default function DeviceDetail() {
     ]).catch(() => {}).finally(() => setDescriptorRetrying(false))
   }
 
-  /** 控制页的执行器实体：只读现状与命令区并排（观测值与命令输入分离） */
+  /** 控制页的执行器实体：只读现状与操作区并排（观测值与操作输入分离） */
   const actuators = useMemo(
     () => (descriptor?.entities ?? []).filter((e) => e.category === 'actuator'),
     [descriptor],
@@ -327,7 +327,7 @@ export default function DeviceDetail() {
             label="高级视图"
             options={[
               { value: 'state' as AdvancedView, label: '状态与趋势' },
-              { value: 'capabilities' as AdvancedView, label: '设备功能' },
+              { value: 'capabilities' as AdvancedView, label: '设备能力' },
               { value: 'diagnostics' as AdvancedView, label: '诊断' },
             ]}
             value={advancedView}
@@ -353,14 +353,14 @@ export default function DeviceDetail() {
               <dl className="grid gap-x-10 gap-y-2.5 sm:grid-cols-2 xl:grid-cols-3">
                 <KeyValue k={d.online ? '最近更新' : '最后见'}
                   v={<span className="num">{fmtDateTime(d.online ? d.updated_at : d.last_seen)}</span>} />
-                <KeyValue k="设备功能" v={descriptorFailed ? '加载失败' : descriptor ? `${capRefs.length} 种` : '尚未同步'} />
+                <KeyValue k="设备能力" v={descriptorFailed ? '加载失败' : descriptor ? `${capRefs.length} 项` : '尚未同步'} />
                 <KeyValue k="可执行操作" v={descriptorFailed ? '加载失败' : `${commands.actions.length} 项`} />
               </dl>
             </Panel>
             {/* 双 ledger 互为 peer：等高互不牵制，空洞无处产生；概览只看最近 8 条，全部历史在各自页 */}
             <div className="grid items-start gap-5 lg:grid-cols-2">
               <Panel
-                title={<span className="flex items-center gap-1.5"><Activity size={14} />最近活动</span>}
+                title={<span className="flex items-center gap-1.5"><Activity size={14} />最近事件</span>}
                 right={
                   <button type="button" onClick={() => setTab('events')}
                     className="link flex items-center gap-0.5 text-xs">
@@ -454,7 +454,7 @@ export default function DeviceDetail() {
                     </div>
                   )}
                   <p className="mt-3 px-0.5 text-[12px] leading-relaxed text-ink-3">
-                    趋势只记录本页打开期间的数据（最多 240 点）；更早的数值请查事件与命令记录。
+                    趋势只记录本页打开期间的数据（最多 240 点）；更早的数值请查事件记录与操作记录。
                   </p>
                 </div>
               )}
@@ -465,11 +465,11 @@ export default function DeviceDetail() {
       {tab === 'controls' && (
         <TabPanel value={tab}>
           <div className="min-w-0 space-y-5">
-            {/* 观测值与命令输入分离：只读现状与命令区并排，避免「看着像已执行」 */}
+            {/* 观测值与操作输入分离：只读现状与操作区并排，避免「看着像已执行」 */}
             <div className="grid items-start gap-5 lg:grid-cols-3">
               {descriptorFailed
                 ? <Panel title="设备操作" className="lg:col-span-2">
-                  <p className="py-4 text-center text-sm text-ink-3">设备功能加载失败，操作列表暂不可用。</p>
+                  <p className="py-4 text-center text-sm text-ink-3">设备能力加载失败，操作列表暂不可用。</p>
                 </Panel>
                 : <ActionPanel deviceId={key} targetLabel={d.name || deviceId} set={commands} online={actionsOnline} offlineReason={actionsOfflineReason} className="lg:col-span-2" />}
               {actuators.length > 0 && (
@@ -496,7 +496,7 @@ export default function DeviceDetail() {
             <CommandHistory deviceId={key} targetLabel={d.name || deviceId} actions={commands.actions} online={actionsOnline} />
             <details className="card overflow-hidden">
               <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-4 py-3 text-[13px] font-semibold">
-                <span className="flex items-center gap-1.5"><Activity size={14} />设备事件</span>
+                <span className="flex items-center gap-1.5"><Activity size={14} />事件</span>
                 <span className="num text-[12px] font-normal text-ink-3">{events.length} 条</span>
               </summary>
               <div className="border-t border-hairline p-4">
@@ -533,16 +533,16 @@ export default function DeviceDetail() {
       {tab === 'advanced' && advancedView === 'capabilities' && (
         <TabPanel value={tab}>
           {descriptorFailed ? (
-            <Panel title={<span className="flex items-center gap-1.5"><Sparkles size={14} />设备功能</span>}>
-              <p className="py-4 text-center text-sm text-ink-3">设备功能加载失败，暂时无法显示功能列表。</p>
+            <Panel title={<span className="flex items-center gap-1.5"><Sparkles size={14} />设备能力</span>}>
+              <p className="py-4 text-center text-sm text-ink-3">设备能力加载失败，暂时无法显示能力列表。</p>
             </Panel>
           ) : !descriptor ? (
-            <EmptyState icon={<Sparkles size={24} />} title="该设备还没有同步设备功能"
-              hint="设备同步功能信息后，这里会显示它支持的功能与操作。" />
+            <EmptyState icon={<Sparkles size={24} />} title="该设备还没有同步设备能力"
+              hint="设备同步能力信息后，这里会显示它支持的能力与操作。" />
           ) : (
             <Panel
-              title={<span className="flex items-center gap-1.5"><Sparkles size={14} />设备功能</span>}
-              right={<span className="num text-[12px] text-ink-3">{capRefs.length} 种 · 已同步 {capabilities.docs.length} 份</span>}>
+              title={<span className="flex items-center gap-1.5"><Sparkles size={14} />设备能力</span>}
+              right={<span className="num text-[12px] text-ink-3">{capRefs.length} 项 · 已同步 {capabilities.docs.length} 份</span>}>
               <CapabilityBrowser descriptor={descriptor} idx={capabilities} />
               <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
                 点击一行查看详细说明；名称优先使用设备提供的中文名称。<span className="sm:hidden">字段表可左右滑动查看完整标识。</span>
@@ -590,16 +590,16 @@ export default function DeviceDetail() {
               )}
               <p className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-0.5 border-t border-hairline pt-3 text-[12px] text-ink-3">
                 <Grid3x3 size={11} className="shrink-0" />
-                设备对象 {descriptor ? descriptor.entities.length : 0} 个 ·
-                设备功能 {capRefs.length} 种 ·
+                实体 {descriptor ? descriptor.entities.length : 0} 个 ·
+                设备能力 {capRefs.length} 项 ·
                 已同步 {capabilities.docs.length} 份 ·
                 数值序列 {seriesKeys.length} 条
               </p>
             </Panel>
             {descriptor && (
-              <Panel title={<span className="flex items-center gap-1.5"><Grid3x3 size={14} />设备对象（技术详情）</span>}>
+              <Panel title={<span className="flex items-center gap-1.5"><Grid3x3 size={14} />实体（技术详情）</span>}>
                 <EntityInventory descriptor={descriptor} />
-                <p className="mt-2 text-[11px] text-ink-3 sm:hidden">左右滑动可查看完整实体编号和功能标识。</p>
+                <p className="mt-2 text-[11px] text-ink-3 sm:hidden">左右滑动可查看完整实体编号和能力标识。</p>
               </Panel>
             )}
           </div>

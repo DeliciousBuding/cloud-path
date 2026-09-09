@@ -1,4 +1,4 @@
-// 插件实例的写操作面：启停 / 编辑 / 重新应用 / 删除，以及权限扩大的显式确认。
+// 运行实例的写操作面：启停 / 编辑 / 重新应用 / 删除，以及权限扩大的显式确认。
 //
 // 主路径只展示常用动作；重新应用只在状态需要处理时出现，删除收进详情页的「更多操作」。
 // 写完只失效查询，由服务端投影决定新事实 —— 绝不因为按钮点了、请求 200 就把保存的设置当作已运行。
@@ -48,7 +48,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
     }
   }
 
-  if (readOnly) return <p className="text-sm text-ink-3">当前账号只能查看，不能修改这个项目。</p>
+  if (readOnly) return <p className="text-sm text-ink-3">当前账号只能查看，不能修改这个实例。</p>
 
   const toggleLabel = v.desired.enabled ? '停用' : '启用'
   const needsReapply = v.drift || v.stale || !v.has_observed
@@ -133,8 +133,8 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
           <>
             <p>
               {!v.has_observed
-                ? `还没有收到${host}的运行状态。重新应用可能会重启这个项目，请确认后再继续。`
-                : `${host}还没有应用最新设置。重新应用可能会重启这个项目，请确认后再继续。`}
+                ? `还没有收到${host}的运行状态。重新应用可能会重启这个实例，请确认后再继续。`
+                : `${host}还没有应用最新设置。重新应用可能会重启这个实例，请确认后再继续。`}
             </p>
             <p className="mt-2 text-xs text-ink-2">
               {v.edge_id !== 'server' && !v.edge_online && '注意：该网关当前离线，重新连接后才会应用。'}
@@ -171,7 +171,7 @@ export function InstanceControls({ v, catalog, onEdit, showEdit = true, variant 
         body={
           <>
             <p>
-              删除后，{host}会在下一次更新时停止这个项目。操作会留下记录。
+              删除后，{host}会在下一次更新时停止这个实例。操作会留下记录。
             </p>
             <p className="mt-2 text-xs text-ink-3">
               运行位置：{v.edge_id === 'server' ? '中心服务' : `网关 ${v.edge_id || '—'}`} · 版本：{v.desired.version || '—'}

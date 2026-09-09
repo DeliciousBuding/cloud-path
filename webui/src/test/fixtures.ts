@@ -120,7 +120,7 @@ export function makeDescriptor(over: Partial<DeviceDescriptor> = {}): DeviceDesc
   }
 }
 
-/** Descriptor 顶层声明命令（schema 未定义该扩展字段，前端按宽容扩展消费） */
+/** Descriptor 顶层声明操作（schema 未定义该扩展字段，前端按宽容扩展消费） */
 export function makeDescriptorWithRootCommands(): DeviceDescriptor {
   const d = makeDescriptor({ entities: [] })
   return {

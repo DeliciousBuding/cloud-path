@@ -9,7 +9,7 @@ const TONE_ICON: Record<ToastTone, { icon: typeof Info; cls: string }> = {
 }
 
 /**
- * 轻提示视口（命令回执 / 错误反馈）。
+ * 轻提示视口（操作回执 / 错误反馈）。
  * 无障碍：整块是 role=status + aria-live=polite 的礼貌播报区；关闭是独立按钮并有可读名称
  * （旧实现把整张卡片做成一个按钮，读屏会把提示正文当成按钮名，且容易误触关闭）。
  * 390px：宽度上限跟随视口（max-w-[calc(100vw-3rem)]），不产生横向溢出。

@@ -1,4 +1,4 @@
-// 插件实例的其余事实面：Version / Edge / Trust / Permissions / Health / Revision / Last ACK，
+// 运行实例的其余事实面：Version / 网关 / Trust / Permissions / Health / Revision / Last ACK，
 // 以及 secret handle、非敏感配置与错误码呈现。
 //
 // 安全边界（control-plane-sync.md 不变量 6、任务书 §6.5）：

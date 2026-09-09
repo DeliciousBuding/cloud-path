@@ -362,7 +362,7 @@ export default function Overview() {
                     plain compact
                     icon={<History size={24} />}
                     title="暂无运行记录"
-                    hint="设备状态变化或操作结果会显示在这里。"
+                    hint="设备事件或操作结果会显示在这里。"
                     action={<Link to="/devices" className="btn btn-ghost">查看设备 <ArrowRight size={13} /></Link>}
                   />
                 ) : (

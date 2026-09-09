@@ -146,7 +146,7 @@ body {
 .btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
 .btn-ghost { background: transparent; color: var(--color-ink); border-color: var(--color-hairline); }
 .btn-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--color-ink) 6%, transparent); }
-/* 危险操作（删除实例 / 不可逆命令）：只有在二次确认对话框里才用 */
+/* 危险操作（删除实例 / 不可逆操作）：只有在二次确认对话框里才用 */
 .btn-danger { background: var(--color-bad); color: var(--color-bad-ink); }
 .btn-danger:hover:not(:disabled) { filter: brightness(1.08); }
 /* 轻量危险操作（列表行内的删除入口）：不填满，只用语义色描边 */

@@ -2,7 +2,8 @@
 
 最后更新：2026-09-09
 
-> 本文是 WebUI 呈现、排版、布局和交互的单一事实源；路由、数据获取与安全边界见
+> 本文是 WebUI 呈现、排版、布局和交互的单一事实源；用户侧名称见
+> [name-lexicon.md](../docs/architecture/name-lexicon.md)，路由、数据获取与安全边界见
 > [docs/design.md](../docs/design.md#前端react-router-7)，Capability 与领域语义见
 > [capability-model.md](../docs/architecture/capability-model.md)。
 
@@ -13,7 +14,7 @@ entity_id、capability URI、property key、raw JSON 只进能力 Inspector 与�
 
 | 层 | 例子 | 归属 |
 |---|---|---|
-| 平台 UI 词 | 概览 / 保存 / 事件 / 载荷 | WebUI 自身（薄词典，暂不引 i18n 框架） |
+| 平台 UI 词 | 概览 / 网关 / 设备 / 实体 / 能力 / 状态 / 事件 / 操作 / 运行实例 | WebUI 自身（薄词典，暂不引 i18n 框架） |
 | 声明展示元数据 | 温度 / 蜂鸣器 / 按下 | Descriptor / Capability declaration 的 title/description |
 | 机器身份 | `temperature`、`cloudpath.dev/capability/...` | 永远 canonical，不翻译 |
 
@@ -28,12 +29,12 @@ resolver 均为纯函数并有确定性单测（fallback 顺序、脏数据降�
 新鲜度呈现：页头与列表行的「更新于 / 连接于」用相对时间（绝对时间进 title 悬停查看），
 事实表与诊断页保留绝对时间。
 
-长历史按天分组（EventFeed `dayGrouped` 与运行记录页命令历史同一视觉语言）：组头承载日期
+长历史按天分组（EventFeed `dayGrouped` 与运行记录页操作历史同一视觉语言）：组头承载日期
 （今天 / 昨天 / 月日），行内只显示时刻，完整时间进 title；避免「组头 + 每行完整日期」双重冗余。
 
 跨设备列表的呈现约定：设备列表 2xl「关键读数」列至多两条声明主观测（与概览 KPI 同一
-`metricTiles` 推导），能力全量事实面只在详情「能力」tab；运行记录页/概览的命令展示名经
-`cmdMeta(cmd, actions?, idx?)` 解析——无单设备命令集时用 `commandDecl`（eventDecl 的命令侧
+`metricTiles` 推导），能力全量事实面只在详情「能力」tab；运行记录页/概览的操作展示名经
+`cmdMeta(cmd, actions?, idx?)` 解析——无单设备操作集时用 `commandDecl`（eventDecl 的操作侧
 对称件）查 catalog 声明，再回落平台词典 / humanize。
 
 状态三态契约：详情类页面在数据未到手时必须区分「加载中（骨架）/ 404（未注册空态）/
@@ -48,22 +49,22 @@ resolver 均为纯函数并有确定性单测（fallback 顺序、脏数据降�
 窄高 sparkline 模式（`hideY`）连同横向网格省去，峰值由标题说人话；X 轴刻度粒度由调用方传入
 （分桶图传时分，秒对 ≥1 分钟的桶是噪音）。
 
-设备概览首屏三段：KPI 行 → [最近活动 2/3 | 设备状况 1/3] → 命令历史通栏置底（限 8 条 + 控制页
-出口）。命令历史放右栏会拉到 20 行、把左栏踢出一大片空洞。
+设备概览首屏三段：KPI 行 → [最近事件 2/3 | 设备状况 1/3] → 操作历史通栏置底（限 8 条 + 控制页
+出口）。操作历史放右栏会拉到 20 行、把左栏踢出一大片空洞。
 
-插件实例状态词汇覆盖两套后端事实源：edge pluginhost.State（大写 STOPPED/HEALTHY…）与 server
+运行实例状态词汇覆盖两套后端事实源：edge pluginhost.State（大写 STOPPED/HEALTHY…）与 server
 AppHost 的 appruntime.InstanceState（小写 running/stopping/failed…，internal/appruntime/types.go）；
 observed.detail 的已知机器标记（server-apphost）经 `hostDetailLabel()` 人话化；未知值原样呈现，不猜。
 
 视觉纪律（Vercel design.md 反模式审查）：无限循环动效（脉冲光环/闪动）与玻璃拟态一律移除（default to stillness / 拒 glass）；
-普通元数据（适配器/串口/节点 ID）不用胶囊，降级为 mono 文本，只有状态保留胶囊；数值/时间列右对齐且表头同对齐；
-时间戳与机器标识用 Geist Mono（只标识本身进 mono，整句不进）；散文不用破折号。胶囊只承载状态/语义：分类、计数、权限 scope、命令集来源等普通元数据用纯文本（高权限 scope 用语义色文字而非胶囊）。
+普通元数据（适配器/串口/网关 ID）不用胶囊，降级为 mono 文本，只有状态保留胶囊；数值/时间列右对齐且表头同对齐；
+时间戳与机器标识用 Geist Mono（只标识本身进 mono，整句不进）；散文不用破折号。胶囊只承载状态/语义：分类、计数、权限 scope、操作集来源等普通元数据用纯文本（高权限 scope 用语义色文字而非胶囊）。
 
-### 设备命令与应用实例
+### 设备操作与运行实例
 
-命令及危险性只来自 Descriptor / Capability 或适配器白名单，不由前端猜测。Capability action 的
+操作及危险性只来自 Descriptor / Capability 或适配器白名单，不由前端猜测。Capability action 的
 `title` / `description` / `destructive` / `confirmation` 是声明元数据；往返与安全边界见
-[protocol.md](../docs/protocol.md#capabilities)，UI 不按命令名补造危险性。
+[protocol.md](../docs/protocol.md#capabilities)，UI 不按操作名补造危险性。
 
 参数优先以声明 schema 生成字段或“设置方式”表单，不注入默认值；只有无法安全展开的嵌套对象、
 其他组合结构或未知约束才保留高级 JSON 编辑。平铺标量、数组、对象数组和根级 `oneOf` 在能无损
@@ -72,8 +73,8 @@ required/type/enum、数值/字符串/数组边界以及 `oneOf` / `anyOf` / `al
 字节及换行/NUL 传输门禁。未知约束参与组合匹配时使用未知态，以“部分参数由设备端确认”提示；
 设备端仍是最终裁决者。保留用户输入，不静默剥离、截断或压缩 JSON；ack 失败缺 detail 时用可读兜底。
 
-命令面板及独立按钮都检查当前身份：viewer、加载中、未登录或无效身份无写表单；保留显式开放模式
-和合法服务身份 `id=0` 的既有设备命令契约。更换设备、账号、租户、角色或声明会卸载参数与确认状态，
+操作面板及独立按钮都检查当前身份：viewer、加载中、未登录或无效身份无写表单；保留显式开放模式
+和合法服务身份 `id=0` 的既有设备操作接口。更换设备、账号、租户、角色或声明会卸载参数与确认状态，
 旧请求/回执不能污染新身份。危险动作保留声明确认，发送后沿用 POST → WS ACK → 历史刷新或超时反馈。
 确认框覆盖整个视口、限制背景滚动和键盘焦点；默认聚焦取消，关闭后恢复触发位置。长内容在对话框内
 滚动，不把确认按钮挤到屏外。参数错误优先使用声明字段名及中文类型；宽屏控制区给表单更多宽度，
@@ -81,10 +82,10 @@ required/type/enum、数值/字符串/数组边界以及 `oneOf` / `anyOf` / `al
 
 Application Plane 的展示入口位于运行实例详情。应用目录声明 `kind=application`，或实例的
 `edge_id=server` 时均可进入；目录为空不影响服务端应用。`server` 是中心服务的应用宿主，不是离线
-网关，不链接到虚构的节点页。隔离方式沿用插件展示词汇：`shared` 为共享进程，`per-instance` 为
+网关，不链接到虚构的网关页。隔离方式沿用插件展示词汇：`shared` 为共享进程，`per-instance` 为
 实例独立进程。
 
-控制请求原样使用投影的 `v.id`（可能为裸标识，也可能带节点前缀）；records / bindings / jobs
+控制请求原样使用投影的 `v.id`（可能为裸标识，也可能带网关前缀）；records / bindings / jobs
 三个只读请求始终使用 `desired.instance_id`。viewer 可读三个分区，但不能新建、编辑、启停、重新
 下发或删除实例；切换为只读角色会关闭列表页已打开的创建或编辑表单。应用数据需要已认证且
 `tenant_id>0` 的租户身份；服务令牌的 `user.id=0` 是合法身份，开放访问不等于应用数据授权。
@@ -132,7 +133,7 @@ unicode-range 只接管 CJK，拉丁/数字仍走 Geist；可复现构建见 web
 - 圆角刻度只有两档：tile 8px（卡内子面/内联 note/控件）与 card 12px（.card/浮层 Toast/品牌 logo）；rounded-2xl+ 不使用。
 - 列表在 Panel 内用 divider rows（`divide-y`），不套子卡（嵌套卡片是硬反模式）；Admin 用户/令牌行已行化。
 - 表格体单元格 `vertical-align: baseline`（对齐行首基线；多行表头才底对齐）。
-- 长 ledger（运行记录页状态记录/操作记录）本地滚动（max-h + overflow-y-auto），页面保持一屏可读；天分组头 sticky 于滚动容器顶，跨天查找不迷路。
+- 长 ledger（运行记录页事件记录/操作记录）本地滚动（max-h + overflow-y-auto），页面保持一屏可读；天分组头 sticky 于滚动容器顶，跨天查找不迷路。
 - 空态/错误态不用装饰性图标瓷砖（彩色圆底）：plain 语义色图标即可。
 
 ### 10.11 页面组合
@@ -141,6 +142,6 @@ unicode-range 只接管 CJK，拉丁/数字仍走 Geist；可复现构建见 web
 - 概览主体是单列 field（KPI → 关注 → fleet 通栏表 → 事件）：live 数据下任何双列 split 都会被两栏高差踢出画布空洞（空洞只随数据搬家，不会消失），reflow 成单列结构消灭；fleet 表格占有全证据宽（Vercel：tables own the full evidence width）。关注为 0 时不摆空面板，一行 quiet 语义文本「暂无异常」。
 - StatTile 的 sub 行恒预留（min-h）：peer 瓦片共享 label→value→detail 内部行，高度结构一致、不互撑。
 - 概览「需要关注」只给聚合主行 + 去向链接：失败操作明细的单一证据家是运行记录页（同屏同一答案不复述第二处）；右列不再被明细 ledger 撑高。
-- 设备概览组合 = KPI → 事实横条（设备状况 KV 多列通栏，回答「健康吗」）→ 双 ledger 并排（最近活动 | 命令历史，互为 peer 等高互不牵制）；列表型内容不进窄轨。
+- 设备概览组合 = KPI → 事实横条（设备状况 KV 多列通栏，回答「健康吗」）→ 双 ledger 并排（最近事件 | 操作历史，互为 peer 等高互不牵制）；列表型内容不进窄轨。
 - 面积图平涂 `fillOpacity 0.1`：装饰性渐变/渐变淡出是硬反模式，渐变只允许作为有标注的连续数据标尺。
 - 用户可见文案不用破折号「——」接续句子（改逗号/句号）；代码注释不受此限。

@@ -21,7 +21,7 @@ const PAGE_LIMIT = 200
 
 type Tab = 'events' | 'commands'
 
-/** 命令状态过滤项：取自平台级命令状态机（lib/format.ts CMD_STATUS_META），非设备语义 */
+/** 操作状态过滤项：取自平台级操作状态机（lib/format.ts CMD_STATUS_META），非设备语义 */
 const STATUS_FILTERS = [
   { value: '', label: '全部状态' },
   { value: 'pending', label: '待发送' },
@@ -36,11 +36,11 @@ const STATUS_FILTERS = [
 const SELECT_CLS = 'min-h-11 min-w-0 max-w-full overflow-hidden rounded-full border border-hairline bg-surface px-3 py-1.5 text-xs font-medium outline-none transition-colors focus:border-accent sm:min-h-0'
 
 /**
- * 活动页：事件与命令历史（/api/events、/api/commands），带设备 / 边缘 / 状态过滤。
+ * 活动页：事件与操作记录（/api/events、/api/commands），带设备 / 网关 / 状态过滤。
  *
  * 约定：
  *   - 时间一律**绝对时间**（完整年月日时分秒），历史跨天时相对时间会误导；
- *   - 边缘过滤在前端按设备键前缀做（后端 commands/events 只接受 device 参数），
+ *   - 网关过滤在前端按设备键前缀做（后端 commands/events 只接受 device 参数），
  *     并在有截断时明确说明，不假装「这就是全部」；
  *   - 事件流合并 WS 实时环形缓冲与 REST 历史并按 设备+时间+类型 去重。
  */
@@ -85,7 +85,7 @@ export default function Activity() {
     return edge && !device ? rows.filter((c) => c.device_id.startsWith(`${edge}/`)) : rows
   }, [cmdQuery.data, edge, device])
 
-  /** 设备 ID → 用户起的名字：命令行的目标列展示人话名，机器 ID 收进 title */
+  /** 设备 ID → 用户起的名字：操作记录的目标列展示人话名，机器 ID 收进 title */
   const deviceNames = useMemo(() => new Map(
     devices.filter((d) => d.name).map((d) => [d.id, d.name as string]),
   ), [devices])
@@ -110,7 +110,7 @@ export default function Activity() {
   const subtitle = query.isLoading ? '正在加载记录…'
     : query.error ? '记录状态暂不可用'
       : tab === 'events'
-        ? `设备主动上报的状态变化 · 最近 ${rows} 条`
+        ? `设备上报的事件 · 最近 ${rows} 条`
         : `下发操作及执行结果 · 最近 ${rows} 条${failedCount > 0 ? ` · ${failedCount} 条失败或超时` : ''}`
 
   const clearAll = () => { setDevice(''); setEdge(''); setTypes(new Set()); setStatus('') }
@@ -135,7 +135,7 @@ export default function Activity() {
               value={tab}
               onChange={(v) => setTab(v)}
               options={[
-                { value: 'events', label: '状态记录', icon: <ActivityIcon size={12} /> },
+                { value: 'events', label: '事件记录', icon: <ActivityIcon size={12} /> },
                 { value: 'commands', label: '操作记录', icon: <Terminal size={12} /> },
               ]}
             />
@@ -209,7 +209,7 @@ export default function Activity() {
       {query.error ? (
         <ErrorState
           icon={<WifiOff size={20} />}
-          title={tab === 'events' ? '状态记录加载失败' : '操作记录加载失败'}
+          title={tab === 'events' ? '事件记录加载失败' : '操作记录加载失败'}
           hint="暂时无法加载历史记录。实时连接收到的内容仍会显示；请稍后重试或联系管理员检查服务。"
           onRetry={() => { void query.refetch() }}
           retrying={query.isFetching}
@@ -218,7 +218,7 @@ export default function Activity() {
         <Panel>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-hairline pb-3">
             <span className="text-[12px] text-ink-3">
-              {tab === 'events' ? '状态记录 · 新到旧' : '操作记录 · 新到旧'}
+              {tab === 'events' ? '事件记录 · 新到旧' : '操作记录 · 新到旧'}
             </span>
             <span className="flex items-center gap-2 text-[12px] text-ink-3">
               {query.isFetching && <Spinner size={12} />}
@@ -230,17 +230,17 @@ export default function Activity() {
           ) : tab === 'events' ? (
             events.length === 0 ? (
               <EmptyState icon={<ActivityIcon size={24} />}
-                title={eventFilter ? '没有匹配的状态记录' : '还没有状态记录'}
-                hint={eventFilter ? '试试清除筛选条件，或换一个设备 / 网关 / 事件类型。' : '设备上报状态变化后会出现在这里。'} />
+                title={eventFilter ? '没有匹配的事件记录' : '还没有事件记录'}
+                hint={eventFilter ? '试试清除筛选条件，或换一个设备 / 网关 / 事件类型。' : '设备上报事件后会出现在这里。'} />
             ) : (
               <>
                 {/* 长 ledger 本地滚动（Vercel: long ledgers may scroll locally）：
                     *  页面保持一屏可读，查找能力留在滚动容器内；组头 sticky 便于跨天定位 */}
-                <div tabIndex={0} role="region" aria-label="状态记录列表"
+                <div tabIndex={0} role="region" aria-label="事件记录列表"
                   className="max-h-[34rem] overflow-y-auto overscroll-contain pr-1">
                   <EventFeed events={events} limit={PAGE_LIMIT} dayGrouped />
                 </div>
-                {atLimit && <LimitNote what="状态记录" hint="可按设备、网关或事件类型筛选查看" />}
+                {atLimit && <LimitNote what="事件记录" hint="可按设备、网关或事件类型筛选查看" />}
               </>
             )
           ) : commands.length === 0 ? (
@@ -271,7 +271,7 @@ function LimitNote({ what, hint }: { what: string; hint: string }) {
 }
 
 /**
- * 命令历史：跨天按天分组（组头承载日期，与事件流同一视觉语言），行内只留时刻。
+ * 操作历史：跨天按天分组（组头承载日期，与事件流同一视觉语言），行内只留时刻。
  * 机器 cmd / args / 成功回执一律收进 title（悬停可查），只有失败原因才是需要行内呈现的人话信息。
  */
 function CommandRows({ rows, names, index }: {

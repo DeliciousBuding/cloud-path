@@ -176,13 +176,13 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState, desir
     <div className="grid min-w-0 items-start gap-5 lg:grid-cols-2">
     <Panel title="设备绑定">
       <ReadContent title="设备绑定" query={bindings} empty={!bindings.data?.bindings.length}>
-        <p className="mb-3 text-xs text-ink-3">以下是应用当前使用的设备功能；绑定会随应用停止而清空。</p>
+        <p className="mb-3 text-xs text-ink-3">以下是应用当前使用的设备能力；绑定会随应用停止而清空。</p>
         <ul className="divide-y divide-hairline">{bindings.data?.bindings.map((binding, index) => {
           const labels = bindingLabels(binding, presentation)
           return <li key={JSON.stringify([binding.requirement_id, binding.entity_id])} className="min-w-0 py-3 first:pt-0">
             <p className="break-words text-sm font-medium [overflow-wrap:anywhere]">{labels.entity || '设备绑定 ' + (index + 1)}</p>
             {labels.capability !== labels.entity && <p className="mt-1 break-words text-xs text-ink-2">{labels.capability}</p>}
-            <TechnicalDetails><p>实体标识：{binding.entity_id}</p><p>功能标识：{binding.capability}</p><p>需求标识：{binding.requirement_id}</p></TechnicalDetails>
+            <TechnicalDetails><p>实体标识：{binding.entity_id}</p><p>能力标识：{binding.capability}</p><p>需求标识：{binding.requirement_id}</p></TechnicalDetails>
           </li>
         })}</ul>
       </ReadContent>

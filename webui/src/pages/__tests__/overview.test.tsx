@@ -78,14 +78,14 @@ describe('概览：有数据', () => {
     const { container } = renderWithProviders(<Overview />)
     expect(await screen.findByText('部分设备离线')).toBeInTheDocument()
     expect(screen.getByText('有操作未完成')).toBeInTheDocument()
-    // 机器命令名/状态徽章/明细时间不在概览二次出现（同屏同一答案只留一处）
+    // 机器操作名/状态徽章/明细时间不在概览二次出现（同屏同一答案只留一处）
     expect(screen.queryByText('Relay On')).not.toBeInTheDocument()
     expect(screen.queryByText('失败')).not.toBeInTheDocument()
     const links = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))
     expect(links).toContain('/activity')
   })
 
-  it('边缘离线与插件未活跃各生成一条可执行的提醒（含去向链接）', async () => {
+  it('网关离线与运行实例未活跃各生成一条可执行的提醒（含去向链接）', async () => {
     route(FULL)
     const { container } = renderWithProviders(<Overview />)
     expect(await screen.findByText('网关连接中断')).toBeInTheDocument()

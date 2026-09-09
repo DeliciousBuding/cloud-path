@@ -55,7 +55,7 @@ describe('未知 Capability 回落', () => {
 
   it('EntityInventory 的 ID 在窄屏可横向滚动、可复制且不截断', () => {
     render(<EntityInventory descriptor={descriptor} />)
-    const region = screen.getByRole('region', { name: '设备对象清单' })
+    const region = screen.getByRole('region', { name: '实体清单' })
     expect(region.querySelector('table')).toHaveClass('min-w-[44rem]')
     expect(screen.getByText(tempEntity.entity_id)).toHaveClass('select-all', 'whitespace-nowrap')
     expect(screen.getByText(tempEntity.entity_id)).not.toHaveClass('truncate')
@@ -99,7 +99,7 @@ describe('未知 Capability 回落', () => {
 
   it('Descriptor 缺席时 RawView 用上报字段通用渲染（不要求后端先就绪）', () => {
     render(<RawView raw={makeDeviceView().state} />)
-    expect(screen.getByText('该设备尚未同步功能信息，此处按已接收的数据显示')).toBeInTheDocument()
+    expect(screen.getByText('该设备尚未同步能力信息，此处按已接收的数据显示')).toBeInTheDocument()
     expect(screen.getByText('Mode')).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Slots 数据表' })).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Diag 完整数据' })).toBeInTheDocument()

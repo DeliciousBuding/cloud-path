@@ -33,7 +33,7 @@ function renderPage(page: ReactElement, route: string) {
 }
 
 /** /healthz 永远 200：它是公开端点，可达与否**不得**影响登录结论。
- *  healthOverride 用来造「setup 前已有边缘接入」的现场——完成页要不要提示边缘会被断开，
+ *  healthOverride 用来造「setup 前已有网关接入」的现场——完成页要不要提示网关会被断开，
  *  取决于这份配置。 */
 type Router = (url: string) => ReturnType<typeof stubResponse>
 function routeWith(auth: Router, healthOverride: Partial<typeof health> = {}) {
@@ -325,10 +325,10 @@ describe('Setup：真实创建首个账号', () => {
     expect(await screen.findByRole('heading', { name: '首页占位' })).toBeInTheDocument()
   })
 
-  // 全鉴权会立刻掐断已接入的边缘（internal/server/ws.go 的 accountMode() 分支），
+  // 全鉴权会立刻掐断已接入的网关（internal/server/ws.go 的 accountMode() 分支），
   // 而 server 只留一条 WARN。向导此前只报喜不说这一步：操作员看到设备全离线，
   // 会以为自己刚把部署弄坏了，界面上也找不到恢复入口。
-  it('setup 前已有边缘接入 → 完成页给出 edge 令牌恢复步骤，而不是只报喜', async () => {
+  it('setup 前已有网关接入 → 完成页给出 edge 令牌恢复步骤，而不是只报喜', async () => {
     const user = userEvent.setup()
     let created = false
     routeWith((url) => {
@@ -358,7 +358,7 @@ describe('Setup：真实创建首个账号', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('全新安装（0 边缘 0 设备）→ 完成页不插这段与本实例无关的警告', async () => {
+  it('全新安装（0 网关 0 设备）→ 完成页不插这段与本实例无关的警告', async () => {
     const user = userEvent.setup()
     let created = false
     routeWith((url) => {

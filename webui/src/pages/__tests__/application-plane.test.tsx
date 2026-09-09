@@ -246,13 +246,13 @@ describe('应用数据读取和通用展示', () => {
   })
 })
 
-describe('插件实例详情的应用入口', () => {
+describe('运行实例详情的应用入口', () => {
   it.each(['server/app-a', 'app-a'])('控制面键 %s 不影响应用裸标识，viewer 无任何写入口', async (controlID) => {
     const instance = appInstance('app-a', controlID)
     const http = installFetch((url) => appResponse(url, { instance }))
     const { container } = renderDetail(controlID)
     expect(await screen.findByText('已保存内容')).toBeVisible()
-    expect(screen.getByText(/当前账号只能查看，不能修改这个项目/)).toBeVisible()
+    expect(screen.getByText(/当前账号只能查看，不能修改这个实例/)).toBeVisible()
     expect(screen.queryByRole('button', { name: /停用|启用|删除|编辑|重新下发/ })).not.toBeInTheDocument()
     expect(screen.queryByText('网关离线')).not.toBeInTheDocument()
     expect(container.querySelector('a[href="/edges/server"]')).toBeNull()

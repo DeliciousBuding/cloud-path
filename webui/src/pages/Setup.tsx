@@ -81,7 +81,7 @@ export default function Setup() {
   const [createdUser, setCreatedUser] = useState('')
 
   /**
-   * 步骤 1 的 /healthz 快照里有没有已接入的边缘/设备。那时实例还没进账号模式、边缘连得上，
+   * 步骤 1 的 /healthz 快照里有没有已接入的网关/设备。那时实例还没进账号模式、网关连得上，
    * 所以这能提示：启用账号验证后，未携带有效网关令牌的已接入网关会断开；已配置令牌的共享网关不受影响。
    * 全新安装为 false，完成页不插这段与本实例无关的警告。
    */
@@ -327,15 +327,15 @@ export default function Setup() {
             </p>
           </div>
 
-          {/* 全鉴权会掐断未携带有效令牌的边缘：账号模式下 edge 的 WS 握手不带租户令牌就被拒
+          {/* 全鉴权会掐断未携带有效令牌的网关：账号模式下 edge 的 WS 握手不带租户令牌就被拒
               （internal/server/ws.go），设备随即全部离线，而 server 只留一条 WARN，
               界面上没有任何地方告诉操作员这是怎么回事、怎么恢复。
               这不是故障，是账号模式的既定语义（docs/security.md §5），但向导只报喜不说这一步，
               人就会以为自己刚把部署弄坏了。
 
-              只在**真的有边缘/设备接入过**时才说：全新安装（步骤 1 探到 0 边缘 0 设备）
+              只在**真的有网关/设备接入过**时才说：全新安装（步骤 1 探到 0 网关 0 设备）
               没有这个后果，此时插一段警告只是噪音。判据取步骤 1 的 /healthz 快照——
-              那时还没进账号模式，边缘能连上；未携带有效令牌的连接会在启用账号验证后断开。 */}
+              那时还没进账号模式，网关能连上；未携带有效令牌的连接会在启用账号验证后断开。 */}
           {hasConnectedFleet && (
             <div className="rounded-lg bg-surface-2 p-3.5 text-left">
               <div className="flex items-start gap-2 text-[12px] leading-relaxed text-ink-2">

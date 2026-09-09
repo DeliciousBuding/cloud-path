@@ -1,6 +1,6 @@
 // 展示格式化工具（纯函数，无副作用）。
 //
-// 设备语义不在这里：事件/命令的展示文案由后端声明驱动（Capability spec.events / spec.actions），
+// 设备语义不在这里：事件/操作的展示文案由后端声明驱动（Capability spec.events / spec.actions），
 // 未声明时回落 humanize(机器名)。机器 ID、Capability ID、事件类型永不本地化
 // （docs/architecture/capability-model.md §9）。
 import { ApiError } from './api'
@@ -143,8 +143,8 @@ export function eventTone(type: string, index?: CapabilityIndex): Tone {
   return (index ? eventDecl(type, index)?.tone : undefined) ?? 'idle'
 }
 
-/** 命令展示名/提示，回落顺序：设备命令集声明 > catalog 里的 action 声明 > 平台词典 > humanize(cmd)。
- *  跨设备列表（活动页 / 概览）没有单设备命令集，传 idx 让它照样吃到声明标题。 */
+/** 操作展示名/提示，回落顺序：设备操作集声明 > catalog 里的 action 声明 > 平台词典 > humanize(cmd)。
+ *  跨设备列表（活动页 / 概览）没有单设备操作集，传 idx 让它照样吃到声明标题。 */
 export function cmdMeta(
   cmd: string, actions?: CommandAction[], idx?: CapabilityIndex,
 ): { label: string; hint: string } {
@@ -160,7 +160,7 @@ export function cmdMeta(
   return { label: friendly[cmd] ?? commandLabel(cmd), hint: '' }
 }
 
-/** 命令生命周期状态 → 徽标语义（平台级状态机，非设备语义） */
+/** 操作生命周期状态 → 徽标语义（平台级状态机，非设备语义） */
 export const CMD_STATUS_META: Record<string, { label: string; tone: Tone }> = {
   pending: { label: '待发送', tone: 'idle' },
   sent:    { label: '已下发', tone: 'accent' },
@@ -239,8 +239,8 @@ export function argsError(args: string, max = 64): string | undefined {
 }
 
 /**
- * 命令下发失败 → 人话。按 HTTP 状态判定，语义对齐 docs/design.md 的 REST 错误约定
- * （400 参数/白名单、401 令牌、404 设备不存在、409 edge 离线、429 命令限流、
+ * 操作下发失败 → 人话。按 HTTP 状态判定，语义对齐 docs/design.md 的 REST 错误约定
+ * （400 参数/白名单、401 令牌、404 设备不存在、409 edge 离线、429 操作限流、
  * 503 存储不可用或 edge 队列满）；不把服务端 message 当规则复述。
  */
 export function commandErrorCopy(e: unknown): string {

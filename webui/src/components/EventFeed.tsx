@@ -70,7 +70,7 @@ const EVENT_LABEL_FALLBACK: Record<string, string> = {
   'command completed': '操作已完成',
 }
 
-/** 通用命令展示词典：声明 title 缺席时优先于 humanize，未知命令仍回落 humanize。 */
+/** 通用操作展示词典：声明 title 缺席时优先于 humanize，未知操作仍回落 humanize。 */
 const COMMAND_LABEL_FALLBACK: Record<string, string> = {
   'read register': '读取寄存器',
   'register read': '读取寄存器',
@@ -94,10 +94,10 @@ export function eventDisplayLabel(type: string, index?: CapabilityIndex, label?:
   for (const key of machineNameKeys(base)) {
     if (EVENT_LABEL_FALLBACK[key]) return EVENT_LABEL_FALLBACK[key]
   }
-  return CJK_RE.test(base) ? base : '未知状态记录'
+  return CJK_RE.test(base) ? base : '未知事件'
 }
 
-/** 命令主标签：声明/平台词典 → 通用词典 → 中文兜底；原始 cmd 只由调用方放进 title。 */
+/** 操作主标签：声明/平台词典 → 通用词典 → 中文兜底；原始 cmd 只由调用方放进 title。 */
 export function commandDisplayMeta(cmd: string, index?: CapabilityIndex): { label: string; hint: string } {
   const meta = cmdMeta(cmd, undefined, index)
   if (CJK_RE.test(meta.label)) return meta
@@ -156,14 +156,14 @@ export function EventFeed({ events, showDevice = true, limit = 30, dayGrouped = 
   /** 长历史模式：按天分组，组头承载日期、行内只留时刻（完整时间悬停可见）；紧凑列表不分组 */
   dayGrouped?: boolean
 }) {
-  // 设备列展示人话名字（机器 ID 收进 title）：与命令历史同一纪律
+  // 设备列展示人话名字（机器 ID 收进 title）：与操作历史同一纪律
   const { list: devices } = useDevices()
   const names = useMemo(() => new Map(
     devices.filter((d) => d.name).map((d) => [d.id, d.name as string]),
   ), [devices])
 
   if (!events.length) {
-    return <p className="py-6 text-center text-sm text-ink-3">暂无运行记录。设备状态变化或操作结果会显示在这里。</p>
+    return <p className="py-6 text-center text-sm text-ink-3">暂无事件。设备上报事件或操作结果会显示在这里。</p>
   }
   const shown = events.slice(0, limit)
   if (!dayGrouped) {
@@ -242,7 +242,7 @@ function EventRow({ e, first, showDevice, name }: {
               type="button"
               onClick={() => setOpen((v) => !v)}
               aria-expanded={open}
-              aria-label={open ? '收起运行记录详情' : '查看运行记录详情'}
+              aria-label={open ? '收起事件详情' : '查看事件详情'}
               className="flex h-11 w-11 shrink-0 items-center justify-center text-ink-3 transition-colors hover:text-ink-2 sm:h-8 sm:w-8">
               <ChevronRight size={12} className={open ? 'rotate-90 transition-transform' : 'transition-transform'} />
             </button>
@@ -253,7 +253,7 @@ function EventRow({ e, first, showDevice, name }: {
         </div>
       </div>
       {open && (
-        <pre tabIndex={0} role="group" aria-label="运行记录详情数据"
+        <pre tabIndex={0} role="group" aria-label="事件详情数据"
           className="num mb-2 max-h-40 overflow-auto rounded-lg bg-surface-2 p-2 font-mono text-[11px] leading-relaxed text-ink-2">
           {e.payload}
         </pre>

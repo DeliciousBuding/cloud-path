@@ -34,7 +34,7 @@ function StatusPill({ label, count, tone }: { label: string; count: number; tone
 
 const KIND_LABEL: Record<string, string> = {
   application: '应用',
-  driver: '设备驱动',
+  driver: '驱动',
   connector: '连接器',
 }
 
@@ -136,13 +136,13 @@ export default function Plugins() {
         <TabPanel value={tab}>
           {catError ? (
             <ErrorState icon={<Puzzle size={20} />} title="可用插件加载失败"
-              hint="暂时无法加载可用插件。已经添加的项目不会受影响，请稍后重试。"
+              hint="暂时无法加载可用插件。已经添加的实例不会受影响，请稍后重试。"
               onRetry={refetchCat} />
           ) : catLoading ? (
             <Panel><RowSkeleton rows={4} /></Panel>
           ) : plugins.length === 0 ? (
             <EmptyState icon={<PackageOpen size={24} />} title="没有可用插件"
-              hint="插件同步后会显示在这里。列表为空不影响已经添加的项目。" />
+              hint="插件同步后会显示在这里。列表为空不影响已经添加的实例。" />
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
               {plugins.slice(0, LIST_CAP).map((p) => {
@@ -198,7 +198,7 @@ export default function Plugins() {
                         )}
                         {contributes.length > 0 && (
                           <div className="min-w-0 pt-1">
-                            <dt className="mb-1 text-ink-3">功能标识</dt>
+                            <dt className="mb-1 text-ink-3">贡献标识</dt>
                             <dd className="flex min-w-0 flex-wrap gap-1.5">
                               {contributes.map((c) => <span key={`${c.kind}-${c.id}-technical`}
                                 className="num max-w-full truncate rounded bg-surface-2 px-1.5 py-0.5 font-mono"
@@ -212,9 +212,9 @@ export default function Plugins() {
                     <div className="mt-3.5 flex min-w-0 flex-wrap items-center gap-2 border-t border-hairline pt-3">
                       {canCreate ? (
                         <button type="button" className="btn btn-primary"
-                          aria-label={`创建${kind === 'application' ? '应用' : '驱动'}实例：${pluginDisplayName(p)}`}
+                          aria-label={`创建运行实例：${pluginDisplayName(p)}`}
                           onClick={() => startCreate(p.id)}>
-                          <Plus size={13} /> 创建{kind === 'application' ? '应用' : '驱动'}实例
+                          <Plus size={13} /> 创建运行实例
                         </button>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-ink-2">
@@ -292,7 +292,7 @@ export default function Plugins() {
 
               {visibleInstances.length === 0 ? (
                 <EmptyState icon={<Layers size={24} />} title="这个运行位置还没有实例"
-                  hint="选择其他运行位置，或在上方添加项目。" />
+                  hint="选择其他运行位置，或在上方添加实例。" />
               ) : (
                 <>
                   {visibleInstances.slice(0, LIST_CAP).map((v) => (
@@ -308,7 +308,7 @@ export default function Plugins() {
               )}
 
               <p className="text-[12px] leading-relaxed text-ink-3">
-                需要处理的项目会排在前面。展开「技术详情」可以查看版本和状态原值。
+                需要处理的实例会排在前面。展开「技术详情」可以查看版本和状态原值。
               </p>
             </div>
           )}

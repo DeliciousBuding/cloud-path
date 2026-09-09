@@ -88,14 +88,14 @@ describe('插件列表只读权限', () => {
     expect(screen.getByRole('tab', { name: /实例/ })).toHaveAttribute('aria-selected', 'true')
     await gotoTab(/可用插件/)
     expect(await screen.findByText('没有可用插件')).toBeInTheDocument()
-    expect(screen.getByText('插件同步后会显示在这里。列表为空不影响已经添加的项目。')).toBeInTheDocument()
+    expect(screen.getByText('插件同步后会显示在这里。列表为空不影响已经添加的实例。')).toBeInTheDocument()
     await gotoTab(/实例/)
     expect((await screen.findAllByText('中心服务')).length).toBeGreaterThanOrEqual(2)
     expect(screen.getAllByText('状态待确认').length).toBeGreaterThan(0)
     expect(screen.getAllByText(/网关 edge-a/).length).toBeGreaterThan(0)
     expect(container.textContent).not.toContain('网关 server')
     expect(container.querySelector('[title^="网关 server"]')).toBeNull()
-    expect(screen.getByText('需要处理的项目会排在前面。展开「技术详情」可以查看版本和状态原值。')).toBeInTheDocument()
+    expect(screen.getByText('需要处理的实例会排在前面。展开「技术详情」可以查看版本和状态原值。')).toBeInTheDocument()
 
   })
 
@@ -187,7 +187,7 @@ describe('插件面分区', () => {
     expect(await screen.findByText('连接器不创建运行实例')).toBeVisible()
     expect(screen.queryByRole('button', { name: /创建.*MQTT/ })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /创建应用实例：示例应用/ }))
+    await user.click(screen.getByRole('button', { name: /创建运行实例：示例应用/ }))
     expect(screen.getByRole('tab', { name: /运行实例/ })).toHaveAttribute('aria-selected', 'true')
     expect(await screen.findByRole('combobox', { name: '要运行什么' })).toHaveValue(application.id)
   })

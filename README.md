@@ -2,8 +2,8 @@
 
 # CloudPath · 云径
 
-**中心服务 + 边缘代理的物联网控制平台（IoT Control Plane）**：
-设备通过 Edge 接入，浏览器查看状态并远程控制。平台不识别具体硬件，
+**中心服务 + 网关的物联网控制平台（IoT Control Plane）**：
+设备通过网关（Edge）接入，浏览器查看状态并远程控制。平台不识别具体硬件，
 新设备由 Driver 插件提供。
 
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/)
@@ -21,10 +21,10 @@
 CloudPath 把「接入设备 → 查看状态 → 远程控制」做成一套可本地运行、也可部署到公网的系统，
 不是某块开发板的专用上位机。
 
-- **中心服务与边缘代理**：中心服务（Server）是 **期望态 / 租户 / 审计的唯一权威**；边缘代理（Edge）是
-  **观测态的唯一权威**并保存最后成功 applied 快照。边缘自治：断网继续运行，重连仅应用最终快照、不回放中间副作用。
+- **中心服务与网关**：中心服务（Server）是 **期望态 / 租户 / 审计的唯一权威**；网关（Edge）是
+  **观测态的唯一权威**并保存最后成功 applied 快照。网关自治：断网继续运行，重连仅应用最终快照、不回放中间副作用。
 - **设备无关 · 插件驱动**：核心（`internal/*`）不识别任何具体硬件；新设备 = 一个 Driver 插件。
-- **中心-边缘拓扑**：多边缘节点 + 单中心服务；当前为单 Server 部署，
+- **中心-网关拓扑**：多网关 + 单中心服务；当前为单 Server 部署，
   多 Server 横向扩展仍属目标态。
 - **设备身份** = `(tenant_id, edge_id, device_id)`；线上传输键 `<edge_id>/<device_id>`。
 - **实时链路**：账号会话下 edge → server → 浏览器走 WebSocket；REST 承担历史查询与管理操作。
@@ -40,11 +40,11 @@ CloudPath 把「接入设备 → 查看状态 → 远程控制」做成一套可
         ┌───────────────┴──────────────────────────────────────────┐
         │  Control Plane —— cloudpath-server（单二进制 + SQLite）   │
         │  desired 权威 · 租户/RBAC · 令牌 · 审计 · 限流 · 保留期     │
-        │  插件目录/实例期望态 · 命令下发与回执结算                    │
+        │  插件目录/运行实例期望态 · 操作下发与回执结算                    │
         └───────────────▲──────────────────────────────────────────┘
                         │ WebSocket（/ws/edge）：state / event 上行，command 下行
         ┌───────────────┴──────────────────────────────────────────┐
-        │  Edge Plane —— cloudpath-edge（每台电脑/站点一个）          │
+        │  Gateway Plane（Edge）—— cloudpath-edge（每台电脑/站点一个） │
         │  observed 权威 · 设备监督与退避重开 · 离线事件缓冲           │
         │  Driver Host（外部插件进程）· 本地 secret 明文解析           │
         └───────────────▲──────────────────────────────────────────┘
@@ -56,11 +56,11 @@ CloudPath 把「接入设备 → 查看状态 → 远程控制」做成一套可
 
 | 类型 | 默认宿主 | 负责 | 不负责 |
 |---|---|---|---|
-| **Driver** | Edge | 设备发现、连接、协议解析、能力映射、设备动作 | 业务流程、租户 UI |
+| **Driver** | 网关（Edge） | 设备发现、连接、协议解析、能力映射、设备动作 | 业务流程、租户 UI |
 | **Application** | Server | 业务对象、绑定、规则、任务、领域 API | 直接访问串口或 Core 数据库 |
-| **Connector** | Edge 或 Server（运行时目标态） | MQTT / Webhook / 外部平台 / 通知 / 数据出口 | 定义核心设备模型 |
+| **Connector** | 网关（Edge）或中心服务（Server；运行时目标态） | MQTT / Webhook / 外部平台 / 通知 / 数据出口 | 定义核心设备模型 |
 
-UI 贡献不是独立的可执行插件类型：当前由 Descriptor/Capability schema 驱动通用设备视图与命令表单；任意页面 Schema 属于目标态。
+UI 贡献不是独立的可执行插件类型：当前由 Descriptor/Capability schema 驱动通用设备视图与操作表单；任意页面 Schema 属于目标态。
 
 插件源码入口与 Core 参考材料：
 
@@ -129,11 +129,11 @@ cp edge.example.yaml edge.yaml    # edge.yaml 是本地私有配置，不入库
 ```
 
 - **没有硬件**：直接用母版里的内置 `adapter: demo`（无需串口）。设备会真实上线并持续
-  上报进程内状态，命令真实执行并返回结果，可验证 Edge 接入、多机接入、命令状态和断线重连。
+  上报进程内状态，操作真实执行并返回结果，可验证网关接入、多机接入、操作状态和断线重连。
 - **有真实串口设备**：先安装并启用对应 Driver Plugin，再在 `edge.yaml` 启用
   `plugin_host`，填写 `port`（Windows `COM3`、Linux `/dev/ttyUSB0`、macOS
-  `/dev/cu.usbserial-*`）与 `adapter: stcb`。串口不存在时设备保持 offline，Edge 按
-  1→2→4→8…→30s 退避重试拔插自愈；demo 与外部 Driver 设备可挂在同一个 Edge 上共存。
+  `/dev/cu.usbserial-*`）与 `adapter: stcb`。串口不存在时设备保持 offline，网关按
+  1→2→4→8…→30s 退避重试拔插自愈；demo 与外部 Driver 设备可挂在同一个网关上共存。
 
 ### 3. 打开管理台
 
@@ -147,10 +147,10 @@ cp edge.example.yaml edge.yaml    # edge.yaml 是本地私有配置，不入库
   （旧 `/events` 路由自动跳转）、应用与插件 `/plugins`、实例详情 `/plugins/<id>`、网关 `/edges`、
   网关详情 `/edges/<edge>`、设置 `/settings`；`role=admin` 另有 `/admin`（成员、权限和访问令牌）。
 
-### 4. 看设备、下发命令、看事件
+### 4. 看设备、下发操作、看事件
 
-设备卡片出现后，在详情页的命令面板点按钮（白名单来自适配器：
-`demo` 为 `ping / set / dump / noop`；外部 Driver（如 `stcb`）的命令面由该 Driver 的 Capability actions 提供），或用 API：
+设备卡片出现后，在详情页的操作面板点按钮（白名单来自适配器：
+`demo` 为 `ping / set / dump / noop`；外部 Driver（如 `stcb`）的操作面由该 Driver 的 Capability actions 提供），或用 API：
 
 ```bash
 curl -fsS -X POST http://127.0.0.1:8080/api/devices/<edge_id>/<device_id>/commands \
@@ -161,7 +161,7 @@ curl -fsS "http://127.0.0.1:8080/api/events?limit=10"     # 事件流（新→�
 curl -fsS http://127.0.0.1:8080/api/edges                 # 网关在线状态
 ```
 
-命令状态是 `pending → sent → ok|failed|timeout`；90 秒未回执由后台 sweeper 标为 `timeout`，前端按 `command_id` 结算回执。事件与终态命令默认保留 30 天。
+操作状态是 `pending → sent → ok|failed|timeout`；90 秒未回执由后台 sweeper 标为 `timeout`，前端按 `command_id` 结算回执。事件与终态操作默认保留 30 天。
 
 ### 界面
 
@@ -204,9 +204,9 @@ curl -fsS http://127.0.0.1:8080/api/edges                 # 网关在线状态
 
 ---
 
-## 多台电脑接入同一个 Server（把 Edge 分发给别人）
+## 多台电脑接入同一个 Server（把网关分发给别人）
 
-这是 CloudPath 的常规用法：**一个 Server，任意多台电脑各自跑 Edge**，
+这是 CloudPath 的常规用法：**一个 Server，任意多台电脑各自跑网关**，
 每台电脑的设备互相隔离、独立控制。
 
 ### 管理员侧（一次性，每台接入电脑一份凭据）
@@ -223,7 +223,7 @@ curl -fsS http://127.0.0.1:8080/api/edges                 # 网关在线状态
 
    也可以在 WebUI `/admin` 页面创建。一人一令牌、一台电脑一个 `edge_id`。
 3. 把三样东西交给对方：`wss://<域名>/ws/edge`、令牌、约定好的 `edge_id`。
-4. 在 `/edges` 与 `/devices` 确认对方上线；按 `<edge_id>/<device_id>` 独立下发命令。
+4. 在 `/edges` 与 `/devices` 确认对方上线；按 `<edge_id>/<device_id>` 独立下发操作。
 
 ### 使用者侧（自己的电脑，不改任何代码）
 
@@ -247,14 +247,14 @@ curl -fsS http://127.0.0.1:8080/api/edges                 # 网关在线状态
    ```
 
 3. 设 `CLOUDPATH_TOKEN` 后运行二进制；看到 `connected to server` 即接入成功。
-4. 断网/合盖/拔线都不用管：Edge 自带指数退避重连，离线事件进有界缓冲、重连后回放。
+4. 断网/合盖/拔线都不用管：网关自带指数退避重连，离线事件进有界缓冲、重连后回放。
 
 ### 隔离与互不影响的实测事实
 
-- 设备全局键是 `<edge_id>/<device_id>`；两台 Edge 各带多台设备时，命令按设备键路由，不串线。
+- 设备全局键是 `<edge_id>/<device_id>`；两台网关各带多台设备时，操作按设备键路由，不串线。
 - `edge` scope 的令牌**只能**连 `/ws/edge`；用它请求 REST（如 `/api/devices`）会得到 `403`。
-- 一台 Edge 掉线不会踢掉另一台的连接，也不会改写对方的在线状态。
-- 跨租户互相不可见：设备/事件/命令/插件实例都按 `tenant_id` 隔离。
+- 一台网关掉线不会踢掉另一台的连接，也不会改写对方的在线状态。
+- 跨租户互相不可见：设备/事件/操作/运行实例都按 `tenant_id` 隔离。
 - 使用者若用租户令牌登录 WebUI 只有 REST（无 `/ws` 实时推送，页面定时刷新并诚实提示）；
   需要完整实时通道就为其创建账号，走账号密码登录。
 
@@ -272,8 +272,8 @@ curl -fsS http://127.0.0.1:8080/api/edges                 # 网关在线状态
 | `-webui` | `CLOUDPATH_WEBUI` | 空 | 开发模式前端静态目录（优先于内嵌产物） |
 | `-allowed-origins` | `CLOUDPATH_ALLOWED_ORIGINS` | 空 | 浏览器 WS Origin 白名单（host 模式，逗号分隔）；空=开发策略并告警 |
 | `-require-auth` | `CLOUDPATH_REQUIRE_AUTH` | false | 无用户时也强制读/写鉴权（L2 公网） |
-| `-retention-days` | `CLOUDPATH_RETENTION_DAYS` | 30 | 事件/终态命令保留天数 |
-| `-cmd-rate` | `CLOUDPATH_CMD_RATE` | 20 | 单设备每分钟命令上限，超限 429 |
+| `-retention-days` | `CLOUDPATH_RETENTION_DAYS` | 30 | 事件/终态操作保留天数 |
+| `-cmd-rate` | `CLOUDPATH_CMD_RATE` | 20 | 单设备每分钟操作上限，超限 429 |
 | `-login-rate` | `CLOUDPATH_LOGIN_RATE` | 5 | 单 IP 每分钟登录尝试上限，超限 429 + Retry-After |
 | `-session-days` | `CLOUDPATH_SESSION_DAYS` | 7 | 会话有效期（天） |
 | `-setup-token` | `CLOUDPATH_SETUP_TOKEN` | 空 | 一次性首装令牌（非回环来源 setup 必带） |
@@ -284,7 +284,7 @@ curl -fsS http://127.0.0.1:8080/api/edges                 # 网关在线状态
 
 | 字段 | 必填 | 默认 | 说明 |
 |---|---|---|---|
-| `server` | 是 | — | Edge 接入端点，末尾 `/ws/edge`；公网用 `wss://` |
+| `server` | 是 | — | 网关（Edge）接入端点，末尾 `/ws/edge`；公网用 `wss://` |
 | `token` | 服务端启用鉴权时必填 | — | 支持 `${ENV}` 展开 |
 | `edge_id` | 否 | 主机名（点号归一为 `-`） | 字母数字 `-_`，1–64，全局唯一 |
 | `poll_interval_s` | 否 | 5 | 状态转储轮询周期 |
@@ -297,16 +297,16 @@ curl -fsS http://127.0.0.1:8080/api/edges                 # 网关在线状态
 | `devices[].baud` | 否 | 9600 | 波特率 |
 | `plugin_host.enabled` | 否 | false | 外部 Driver 插件宿主开关 |
 | `plugin_host.root` | 否 | `plugins.d` | 插件安装根目录（支持 `${ENV}`） |
-| `plugin_host.state_dir` | 否 | `data/plugin-state` | 插件实例 desired-state 目录 |
+| `plugin_host.state_dir` | 否 | `data/plugin-state` | 运行实例 desired-state 目录 |
 | `plugin_host.tenant` | 否 | `default` | 外部 driver 实例租户 |
 | `plugin_host.required` | 否 | false | true=host 失败则 edge 启动失败 |
 | `plugin_host.lock` | 否 | `<root>/plugins.lock` | 锁文件（固定版本/digest/来源） |
 | `plugin_host.close_timeout_s` | 否 | 10 | 优雅关闭 deadline |
 
 > `plugin_host` 会按 desired-state 监督外部 driver 进程，并把 driver ID 桥接成
-> Edge 的 device.Adapter（Driver Protocol v1）：打开/观测/命令均走 DriverClient；
+> 网关的 device.Adapter（Driver Protocol v1）：打开/状态/操作均走 DriverClient；
 > 内置 adapter 与外部 driver ID 冲突会拒绝启动。外部 driver 实例的 `port` 等配置
-> 由 Server desired state（插件实例配置）注入，Edge 自身不伪造设备在线。
+> 由 Server desired state（运行实例配置）注入，网关自身不伪造设备在线。
 
 ### CLI（`cloudpath`）：插件 Registry 控制面
 
@@ -341,16 +341,16 @@ L1 内网/反代（`-allowed-origins` + 建议令牌 + TLS）→ L2 公网（令
 **Secret 边界（当前关键设计）**：
 
 - **Server 只见 `secret://<name>` handle**，配置与审计里出现的都是 handle，不是值；
-- **明文只存在于目标 Edge 本地**：由本地 provider 按 `<root>/<tenant>/<instance>/<name>`
+- **明文只存在于目标网关本地**：由本地 provider 按 `<root>/<tenant>/<instance>/<name>`
   解析（[internal/secrethandle](internal/secrethandle/secrethandle.go)），不缓存、不落日志、
   不跨租户/实例读取；handle 名严格校验，无法编码路径或平台技巧；
 - 插件必须在 manifest `permissions.secrets` 里**显式声明**才能解析对应 handle，未声明即 fail-closed；
 - 当前**不做中心 Secret Store**：Server 不保存、不转发任何明文。
 
-**输入与资源防护**：命令白名单由适配器声明；`args` ≤64 字节且不含换行/NUL；
+**输入与资源防护**：操作白名单由适配器声明；`args` ≤64 字节且不含换行/NUL；
 `edge_id` 形状校验；设备归属校验（edge 只能上报自己注册过的键）；请求体
 `MaxBytesReader(4096)`；WS 读上限（edge 64KB / 浏览器 4KB）；SPA 路径穿越防护；
-命令与登录限流（429 + `Retry-After`）。
+操作与登录限流（429 + `Retry-After`）。
 
 **响应头**：`X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`、
 `Referrer-Policy: no-referrer`、`Permissions-Policy`、带内联脚本 hash 的 CSP；
@@ -433,16 +433,16 @@ cloud-path/
 
 > 未实现的能力不写成现状。完整的当前实现与目标态见 [docs/architecture.md](docs/architecture.md)。
 
-当前实现包括单二进制 Server（内嵌 WebUI）、Edge、插件 CLI、账号/RBAC/多租户、
-设备监督与离线缓冲、外部 Driver Plugin Host、Application Runtime、命令与事件持久化、
+当前实现包括单二进制 Server（内嵌 WebUI）、网关（Edge）、插件 CLI、账号/RBAC/多租户、
+设备监督与离线缓冲、外部 Driver Plugin Host、Application Runtime、操作与事件持久化、
 Registry CLI、WebUI，以及发布和部署物料。代码和测试能证明软件行为，不等于真板验证。
 
 **真板证据边界**
 
 - 多实例多设备映射和串口注入已有协议级回归测试，但尚未完成同一外部 Driver 驱动多块真板、
-  覆盖拔插、重连和命令 ACK 的现场 E2E。
-- 现有 STC-B 单板链路可用于回归；新结论必须附真板日志、命令 ACK 和设备事件。
-- 命令和事件路由目前假设 `entity_id` 全局唯一，`(device_key, entity_id)` 尚未贯穿绑定与路由。
+  覆盖拔插、重连和操作 ACK 的现场 E2E。
+- 现有 STC-B 单板链路可用于回归；新结论必须附真板日志、操作 ACK 和设备事件。
+- 操作和事件路由目前假设 `entity_id` 全局唯一，`(device_key, entity_id)` 尚未贯穿绑定与路由。
   多板链路在协议和真板证据补齐前不算已验证。
 
 **尚未实现**
@@ -460,7 +460,7 @@ Connector/通知运行时、Transform/WASM、MQTT/Modbus 接入、远程 OTA、�
 | [docs/design.md](docs/design.md) | 技术设计：技术栈、进程模型、存储、行为边界、安全、测试 |
 | [webui/DESIGN.md](webui/DESIGN.md) | WebUI 呈现、排版、布局与交互设计 |
 | [docs/architecture.md](docs/architecture.md) | 架构总览与「当前实现 vs 目标态」 |
-| [docs/protocol.md](docs/protocol.md) | Edge ↔ Server 线上协议（信封、消息、DTO） |
+| [docs/protocol.md](docs/protocol.md) | 网关（Edge）↔ 中心服务（Server）线上协议（信封、消息、DTO） |
 | [docs/api.md](docs/api.md) | REST/WS API、鉴权三级模型、限流与安全头 |
 | [docs/security.md](docs/security.md) | 安全与运维基线（L0/L1/L2、令牌、检查表） |
 | [docs/deploy.md](docs/deploy.md) | 部署指南（本地/容器/反代） |
@@ -469,6 +469,7 @@ Connector/通知运行时、Transform/WASM、MQTT/Modbus 接入、远程 OTA、�
 | [docs/architecture/registry.md](docs/architecture/registry.md) | Registry 索引与 `cloudpath plugin` CLI |
 | [docs/architecture/how-to-build-driver.md](docs/architecture/how-to-build-driver.md) | 新增 Driver 的操作入口 |
 | [docs/architecture/capability-model.md](docs/architecture/capability-model.md) | Device/Entity/Capability 模型 |
+| [docs/architecture/name-lexicon.md](docs/architecture/name-lexicon.md) | 用户侧中文名称与机器标识映射 |
 | [docs/architecture/control-plane-sync.md](docs/architecture/control-plane-sync.md) | 声明式快照 + 单调 revision 同步语义 |
 | [docs/architecture/tenant-security-policy.md](docs/architecture/tenant-security-policy.md) | 租户配额、保留期与 secret 边界 |
 | [docs/architecture/repository-strategy.md](docs/architecture/repository-strategy.md) | 仓库组合、命名、拆仓条件与公开边界 |
