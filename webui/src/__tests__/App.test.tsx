@@ -148,6 +148,19 @@ describe('Schema 端点缺席时的设备详情页', () => {
   })
 })
 
+describe('旧业务路径兼容', () => {
+  it('/pillbox 重定向到插件 UI 的 /apps/pillbox 入口', async () => {
+    installFetch((url) => {
+      if (url === '/api/auth/me') return stubResponse(200, me)
+      if (url === '/api/plugins') return stubResponse(200, { plugins: [] })
+      if (url === '/api/plugin-instances') return stubResponse(200, { instances: [] })
+      return stubResponse(404, {})
+    })
+    renderApp('/pillbox')
+    expect(await screen.findByText('应用不存在')).toBeInTheDocument()
+  })
+})
+
 describe('渲染崩溃兜底', () => {
   it('ErrorBoundary 把异常同步成可读卡片（不白屏）', async () => {
     const Boom = () => { throw new Error('组件炸了') }

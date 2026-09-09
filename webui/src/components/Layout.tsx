@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, Cpu, Activity, LogOut, Network, Settings, Monitor, Puzzle, ShieldCheck, Sun, Moon,
-  ChevronDown, UserRound, WifiOff,
+  ChevronDown, UserRound, WifiOff, Boxes, Bell, Music, Thermometer, Megaphone, Pill, AppWindow,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { Logo } from './Logo'
 import { StatusDot } from './ui'
 import { ToastViewport } from './Toast'
@@ -14,6 +15,8 @@ import { useLive } from '@/store/ws'
 import { getTheme, setTheme, type ThemeMode } from '@/lib/theme'
 import { roleLabel } from '@/lib/format'
 import { logout, useAuth, useIsAdmin } from '@/store/auth'
+import { usePluginCatalog, usePluginInstances } from '@/hooks/usePlugins'
+import { applicationUIReadable, buildApplicationNavigation } from '@/lib/plugin-ui'
 
 /**
  * 产品级信息架构（固定顺序）：
@@ -33,6 +36,16 @@ const APPS_NAV = [{ to: '/plugins', label: '应用与插件', icon: Puzzle, end:
 const ADMIN_NAV = { to: '/admin', label: '管理', icon: ShieldCheck, end: false }
 
 const TAIL_NAV = [{ to: '/settings', label: '设置', icon: Settings, end: false }]
+
+const APP_ICONS: Record<string, LucideIcon> = {
+  pill: Pill, pillbox: Pill, bell: Bell, music: Music, thermometer: Thermometer,
+  megaphone: Megaphone, 'service-desk': Megaphone, environment: Thermometer,
+  box: Boxes, application: AppWindow,
+}
+
+function appIcon(name: string | undefined): LucideIcon {
+  return name ? APP_ICONS[name] ?? Puzzle : Puzzle
+}
 
 function navCls(active: boolean): string {
   return cn(
@@ -173,9 +186,17 @@ function OfflineBanner() {
 export default function Layout() {
   const location = useLocation()
   const isAdmin = useIsAdmin()
+  const authStatus = useAuth((state) => state.status)
+  const user = useAuth((state) => state.user)
   const [moreOpen, setMoreOpen] = useState(false)
   const moreRef = useRef<HTMLDivElement>(null)
-  const moreNav = isAdmin ? [...APPS_NAV, ADMIN_NAV, ...TAIL_NAV] : [...APPS_NAV, ...TAIL_NAV]
+  const { plugins } = usePluginCatalog()
+  const { instances } = usePluginInstances()
+  const readable = applicationUIReadable(user, authStatus)
+  const appNav = useMemo(() => buildApplicationNavigation(plugins, instances, readable).map((item) => ({
+    to: item.to, label: item.label, icon: appIcon(item.icon), end: false,
+  })), [instances, plugins, readable])
+  const moreNav = isAdmin ? [...appNav, ...APPS_NAV, ADMIN_NAV, ...TAIL_NAV] : [...appNav, ...APPS_NAV, ...TAIL_NAV]
   const nav = [...CORE_NAV, ...moreNav]
   const moreActive = moreNav.some(({ to }) => location.pathname === to || location.pathname.startsWith(`${to}/`))
 

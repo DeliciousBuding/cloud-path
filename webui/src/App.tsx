@@ -19,6 +19,7 @@ const Pillbox = lazy(() => import('@/pages/Pillbox'))
 const Activity = lazy(() => import('@/pages/Activity'))
 const Plugins = lazy(() => import('@/pages/Plugins'))
 const PluginInstanceDetail = lazy(() => import('@/pages/PluginInstanceDetail'))
+const ApplicationPage = lazy(() => import('@/pages/ApplicationPage'))
 const Edges = lazy(() => import('@/pages/Edges'))
 const EdgeDetail = lazy(() => import('@/pages/EdgeDetail'))
 const Settings = lazy(() => import('@/pages/Settings'))
@@ -86,8 +87,10 @@ export default function App() {
               <Route index element={<Overview />} />
               <Route path="devices" element={<Devices />} />
               <Route path="devices/:edgeId/:deviceId" element={<DeviceDetail />} />
-              <Route path="pillbox" element={<Pillbox />} />
+              <Route path="pillbox" element={<Navigate to="/apps/pillbox" replace />} />
               <Route path="pillbox/:edgeId/:deviceId" element={<Pillbox />} />
+              <Route path="apps/:appRoute" element={<ApplicationPage />} />
+              <Route path="apps/:appRoute/:pageId" element={<ApplicationPage />} />
               {/* 活动（事件 + 命令历史）；/events 是旧路径，保留重定向不断链 */}
               <Route path="activity" element={<Activity />} />
               <Route path="events" element={<Navigate to="/activity" replace />} />

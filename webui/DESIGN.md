@@ -86,8 +86,10 @@ Application Plane 的展示入口位于运行实例详情。应用目录声明 `
 
 控制请求原样使用投影的 `v.id`（可能为裸标识，也可能带节点前缀）；records / bindings / jobs
 三个只读请求始终使用 `desired.instance_id`。viewer 可读三个分区，但不能新建、编辑、启停、重新
-下发或删除实例；切换为只读角色会关闭列表页已打开的创建或编辑表单。应用数据需要已认证且
-`tenant_id>0` 的租户身份；服务令牌的 `user.id=0` 是合法身份，开放访问不等于应用数据授权。
+下发或删除实例；切换为只读角色会关闭列表页已打开的创建或编辑表单。应用读面跟随 `authReady`：
+`open`（L0/认证探针不可用）可读但强制只读，账号模式仍要求合法 `tenant_id>0`；服务令牌的
+`user.id=0` 是合法身份。写操作继续只允许已登录的 operator/admin。插件业务导航、`/apps/:route`
+路由和自定义 iframe bridge 的契约见 `webui/src/components/plugin-ui/README.md`。
 
 普通视图展示可辨认的结构化字段、公开 Descriptor / Capability 名称与本地化时间。已知通用字段沿用
 公共词汇；无展示声明的字段保留原字段名，不能用“数据项 1”掩盖含义。标题/名称、状态类字段与已填
