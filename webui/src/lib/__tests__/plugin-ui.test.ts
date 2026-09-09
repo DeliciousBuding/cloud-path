@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applicationUIReadable, buildApplicationNavigation, normalizePluginUI, pluginUIAssetURL,
-  resolveApplicationRoute,
+  resolveApplicationRoute, resolveDriverDeviceUI,
 } from '@/lib/plugin-ui'
 import { normalizeCatalog } from '@/lib/plugins'
 import type { PluginCatalogView, PluginInstanceView } from '@/lib/types'
@@ -122,5 +122,35 @@ describe('application navigation and route resolution', () => {
     expect(applicationUIReadable(null, 'out')).toBe(false)
     expect(applicationUIReadable({ id: 1, username: 'u', name: 'U', role: 'viewer', tenant_id: 1, tenant_slug: 't' }, 'in')).toBe(true)
     expect(applicationUIReadable({ id: 1, username: 'u', name: 'U', role: 'viewer', tenant_id: 0, tenant_slug: 't' }, 'in')).toBe(false)
+  })
+})
+
+describe('Driver device UI resolution', () => {
+  const driver = plugin({
+    id: 'example.driver',
+    kind: 'driver',
+    contributes: {
+      drivers: [{
+        id: 'stcb', title: 'STC-B Driver',
+        ui: { apiVersion: 1, device: { sections: [{ type: 'status', source: 'device' }] } },
+      }],
+    },
+  })
+
+  it('matches the exact adapter through a verified Driver contribution', () => {
+    expect(resolveDriverDeviceUI([driver], 'stcb')?.plugin.id).toBe('example.driver')
+    expect(resolveDriverDeviceUI([driver], 'other')).toBeUndefined()
+    expect(resolveDriverDeviceUI([{ ...driver, verified: false }], 'stcb')).toBeUndefined()
+    expect(resolveDriverDeviceUI([{ ...driver, kind: 'application' }], 'stcb')).toBeUndefined()
+  })
+
+  it('fails closed on ambiguous matches and invalid section sources', () => {
+    const second = { ...driver, id: 'example.driver-two' }
+    expect(resolveDriverDeviceUI([driver, second], 'stcb')).toBeUndefined()
+    const invalidSource = plugin({
+      id: 'example.driver-bad', kind: 'driver',
+      contributes: { drivers: [{ id: 'stcb', ui: { apiVersion: 1, device: { sections: [{ type: 'status', source: 'records' }] } } }] },
+    })
+    expect(resolveDriverDeviceUI([invalidSource], 'stcb')).toBeUndefined()
   })
 })
