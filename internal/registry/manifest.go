@@ -51,12 +51,13 @@ type Contributes struct {
 
 // DriverContribution is one driver provided by a Driver plugin.
 type DriverContribution struct {
-	ID                string `yaml:"id" json:"id"`
-	Title             string `yaml:"title,omitempty" json:"title,omitempty"`
-	Descriptor        string `yaml:"descriptor,omitempty" json:"descriptor,omitempty"`
-	ConfigSchema      string `yaml:"configSchema,omitempty" json:"configSchema,omitempty"`
-	Discovery         string `yaml:"discovery,omitempty" json:"discovery,omitempty"`
-	CapabilityCatalog string `yaml:"capabilityCatalog,omitempty" json:"capabilityCatalog,omitempty"`
+	ID                string    `yaml:"id" json:"id"`
+	Title             string    `yaml:"title,omitempty" json:"title,omitempty"`
+	Descriptor        string    `yaml:"descriptor,omitempty" json:"descriptor,omitempty"`
+	ConfigSchema      string    `yaml:"configSchema,omitempty" json:"configSchema,omitempty"`
+	Discovery         string    `yaml:"discovery,omitempty" json:"discovery,omitempty"`
+	CapabilityCatalog string    `yaml:"capabilityCatalog,omitempty" json:"capabilityCatalog,omitempty"`
+	UI                *PluginUI `yaml:"ui,omitempty" json:"ui,omitempty"`
 }
 
 // ApplicationContribution is one application provided by an Application plugin.
@@ -64,6 +65,7 @@ type ApplicationContribution struct {
 	ID           string           `yaml:"id" json:"id"`
 	Title        string           `yaml:"title,omitempty" json:"title,omitempty"`
 	Requirements []map[string]any `yaml:"requirements,omitempty" json:"requirements,omitempty"`
+	UI           *PluginUI        `yaml:"ui,omitempty" json:"ui,omitempty"`
 }
 
 // ConnectorContribution is one connector provided by a Connector plugin.
@@ -111,6 +113,9 @@ func ValidateManifest(data []byte, schema []byte) (*Manifest, error) {
 		return nil, fmt.Errorf("load manifest schema: %w", err)
 	}
 	if err := validator.Validate(raw); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidManifest, err)
+	}
+	if err := validateManifestUISchema(raw); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidManifest, err)
 	}
 	m, err := ParseManifest(data)
@@ -247,6 +252,9 @@ func ValidateContributions(m *Manifest) error {
 		}
 	default:
 		return fmt.Errorf("unknown manifest kind %q for contributes", m.Kind)
+	}
+	if err := validateManifestUI(m); err != nil {
+		return err
 	}
 	return nil
 }

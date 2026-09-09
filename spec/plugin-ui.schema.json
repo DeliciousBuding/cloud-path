@@ -5,6 +5,7 @@
   "description": "Declarative UI contribution for an Application or Driver plugin. Core validates and renders allowlisted sections; arbitrary scripts are not allowed.",
   "type": "object",
   "required": ["apiVersion"],
+  "additionalProperties": false,
   "properties": {
     "apiVersion": {"const": 1},
     "navigation": {"$ref": "#/$defs/navigation"},
@@ -51,7 +52,7 @@
         "presentation": {"enum": ["list", "timeline", "table", "cards"]},
         "text": {"type": "string", "maxLength": 4000},
         "entry": {"type": "string", "maxLength": 240},
-        "scopes": {"type": "array", "maxItems": 16, "items": {"type": "string", "maxLength": 80}},
+        "scopes": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"enum": ["instance.read", "jobs.run", "records.read", "bindings.read", "config.write"]}},
         "fields": {"type": "array", "maxItems": 64, "items": {"type": "object"}}
       },
       "additionalProperties": false

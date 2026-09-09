@@ -7,6 +7,8 @@
 // observed 为 unknown，绝不根据 desired_enabled 虚报 HEALTHY。
 package plugincatalog
 
+import "github.com/DeliciousBuding/cloud-path/internal/api"
+
 // PluginView 是单个已安装插件的脱敏事实视图。
 type PluginView struct {
 	ID            string          `json:"id"`
@@ -38,19 +40,21 @@ type ContributesView struct {
 
 // DriverContributionView 是一个 Driver 贡献。
 type DriverContributionView struct {
-	ID                string `json:"id"`
-	Title             string `json:"title,omitempty"`
-	Descriptor        string `json:"descriptor,omitempty"`
-	ConfigSchema      string `json:"configSchema,omitempty"`
-	Discovery         string `json:"discovery,omitempty"`
-	CapabilityCatalog string `json:"capabilityCatalog,omitempty"`
+	ID                string            `json:"id"`
+	Title             string            `json:"title,omitempty"`
+	Descriptor        string            `json:"descriptor,omitempty"`
+	ConfigSchema      string            `json:"configSchema,omitempty"`
+	Discovery         string            `json:"discovery,omitempty"`
+	CapabilityCatalog string            `json:"capabilityCatalog,omitempty"`
+	UI                *api.PluginUIData `json:"ui,omitempty"`
 }
 
 // ApplicationContributionView 是一个 Application 贡献。requirements 可能携带任意
 // 载荷，为避免泄漏不暴露，仅保留 id/title。
 type ApplicationContributionView struct {
-	ID    string `json:"id"`
-	Title string `json:"title,omitempty"`
+	ID    string            `json:"id"`
+	Title string            `json:"title,omitempty"`
+	UI    *api.PluginUIData `json:"ui,omitempty"`
 }
 
 // ConnectorContributionView 是一个 Connector 贡献。

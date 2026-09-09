@@ -52,6 +52,7 @@
 | `GET /api/overview` | 读 | Overview 首屏聚合读面（§5.1） |
 | `GET /api/plugins` | 读 | 插件目录（§5.2） |
 | `GET /api/plugins/{pluginID}` | 读 | 单插件视图（§5.2） |
+| `GET /api/plugin-ui/assets/{pluginID}/{version}/{path:.*}` | 读 | 插件自定义 UI 静态资产（§5.2.1） |
 | `GET /api/plugin-instances` | 读 | 插件实例列表（§5.3） |
 | `GET /api/plugin-instances/{id}` | 读 | 单插件实例（§5.3） |
 | `GET /api/plugin-instances/{id}/records` | 读 | 实例领域记录（§5.5） |
@@ -154,12 +155,28 @@ WebUI 首屏一次性聚合。所有计数来自真实 Edge 上报与 Server 权
 
 默认 catalog 合并当前租户的 Edge 上报安装物与中心 AppHost 的 Application 安装物。
 Edge 安装物按租户隔离；AppHost 插件目录是 Server 级安装事实，对所有已认证租户可见。
-同一 `plugin_id` 只返回一个 `PluginView`：Edge 上报优先于 AppHost；同源多版本按
-major/minor/patch 取最高，版本相同按 edge id 稳定去重；列表与单查询使用同一规范化结果。
+同一 `plugin_id` 只返回一个 `PluginView`：先按 major/minor/patch 取最高版本；
+版本相同再优先 Edge 上报事实，最后按 edge id 稳定去重；列表与单查询使用同一规范化结果。
+因此新版 AppHost Application 不会被旧 Edge 安装物遮蔽。
 AppHost 的 `plugins.lock` 不存在按空安装集处理；lock 解析失败、`plugin.yaml` 读取失败、
 lock/manifest ID 或版本不一致时返回 `500`，不静默隐藏。`PluginView` 只暴露白名单字段：
 `Verified`/`Digest` 来自 lockfile，`Permissions`/`Contributes` 来自 manifest；entrypoint、
 descriptor、configSchema、capabilityCatalog 等本地路径不进入响应。
+
+`Contributes.applications[].ui` / `Contributes.drivers[].ui` 是白名单投影的声明式 UI
+贡献（`apiVersion/navigation/pages/device/sections`）。自定义 section 的 `entry` 只能是
+插件包内 `ui/` 下的相对路径；原始 JSON、entrypoint、安装目录和 secret 不返回。
+
+#### 5.2.1 插件 UI 静态资产（读）
+
+`GET /api/plugin-ui/assets/{pluginID}/{version}/{path:.*}` 只服务中心 AppHost 本地安装、
+且 manifest 已声明至少一个 `custom` section 的 Application 插件资产。`path` 必须位于
+插件包 `ui/` 子树，只允许 HTML/CSS/JS/JSON/SVG/图片/字体等固定 MIME 白名单，单文件上限
+5 MiB；绝对路径、`..`、反斜杠、URL、symlink 逃逸、未声明 custom entry、版本不匹配和
+不可见插件一律 fail-closed（通常 `404`）。响应固定 `Cache-Control: no-store`，
+`X-Frame-Options: SAMEORIGIN`，CSP 只允许同源静态资源且 `connect-src 'none'`；资产内容
+不包含本机路径。账号模式必须认证；L0 open 模式允许匿名读取，但 catalog 按空租户
+可见性校验，路径与 MIME 限制不变。若本地没有该插件包（例如 Edge-only 安装），返回 `404`。
 
 ### 5.3 插件实例（读）
 

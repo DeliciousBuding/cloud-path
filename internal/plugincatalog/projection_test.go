@@ -31,7 +31,9 @@ func sampleProjection() stubProjection {
 				Digest: "sha256:aa", Verified: true, VerifiedPublisher: "acme",
 				Permissions: api.PluginPermissionsData{Secrets: []string{"api_token"}},
 				Contributions: api.PluginContributionsData{Drivers: []api.PluginDriverContributionData{
-					{ID: "stcb", Title: "STC-B Driver", Discovery: "manual"},
+					{ID: "stcb", Title: "STC-B Driver", Discovery: "manual", UI: &api.PluginUIData{
+						APIVersion: 1, Device: &api.PluginUIDeviceData{Sections: []api.PluginUISectionData{{Type: "status"}}},
+					}},
 				}},
 			}},
 			"tenant-b": {{PluginID: "io.github.other.app", Version: "1.0.0", Kind: "Application"}},
@@ -151,7 +153,8 @@ func TestProjectionCatalogReadsRealSource(t *testing.T) {
 	}
 	p := plugins[0]
 	if p.ID != "io.github.acme.driver" || p.Kind != "Driver" || !p.Verified ||
-		p.Permissions.Secrets[0] != "api_token" || p.Contributes.Drivers[0].ID != "stcb" {
+		p.Permissions.Secrets[0] != "api_token" || p.Contributes.Drivers[0].ID != "stcb" ||
+		p.Contributes.Drivers[0].UI == nil || p.Contributes.Drivers[0].UI.Device == nil {
 		t.Fatalf("plugin 视图字段错误: %+v", p)
 	}
 	one, ok, err := c.Plugin("tenant-a", "io.github.acme.driver")
@@ -224,5 +227,51 @@ func TestSanitizeDetail(t *testing.T) {
 	// 正常错误文本不受影响（不得把有用信息全抹掉）。
 	if got := SanitizeDetail("plugin exited with code 3"); got != "plugin exited with code 3" {
 		t.Fatalf("普通摘要被误伤: %q", got)
+	}
+}
+
+func TestProjectionCatalogProjectsUIAndRejectsRouteConflict(t *testing.T) {
+	ui := &api.PluginUIData{
+		APIVersion: 1,
+		Navigation: &api.PluginUINavigationData{Title: "药盒提醒", Route: "pillbox"},
+		Pages: []api.PluginUIPageData{{
+			ID: "home", Title: "药盒提醒",
+			Sections: []api.PluginUISectionData{{Type: "status"}, {Type: "custom", Entry: "ui/index.html", Scopes: []string{"instance.read"}, Fields: []map[string]any{{"label": "C:\\secret\\ui"}}}},
+		}},
+	}
+	src := stubProjection{installations: map[string][]api.PluginInstallationStatusData{
+		"tenant-a": {{
+			PluginID: "io.test.app", Version: "1.0.0", Kind: "Application", Protocol: 1,
+			Contributions: api.PluginContributionsData{Applications: []api.PluginApplicationContributionData{{ID: "app", UI: ui}}},
+		}},
+	}}
+	c := NewProjectionCatalog(src)
+	views, err := c.Plugins("tenant-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(views) != 1 || views[0].Contributes.Applications[0].UI == nil || views[0].Contributes.Applications[0].UI.Navigation.Route != "pillbox" {
+		t.Fatalf("UI 未投影: %+v", views)
+	}
+	views[0].Contributes.Applications[0].UI.Pages[0].Sections[0].Type = "mutated"
+	again, err := c.Plugins("tenant-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again[0].Contributes.Applications[0].UI.Pages[0].Sections[0].Type != "status" {
+		t.Fatal("UI 投影必须深拷贝，响应改动不得污染源数据")
+	}
+	if got := again[0].Contributes.Applications[0].UI.Pages[0].Sections[1].Fields[0]["label"]; got != "[path]" {
+		t.Fatalf("UI fields 中的本机路径必须脱敏: %v", got)
+	}
+
+	conflict := stubProjection{installations: map[string][]api.PluginInstallationStatusData{
+		"tenant-a": {
+			{PluginID: "io.test.app1", Version: "1.0.0", Kind: "Application", Contributions: api.PluginContributionsData{Applications: []api.PluginApplicationContributionData{{ID: "one", UI: ui}}}},
+			{PluginID: "io.test.app2", Version: "1.0.0", Kind: "Application", Contributions: api.PluginContributionsData{Applications: []api.PluginApplicationContributionData{{ID: "two", UI: ui}}}},
+		},
+	}}
+	if _, err := NewProjectionCatalog(conflict).Plugins("tenant-a"); err == nil || !strings.Contains(err.Error(), "conflict") {
+		t.Fatalf("重复 UI route 必须 fail closed: %v", err)
 	}
 }

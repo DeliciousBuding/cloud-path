@@ -92,7 +92,7 @@ compatibility:
 }
 
 // TestPluginsAPICanonicalizesEdgeAndAppHost 锁定列表与详情的同一份去重事实：
-// Edge 上报优先于 AppHost；同一 plugin_id 多 Edge 重版取最高 semver；
+// 同一 plugin_id 先取最高 semver；同版本 Edge 优先于 AppHost；
 // AppHost Application 目录是 Server 级事实，对所有租户可见。
 func TestPluginsAPICanonicalizesEdgeAndAppHost(t *testing.T) {
 	srv, _, _, mem, a, b := setupPluginPlane(t)
@@ -102,8 +102,12 @@ func TestPluginsAPICanonicalizesEdgeAndAppHost(t *testing.T) {
 	seedInstallations(t, srv, mem, a, "e2", []api.PluginInstallationStatusData{{
 		PluginID: "io.test.shared", Version: "2.0.0", Kind: "Driver", Protocol: 1, Digest: "edge-high",
 	}})
+	seedInstallations(t, srv, mem, a, "e2", []api.PluginInstallationStatusData{{
+		PluginID: "io.test.same", Version: "1.0.0", Kind: "Driver", Protocol: 1, Digest: "edge-same",
+	}})
 	installAppHostManifests(t, srv, map[string]string{
 		"io.test.shared":      applicationManifest("io.test.shared", "3.0.0"),
+		"io.test.same":        applicationManifest("io.test.same", "1.0.0"),
 		"io.test.server-only": applicationManifest("io.test.server-only", "4.0.0"),
 	})
 
@@ -113,8 +117,12 @@ func TestPluginsAPICanonicalizesEdgeAndAppHost(t *testing.T) {
 		byID[view.ID] = view
 	}
 	sharedA, ok := byID["io.test.shared"]
-	if !ok || sharedA.Version != "2.0.0" || sharedA.Kind != "Driver" || sharedA.Digest != "edge-high" {
-		t.Fatalf("Edge 应优先且同源取最高版本: %+v", sharedA)
+	if !ok || sharedA.Version != "3.0.0" || sharedA.Kind != "Application" {
+		t.Fatalf("跨来源应取最高版本，AppHost 新版不能被旧 Edge 遮蔽: %+v", sharedA)
+	}
+	sameA, ok := byID["io.test.same"]
+	if !ok || sameA.Version != "1.0.0" || sameA.Kind != "Driver" || sameA.Digest != "edge-same" {
+		t.Fatalf("同版本应优先 Edge 事实: %+v", sameA)
 	}
 	if view, ok := byID["io.test.server-only"]; !ok || view.Version != "4.0.0" || view.Kind != "Application" {
 		t.Fatalf("AppHost 插件缺失: %+v", byID)
@@ -226,6 +234,19 @@ contributes:
   applications:
     - id: app.test
       title: Test App
+      ui:
+        apiVersion: 1
+        navigation:
+          title: Test App
+          route: test-app
+        pages:
+          - id: home
+            title: Test App
+            sections:
+              - type: status
+              - type: custom
+                entry: ui/index.html
+                scopes: [instance.read]
   drivers:
     - id: driver.test
       title: Test Driver
@@ -252,6 +273,10 @@ contributes:
 		len(view.Contributes.Applications) != 1 || len(view.Contributes.Drivers) != 1 ||
 		len(view.Contributes.Connectors) != 1 {
 		t.Fatalf("公开字段缺失: %+v", view)
+	}
+	if view.Contributes.Applications[0].UI == nil || view.Contributes.Applications[0].UI.Navigation == nil ||
+		view.Contributes.Applications[0].UI.Navigation.Route != "test-app" {
+		t.Fatalf("Application UI 未投影: %+v", view.Contributes.Applications[0])
 	}
 	if view.Contributes.Drivers[0].Descriptor != "" || view.Contributes.Drivers[0].ConfigSchema != "" ||
 		view.Contributes.Drivers[0].CapabilityCatalog != "" {

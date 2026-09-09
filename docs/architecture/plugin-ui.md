@@ -74,7 +74,7 @@ contributes:
               source: diagnostics
 ```
 
-Connector 暂不接受 `ui`；声明后安装/目录可以披露，但运行时 fail-closed。
+Connector 暂不接受 `ui`；manifest 校验直接拒绝，避免把未实现的 UI 运行时伪装成可用。
 
 ## 4. 路由与导航
 
@@ -187,6 +187,25 @@ PATCH /api/plugin-instances/{id}
 - Core 按 `scopes` 代理白名单 API，并对 tenant、instance、RBAC 再校验。
 - 自定义页面失败时显示错误边界和返回业务页入口，不拖垮主 WebUI。
 - 没有 `entry` 或资产不可用时 fail-closed，显示“自定义界面不可用”。
+
+### 自定义资产端点
+
+Core 提供：
+
+```text
+GET /api/plugin-ui/assets/{pluginID}/{version}/{path:.*}
+```
+
+- 只服务中心 AppHost 本地安装、且 manifest 已声明至少一个 `custom` section 的 Application
+  插件资产；
+- `path` 只能位于插件包 `ui/` 子树，拒绝绝对路径、`..`、反斜杠、URL、symlink 逃逸；
+- 只允许 HTML/CSS/JS/JSON/SVG/图片/字体等固定 MIME 白名单，单文件上限 5 MiB；
+- 版本必须与请求插件目录的 lock/manifest 一致；
+- 账号模式必须认证；L0 open 模式允许匿名读取，但仍按空租户做 catalog 可见性校验；
+- 响应固定 `Cache-Control: no-store`、`X-Frame-Options: SAMEORIGIN` 和仅允许同源静态
+  资源的 CSP，`connect-src 'none'`；
+- 未安装、未声明 custom entry、版本不匹配、跨租户不可见或本地包不存在（例如 Edge-only）
+  一律 `404`；错误响应不包含本机路径。
 
 自定义 UI 是逃生通道，不是默认路径。药盒、呼叫、环境、音乐、告警优先用声明式 section 实现。
 

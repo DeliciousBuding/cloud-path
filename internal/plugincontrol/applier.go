@@ -218,23 +218,7 @@ func (h *Host) InstallationStatus() ([]api.PluginInstallationStatusData, error) 
 			Secrets:    append([]string(nil), manifest.Permissions.Secrets...),
 		}
 		row.Capabilities = append([]string(nil), manifest.Capabilities...)
-		if c := manifest.Contributes; c != nil {
-			for _, d := range c.Drivers {
-				row.Contributions.Drivers = append(row.Contributions.Drivers, api.PluginDriverContributionData{
-					ID: d.ID, Title: d.Title, Discovery: d.Discovery,
-				})
-			}
-			for _, a := range c.Applications {
-				row.Contributions.Applications = append(row.Contributions.Applications, api.PluginApplicationContributionData{
-					ID: a.ID, Title: a.Title,
-				})
-			}
-			for _, c2 := range c.Connectors {
-				row.Contributions.Connectors = append(row.Contributions.Connectors, api.PluginConnectorContributionData{
-					ID: c2.ID, Title: c2.Title, Direction: c2.Direction, Host: c2.Host,
-				})
-			}
-		}
+		row.Contributions = manifest.PublicContributions()
 		out = append(out, row)
 	}
 	sort.Slice(out, func(i, j int) bool {

@@ -14,3 +14,8 @@ import _ "embed"
 //
 //go:embed spec/plugin-manifest.schema.json
 var PluginManifestSchema []byte
+
+// PluginUISchema 是 spec/plugin-ui.schema.json 的嵌入副本，供 manifest UI 贡献校验使用。
+//
+//go:embed spec/plugin-ui.schema.json
+var PluginUISchema []byte

@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	cloudpath "github.com/DeliciousBuding/cloud-path"
 )
 
 // 发布的二进制必须在没有仓库 checkout 的机器上也能校验 manifest：
@@ -132,5 +134,16 @@ func TestEmbeddedSchemaStillRejectsInvalidManifest(t *testing.T) {
 		if e.Name() != "plugins.lock" && strings.HasPrefix(e.Name(), "not-a-valid") {
 			t.Fatalf("rejected install left plugin dir %q", e.Name())
 		}
+	}
+}
+
+func TestEmbeddedUISchemaMatchesRepoSSOT(t *testing.T) {
+	repo := filepath.Join("..", "..", "spec", "plugin-ui.schema.json")
+	want, err := os.ReadFile(repo)
+	if err != nil {
+		t.Skipf("repo UI schema unavailable: %v", err)
+	}
+	if string(cloudpath.PluginUISchema) != string(want) {
+		t.Fatal("embedded plugin UI schema drifted from spec/plugin-ui.schema.json")
 	}
 }
