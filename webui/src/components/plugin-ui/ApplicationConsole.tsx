@@ -3,6 +3,7 @@
 // It reuses the existing Application Plane reads/actions; the UI page only
 // decides which white-listed sections are shown and in what order.
 import { Link } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { Panel } from '@/components/ui'
 import { useApplicationPlane } from '@/hooks/useApplicationPlane'
 import { applicationRunningState } from '@/lib/application-plane'
@@ -16,6 +17,7 @@ export function ApplicationConsole({ instance, catalog, page, readOnly, lifecycl
   readOnly: boolean
   lifecycleKey: string
 }) {
+  const { t } = useTranslation('plugin')
   const { records, bindings, jobs, presentation, status, running, canRead } = useApplicationPlane(
     instance.desired.instance_id, 0, '', lifecycleKey,
   )
@@ -25,18 +27,18 @@ export function ApplicationConsole({ instance, catalog, page, readOnly, lifecycl
     : runningState === 'unknown' ? undefined : false
 
   if (!canRead) {
-    return <Panel title="应用数据">
-      <p className="text-sm text-ink-2">登录后可查看当前组织的应用数据、设置和操作。</p>
-      <Link to="/login" className="btn btn-ghost mt-3">前往登录</Link>
+    return <Panel title={t('console.appData')}>
+      <p className="text-sm text-ink-2">{t('console.loginHint')}</p>
+      <Link to="/login" className="btn btn-ghost mt-3">{t('console.login')}</Link>
     </Panel>
   }
 
   return <div className="space-y-5" aria-label={page.title}>
     {!instance.desired.enabled && <div role="status" className="rounded-lg bg-warn/12 px-3.5 py-3 text-sm text-warn">
-      这个应用已停用。你仍可查看历史记录和设置；操作按钮不会执行。
+      {t('console.disabled')}
     </div>}
     {instance.stale && <div role="status" className="rounded-lg bg-warn/12 px-3.5 py-3 text-sm text-warn">
-      当前运行状态已过期，页面以最近一次收到的状态为准。
+      {t('console.stale')}
     </div>}
     {page.sections.map((section, index) => <ApplicationSection
       key={`${section.type}:${index}`}
@@ -52,7 +54,7 @@ export function ApplicationConsole({ instance, catalog, page, readOnly, lifecycl
       lifecycleKey={lifecycleKey}
     />)}
     <p role="status" className="text-xs text-ink-3">
-      {status === 'open' ? '实时更新已连接' : status === 'connecting' ? '正在连接实时更新，暂以定时同步为准' : '实时更新已断开，暂以定时同步为准'}
+      {status === 'open' ? t('console.realtimeOpen') : status === 'connecting' ? t('console.realtimeConnecting') : t('console.realtimeClosed')}
     </p>
   </div>
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Ban, Boxes, Layers, PackagePlus, PackageOpen, Plus, Puzzle, Server, ShieldCheck,
 } from 'lucide-react'
@@ -32,16 +33,6 @@ function StatusPill({ label, count, tone }: { label: string; count: number; tone
   </span>
 }
 
-const KIND_LABEL: Record<string, string> = {
-  application: '应用',
-  driver: '驱动',
-  connector: '连接器',
-}
-
-function kindLabel(kind: string | undefined): string {
-  return kind ? (KIND_LABEL[kind] ?? kind) : '未知类型'
-}
-
 /**
  * 插件面二分：
  *   目录 Catalog   = 插件声明事实（GET /api/plugins）：kind/version/digest/verified/permissions/contributes
@@ -50,7 +41,15 @@ function kindLabel(kind: string | undefined): string {
  * 不渲染目录里的 source 字段：它可能是安装来源的本机路径，属于不得外泄的信息。
  */
 export default function Plugins() {
-  usePageTitle('应用与插件')
+  const { t } = useTranslation('plugins')
+  usePageTitle(t('page.title'))
+
+  function kindLabel(kind: string | undefined): string {
+    const key = kind === 'application' ? 'page.kindApplication'
+      : kind === 'driver' ? 'page.kindDriver'
+        : kind === 'connector' ? 'page.kindConnector' : undefined
+    return key ? t(key) : kind || t('page.kindUnknown')
+  }
 
   const [tab, setTab] = useState<Tab>('instances')
   const [edgeFilter, setEdgeFilter] = useState('all')
@@ -94,8 +93,8 @@ export default function Plugins() {
   }, [edgeFilter, edgeOptions])
 
   const tabs: TabItem<Tab>[] = [
-    { value: 'instances', label: '运行实例', icon: <Boxes size={13} />, count: instances.length },
-    { value: 'catalog', label: '可用插件', icon: <Puzzle size={13} />, count: plugins.length },
+    { value: 'instances', label: t('page.tabInstances'), icon: <Boxes size={13} />, count: instances.length },
+    { value: 'catalog', label: t('page.tabCatalog'), icon: <Puzzle size={13} />, count: plugins.length },
   ]
 
   function startCreate(pluginId?: string) {
@@ -113,36 +112,36 @@ export default function Plugins() {
   return (
     <>
       <PageHeader
-        title="应用与插件"
+        title={t('page.title')}
         subtitle={
           catLoading || insLoading
-            ? '正在加载…'
+            ? t('page.loading')
             : instances.length === 0
-              ? `${plugins.length} 个可用插件`
-              : `${instances.length} 个运行实例 · ${statusCounts.normal} 个运行正常 · ${statusCounts.attention} 个需要处理`
+              ? t('page.pluginCount', { count: plugins.length })
+              : t('page.instanceSummary', { total: instances.length, normal: statusCounts.normal, attention: statusCounts.attention })
         }
         actions={!readOnly && canCreateInstance && (
           <button type="button" className="btn btn-primary" onClick={() => startCreate()}>
-            <Plus size={13} /> 新建实例
+            <Plus size={13} /> {t('page.createInstance')}
           </button>
         )}
       />
 
       <div className="mb-5">
-        <TabBar items={tabs} value={tab} onChange={setTab} label="应用与插件分区" />
+        <TabBar items={tabs} value={tab} onChange={setTab} label={t('page.tabAria')} />
       </div>
 
       {tab === 'catalog' && (
         <TabPanel value={tab}>
           {catError ? (
-            <ErrorState icon={<Puzzle size={20} />} title="可用插件加载失败"
-              hint="暂时无法加载可用插件。已经添加的实例不会受影响，请稍后重试。"
+            <ErrorState icon={<Puzzle size={20} />} title={t('page.catalogLoadFailed')}
+              hint={t('page.catalogLoadFailedHint')}
               onRetry={refetchCat} />
           ) : catLoading ? (
             <Panel><RowSkeleton rows={4} /></Panel>
           ) : plugins.length === 0 ? (
-            <EmptyState icon={<PackageOpen size={24} />} title="没有可用插件"
-              hint="插件同步后会显示在这里。列表为空不影响已经添加的实例。" />
+            <EmptyState icon={<PackageOpen size={24} />} title={t('page.noPlugins')}
+              hint={t('page.noPluginsHint')} />
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
               {plugins.slice(0, LIST_CAP).map((p) => {
@@ -150,9 +149,9 @@ export default function Plugins() {
                 const kind = normalizePluginKind(p.kind)
                 const canCreate = kind === 'application' || kind === 'driver'
                 const contributes = [
-                  ...(p.contributes?.drivers ?? []).map((x) => ({ kind: 'Driver', label: '设备驱动', ...x })),
-                  ...(p.contributes?.applications ?? []).map((x) => ({ kind: 'Application', label: '应用', ...x })),
-                  ...(p.contributes?.connectors ?? []).map((x) => ({ kind: 'Connector', label: '连接器', ...x })),
+                  ...(p.contributes?.drivers ?? []).map((x) => ({ kind: 'Driver', label: t('page.contributionDriver'), ...x })),
+                  ...(p.contributes?.applications ?? []).map((x) => ({ kind: 'Application', label: t('page.contributionApplication'), ...x })),
+                  ...(p.contributes?.connectors ?? []).map((x) => ({ kind: 'Connector', label: t('page.contributionConnector'), ...x })),
                 ]
                 return (
                   <Panel key={p.id} className="fade-up">
@@ -172,33 +171,33 @@ export default function Plugins() {
                     </div>
 
                     <dl className="mt-3 space-y-1.5">
-                      <div className="kv"><dt>版本</dt>
+                      <div className="kv"><dt>{t('page.version')}</dt>
                         <dd className="num min-w-0 truncate">{p.version || '—'}</dd></div>
                     </dl>
 
                     <div className="mt-3.5 border-t border-hairline pt-3">
-                      <p className="mb-2 text-[12px] font-medium text-ink-3">需要的权限</p>
-                      <PermissionList permissions={p.permissions} emptyHint="不需要额外权限" />
+                      <p className="mb-2 text-[12px] font-medium text-ink-3">{t('page.permissionsRequired')}</p>
+                      <PermissionList permissions={p.permissions} emptyHint={t('page.noExtraPermissions')} />
                     </div>
 
                     <details className="mt-3.5 min-w-0 border-t border-hairline pt-3 text-xs text-ink-2">
-                      <summary className="flex min-h-11 cursor-pointer items-center">技术详情</summary>
+                      <summary className="flex min-h-11 cursor-pointer items-center">{t('page.technicalDetails')}</summary>
                       <dl className="mt-2 space-y-1.5">
-                        <div className="kv"><dt>插件标识</dt>
+                        <div className="kv"><dt>{t('page.pluginId')}</dt>
                           <dd className="num min-w-0 truncate font-mono" title={p.id}>{p.id}</dd></div>
-                        <div className="kv"><dt>插件类型</dt>
-                          <dd className="num min-w-0 truncate">{p.kind || '未提供'}</dd></div>
-                        <div className="kv"><dt>协议版本</dt>
+                        <div className="kv"><dt>{t('page.pluginType')}</dt>
+                          <dd className="num min-w-0 truncate">{p.kind || t('page.notProvided')}</dd></div>
+                        <div className="kv"><dt>{t('page.protocolVersion')}</dt>
                           <dd className="num min-w-0 truncate">{p.protocol || 0}</dd></div>
-                        <div className="kv"><dt>安装摘要</dt>
+                        <div className="kv"><dt>{t('page.installDigest')}</dt>
                           <dd className="num min-w-0 truncate" title={p.digest}>{shortDigest(p.digest)}</dd></div>
                         {p.compatibility && (
-                          <div className="kv"><dt>兼容性</dt>
+                          <div className="kv"><dt>{t('page.compatibility')}</dt>
                             <dd className="min-w-0 truncate" title={p.compatibility}>{p.compatibility}</dd></div>
                         )}
                         {contributes.length > 0 && (
                           <div className="min-w-0 pt-1">
-                            <dt className="mb-1 text-ink-3">贡献标识</dt>
+                            <dt className="mb-1 text-ink-3">{t('page.contributions')}</dt>
                             <dd className="flex min-w-0 flex-wrap gap-1.5">
                               {contributes.map((c) => <span key={`${c.kind}-${c.id}-technical`}
                                 className="num max-w-full truncate rounded bg-surface-2 px-1.5 py-0.5 font-mono"
@@ -212,17 +211,17 @@ export default function Plugins() {
                     <div className="mt-3.5 flex min-w-0 flex-wrap items-center gap-2 border-t border-hairline pt-3">
                       {canCreate ? (
                         <button type="button" className="btn btn-primary"
-                          aria-label={`创建运行实例：${pluginDisplayName(p)}`}
+                          aria-label={t('page.createInstanceAria', { name: pluginDisplayName(p) })}
                           onClick={() => startCreate(p.id)}>
-                          <Plus size={13} /> 创建运行实例
+                          <Plus size={13} /> {t('page.createInstanceButton')}
                         </button>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-ink-2">
-                          <Ban size={13} className="shrink-0" /> 连接器不创建运行实例
+                          <Ban size={13} className="shrink-0" /> {t('page.connectorNoInstance')}
                         </span>
                       )}
                       <span className="min-w-0 text-[12px] leading-relaxed text-ink-3">
-                        仅表示插件可以使用，不代表已经运行。
+                        {t('page.availableHint')}
                       </span>
                     </div>
                   </Panel>
@@ -232,7 +231,7 @@ export default function Plugins() {
           )}
           {plugins.length > LIST_CAP && (
             <p className="mt-4 text-center text-[12px] text-ink-3">
-              仅显示前 {LIST_CAP} 个插件（共 {plugins.length} 个）
+              {t('page.listCapPlugins', { cap: LIST_CAP, count: plugins.length })}
             </p>
           )}
         </TabPanel>
@@ -241,58 +240,58 @@ export default function Plugins() {
       {tab === 'instances' && (
         <TabPanel value={tab}>
           {!readOnly && creating ? (
-            <Panel title={<span className="flex items-center gap-1.5"><PackagePlus size={14} />新建运行实例</span>}>
+            <Panel title={<span className="flex items-center gap-1.5"><PackagePlus size={14} />{t('page.newInstance')}</span>}>
               <InstanceForm mode="create" catalog={plugins} initialPluginId={creatingPluginId ?? undefined} onDone={stopCreate} />
             </Panel>
           ) : !readOnly && editing ? (
-            <Panel title={<span className="flex items-center gap-1.5"><PackagePlus size={14} />编辑运行实例</span>}>
+            <Panel title={<span className="flex items-center gap-1.5"><PackagePlus size={14} />{t('page.editInstance')}</span>}>
               <InstanceForm mode="edit" instance={editing} catalog={plugins} onDone={() => setEditing(null)} />
             </Panel>
           ) : insError ? (
-            <ErrorState icon={<Boxes size={20} />} title="运行实例加载失败"
-              hint="暂时无法加载运行实例。请重试；如果仍然失败，请联系管理员。"
+            <ErrorState icon={<Boxes size={20} />} title={t('page.instanceLoadFailed')}
+              hint={t('page.instanceLoadFailedHint')}
               onRetry={refetchIns} />
           ) : insLoading ? (
             <div className="grid gap-4"><RowSkeleton rows={3} /></div>
           ) : instances.length === 0 ? (
             <div>
-              <EmptyState icon={<Layers size={24} />} title="还没有运行实例"
+              <EmptyState icon={<Layers size={24} />} title={t('page.noInstances')}
                 hint={canCreateInstance
-                  ? '先选择一个应用或设备驱动，再指定运行位置。保存后，这里会显示它是否正在运行。'
-                  : '先同步或安装一个应用或设备驱动插件，然后才能创建运行实例。'} />
+                  ? t('page.noInstancesCreateHint')
+                  : t('page.noInstancesInstallHint')} />
               {!readOnly && canCreateInstance && <div className="-mt-3 flex justify-center">
                 <button type="button" className="btn btn-primary" onClick={() => startCreate()}>
-                  <Plus size={13} /> 新建第一个实例
+                  <Plus size={13} /> {t('page.createFirstInstance')}
                 </button>
               </div>}
             </div>
           ) : (
             <div className="grid gap-4">
               <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 rounded-lg bg-surface-2 px-3.5 py-2.5">
-                <span className="text-[12px] font-medium text-ink-3">状态概览</span>
-                <StatusPill label="运行正常" count={statusCounts.normal} tone="ok" />
-                <StatusPill label="需要处理" count={statusCounts.attention} tone="warn" />
-                <StatusPill label="状态待确认" count={statusCounts.unknown} tone="idle" />
-                <StatusPill label="已停止" count={statusCounts.stopped} tone="idle" />
+                <span className="text-[12px] font-medium text-ink-3">{t('page.statusOverview')}</span>
+                <StatusPill label={t('page.statusNormal')} count={statusCounts.normal} tone="ok" />
+                <StatusPill label={t('page.statusAttention')} count={statusCounts.attention} tone="warn" />
+                <StatusPill label={t('page.statusUnknown')} count={statusCounts.unknown} tone="idle" />
+                <StatusPill label={t('page.statusStopped')} count={statusCounts.stopped} tone="idle" />
               </div>
               <div className="flex min-w-0 flex-col gap-2 rounded-lg bg-surface-2 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <label htmlFor="instance-location" className="flex min-w-0 shrink-0 items-center gap-2 whitespace-nowrap text-[13px] font-medium text-ink-2">
-                  <Server size={14} className="shrink-0" /> 运行位置
+                  <Server size={14} className="shrink-0" /> {t('page.location')}
                 </label>
                 <select id="instance-location" className="input min-h-11 max-w-full text-[13px] sm:min-h-0 sm:w-72"
                   value={edgeFilter} onChange={(e) => setEdgeFilter(e.target.value)}>
-                  <option value="all">全部运行位置（{instances.length}）</option>
+                  <option value="all">{t('page.allLocations', { count: instances.length })}</option>
                   {edgeOptions.map((edge) => (
                     <option key={edge} value={edge}>
-                      {edge === 'server' ? '中心服务' : `网关 ${edge || '未知'}`}（{instances.filter((v) => v.edge_id === edge).length}）
+                      {edge === 'server' ? t('page.server') : edge ? t('page.edge', { id: edge }) : t('page.edgeUnknown')}（{instances.filter((v) => v.edge_id === edge).length}）
                     </option>
                   ))}
                 </select>
               </div>
 
               {visibleInstances.length === 0 ? (
-                <EmptyState icon={<Layers size={24} />} title="这个运行位置还没有实例"
-                  hint="选择其他运行位置，或在上方添加实例。" />
+                <EmptyState icon={<Layers size={24} />} title={t('page.noInstancesAtLocation')}
+                  hint={t('page.noInstancesAtLocationHint')} />
               ) : (
                 <>
                   {visibleInstances.slice(0, LIST_CAP).map((v) => (
@@ -301,14 +300,14 @@ export default function Plugins() {
                   ))}
                   {visibleInstances.length > LIST_CAP && (
                     <p className="text-center text-[12px] text-ink-3">
-                      仅显示前 {LIST_CAP} 个实例（共 {visibleInstances.length} 个）
+                      {t('page.listCapInstances', { cap: LIST_CAP, count: visibleInstances.length })}
                     </p>
                   )}
                 </>
               )}
 
               <p className="text-[12px] leading-relaxed text-ink-3">
-                需要处理的实例会排在前面。展开「技术详情」可以查看版本和状态原值。
+                {t('page.listHint')}
               </p>
             </div>
           )}

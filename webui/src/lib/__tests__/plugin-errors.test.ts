@@ -5,12 +5,13 @@
 //   ③ desired 永不被当成 observed —— has_observed=false / stale / drift 各有独立状态。
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '@/lib/api'
+import { i18n } from '@/i18n'
 import {
-  healthMeta, permissionCount, permissionGroups, pluginErrorCopy, safeConfigEntries,
+  healthMeta, permissionCount, permissionGroups, pluginDisplayName, pluginErrorCopy, safeConfigEntries,
   hostDetailLabel, instanceStatus, secretHandleName, stateMeta, syncState, trustMeta,
 } from '@/lib/plugins'
 import { PluginErr } from '@/lib/types'
-import type { PluginInstanceView } from '@/lib/types'
+import type { PluginCatalogView, PluginInstanceView } from '@/lib/types'
 
 const RUNTIME_CODES = [
   'plugin_instance_host_mismatch',
@@ -40,6 +41,26 @@ function instance(over: Partial<PluginInstanceView> = {}): PluginInstanceView {
 }
 
 describe('稳定错误码 → 文案', () => {
+  it('切换语言只改变展示文案，稳定码与权限确认语义不变', async () => {
+    const previous = i18n.language
+    try {
+      await i18n.changeLanguage('en-US')
+      const en = pluginErrorCopy(err(400, PluginErr.Quota))
+      expect(en.code).toBe(PluginErr.Quota)
+      expect(en.title).toMatch(/limit/i)
+      expect(en.hint).toMatch(/not saved/i)
+      expect(en.needsPermissionConfirm).toBe(false)
+
+      await i18n.changeLanguage('zh-CN')
+      const zh = pluginErrorCopy(err(400, PluginErr.Quota))
+      expect(zh.code).toBe(PluginErr.Quota)
+      expect(zh.title).toMatch(/数量上限/)
+      expect(zh.needsPermissionConfirm).toBe(false)
+    } finally {
+      await i18n.changeLanguage(previous)
+    }
+  })
+
   it('10 个码全部有映射，且文案互不相同（不留「未知错误」黑洞）', () => {
     expect(ALL_CODES).toHaveLength(10)
     expect(Object.values(PluginErr)).toHaveLength(7)
@@ -123,6 +144,29 @@ describe('稳定错误码 → 文案', () => {
     const net = pluginErrorCopy(new Error('无法连接 server'))
     expect(net.title).toMatch(/无法连接/)
     expect(net.hint).toMatch(/未提交/)
+  })
+})
+
+describe('插件声明文本本地化', () => {
+  it('优先使用 i18n map，缺省时回落到插件 title，机器 ID 永不翻译', async () => {
+    const catalog = {
+      id: 'io.github.acme.temperature', kind: 'application', version: 'v1', source: '', digest: '', verified: true,
+      protocol: 1, permissions: {},
+      contributes: { applications: [{ id: 'acme.temperature', title: '温度', i18n: { 'en-US': 'Temperature' } }] },
+    } as PluginCatalogView
+    const previous = i18n.language
+    try {
+      await i18n.changeLanguage('en-US')
+      expect(pluginDisplayName(catalog)).toBe('Temperature')
+      await i18n.changeLanguage('zh-CN')
+      // 只有 en-US 翻译时，按架构回退顺序仍优先使用可用的 i18n 值。
+      expect(pluginDisplayName(catalog)).toBe('Temperature')
+      const legacy = { ...catalog, contributes: { applications: [{ id: 'acme.legacy', title: '温度' }] } } as PluginCatalogView
+      expect(pluginDisplayName(legacy)).toBe('温度')
+      expect(pluginDisplayName({ ...catalog, contributes: {} })).toBe(catalog.id)
+    } finally {
+      await i18n.changeLanguage(previous)
+    }
   })
 })
 

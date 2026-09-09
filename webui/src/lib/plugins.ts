@@ -5,6 +5,8 @@
 //   ② `has_observed=false` → 显式呈现对应运行宿主未上报；`stale` / `drift` 各有独立视觉状态。
 //   ③ 错误一律按 api.PluginErr* **稳定码**呈现文案，不解析服务端错误文本；
 //      secret 只显示 handle 名，不显示明文；不呈现本机绝对路径与插件 stdout/stderr 原文。
+import { i18n } from '@/i18n'
+import { resolveLocalizedText } from '@/i18n/pluginText'
 import { ApiError } from './api'
 import type { Tone } from '@/components/ui'
 import { PluginErr } from './types'
@@ -14,6 +16,10 @@ import type {
   PluginCatalogView, PluginConnectorContributionData, PluginErrCode, PluginInstanceView,
   PluginPermissionsData,
 } from './types'
+
+function pluginText(key: string, options?: Record<string, unknown>): string {
+  return i18n.t(key, { ns: 'plugin', ...options }) as string
+}
 
 /* ------------------------------------------------------------------ *
  * ① 稳定错误码 → 文案
@@ -43,60 +49,29 @@ export interface PluginErrorCopy {
   retryable: boolean
 }
 
-const ERR_COPY: Record<MappedPluginErrCode, Omit<PluginErrorCopy, 'code'>> = {
-  [PluginErr.NotFound]: {
-    title: '没有找到这个运行实例',
-    hint: '它可能已被删除，或不属于当前组织。请返回列表刷新后再试。',
-    tone: 'idle', needsPermissionConfirm: false, retryable: false,
-  },
-  [PluginErr.Conflict]: {
-    title: '无法保存：名称或版本冲突',
-    hint: '同一个网关里已经有同名实例，或版本与现有记录不一致。请换一个名称，或先更新已有实例。',
-    tone: 'warn', needsPermissionConfirm: false, retryable: false,
-  },
-  [PluginErr.Quota]: {
-    title: '已经达到数量上限',
-    hint: '当前组织可添加的实例数量已达上限，本次保存未生效。请先删除不用的实例，或联系管理员提高上限。',
-    tone: 'warn', needsPermissionConfirm: false, retryable: false,
-  },
-  [PluginErr.PermissionConfirm]: {
-    title: '需要你同意新增权限',
-    hint: '这次修改会让插件获得更多权限。请核对下方权限并勾选确认，再重新提交。',
-    tone: 'warn', needsPermissionConfirm: true, retryable: true,
-  },
-  [PluginErr.EdgeOffline]: {
-    title: '目标网关当前离线',
-    hint: '设置可以保存，但该网关暂时无法应用。网关重新连接后会自动同步最新设置。',
-    tone: 'warn', needsPermissionConfirm: false, retryable: true,
-  },
-  [PluginErr.SecretForbidden]: {
-    title: '找不到可用的密钥',
-    hint: '这个密钥不存在、没有授权或已失效。请改用已授权的密钥名称；界面只显示名称，不显示明文。',
-    tone: 'bad', needsPermissionConfirm: false, retryable: false,
-  },
-  [PluginErr.InvalidConfig]: {
-    title: '设置内容有误',
-    hint: '部分设置不符合要求，例如名称、长度或取值范围有误。请修改后重新提交。',
-    tone: 'bad', needsPermissionConfirm: false, retryable: false,
-  },
-  [PLUGIN_RUNTIME_ERR_CODES.HostMismatch]: {
-    title: '运行位置与插件类型不匹配',
-    hint: '驱动只能运行在网关，应用只能运行在中心服务。新建时请选择正确运行位置；已有实例若位置不对，请删除后在正确位置重新创建。',
-    tone: 'warn', needsPermissionConfirm: false, retryable: false,
-  },
-  [PLUGIN_RUNTIME_ERR_CODES.KindUnsupported]: {
-    title: '暂不支持这种插件类型',
-    hint: '连接器目前没有可用运行时，选择网关或中心服务都不能创建实例。请确认插件类型是否正确，或等待支持后再试。',
-    tone: 'warn', needsPermissionConfirm: false, retryable: false,
-  },
-  [PLUGIN_RUNTIME_ERR_CODES.KindUnavailable]: {
-    title: '暂时无法确认插件类型',
-    hint: '请确认插件已经安装到目标运行位置并完成同步，然后刷新重试；如果已安装仍失败，请联系管理员检查插件安装信息。',
-    tone: 'warn', needsPermissionConfirm: false, retryable: true,
-  },
+const ERR_META: Record<MappedPluginErrCode, Omit<PluginErrorCopy, 'title' | 'hint' | 'code'>> = {
+  [PluginErr.NotFound]: { tone: 'idle', needsPermissionConfirm: false, retryable: false },
+  [PluginErr.Conflict]: { tone: 'warn', needsPermissionConfirm: false, retryable: false },
+  [PluginErr.Quota]: { tone: 'warn', needsPermissionConfirm: false, retryable: false },
+  [PluginErr.PermissionConfirm]: { tone: 'warn', needsPermissionConfirm: true, retryable: true },
+  [PluginErr.EdgeOffline]: { tone: 'warn', needsPermissionConfirm: false, retryable: true },
+  [PluginErr.SecretForbidden]: { tone: 'bad', needsPermissionConfirm: false, retryable: false },
+  [PluginErr.InvalidConfig]: { tone: 'bad', needsPermissionConfirm: false, retryable: false },
+  [PLUGIN_RUNTIME_ERR_CODES.HostMismatch]: { tone: 'warn', needsPermissionConfirm: false, retryable: false },
+  [PLUGIN_RUNTIME_ERR_CODES.KindUnsupported]: { tone: 'warn', needsPermissionConfirm: false, retryable: false },
+  [PLUGIN_RUNTIME_ERR_CODES.KindUnavailable]: { tone: 'warn', needsPermissionConfirm: false, retryable: true },
 }
 
-const KNOWN = new Set<string>(Object.keys(ERR_COPY))
+const KNOWN = new Set<string>(Object.keys(ERR_META))
+
+function errorCopy(code: MappedPluginErrCode): PluginErrorCopy {
+  return {
+    ...ERR_META[code],
+    code,
+    title: pluginText(`errors.codes.${code}.title`),
+    hint: pluginText(`errors.codes.${code}.hint`),
+  }
+}
 
 /**
  * 把任意写操作异常映射成可呈现文案。
@@ -104,39 +79,37 @@ const KNOWN = new Set<string>(Object.keys(ERR_COPY))
  * 绝不把服务端 message 当规则复述，也不做自然语言解析。
  */
 export function pluginErrorCopy(e: unknown): PluginErrorCopy {
-  if (e instanceof ApiError && e.code && KNOWN.has(e.code)) {
-    return { ...ERR_COPY[e.code as MappedPluginErrCode], code: e.code as MappedPluginErrCode }
-  }
+  if (e instanceof ApiError && e.code && KNOWN.has(e.code)) return errorCopy(e.code as MappedPluginErrCode)
   if (e instanceof ApiError) {
     if (e.status === 401) {
       return {
-        title: '登录已失效', hint: '请重新登录后再操作。',
+        title: pluginText('errors.http401.title'), hint: pluginText('errors.http401.hint'),
         tone: 'warn', needsPermissionConfirm: false, retryable: true,
       }
     }
     if (e.status === 403) {
       return {
-        title: '权限不足',
-        hint: '当前账号不能修改这个实例，但仍可查看保存的设置和运行情况。',
+        title: pluginText('errors.http403.title'), hint: pluginText('errors.http403.hint'),
         tone: 'warn', needsPermissionConfirm: false, retryable: false,
       }
     }
     if (e.status === 429) {
       return {
-        title: '操作过于频繁',
-        hint: e.retryAfter ? `请 ${e.retryAfter} 秒后重试。` : '请稍后重试。',
+        title: pluginText('errors.http429.title'),
+        hint: e.retryAfter
+          ? pluginText('errors.http429After.hint', { seconds: e.retryAfter })
+          : pluginText('errors.http429.hint'),
         tone: 'warn', needsPermissionConfirm: false, retryable: true,
       }
     }
     return {
-      title: `保存失败（HTTP ${e.status}）`,
-      hint: '平台没有保存这次修改，原设置保持不变。请稍后重试；如果仍然失败，请联系管理员。',
+      title: pluginText('errors.httpStatus.title', { status: e.status }),
+      hint: pluginText('errors.httpStatus.hint'),
       tone: 'bad', needsPermissionConfirm: false, retryable: true,
     }
   }
   return {
-    title: '无法连接平台',
-    hint: '网络不可达或平台暂时不可用。本次保存未提交，原设置保持不变。',
+    title: pluginText('errors.network.title'), hint: pluginText('errors.network.hint'),
     tone: 'bad', needsPermissionConfirm: false, retryable: true,
   }
 }
@@ -155,55 +128,39 @@ export interface SyncState {
   hint: string
 }
 
+function hostLabel(serverHosted: boolean): string {
+  return serverHosted ? pluginText('host.server') : pluginText('host.edge')
+}
+
 /**
  * 由服务端投影字段推导同步状态 —— 前端**不自己算**是否 drift/stale，
  * 只把 `drift` / `stale` / `has_observed` / revision 说成人话。
  */
 export function syncState(v: PluginInstanceView): SyncState {
   const serverHosted = v.edge_id === 'server'
-  const host = serverHosted ? '中心服务' : '网关'
+  const host = hostLabel(serverHosted)
   if (!v.has_observed) {
     return {
       key: 'unreported',
-      label: '状态待确认',
+      label: pluginText('sync.unreported.label'),
       tone: 'idle',
       hint: serverHosted
-        ? '还没有收到这个应用的运行状态。保存的启用设置不代表它正在运行，请查看应用数据。'
+        ? pluginText('sync.unreported.hintServer')
         : v.edge_online
-        ? '设置已保存，但还没有收到这个网关的运行状态，不能据此判断它是否正在运行。'
-        : '网关当前离线，暂时没有运行状态。重新连接后会自动更新。',
+          ? pluginText('sync.unreported.hintEdgeOnline')
+          : pluginText('sync.unreported.hintEdgeOffline'),
     }
   }
   if (v.stale) {
-    return {
-      key: 'stale',
-      label: '状态可能已过期',
-      tone: 'warn',
-      hint: host + '收到的运行状态已超过有效期，当前显示的是上次状态，不代表现在的运行情况。',
-    }
+    return { key: 'stale', label: pluginText('sync.stale.label'), tone: 'warn', hint: pluginText('sync.stale.hint', { host }) }
   }
   if (v.drift) {
-    return {
-      key: 'drift',
-      label: '有差异',
-      tone: 'warn',
-      hint: `${host}还没有应用最新设置。可以重新同步一次。`,
-    }
+    return { key: 'drift', label: pluginText('sync.drift.label'), tone: 'warn', hint: pluginText('sync.drift.hint', { host }) }
   }
   if (v.applied_revision < v.desired_revision) {
-    return {
-      key: 'pending',
-      label: '正在应用设置',
-      tone: 'accent',
-      hint: `最新设置已保存，正在等待${host}应用。`,
-    }
+    return { key: 'pending', label: pluginText('sync.pending.label'), tone: 'accent', hint: pluginText('sync.pending.hint', { host }) }
   }
-  return {
-    key: 'synced',
-    label: '已同步',
-    tone: 'ok',
-    hint: `${host}已应用当前设置。`,
-  }
+  return { key: 'synced', label: pluginText('sync.synced.label'), tone: 'ok', hint: pluginText('sync.synced.hint', { host }) }
 }
 
 /** 实例状态 → 展示语义。两套后端事实源：
@@ -211,58 +168,47 @@ export function syncState(v: PluginInstanceView): SyncState {
  *  - server AppHost（appruntime.InstanceState）：小写（running/stopping…，见 internal/appruntime/types.go）。
  *  两套都在同一 observed 投影里，词汇必须都覆盖，否则服务器托管实例会露出机器串。
  *  未知值原样呈现，不猜含义。 */
-const STATE_META: Record<string, { label: string; tone: Tone }> = {
-  STOPPED: { label: '已停止', tone: 'idle' },
-  STARTING: { label: '启动中', tone: 'accent' },
-  HEALTHY: { label: '运行中', tone: 'ok' },
-  DEGRADED: { label: '降级', tone: 'warn' },
-  CRASHED: { label: '已崩溃', tone: 'bad' },
-  BACKOFF: { label: '重启退避', tone: 'warn' },
-  DISABLED: { label: '已禁用', tone: 'idle' },
-  degraded: { label: '运行异常', tone: 'warn' },
-  crashed: { label: '已中断', tone: 'bad' },
-  backoff: { label: '正在重试', tone: 'warn' },
-  disabled: { label: '已停用', tone: 'idle' },
-  created: { label: '已创建', tone: 'idle' },
-  starting: { label: '启动中', tone: 'accent' },
-  running: { label: '运行中', tone: 'ok' },
-  stopping: { label: '停止中', tone: 'accent' },
-  stopped: { label: '已停止', tone: 'idle' },
-  failed: { label: '启动失败', tone: 'bad' },
+const STATE_KEYS: Record<string, { key: string; tone: Tone }> = {
+  STOPPED: { key: 'stopped', tone: 'idle' }, STARTING: { key: 'starting', tone: 'accent' },
+  HEALTHY: { key: 'running', tone: 'ok' }, DEGRADED: { key: 'degraded', tone: 'warn' },
+  CRASHED: { key: 'crashed', tone: 'bad' }, BACKOFF: { key: 'backoff', tone: 'warn' },
+  DISABLED: { key: 'disabled', tone: 'idle' }, created: { key: 'created', tone: 'idle' },
+  starting: { key: 'starting', tone: 'accent' }, running: { key: 'running', tone: 'ok' },
+  stopping: { key: 'stopping', tone: 'accent' }, stopped: { key: 'stopped', tone: 'idle' },
+  degraded: { key: 'degraded', tone: 'warn' }, crashed: { key: 'crashed', tone: 'bad' },
+  backoff: { key: 'backoff', tone: 'warn' }, disabled: { key: 'disabled', tone: 'idle' },
+  failed: { key: 'failed', tone: 'bad' },
 }
 
 /** observed.detail 的已知机器标记 → 人话（其余是 server 脱敏摘要，原样呈现） */
-const HOST_DETAIL_LABEL: Record<string, string> = { 'server-apphost': '中心服务' }
 export function hostDetailLabel(detail?: string): string | undefined {
   if (!detail) return undefined
-  return HOST_DETAIL_LABEL[detail] ?? detail
+  return detail === 'server-apphost' ? pluginText('host.server') : detail
 }
 
-/** pluginhost.Health 的规范大写名 → 展示语义 */
-const HEALTH_META: Record<string, { label: string; tone: Tone }> = {
-  HEALTHY: { label: '健康', tone: 'ok' },
-  DEGRADED: { label: '降级', tone: 'warn' },
-  UNHEALTHY: { label: '异常', tone: 'bad' },
-  UNKNOWN: { label: '未知', tone: 'idle' },
-  healthy: { label: '健康', tone: 'ok' },
-  degraded: { label: '降级', tone: 'warn' },
-  unhealthy: { label: '异常', tone: 'bad' },
-  unknown: { label: '未知', tone: 'idle' },
+const HEALTH_KEYS: Record<string, { key: string; tone: Tone }> = {
+  HEALTHY: { key: 'healthy', tone: 'ok' }, DEGRADED: { key: 'degraded', tone: 'warn' },
+  UNHEALTHY: { key: 'unhealthy', tone: 'bad' }, UNKNOWN: { key: 'unknown', tone: 'idle' },
+  healthy: { key: 'healthy', tone: 'ok' }, degraded: { key: 'degraded', tone: 'warn' },
+  unhealthy: { key: 'unhealthy', tone: 'bad' }, unknown: { key: 'unknown', tone: 'idle' },
 }
 
 export function stateMeta(state: string | undefined): { label: string; tone: Tone } {
-  if (!state) return { label: '未上报', tone: 'idle' }
-  return STATE_META[state] ?? { label: '状态待确认', tone: 'idle' }
+  if (!state) return { label: pluginText('state.notReported'), tone: 'idle' }
+  const meta = STATE_KEYS[state]
+  return meta ? { label: pluginText(`state.${meta.key}`), tone: meta.tone } : { label: pluginText('state.unknown'), tone: 'idle' }
 }
 
 export function healthMeta(health: string | undefined): { label: string; tone: Tone } {
-  if (!health) return { label: '未上报', tone: 'idle' }
-  return HEALTH_META[health] ?? { label: '状态待确认', tone: 'idle' }
+  if (!health) return { label: pluginText('health.notReported'), tone: 'idle' }
+  const meta = HEALTH_KEYS[health]
+  return meta ? { label: pluginText(`health.${meta.key}`), tone: meta.tone } : { label: pluginText('health.unknown'), tone: 'idle' }
 }
 
 export function instanceLocationLabel(v: PluginInstanceView): string {
-  if (v.edge_id === 'server') return '中心服务'
-  return `网关 ${v.edge_id || '未知'}${v.edge_online ? '' : '（离线）'}`
+  if (v.edge_id === 'server') return pluginText('location.server')
+  const id = v.edge_id || pluginText('location.unknownEdge')
+  return v.edge_online ? pluginText('location.edge', { id }) : pluginText('location.edgeOffline', { id })
 }
 
 export type InstanceStatusKey = 'normal' | 'attention' | 'unknown' | 'stopped'
@@ -281,102 +227,104 @@ export interface InstanceStatus {
 /** 把实际运行事实说成普通用户能理解的一句话，并给出下一步；机器原值只留给技术详情。 */
 export function instanceStatus(v: PluginInstanceView): InstanceStatus {
   const serverHosted = v.edge_id === 'server'
-  const host = serverHosted ? '中心服务' : '网关'
+  const host = hostLabel(serverHosted)
   const state = stateMeta(v.observed?.state)
   const health = healthMeta(v.observed?.health)
 
   if (!v.has_observed) {
     const hostOffline = !serverHosted && v.desired.enabled && !v.edge_online
+    if (hostOffline) {
+      return {
+        key: 'attention', label: pluginText('status.unreportedOffline.label'), tone: 'warn',
+        summary: pluginText('status.unreportedOffline.summary'), next: pluginText('status.unreportedOffline.next'),
+        needsAttention: true, priority: 0,
+      }
+    }
     return {
-      key: hostOffline ? 'attention' : 'unknown', label: hostOffline ? '等待网关连接' : '状态待确认',
-      tone: hostOffline ? 'warn' : 'idle',
-      summary: hostOffline ? '网关离线，还没有收到运行状态' : `还没有收到${host}的运行状态`,
-      next: serverHosted
-        ? '稍后刷新；如果一直没有状态，请查看运行记录。'
-        : hostOffline
-          ? '先恢复网关连接，连接后会自动更新。'
-          : '稍后刷新；如果一直没有状态，请重新应用设置。',
-      needsAttention: hostOffline, priority: hostOffline ? 0 : 1,
+      key: 'unknown', label: pluginText('status.unreportedServer.label'), tone: 'idle',
+      summary: pluginText('status.unreportedServer.summary', { host }),
+      next: serverHosted ? pluginText('status.unreportedServer.next') : pluginText('status.unreportedEdge.next'),
+      needsAttention: false, priority: 1,
     }
   }
 
   if (v.stale) {
     return {
-      key: 'attention', label: '状态可能已过期', tone: 'warn',
-      summary: `上次状态：${state.label}`,
+      key: 'attention', label: pluginText('status.stale.label'), tone: 'warn',
+      summary: pluginText('status.stale.summary', { state: state.label }),
       next: v.edge_id !== 'server' && !v.edge_online
-        ? '先恢复网关连接，等待最新状态；确认连接后再重新应用设置。'
-        : '等待最新状态；如果长时间没有更新，请重新应用设置。',
+        ? pluginText('status.stale.nextOffline')
+        : pluginText('status.stale.nextOnline'),
       needsAttention: true, priority: 0,
     }
   }
 
   if (v.drift || (!v.desired.enabled && state.tone === 'ok')) {
     const healthCopy = v.observed?.health && health.tone !== 'ok' && health.tone !== 'idle'
-      ? ` · 健康${health.label}` : ''
+      ? pluginText('status.healthSuffix', { label: health.label }) : ''
     return {
-      key: 'attention', label: '最新设置尚未生效', tone: 'warn',
+      key: 'attention', label: pluginText('status.drift.label'), tone: 'warn',
       summary: !v.desired.enabled && state.tone === 'ok'
-        ? '当前仍在运行' : `当前：${state.label}${healthCopy}`,
-      next: '打开详情核对设置，再点击「重新应用设置」。',
+        ? pluginText('status.drift.summaryRunning')
+        : pluginText('status.drift.summaryCurrent', { state: state.label, health: healthCopy }),
+      next: pluginText('status.drift.next'),
       needsAttention: true, priority: 0,
     }
   }
 
-  if (state.label === '已停止' || state.label === '已停用' || state.label === '已禁用') {
+  if (state.label === pluginText('state.stopped') || state.label === pluginText('state.disabled')) {
     return {
-      key: 'stopped', label: '已停止', tone: 'idle',
-      summary: '当前没有运行',
-      next: v.desired.enabled ? '如果应该运行，请重新应用设置。' : undefined,
+      key: 'stopped', label: pluginText('status.stopped.label'), tone: 'idle',
+      summary: pluginText('status.stopped.summary'),
+      next: v.desired.enabled ? pluginText('status.stopped.next') : undefined,
       needsAttention: false, priority: 2,
     }
   }
 
-  const abnormal = state.tone === 'bad' || state.tone === 'warn'
-    || health.tone === 'bad' || health.tone === 'warn'
+  const abnormal = state.tone === 'bad' || state.tone === 'warn' || health.tone === 'bad' || health.tone === 'warn'
   if (abnormal) {
-    const healthCopy = v.observed?.health && health.label !== '未上报' ? ` · 健康${health.label}` : ''
+    const healthCopy = v.observed?.health && health.label !== pluginText('health.notReported')
+      ? pluginText('status.healthSuffix', { label: health.label }) : ''
     return {
-      key: 'attention', label: '需要处理', tone: state.tone === 'bad' || health.tone === 'bad' ? 'bad' : 'warn',
-      summary: `当前：${state.label}${healthCopy}`,
-      next: '查看运行记录或重新应用设置；如果持续异常，请联系管理员。',
-      needsAttention: true, priority: 0,
+      key: 'attention', label: pluginText('status.abnormal.label'),
+      tone: state.tone === 'bad' || health.tone === 'bad' ? 'bad' : 'warn',
+      summary: pluginText('status.abnormal.summary', { state: state.label, health: healthCopy }),
+      next: pluginText('status.abnormal.next'), needsAttention: true, priority: 0,
     }
   }
 
   if (state.tone === 'ok') {
     return {
-      key: 'normal', label: '运行正常', tone: 'ok',
-      summary: `当前：${state.label}`,
+      key: 'normal', label: pluginText('status.normal.label'), tone: 'ok',
+      summary: pluginText('status.normal.summary', { state: state.label }),
       needsAttention: false, priority: 3,
     }
   }
 
   return {
-    key: 'unknown', label: '状态待确认', tone: 'idle',
-    summary: `当前：${state.label}`,
-    next: '打开详情查看最近更新；如果状态一直没有变化，请重新应用设置。',
-    needsAttention: false, priority: 1,
+    key: 'unknown', label: pluginText('status.unknown.label'), tone: 'idle',
+    summary: pluginText('status.unknown.summary', { state: state.label }),
+    next: pluginText('status.unknown.next'), needsAttention: false, priority: 1,
   }
 }
 
 /** 目录里的 observed_state 在 server 侧未观测时是小写 unknown（plugincatalog 约定） */
 export function trustMeta(mode: string | undefined, verified: boolean): { label: string; tone: Tone } {
-  if (verified) return { label: mode ? `已验证 · ${mode}` : '已验证', tone: 'ok' }
-  return { label: mode ? `未验证 · ${mode}` : '未验证', tone: 'warn' }
+  if (verified) {
+    return { label: mode ? pluginText('trust.verifiedWithMode', { mode }) : pluginText('trust.verified'), tone: 'ok' }
+  }
+  return { label: mode ? pluginText('trust.unverifiedWithMode', { mode }) : pluginText('trust.unverified'), tone: 'warn' }
 }
 
 export const ISOLATION_LABELS: Record<string, string> = {
-  shared: '共享运行',
-  'per-instance': '独立运行',
-  none: '不隔离',
-  process: '独立运行',
-  container: '独立运行',
+  shared: 'isolation.shared', 'per-instance': 'isolation.independent', none: 'isolation.none',
+  process: 'isolation.independent', container: 'isolation.independent',
 }
 
 export function isolationLabel(isolation: string | undefined): string {
-  if (!isolation) return '未指定'
-  return ISOLATION_LABELS[isolation] ?? isolation
+  if (!isolation) return pluginText('isolation.unspecified')
+  const key = ISOLATION_LABELS[isolation]
+  return key ? pluginText(key) : isolation
 }
 
 /* ------------------------------------------------------------------ *
@@ -392,11 +340,9 @@ export interface PermissionGroup {
 }
 
 /** 权限分组顺序固定：硬件 > 网络 > 文件系统 > secret（风险由高到低） */
-const PERM_GROUPS: { key: keyof PluginPermissionsData; group: string; tone: Tone }[] = [
-  { key: 'hardware', group: '硬件', tone: 'warn' },
-  { key: 'network', group: '网络', tone: 'warn' },
-  { key: 'filesystem', group: '文件系统', tone: 'warn' },
-  { key: 'secrets', group: '密钥', tone: 'bad' },
+const PERM_GROUPS: { key: keyof PluginPermissionsData; tone: Tone }[] = [
+  { key: 'hardware', tone: 'warn' }, { key: 'network', tone: 'warn' },
+  { key: 'filesystem', tone: 'warn' }, { key: 'secrets', tone: 'bad' },
 ]
 
 /** 只列出**声明了**的权限组；未声明的组不出现（不塞「无」占位，避免满屏 badge） */
@@ -405,7 +351,7 @@ export function permissionGroups(p: PluginPermissionsData | undefined): Permissi
   const out: PermissionGroup[] = []
   for (const g of PERM_GROUPS) {
     const items = p[g.key] ?? []
-    if (items.length > 0) out.push({ ...g, items })
+    if (items.length > 0) out.push({ ...g, group: pluginText(`permissions.groups.${g.key}`), items })
   }
   return out
 }
@@ -421,7 +367,7 @@ export function permissionCount(p: PluginPermissionsData | undefined): number {
  */
 export function secretHandleName(ref: string): string {
   const m = /^secret:\/\/(.+)$/.exec(ref.trim())
-  return (m?.[1] ?? ref).trim() || '（空 handle）'
+  return (m?.[1] ?? ref).trim() || pluginText('common.emptyHandle')
 }
 
 /** 配置项呈现：secret:// 值一律折叠成 handle 名，防止明文出现在 DOM 里 */
@@ -442,30 +388,23 @@ export function pluginDisplayName(catalog?: PluginCatalogView): string {
     ...(catalog?.contributes?.applications ?? []),
     ...(catalog?.contributes?.connectors ?? []),
   ]
-  const title = contributions.find((x) => x.title?.trim())?.title?.trim()
-  return title || catalog?.id || '插件信息未提供'
+  const title = contributions.map((x) => resolveLocalizedText(x, 'title')).find(Boolean)
+  return title || catalog?.id || pluginText('display.unknownPlugin')
 }
 
-const PERMISSION_ITEM_LABELS: Record<string, string> = {
-  'hardware:uart': '访问串口',
-  'hardware:serial': '访问串口',
-  'hardware:serial-port': '访问串口',
-  'hardware:gpio': '控制输入输出端口',
-  'hardware:i2c': '访问 I2C 设备',
-  'hardware:spi': '访问 SPI 设备',
-  'hardware:usb': '访问 USB 设备',
-  'network:outbound': '访问网络',
-  'network:inbound': '接受网络连接',
-  'network:local-network': '访问局域网',
-  'network:http': '访问网页服务',
-  'filesystem:read': '读取文件',
-  'filesystem:write': '写入文件',
+const PERMISSION_ITEM_KEYS: Record<string, string> = {
+  'hardware:uart': 'uart', 'hardware:serial': 'serial', 'hardware:serial-port': 'serialPort',
+  'hardware:gpio': 'gpio', 'hardware:i2c': 'i2c', 'hardware:spi': 'spi', 'hardware:usb': 'usb',
+  'network:outbound': 'outbound', 'network:inbound': 'inbound',
+  'network:local-network': 'localNetwork', 'network:http': 'http',
+  'filesystem:read': 'read', 'filesystem:write': 'write',
 }
 
 /** 权限项的人话标签；未知项原样保留，避免猜业务含义。 */
 export function permissionItemLabel(group: keyof PluginPermissionsData, item: string): string {
-  if (group === 'secrets') return `使用密钥 ${item}`
-  return PERMISSION_ITEM_LABELS[`${group}:${item}`] ?? item
+  if (group === 'secrets') return pluginText('permissions.items.secret', { name: item })
+  const key = PERMISSION_ITEM_KEYS[`${group}:${item}`]
+  return key ? pluginText(`permissions.items.${key}`) : item
 }
 
 /* ------------------------------------------------------------------ *
@@ -478,6 +417,15 @@ function str(v: unknown): string {
 
 function bool(v: unknown): boolean {
   return v === true
+}
+
+function normalizeI18nText(raw: unknown): Record<string, string> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === 'string' && value.trim()) out[key] = value.trim()
+  }
+  return Object.keys(out).length > 0 ? out : undefined
 }
 
 /**
@@ -574,6 +522,7 @@ function normalizeDriverContribution(raw: unknown): PluginCatalogDriverView | nu
   return {
     id,
     title: str(o.title) || undefined,
+    i18n: normalizeI18nText(o.i18n),
     descriptor: str(o.descriptor) || undefined,
     configSchema: str(o.configSchema) || undefined,
     discovery: str(o.discovery) || undefined,
@@ -590,6 +539,7 @@ function normalizeApplicationContribution(raw: unknown): PluginApplicationContri
   return {
     id,
     title: str(o.title) || undefined,
+    i18n: normalizeI18nText(o.i18n),
     ui: normalizePluginUI(o.ui),
   }
 }
@@ -602,6 +552,7 @@ function normalizeConnectorContribution(raw: unknown): PluginConnectorContributi
   return {
     id,
     title: str(o.title) || undefined,
+    i18n: normalizeI18nText(o.i18n),
     direction: str(o.direction) || undefined,
     host: str(o.host) || undefined,
   }

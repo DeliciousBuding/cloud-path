@@ -1,6 +1,7 @@
 // 实例列表行：主路径只回答「是否运行、在哪里、是否异常、下一步做什么」，
 // 版本号、状态原值等工程字段收进折叠的技术详情。
 import { Link } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { ArrowRight, Boxes, Server } from 'lucide-react'
 import { Badge, StatusDot } from '@/components/ui'
 import { DesiredObserved, SyncBanner } from './DesiredObserved'
@@ -16,6 +17,7 @@ export function InstanceRow({ v, catalog, onEdit }: {
   catalog?: PluginCatalogView
   onEdit?: () => void
 }) {
+  const { t } = useTranslation('plugin')
   const status = instanceStatus(v)
   const st = stateMeta(v.observed?.state)
   const hl = healthMeta(v.observed?.health)
@@ -28,7 +30,7 @@ export function InstanceRow({ v, catalog, onEdit }: {
         <StatusDot online={status.key === 'normal'} />
         <Link to={`/plugins/${encodeURIComponent(v.id)}`}
           className="num inline-flex min-h-11 min-w-0 max-w-full items-center truncate text-[14px] font-semibold tracking-[-0.01em] no-underline hover:text-accent sm:min-h-0"
-          title={`${v.id} · 查看详情`}>
+          title={t('instance.rowTitle', { id: v.id })}>
           {v.desired.instance_id || v.id}
         </Link>
         <span className="flex min-w-0 items-center gap-1 text-[12px] text-ink-3"
@@ -42,47 +44,47 @@ export function InstanceRow({ v, catalog, onEdit }: {
       <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-ink-3">
         <span className="flex min-w-0 items-center gap-1">
           <Server size={11} className="shrink-0" />
-          {serverHosted ? <span>中心服务</span> : (
+          {serverHosted ? <span>{t('host.server')}</span> : (
             <Link to={`/edges/${encodeURIComponent(v.edge_id)}`}
               className="min-w-0 truncate no-underline transition-colors hover:text-accent"
               title={hostLocation}>{hostLocation}</Link>
           )}
         </span>
-        {v.last_ack_at && <><span aria-hidden="true">·</span><span>更新于 {fmtDateTime(v.last_ack_at)}</span></>}
+        {v.last_ack_at && <><span aria-hidden="true">·</span><span>{t('plane.updatedAt')} {fmtDateTime(v.last_ack_at)}</span></>}
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2.5">
         <div className="min-w-0 rounded-lg bg-surface-2 px-3 py-2.5">
-          <p className="text-[12px] font-medium text-ink-3">保存的设置</p>
+          <p className="text-[12px] font-medium text-ink-3">{t('desired.desired')}</p>
           <p className="mt-1 flex min-w-0 items-baseline gap-1 text-[12px] font-medium"
-            title={`${v.desired.enabled ? '已启用' : '已停用'} · ${v.desired.version}`}>
-            <span className="shrink-0">{v.desired.enabled ? '已启用' : '已停用'}</span>
+            title={`${v.desired.enabled ? t('desired.enabledValue') : t('desired.disabledValue')} · ${v.desired.version}`}>
+            <span className="shrink-0">{v.desired.enabled ? t('desired.enabledValue') : t('desired.disabledValue')}</span>
             <span className="shrink-0 text-ink-3">·</span>
             <span className="num min-w-0 truncate">{v.desired.version || '—'}</span>
           </p>
         </div>
         <div className="min-w-0 rounded-lg bg-surface-2 px-3 py-2.5">
-          <p className="text-[12px] font-medium text-ink-3">当前运行情况</p>
+          <p className="text-[12px] font-medium text-ink-3">{t('desired.observed')}</p>
           {v.has_observed ? (
             <>
               <p className={`mt-1 break-words text-[12px] font-medium ${
                 status.tone === 'ok' ? 'text-ok' : status.tone === 'bad' ? 'text-bad'
                   : status.tone === 'warn' ? 'text-warn' : ''}`}
-                title={`${st.label} · ${v.observed?.version ?? '未给出版本'}`}>
+                title={`${st.label} · ${v.observed?.version ?? t('instance.versionNotProvided')}`}>
                 {status.summary}
               </p>
               <p className="mt-0.5 break-words text-[12px] text-ink-3">
                 {v.observed?.health
-                  ? (hl.tone === 'idle' ? '健康状态暂未提供' : '健康：' + hl.label)
-                  : '健康状态未上报'}
-                {v.stale ? ' · 状态可能不是最新' : ''}
+                  ? (hl.tone === 'idle' ? t('instance.healthUnavailable') : t('instance.health', { label: hl.label }))
+                  : t('instance.healthNotReported')}
+                {v.stale ? t('instance.mayBeStale') : ''}
               </p>
             </>
           ) : (
             <>
-              <p className="mt-1 truncate text-[12px] font-medium text-ink-2">状态待确认</p>
+              <p className="mt-1 truncate text-[12px] font-medium text-ink-2">{t('common.statusUnknown')}</p>
               <p className="mt-0.5 min-w-0 truncate text-[12px] text-ink-3">
-                {serverHosted ? '还没有收到中心服务的运行状态' : v.edge_online ? '网关在线，还没有收到运行状态' : '网关离线'}
+                {serverHosted ? t('instance.noServerStatus') : v.edge_online ? t('instance.noEdgeStatusOnline') : t('instance.edgeOffline')}
               </p>
             </>
           )}
@@ -91,28 +93,28 @@ export function InstanceRow({ v, catalog, onEdit }: {
 
       {status.needsAttention && status.next && (
         <div className="mt-3 rounded-lg bg-warn/10 px-3 py-2.5 text-[12px] leading-relaxed text-ink-2">
-          下一步：{status.next}
+          {t('desired.next', { text: status.next })}
         </div>
       )}
 
       <details className="mt-3 min-w-0 text-xs text-ink-2">
-        <summary className="flex min-h-11 cursor-pointer items-center">技术详情</summary>
+        <summary className="flex min-h-11 cursor-pointer items-center">{t('common.technicalDetails')}</summary>
         <dl className="mt-2 space-y-1 rounded-lg bg-surface-2 px-3 py-2.5">
-          <div><dt className="inline">运行位置：</dt><dd className="inline">{hostLocation}</dd></div>
-          <div><dt className="inline">运行方式：</dt><dd className="inline">{isolationLabel(v.desired.isolation)}</dd></div>
-          <div><dt className="inline">最近更新：</dt><dd className="num inline">{v.last_ack_at ? fmtDateTime(v.last_ack_at) : '尚未更新'}</dd></div>
-          <div><dt className="inline">插件标识：</dt><dd className="num inline break-all">{v.desired.plugin_id || '—'}</dd></div>
-          <div><dt className="inline">当前版本：</dt><dd className="num inline">{v.has_observed ? (v.observed?.version || '未给出') : '未上报'}</dd></div>
-          <div><dt className="inline">设置版本：</dt><dd className="num inline">{v.desired_revision}</dd></div>
-          <div><dt className="inline">运行状态版本：</dt><dd className="num inline">{v.applied_revision}</dd></div>
-          <div><dt className="inline">运行状态原值：</dt><dd className="num inline break-all">{v.observed?.state || '—'}</dd></div>
-          <div><dt className="inline">健康状态原值：</dt><dd className="num inline break-all">{v.observed?.health || '—'}</dd></div>
+          <div><dt className="inline">{t('facts.location')}：</dt><dd className="inline">{hostLocation}</dd></div>
+          <div><dt className="inline">{t('facts.isolation')}：</dt><dd className="inline">{isolationLabel(v.desired.isolation)}</dd></div>
+          <div><dt className="inline">{t('facts.lastUpdated')}：</dt><dd className="num inline">{v.last_ack_at ? fmtDateTime(v.last_ack_at) : t('instance.notUpdated')}</dd></div>
+          <div><dt className="inline">{t('facts.pluginId')}：</dt><dd className="num inline break-all">{v.desired.plugin_id || '—'}</dd></div>
+          <div><dt className="inline">{t('instance.currentVersion')}：</dt><dd className="num inline">{v.has_observed ? (v.observed?.version || t('instance.versionNotProvided')) : t('common.notReported')}</dd></div>
+          <div><dt className="inline">{t('facts.desiredRevision')}：</dt><dd className="num inline">{v.desired_revision}</dd></div>
+          <div><dt className="inline">{t('facts.appliedRevision')}：</dt><dd className="num inline">{v.applied_revision}</dd></div>
+          <div><dt className="inline">{t('desired.stateRaw')}</dt><dd className="num inline break-all">{v.observed?.state || '—'}</dd></div>
+          <div><dt className="inline">{t('instance.healthRaw')}</dt><dd className="num inline break-all">{v.observed?.health || '—'}</dd></div>
         </dl>
       </details>
 
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-hairline pt-3">
         <Link to={`/plugins/${encodeURIComponent(v.id)}`} className="btn btn-primary">
-          查看详情 <ArrowRight size={13} />
+          {t('instance.viewDetails')} <ArrowRight size={13} />
         </Link>
         <InstanceControls v={v} catalog={catalog} onEdit={onEdit} variant="list" />
       </div>

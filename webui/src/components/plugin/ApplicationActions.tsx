@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { SchemaActionInput } from '@/components/command/SchemaActionInput'
 import { useApplicationAction } from '@/hooks/useApplicationAction'
@@ -9,6 +10,7 @@ import type { AppJobsView, AppJobView } from '@/lib/types'
 import { useAuth } from '@/store/auth'
 
 function ActionResult({ json }: { json: string }) {
+  const { t } = useTranslation('plugin')
   let value: unknown
   let valid = true
   try { value = JSON.parse(json) } catch { valid = false }
@@ -16,13 +18,13 @@ function ActionResult({ json }: { json: string }) {
   return <div className="mt-3 min-w-0 space-y-3">
     {valid
       ? <p className="break-words text-sm leading-relaxed text-ink-2 [overflow-wrap:anywhere]">{
-        summary.text || '应用已返回结果，详情请查看结果原文或应用记录。'
+        summary.text || t('actions.resultFallback')
       }</p>
       : <p className="text-sm text-ink-2">{json
-        ? '应用返回的内容无法直接展示，请查看原文。' : '应用未返回结果内容，请查看应用记录。'}</p>}
+        ? t('actions.resultInvalid') : t('actions.resultMissing')}</p>}
     {json && <details className="min-w-0">
-      <summary className="flex min-h-11 cursor-pointer items-center text-xs text-ink-2">查看结果原文</summary>
-      <pre tabIndex={0} role="group" aria-label="执行结果原文"
+      <summary className="flex min-h-11 cursor-pointer items-center text-xs text-ink-2">{t('actions.viewRaw')}</summary>
+      <pre tabIndex={0} role="group" aria-label={t('actions.rawAria')}
         className="num mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-surface-2 p-3 font-mono text-xs">{json}</pre>
     </details>}
   </div>
@@ -31,38 +33,39 @@ function ActionResult({ json }: { json: string }) {
 function ActionForm({ instanceID, job, scope, schema, enabled, hasInput }: {
   instanceID: string; job: AppJobView; scope: string; schema: Record<string, unknown>; enabled: boolean; hasInput: boolean
 }) {
+  const { t } = useTranslation('plugin')
   const { mutation, request, run, edit } = useApplicationAction(instanceID, job, schema, scope, enabled)
   const title = job.title?.trim() || job.id
   return <div className="min-w-0">
-    <SchemaActionInput action={{ label: title, inputSchema: schema, inputPlaceholder: '按应用要求填写参数' }}
+    <SchemaActionInput action={{ label: title, inputSchema: schema, inputPlaceholder: t('actions.inputPlaceholder') }}
       validate={(args) => appJobArgsError(args, schema)} emptyArgs="{}"
-      description={hasInput ? '按应用要求填写参数。' : '无需填写参数，点击即可执行。'}
-      emptyHint={hasInput ? '填写参数后可执行。' : '点击执行操作。'}
-      validationSource="插件" disabled={!enabled || mutation.isPending} onEdit={edit}
+      description={hasInput ? t('actions.inputDescription') : t('actions.noInputDescription')}
+      emptyHint={hasInput ? t('actions.inputHint') : t('actions.noInputHint')}
+      validationSource={t('actions.validationSource')} disabled={!enabled || mutation.isPending} onEdit={edit}
       renderSubmit={(args, error) => <button type="button" className="btn btn-primary shrink-0"
-        aria-label={(mutation.isError ? '重试' : mutation.isSuccess ? '再次执行' : '执行') + '「' + title + '」'}
+        aria-label={mutation.isError ? t('actions.retryAria', { title }) : mutation.isSuccess ? t('actions.againAria', { title }) : t('actions.runAria', { title })}
         aria-busy={mutation.isPending} disabled={!enabled || Boolean(error) || mutation.isPending} onClick={() => run(args)}>
         {mutation.isPending && <Loader2 size={14} className="animate-spin" />}
-        {mutation.isPending ? '等待执行结果…' : mutation.isError ? '再次尝试' : mutation.isSuccess ? '再次执行' : '执行操作'}
+        {mutation.isPending ? t('actions.waiting') : mutation.isError ? t('actions.retry') : mutation.isSuccess ? t('actions.again') : t('actions.run')}
       </button>} />
     {mutation.isError && <div className="mt-3 min-w-0 space-y-2 rounded-lg border border-hairline p-3">
       <p role="alert" className="break-words text-sm text-bad">{appActionError(mutation.error)}</p>
-      <p className="text-xs leading-relaxed text-ink-2">不会自动重试。请先查看应用记录；再次执行会沿用上次内容，修改参数后再执行会作为一次新的操作。</p>
+      <p className="text-xs leading-relaxed text-ink-2">{t('actions.noAutoRetry')}</p>
       {mutation.error instanceof Error && mutation.error.message && <details className="min-w-0">
-        <summary className="cursor-pointer text-xs text-ink-2">错误详情</summary>
+        <summary className="cursor-pointer text-xs text-ink-2">{t('actions.errorDetails')}</summary>
         <p className="mt-2 whitespace-pre-wrap break-words text-xs text-ink-2 [overflow-wrap:anywhere]">{mutation.error.message}</p>
       </details>}
     </div>}
     {mutation.isSuccess && <div className="mt-3 min-w-0 rounded-lg border border-hairline p-4">
-      <p role="status" className="text-sm font-medium">操作已受理</p>
-      <p className="mt-1 text-xs leading-relaxed text-ink-3">以下为应用返回的结果，不一定代表设备已经执行。设备执行结果请在应用记录中核对。</p>
-      <h4 className="mt-4 text-sm font-medium">执行结果</h4>
+      <p role="status" className="text-sm font-medium">{t('actions.accepted')}</p>
+      <p className="mt-1 text-xs leading-relaxed text-ink-3">{t('actions.acceptedHint')}</p>
+      <h4 className="mt-4 text-sm font-medium">{t('actions.result')}</h4>
       <ActionResult json={mutation.data.result_json} />
     </div>}
     {request && <details className="mt-3 min-w-0">
-      <summary className="flex min-h-11 cursor-pointer items-center text-xs text-ink-2">本次请求详情</summary>
-      <p className="mt-2 break-all text-xs text-ink-2">请求标识：<code>{request.idempotency_key}</code></p>
-      <pre tabIndex={0} role="group" aria-label="本次请求参数"
+      <summary className="flex min-h-11 cursor-pointer items-center text-xs text-ink-2">{t('actions.requestDetails')}</summary>
+      <p className="mt-2 break-all text-xs text-ink-2">{t('actions.requestId')}<code>{request.idempotency_key}</code></p>
+      <pre tabIndex={0} role="group" aria-label={t('actions.requestArgsAria')}
         className="num mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-surface-2 p-3 font-mono text-xs">{request.args_json}</pre>
     </details>}
   </div>
@@ -83,18 +86,19 @@ function Action({ instanceID, job, scope, enabled }: {
 export function ApplicationActions({ instanceID, jobs, running, conflict = false, desiredEnabled = true, lifecycleKey }: {
   instanceID: string; jobs: AppJobsView | undefined; running: boolean | undefined; conflict?: boolean; desiredEnabled?: boolean; lifecycleKey?: string
 }) {
+  const { t } = useTranslation('plugin')
   const scope = useAuth((state) => appActionScope(state, instanceID))
   const actions = manualAppJobs(jobs?.instance_id === instanceID ? jobs.job_descriptors : undefined)
   return <div className="min-w-0">
-    <p className="mb-3 text-xs leading-relaxed text-ink-3">这里显示可以手动执行的操作。后台定时任务会自动运行。</p>
-    {!scope && <p className="mb-3 text-sm text-ink-2">当前账号只能查看，不能执行操作。</p>}
+    <p className="mb-3 text-xs leading-relaxed text-ink-3">{t('actions.intro')}</p>
+    {!scope && <p className="mb-3 text-sm text-ink-2">{t('actions.readOnly')}</p>}
     {running !== true && <p className="mb-3 text-sm text-ink-2">{conflict
-      ? '运行状态来源不一致，暂不能执行操作。'
+      ? t('actions.conflict')
       : running === false
-        ? desiredEnabled ? '应用已停止，不能执行操作。' : '设置已停用，不能执行操作。'
-        : '应用运行状态尚未确认，不能执行操作。'}</p>}
+        ? desiredEnabled ? t('actions.stopped') : t('actions.disabled')
+        : t('actions.unknown')}</p>}
     {actions.length ? <div className="divide-y divide-hairline">{actions.map((job) => <Action
       key={JSON.stringify([scope, lifecycleKey, running === false, job])} instanceID={instanceID} job={job} scope={scope} enabled={running === true} />)}</div>
-      : jobs && <p className="py-3 text-sm text-ink-3">暂无应用操作</p>}
+      : jobs && <p className="py-3 text-sm text-ink-3">{t('actions.empty')}</p>}
   </div>
 }

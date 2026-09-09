@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 import {
   Boxes, KeyRound, Puzzle, Server, Settings2, ShieldCheck, SlidersHorizontal,
@@ -22,10 +23,11 @@ import { useAuth } from '@/store/auth'
  * 390px 下同样可操作。
  */
 export default function PluginInstanceDetail() {
+  const { t } = useTranslation('plugins')
   const { id = '' } = useParams()
   const key = decodeURIComponent(id)
   const { instance, loading, error } = usePluginInstance(key)
-  usePageTitle(instance ? `运行实例 ${instance.id}` : '运行实例')
+  usePageTitle(instance ? t('detail.title', { id: instance.id }) : t('detail.titleFallback'))
 
   const { plugins } = usePluginCatalog()
   const [editing, setEditing] = useState(false)
@@ -39,7 +41,7 @@ export default function PluginInstanceDetail() {
   if (loading) {
     return (
       <>
-        <BackLink to="/plugins" label="应用与插件" />
+        <BackLink to="/plugins" label={t('detail.back')} />
         <Panel><RowSkeleton rows={5} /></Panel>
       </>
     )
@@ -48,13 +50,13 @@ export default function PluginInstanceDetail() {
   if (!instance) {
     return (
       <>
-        <BackLink to="/plugins" label="应用与插件" />
+        <BackLink to="/plugins" label={t('detail.back')} />
         {error ? (
-          <ErrorState icon={<Boxes size={20} />} title="运行实例加载失败"
-            hint={`没有找到 ${key}。它可能已被删除，或不属于当前组织。请返回列表刷新后再试。`} />
+          <ErrorState icon={<Boxes size={20} />} title={t('detail.loadFailed')}
+            hint={t('detail.notFoundHint', { id: key })} />
         ) : (
-          <EmptyState icon={<Boxes size={24} />} title="运行实例不存在"
-            hint={`没有找到 ${key}。它可能已被删除，或不属于当前组织。请返回列表刷新后再试。`} />
+          <EmptyState icon={<Boxes size={24} />} title={t('detail.notFound')}
+            hint={t('detail.notFoundHint', { id: key })} />
         )}
       </>
     )
@@ -69,37 +71,37 @@ export default function PluginInstanceDetail() {
   const facts = (
     <div className="grid items-start gap-5 lg:grid-cols-3">
       <Panel className="lg:col-span-2"
-        title={<span className="flex items-center gap-1.5"><Boxes size={14} />保存的设置与当前运行情况</span>}>
+        title={<span className="flex items-center gap-1.5"><Boxes size={14} />{t('detail.savedAndObserved')}</span>}>
         <InstanceSplit v={instance} />
       </Panel>
 
-      <Panel title={<span className="flex items-center gap-1.5"><Settings2 size={14} />基本信息</span>}>
+      <Panel title={<span className="flex items-center gap-1.5"><Settings2 size={14} />{t('detail.basicInfo')}</span>}>
         <InstanceFacts v={instance} catalog={catalog} />
       </Panel>
 
-      <Panel title={<span className="flex items-center gap-1.5"><ShieldCheck size={14} />权限</span>}
-        right={catalog ? undefined : <Badge tone="idle">未提供来源信息</Badge>}>
+      <Panel title={<span className="flex items-center gap-1.5"><ShieldCheck size={14} />{t('detail.permissions')}</span>}
+        right={catalog ? undefined : <Badge tone="idle">{t('detail.sourceUnavailable')}</Badge>}>
         <PermissionList
           permissions={catalog?.permissions}
           emptyHint={catalog
-            ? '该插件不需要额外权限'
-            : '可用插件列表中没有这个插件的权限信息。期望状态与实际状态不受影响。'}
+            ? t('detail.noExtraPermissions')
+            : t('detail.permissionsUnavailable')}
         />
         {catalog?.verified && (
           <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
-            该插件已通过来源验证，权限声明来自插件信息。
+            {t('detail.verifiedPermissions')}
           </p>
         )}
       </Panel>
 
-      <Panel title={<span className="flex items-center gap-1.5"><KeyRound size={14} />使用的密钥</span>}>
+      <Panel title={<span className="flex items-center gap-1.5"><KeyRound size={14} />{t('detail.secrets')}</span>}>
         <SecretRefList refs={instance.desired.secret_refs} />
       </Panel>
 
-      <Panel title={<span className="flex items-center gap-1.5"><SlidersHorizontal size={14} />插件设置</span>}>
+      <Panel title={<span className="flex items-center gap-1.5"><SlidersHorizontal size={14} />{t('detail.settings')}</span>}>
         <ConfigTable config={instance.desired.config} />
         <p className="mt-3 border-t border-hairline pt-3 text-[12px] leading-relaxed text-ink-3">
-          这里只显示设置内容；密钥只会显示名称，不会显示内容。
+          {t('detail.settingsHint')}
         </p>
       </Panel>
     </div>
@@ -107,7 +109,7 @@ export default function PluginInstanceDetail() {
 
   return (
     <>
-      <BackLink to="/plugins" label="应用与插件" />
+      <BackLink to="/plugins" label={t('detail.back')} />
 
       <header className="mb-5 flex flex-wrap items-center gap-2.5 fade-up">
         <h1 className="metric num min-w-0 max-w-full break-all text-[24px] font-semibold sm:truncate" title={instance.id}>
@@ -119,36 +121,36 @@ export default function PluginInstanceDetail() {
           <Puzzle size={11} className="shrink-0" />
           <span className="min-w-0 truncate">{pluginDisplayName(catalog)}</span>
         </span>
-        {serverHosted ? <span className="flex items-center gap-1 text-xs text-ink-2"><Server size={13} />中心服务</span> : <>
+        {serverHosted ? <span className="flex items-center gap-1 text-xs text-ink-2"><Server size={13} />{t('detail.server')}</span> : <>
           <Link to={`/edges/${encodeURIComponent(instance.edge_id)}`}
             className="flex min-w-0 max-w-full items-center gap-1 font-mono text-[11px] text-ink-3 no-underline transition-colors hover:text-accent"
-            title={`网关 ${instance.edge_id}`}>
+            title={t('detail.edgeTitle', { id: instance.edge_id })}>
             <Server size={11} className="shrink-0" />
-            <span className="min-w-0 truncate">网关 {instance.edge_id || '—'}</span>
+            <span className="min-w-0 truncate">{t('detail.edge', { id: instance.edge_id || '—' })}</span>
           </Link>
           <Badge tone={instance.edge_online ? 'ok' : 'idle'}>
-            {instance.edge_online ? '网关在线' : '网关离线'}
+            {instance.edge_online ? t('detail.edgeOnline') : t('detail.edgeOffline')}
           </Badge>
         </>}
         <span className="ml-auto shrink-0"><Badge tone={status.tone}>{status.label}</Badge></span>
       </header>
 
       {editing && !readOnly ? (
-        <Panel title={<span className="flex items-center gap-1.5"><SlidersHorizontal size={14} />编辑设置</span>}
+        <Panel title={<span className="flex items-center gap-1.5"><SlidersHorizontal size={14} />{t('detail.editSettings')}</span>}
           className="mb-5">
           <InstanceForm mode="edit" instance={instance} catalog={plugins} onDone={() => setEditing(false)} />
         </Panel>
       ) : (
         <>
-          <Panel className="mb-5" title="当前状态">
+          <Panel className="mb-5" title={t('detail.currentStatus')}>
             <InstanceStatusSummary v={instance} />
           </Panel>
 
-          <Panel className="mb-5" title="操作">
+          <Panel className="mb-5" title={t('detail.actions')}>
             <InstanceControls v={instance} catalog={catalog} showEdit={false}
               onEdit={() => setEditing(true)} />
             {!readOnly && <button type="button" className="btn btn-ghost mt-3" onClick={() => setEditing(true)}>
-              <SlidersHorizontal size={13} /> 编辑设置
+              <SlidersHorizontal size={13} /> {t('detail.editSettings')}
             </button>}
           </Panel>
 
@@ -160,7 +162,7 @@ export default function PluginInstanceDetail() {
           )}
 
           <details className="min-w-0">
-            <summary className="mb-4 flex min-h-11 cursor-pointer items-center text-sm text-ink-2">查看设置、权限与密钥</summary>
+            <summary className="mb-4 flex min-h-11 cursor-pointer items-center text-sm text-ink-2">{t('detail.showDetails')}</summary>
             {facts}
           </details>
         </>
