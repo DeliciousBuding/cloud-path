@@ -36,6 +36,12 @@
             "properties": {
               "id": {"type": "string", "description": "Stable driver contribution id (distinct from the plugin id)."},
               "title": {"type": "string"},
+              "i18n": {
+                "type": "object",
+                "description": "Optional locale -> title map. Legacy title remains the default.",
+                "propertyNames": {"minLength": 1},
+                "additionalProperties": {"type": "string"}
+              },
               "descriptor": {"type": "string"},
               "configSchema": {"type": "string"},
               "discovery": {"type": "string"},
@@ -52,6 +58,12 @@
             "properties": {
               "id": {"type": "string", "description": "Stable application contribution id (distinct from the plugin id)."},
               "title": {"type": "string"},
+              "i18n": {
+                "type": "object",
+                "description": "Optional locale -> title map. Legacy title remains the default.",
+                "propertyNames": {"minLength": 1},
+                "additionalProperties": {"type": "string"}
+              },
               "requirements": {"type": "array", "items": {"type": "object"}},
               "ui": {"type": "object", "description": "Declarative UI contribution validated against spec/plugin-ui.schema.json."}
             }
@@ -65,6 +77,12 @@
             "properties": {
               "id": {"type": "string", "description": "Stable connector contribution id (distinct from the plugin id)."},
               "title": {"type": "string"},
+              "i18n": {
+                "type": "object",
+                "description": "Optional locale -> title map. Legacy title remains the default.",
+                "propertyNames": {"minLength": 1},
+                "additionalProperties": {"type": "string"}
+              },
               "direction": {"type": "string"},
               "host": {"type": "string"}
             }

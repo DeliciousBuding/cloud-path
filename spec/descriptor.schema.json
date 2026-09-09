@@ -21,6 +21,12 @@
         "entity_id": {"type": "string"},
         "unique_key": {"type": "string", "description": "Driver 范围内用户不可改的唯一键"},
         "name": {"type": "string"},
+        "i18n": {
+          "type": "object",
+          "description": "可选 locale -> entity name 映射；旧 name 仍是默认值。",
+          "propertyNames": {"minLength": 1},
+          "additionalProperties": {"type": "string"}
+        },
         "category": {"type": "string", "enum": ["sensor", "actuator", "diagnostic", "config"]},
         "capabilities": {"type": "array", "items": {"type": "string"}},
         "observations": {

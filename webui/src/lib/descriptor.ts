@@ -5,10 +5,11 @@
 // 本文件的存在意义：设备语义（时钟/分格/提醒…）不写进组件，组件只问这里要
 // 「主值 / 胶囊 / 分组 / 操作集 / 渲染 widget」，全部由 Descriptor + Capability 声明推导。
 import type { Tone } from '@/components/ui'
+import { resolveLocalizedText, type LocalizedText } from '@/i18n/pluginText'
 import type {
   CapabilityActionDecl, CapabilityDoc, CapabilityPresentation,
   DeviceDescriptor, DeviceRaw, DeviceStatus, DescriptorEntity, EntityCategory,
-  Observation, ObservationQuality,
+  I18nText, Observation, ObservationQuality,
 } from './types'
 
 /* ---------------- 基础字符串工具 ---------------- */
@@ -90,6 +91,16 @@ function obj(v: unknown): Record<string, unknown> | null {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null
 }
 
+function normalizeI18n(v: unknown): I18nText | undefined {
+  const source = obj(v)
+  if (!source) return undefined
+  const out: I18nText = {}
+  for (const [locale, text] of Object.entries(source)) {
+    if (locale.trim() && typeof text === 'string' && text.trim()) out[locale] = text
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
 /* ---------------- Capability 引用解析 ---------------- */
 
 export interface CapabilityRef {
@@ -154,6 +165,10 @@ export function capabilityLabel(ref: string | undefined, idx: CapabilityIndex = 
   if (!ref) return '未声明'
   const doc = resolveCapability(ref, idx)
   const parsed = parseCapabilityRef(ref)
+  if (doc?.metadata?.i18n && Object.keys(doc.metadata.i18n).length) {
+    const translated = resolveLocalizedText(doc.metadata, 'title')
+    if (translated) return translated
+  }
   const title = str(doc?.metadata?.title)
   return localizedTitle(title) ?? GENERIC_NOUN[parsed.name] ?? title ?? humanize(parsed.name || ref)
 }
@@ -200,6 +215,7 @@ function normalizeEntity(v: unknown): DescriptorEntity | null {
       ? categoryRaw : 'sensor'
   const e: DescriptorEntity = { entity_id: entityId, unique_key: uniqueKey, category, capabilities }
   const name = str(o.name); if (name) e.name = name
+  const i18n = normalizeI18n(o.i18n); if (i18n) e.i18n = i18n
   const obsSrc = obj(o.observations)
   if (obsSrc) {
     const observations: Record<string, Observation> = {}
@@ -249,6 +265,7 @@ function normalizeCapabilityDoc(v: unknown): CapabilityDoc | null {
       },
     }
     const title = str(meta.title); if (title) doc.metadata.title = title
+    const i18n = normalizeI18n(meta.i18n); if (i18n) doc.metadata.i18n = i18n
     if (spec) doc.spec = spec as CapabilityDoc['spec']
     if (str(o.apiVersion)) doc.apiVersion = str(o.apiVersion)
     if (str(o.kind)) doc.kind = str(o.kind)
@@ -261,6 +278,7 @@ function normalizeCapabilityDoc(v: unknown): CapabilityDoc | null {
     metadata: { id, version: typeof o.version === 'number' ? o.version : (parseCapabilityRef(id).version ?? 1) },
   }
   const title = str(o.title); if (title) doc.metadata.title = title
+  const i18n = normalizeI18n(o.i18n); if (i18n) doc.metadata.i18n = i18n
   const flatSpec: Record<string, unknown> = {}
   for (const k of ['properties', 'events', 'actions', 'presentation'] as const) {
     const sub = obj(o[k]); if (sub) flatSpec[k] = sub
@@ -336,7 +354,7 @@ export function readInlineDescriptor(input: unknown): DeviceDescriptor | null {
 /* ---------------- Entity / Observation 读取 ---------------- */
 
 export function entityTitle(e: DescriptorEntity): string {
-  return e.name || humanize(e.unique_key || e.entity_id)
+  return resolveLocalizedText(e, 'name') ?? humanize(e.unique_key || e.entity_id)
 }
 
 /** 观测列表：按 (capability, property) 稳定排序，去重同一 capability+property */
@@ -599,9 +617,9 @@ function declaredCommands(container: Record<string, unknown>): CommandAction[] {
       if (!o) continue
       const cmd = str(o.command) ?? str(o.cmd) ?? str(o.id) ?? str(o.name) ?? str(o.action)
       if (!cmd) continue
-      const label = str(o.title) ?? str(o.label) ?? str(o.name) ?? commandLabel(cmd)
+      const label = resolveLocalizedText(o as LocalizedText, 'title') ?? str(o.label) ?? str(o.name) ?? commandLabel(cmd)
       const a: CommandAction = { cmd, label, variant: variantOf(o) }
-      const hint = str(o.description) ?? str(o.hint); if (hint) a.hint = hint
+      const hint = resolveLocalizedText(o as LocalizedText, 'description') ?? str(o.hint); if (hint) a.hint = hint
       const confirmText = confirmOf(o, label); if (confirmText) a.confirmText = confirmText
       const schema = obj(o.inputSchema) ?? obj(o.input) ?? obj(o.args)
       if (schema) {
@@ -630,12 +648,12 @@ function actionsFromCapabilities(
       for (const [name, declRaw] of Object.entries(actions)) {
         const decl = (obj(declRaw) ?? {}) as Record<string, unknown>
         const cmd = str(decl.command) ?? str(decl.cmd) ?? name
-        const label = str(decl.title) ?? str(decl.label) ?? commandLabel(name)
+        const label = resolveLocalizedText(decl as LocalizedText, 'title') ?? str(decl.label) ?? commandLabel(name)
         const a: CommandAction = {
           cmd, label, variant: variantOf(decl),
           capability: ref, entityId: e.entity_id, entityLabel: entityTitle(e),
         }
-        const hint = str(decl.description) ?? str(decl.hint); if (hint) a.hint = hint
+        const hint = resolveLocalizedText(decl as LocalizedText, 'description') ?? str(decl.hint); if (hint) a.hint = hint
         const confirmText = confirmOf(decl, label); if (confirmText) a.confirmText = confirmText
         const schema = obj(decl.inputSchema)
         if (schema && schemaNeedsInput(schema)) { a.needsInput = true; a.inputSchema = schema }
@@ -846,9 +864,14 @@ export function commandDecl(cmd: string, idx: CapabilityIndex): {
     for (const [name, declRaw] of Object.entries(actions)) {
       const decl = obj(declRaw) ?? {}
       if ((str(decl.command) ?? str(decl.cmd) ?? name) !== cmd) continue
-      // 与 propertyLabel / capabilityLabel 同一 locale 规则：英文 title 让位给平台词典
-      const title = localizedTitle(str(decl.title) ?? str(decl.label))
-      const description = str(decl.description) ?? str(decl.hint)
+      const hasI18n = Boolean(obj(decl.i18n) && Object.keys(obj(decl.i18n) ?? {}).length)
+      // 与 propertyLabel / capabilityLabel 同一 locale 规则：无 i18n 时英文 title 让位平台词典。
+      const title = hasI18n
+        ? resolveLocalizedText(decl as LocalizedText, 'title')
+        : localizedTitle(str(decl.title) ?? str(decl.label))
+      const description = hasI18n
+        ? resolveLocalizedText(decl as LocalizedText, 'description')
+        : str(decl.description) ?? str(decl.hint)
       if (title || description) return { title, description }
     }
   }

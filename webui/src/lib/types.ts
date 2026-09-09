@@ -220,6 +220,9 @@ export type Json =
   | Json[]
   | { [k: string]: Json }
 
+/** 插件声明文本的 locale -> 文本映射；机器 ID / URI / property key 永不进入。 */
+export type I18nText = Record<string, string>
+
 /** Descriptor: device status 枚举 */
 export type DeviceStatus = 'online' | 'offline' | 'unavailable' | 'degraded'
 
@@ -251,6 +254,7 @@ export interface DescriptorEntity {
   /** Driver 范围内用户不可改的唯一键 */
   unique_key: string
   name?: string
+  i18n?: I18nText
   category: EntityCategory
   /** Capability 引用列表（字符串，允许带或不带 @version） */
   capabilities: string[]
@@ -291,6 +295,7 @@ export interface CapabilityEventDecl {
 export interface CapabilityActionDecl {
   title?: string
   description?: string
+  i18n?: I18nText
   inputSchema?: Record<string, unknown>
   /** 下发到 POST commands 的 cmd 字段（缺省用 action key） */
   command?: string
@@ -322,6 +327,7 @@ export interface CapabilityMetadata {
   id: string
   version: number
   title?: string
+  i18n?: I18nText
 }
 
 /** 一份 Capability 文档（catalog 下发或随 Descriptor 一并返回） */
@@ -445,6 +451,7 @@ export interface PluginUIContribution {
 export interface PluginDriverContributionData {
   id: string
   title?: string
+  i18n?: I18nText
   discovery?: string
   ui?: PluginUIContribution
 }
@@ -452,12 +459,14 @@ export interface PluginDriverContributionData {
 export interface PluginApplicationContributionData {
   id: string
   title?: string
+  i18n?: I18nText
   ui?: PluginUIContribution
 }
 
 export interface PluginConnectorContributionData {
   id: string
   title?: string
+  i18n?: I18nText
   direction?: string
   host?: string
 }
@@ -667,6 +676,7 @@ export const PLUGIN_ERR_CODES: readonly string[] = Object.values(PluginErr)
 export interface PluginCatalogDriverView {
   id: string
   title?: string
+  i18n?: I18nText
   descriptor?: string
   configSchema?: string
   discovery?: string
