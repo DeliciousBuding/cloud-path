@@ -32,7 +32,7 @@ export function DeviceRow({ d }: { d: DeviceView }) {
       <div className="col-span-2 flex min-w-0 items-center gap-2 lg:col-span-1">
         <Link
           to={`/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`}
-          className="flex min-w-0 items-center gap-1 text-[13px] font-medium no-underline hover:text-accent"
+          className="flex min-h-11 min-w-0 items-center gap-1 text-[13px] font-medium no-underline hover:text-accent sm:min-h-0"
           title={`${name} · ${d.id}`}
         >
           <span className="min-w-0 truncate">{name}</span>

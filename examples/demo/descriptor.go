@@ -153,7 +153,7 @@ func demoDescriptor(id string) model.Descriptor {
 				Category: model.EntityDiagnostic, Capabilities: []string{capUptime},
 			},
 			{
-				EntityID: entityCommands, UniqueKey: entityCommands, Name: "命令计数",
+				EntityID: entityCommands, UniqueKey: entityCommands, Name: "命令总数（含轮询）",
 				Category: model.EntityDiagnostic, Capabilities: []string{capCounter},
 			},
 			{

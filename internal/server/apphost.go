@@ -561,6 +561,9 @@ func (h *AppHost) startInstance(ctx context.Context, row store.PluginInstanceRow
 	h.mu.Unlock()
 	h.logger.Info("apphost instance running", "instance", row.InstanceID,
 		"plugin", row.PluginID, "version", row.Version, "bindings", len(bs.Bindings))
+	// 启动成功后立即投影一次 observed：生产 reconcile 也经由此路径，避免实例已 running
+	// 但控制面最多 30s 仍显示旧状态。此处已释放 h.mu；reportObserved 自行取锁。
+	h.reportObserved()
 	return nil
 }
 

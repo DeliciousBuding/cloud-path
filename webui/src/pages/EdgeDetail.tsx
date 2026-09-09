@@ -89,7 +89,7 @@ export default function EdgeDetail() {
 
       {!e.online && (
         <div className="banner mb-5 rounded-lg" role="status">
-          这个网关当前离线：下属设备暂停更新，已发送的操作会排队等待重连。其他在线网关不受影响。
+          这个网关当前离线：下属设备暂停更新，网关离线期间不能下发操作，恢复连接后再试。其他在线网关不受影响。
         </div>
       )}
 
@@ -125,7 +125,7 @@ export default function EdgeDetail() {
                       {d.online ? '在线' : '离线'}
                     </Badge>
                     <Link to={`/devices/${encodeURIComponent(e.edge_id)}/${encodeURIComponent(dev)}`}
-                      className="min-w-0 flex-1 no-underline">
+                      className="flex min-h-11 min-w-0 flex-1 flex-col justify-center no-underline">
                       <span className="block truncate text-[13px] font-medium hover:text-accent" title={deviceLabel(d)}>
                         <span className="sr-only">{d.online ? '在线，' : '离线，'}</span>
                         {deviceLabel(d)}
@@ -165,7 +165,7 @@ export default function EdgeDetail() {
                 <span className="text-ink-3">
                   {events.length > 20 ? `另有 ${events.length - 20} 条` : '这里只展示状态事件'}
                 </span>
-                <Link to="/activity" className="link flex items-center gap-0.5">
+                <Link to="/activity" className="link flex min-h-11 items-center gap-0.5">
                   查看全部运行记录 <ArrowRight size={12} />
                 </Link>
               </div>

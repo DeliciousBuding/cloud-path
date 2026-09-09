@@ -13,11 +13,6 @@ export function fmtTime(ts: number): string {
   return new Date(ts * 1000).toLocaleTimeString('zh-CN', { hour12: false })
 }
 
-/** 时分刻度（HH:MM）：分桶时间轴用，秒级细节对 ≥ 1 分钟的桶是噪音 */
-export function fmtHourMin(ts: number): string {
-  return new Date(ts * 1000).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' })
-}
-
 export function fmtDateTime(ts: number): string {
   if (!ts) return '—'
   return new Date(ts * 1000).toLocaleString('zh-CN', { hour12: false })

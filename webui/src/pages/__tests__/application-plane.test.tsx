@@ -260,7 +260,7 @@ describe('插件实例详情的应用入口', () => {
     expect(http.calls.every((c) => c.method === 'GET')).toBe(true)
     expect(screen.getByText('app_config')).not.toBeVisible()
     expect(screen.getByText('{"example_input":"input-1"}')).not.toBeVisible()
-    await userEvent.setup().click(screen.getByText('查看详细信息'))
+    await userEvent.setup().click(screen.getByText('查看设置、权限与密钥'))
     expect(screen.getByText('共享运行')).toBeVisible()
     expect(screen.getAllByText('运行位置').length).toBeGreaterThan(0)
     expect(screen.getAllByText('中心服务').length).toBeGreaterThan(0)

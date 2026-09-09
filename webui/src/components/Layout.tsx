@@ -83,7 +83,7 @@ function ConnPill() {
 
 function Brand() {
   return (
-    <NavLink to="/" className="flex items-center gap-2.5 px-1 text-accent" aria-label="CloudPath 概览">
+    <NavLink to="/" className="flex min-h-11 items-center gap-2.5 px-1 text-accent sm:min-h-0" aria-label="CloudPath 概览">
       <Logo size={26} />
       <span className="leading-tight">
         <span className="block text-[15px] font-semibold tracking-[-0.01em] text-ink">CloudPath</span>

@@ -66,7 +66,9 @@ async function openDiagnostics() {
   const user = userEvent.setup()
   const summary = screen.getByText('高级诊断').closest('summary')
   expect(summary).not.toBeNull()
+  expect(summary).toHaveTextContent('展开查看')
   await user.click(summary as HTMLElement)
+  expect(summary).toHaveTextContent('收起')
 }
 
 describe('侧栏账号区', () => {

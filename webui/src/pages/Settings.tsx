@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Activity, AlertCircle, Check, Cpu, Database, KeyRound, LogOut, Monitor, Moon, Network, Plug,
+  Activity, AlertCircle, Check, ChevronDown, Cpu, Database, KeyRound, LogOut, Monitor, Moon, Network, Plug,
   Server, Sun, UserRound, Wifi,
 } from 'lucide-react'
 import { Badge, KeyValue, PageHeader, Panel, Segmented, StatTile, TextField } from '@/components/ui'
@@ -299,7 +299,11 @@ export default function Settings() {
       >
         <summary className="flex min-h-11 cursor-pointer select-none flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-ink-2">
           <span className="flex items-center gap-1.5"><Activity size={14} />高级诊断</span>
-          <span className="text-xs font-normal text-ink-3">连接、记录与接入方式</span>
+          <span className="hidden text-xs font-normal text-ink-3 sm:inline">连接、记录与接入方式</span>
+          <span className="ml-auto flex items-center gap-1 text-xs font-normal text-ink-3">
+            {diagnosticsOpen ? '收起' : '展开查看'}
+            <ChevronDown size={14} className={diagnosticsOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
+          </span>
         </summary>
         <p className="mt-1 max-w-[62ch] text-xs leading-relaxed text-ink-3">
           这里用于排查运行和接入问题。无法读取时会明确显示失败，不会用 0 或假加载代替。

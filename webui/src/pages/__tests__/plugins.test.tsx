@@ -267,7 +267,7 @@ describe('实例分区：desired 与 observed 永远分别渲染', () => {
     route({ instances: [instance({ stale: true })] })
     const user = userEvent.setup()
     renderDetail()
-    await user.click(await screen.findByText('查看详细信息'))
+    await user.click(await screen.findByText('查看设置、权限与密钥'))
     expect(await screen.findByText(/已超过有效期/)).toBeInTheDocument()
     expect(screen.getByText(/运行状态已过期 · 更新于/)).toBeInTheDocument()
     // 保存的设置与当前运行情况两栏都在，且各自标注来源
@@ -281,7 +281,7 @@ describe('实例分区：desired 与 observed 永远分别渲染', () => {
     route({ instances: [instance()] })
     const user = userEvent.setup()
     renderDetail()
-    await user.click(await screen.findByText('查看详细信息'))
+    await user.click(await screen.findByText('查看设置、权限与密钥'))
     expect(await screen.findByText('基本信息')).toBeInTheDocument()
     // 'Edge 在线' 在头部徽标与事实一览里各出现一次，故按「至少一处」断言
     for (const label of ['期望版本', '实际版本', '运行位置', '网关状态', '来源验证', '安装摘要']) {
@@ -306,7 +306,7 @@ describe('实例分区：desired 与 observed 永远分别渲染', () => {
     route({ instances: [instance({ id: 'server/inst-1', edge_id: 'server' })] })
     const user = userEvent.setup()
     renderDetail('/plugins/server%2Finst-1')
-    await user.click(await screen.findByText('查看详细信息'))
+    await user.click(await screen.findByText('查看设置、权限与密钥'))
     expect(await screen.findByText('中心服务会按它应用')).toBeVisible()
     expect(screen.queryByText('网关会按它应用')).not.toBeInTheDocument()
   })
@@ -315,7 +315,7 @@ describe('实例分区：desired 与 observed 永远分别渲染', () => {
     route({ instances: [instance()] })
     const user = userEvent.setup()
     const { container } = renderDetail()
-    await user.click(await screen.findByText('查看详细信息'))
+    await user.click(await screen.findByText('查看设置、权限与密钥'))
     await screen.findByText('基本信息')
     expect(container.textContent).not.toContain(LOCAL_PATH)
   })

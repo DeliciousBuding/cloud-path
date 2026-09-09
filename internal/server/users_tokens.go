@@ -26,7 +26,7 @@ func (s *Server) requireRole(need api.UserRole) func(http.Handler) http.Handler 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if p := auth.FromContext(r.Context()); p != nil && !auth.RoleAllows(p.Role, string(need)) {
-				writeJSON(w, http.StatusForbidden, map[string]string{"error": "permission denied"})
+				writeAPIError(w, r, http.StatusForbidden, apiErrPermissionDenied, "当前账号无权执行此操作")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -40,11 +40,11 @@ func (s *Server) requireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := s.currentPrincipal(r)
 		if p == nil {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+			writeAPIError(w, r, http.StatusUnauthorized, apiErrAuthenticationRequired, "需要登录或有效令牌")
 			return
 		}
 		if !auth.RoleAllows(p.Role, string(api.RoleAdmin)) {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "permission denied"})
+			writeAPIError(w, r, http.StatusForbidden, apiErrPermissionDenied, "当前账号无权执行此操作")
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), p)))

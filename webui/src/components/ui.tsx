@@ -133,20 +133,6 @@ export function ErrorState({ icon, title, hint, onRetry, retrying, compact, plai
   )
 }
 
-/** 页内分区标题（比 Panel title 更轻，用于把一组卡片归到一个语义段落下） */
-export function SectionTitle({ icon, children, right }: {
-  icon?: ReactNode; children: ReactNode; right?: ReactNode
-}) {
-  return (
-    <div className="mb-3 flex min-w-0 items-center justify-between gap-3 px-1">
-      <h2 className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold tracking-[-0.01em]">
-        {icon}<span className="truncate">{children}</span>
-      </h2>
-      {right}
-    </div>
-  )
-}
-
 export function Segmented<T extends string>({ options, value, onChange, label = '视图切换' }: {
   options: { value: T; label: string; icon?: ReactNode }[]
   value: T
@@ -394,7 +380,7 @@ export function AuthCard({ title, subtitle, children, footer }: {
 export function BackLink({ to, label }: { to: string; label: string }) {
   return (
     <Link to={to}
-      className="mb-5 inline-flex items-center gap-1 text-sm text-ink-2 transition-colors hover:text-accent fade-up">
+      className="mb-5 inline-flex min-h-11 items-center gap-1 text-sm text-ink-2 transition-colors hover:text-accent fade-up sm:min-h-0">
       <ArrowLeft size={15} /> {label}
     </Link>
   )

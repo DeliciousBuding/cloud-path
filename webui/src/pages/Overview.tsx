@@ -276,7 +276,7 @@ export default function Overview() {
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-4 sm:px-5">
                     <CheckCircle2 size={16} className="shrink-0 text-ok" />
                     <p className="min-w-0 flex-1 text-sm text-ink-2">当前没有需要处理的异常。</p>
-                    <Link to="/activity" className="link flex shrink-0 items-center gap-0.5 text-xs">
+                    <Link to="/activity" className="link flex min-h-11 shrink-0 items-center gap-0.5 text-xs">
                       查看运行记录 <ArrowRight size={12} />
                     </Link>
                   </div>
@@ -308,7 +308,7 @@ export default function Overview() {
               <Panel
                 title={<span className="flex items-center gap-1.5"><Cpu size={14} />设备状态</span>}
                 right={
-                  <Link to="/devices" className="link flex items-center gap-0.5 text-xs">
+                  <Link to="/devices" className="link flex min-h-11 items-center gap-0.5 text-xs">
                     查看全部设备 <ArrowRight size={12} />
                   </Link>
                 }
@@ -339,7 +339,7 @@ export default function Overview() {
                   </ul>
                 )}
                 {devices.length > 8 && (
-                  <Link to="/devices" className="link mt-3 flex items-center gap-0.5 border-t border-hairline pt-3 text-xs">
+                  <Link to="/devices" className="link mt-3 flex min-h-11 items-center gap-0.5 border-t border-hairline pt-3 text-xs">
                     另有 {devices.length - 8} 台 · 查看全部 <ArrowRight size={12} />
                   </Link>
                 )}
@@ -349,7 +349,7 @@ export default function Overview() {
             <Panel
               title={<span className="flex items-center gap-1.5"><Activity size={14} />最近运行记录</span>}
               right={
-                <Link to="/activity" className="link flex items-center gap-0.5 text-xs">
+                <Link to="/activity" className="link flex min-h-11 items-center gap-0.5 text-xs">
                   查看全部 <ArrowRight size={12} />
                 </Link>
               }

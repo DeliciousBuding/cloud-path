@@ -38,7 +38,7 @@ Edge(demo 设备) → Server → WebUI：上线/实时状态/独立命令/事件
 | `hardware` | 恒为 `none` | 常量（诚实标注） |
 | `uptime_s` | 自 `Open` 起的真实运行秒数 | 时间 |
 | `ticks` | 心跳计数 | 内部 tick 循环（默认 10s，`extra.tick_interval_s` 可调） |
-| `commands` | 已接受命令计数 | 每条白名单命令 |
+| `commands` | 已接受命令总数（含 Edge 默认轮询） | 每条白名单命令 |
 | `pings` | `ping` 命令计数 | `ping` |
 | `level` | 可写回数值设定 | `set value=<整数>` |
 | `enabled` | 可写回开关 | `set enabled=<true\|false>` |
@@ -75,7 +75,7 @@ value=42 enabled=true
 | `heartbeat` | 心跳 | sensor | `counter@1` | `value` = ticks |
 | `switch` | 开关 | actuator | `toggle@1` | `state` = enabled |
 | `uptime` | 运行时长 | diagnostic | `uptime@1` | `seconds` |
-| `commands` | 命令计数 | diagnostic | `counter@1` | `value` |
+| `commands` | 命令总数（含轮询） | diagnostic | `counter@1` | `value` |
 | `diagnostics` | 诊断 | diagnostic | `diagnostics@1` | `status` = `reference-demo-device` |
 | `level` | 设定值 | config | `setpoint@1` | `value` = level |
 

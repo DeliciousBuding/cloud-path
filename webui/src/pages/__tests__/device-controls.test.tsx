@@ -6,6 +6,7 @@ import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { CommandHistory } from '@/components/CommandHistory'
 import DeviceDetail from '@/pages/DeviceDetail'
 import { installFetch, stubResponse } from '@/test/http'
 import { renderWithProviders, resetStores } from '@/test/render'
@@ -29,13 +30,16 @@ interface Opts {
   descriptor?: unknown
   capabilities?: unknown
   commands?: unknown[]
+  device?: unknown
+  edges?: unknown[]
 }
 function route(o: Opts = {}) {
   return installFetch((url) => {
     if (url === '/api/adapters') {
       return o.adapters ? stubResponse(200, { adapters: o.adapters }) : stubResponse(404, {})
     }
-    if (url === `/api/devices/edge-1/dev-9`) return stubResponse(200, makeDeviceView())
+    if (url === `/api/devices/edge-1/dev-9`) return stubResponse(200, o.device ?? makeDeviceView())
+    if (url === '/api/edges') return o.edges ? stubResponse(200, { edges: o.edges }) : stubResponse(404, {})
     if (url.endsWith('/descriptor')) {
       return o.descriptor ? stubResponse(200, o.descriptor) : stubResponse(404, {})
     }
@@ -97,6 +101,28 @@ describe('命令集来自设备支持的操作', () => {
     renderDetail()
     await gotoControls()
     expect(await screen.findByText('这台设备暂时没有可执行的操作')).toBeInTheDocument()
+  })
+})
+
+describe('离线设备控制', () => {
+  const edge = (online: boolean) => ({
+    edge_id: 'edge-1', online, version: 'dev', devices: ['dev-9'], connected_at: 0,
+  })
+
+  it('设备离线时禁用操作并说明原因', async () => {
+    route({ device: makeDeviceView({ online: false }), edges: [edge(true)], descriptor: makeDescriptor(), capabilities: catalogPayload })
+    renderDetail()
+    await gotoControls()
+    expect(await screen.findByRole('status')).toHaveTextContent('设备当前离线')
+    expect(screen.getByRole('button', { name: '闭合' })).toBeDisabled()
+  })
+
+  it('所属网关离线时也 fail-closed 禁用操作', async () => {
+    route({ device: makeDeviceView({ online: true }), edges: [edge(false)], descriptor: makeDescriptor(), capabilities: catalogPayload })
+    renderDetail()
+    await gotoControls()
+    expect(await screen.findByRole('status')).toHaveTextContent('所属网关当前离线')
+    expect(screen.getByRole('button', { name: '闭合' })).toBeDisabled()
   })
 })
 
@@ -254,6 +280,47 @@ describe('操作记录', () => {
       method: 'POST',
       body: { cmd: 'pulse', args: '{"ms":100}' },
     })
+  })
+
+  it('未传在线态时保持历史重试入口', async () => {
+    route({
+      commands: [{
+        id: 53, device_id: KEY, cmd: 'pulse', args: '{"ms":100}', status: 'failed',
+        created_at: 1_780_000_000, acked_at: 1_780_000_001, result: 'busy',
+      }],
+    })
+    renderWithProviders(<CommandHistory deviceId={KEY} actions={[{ cmd: 'pulse', label: '点动' }]} />)
+    expect(await screen.findByRole('button', { name: '重试点动' })).toBeInTheDocument()
+  })
+
+  it('设备离线时禁用历史重试并说明恢复条件', async () => {
+    route({
+      commands: [{
+        id: 54, device_id: KEY, cmd: 'pulse', args: '{"ms":100}', status: 'failed',
+        created_at: 1_780_000_000, acked_at: 1_780_000_001, result: 'busy',
+      }],
+    })
+    renderWithProviders(<CommandHistory deviceId={KEY} online={false} actions={[{ cmd: 'pulse', label: '点动' }]} />)
+    expect(await screen.findByText('设备恢复在线后可重试')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重试点动' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '去设备操作中重试' })).not.toBeInTheDocument()
+  })
+
+  it('设备详情离线时也不显示历史重试入口', async () => {
+    route({
+      device: makeDeviceView({ online: false }),
+      edges: [{ edge_id: 'edge-1', online: true, version: 'dev', devices: ['dev-9'], connected_at: 0 }],
+      descriptor: makeDescriptor(),
+      capabilities: catalogPayload,
+      commands: [{
+        id: 55, device_id: KEY, cmd: 'pulse', args: '{"ms":100}', status: 'failed',
+        created_at: 1_780_000_000, acked_at: 1_780_000_001, result: 'busy',
+      }],
+    })
+    renderDetail(ROUTE + '?tab=events')
+    expect(await screen.findByText('设备恢复在线后可重试')).toBeVisible()
+    expect(screen.queryByRole('button', { name: '重试点动' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '去设备操作中重试' })).not.toBeInTheDocument()
   })
 })
 

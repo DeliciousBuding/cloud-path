@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appTime, applicationRunningState, bindingLabels, recordFieldLabel, scheduleSummary, scheduleZone } from '@/lib/application-plane'
+import { appTime, applicationResultSummary, applicationRunningState, bindingLabels, recordFieldLabel, scheduleSummary, scheduleZone } from '@/lib/application-plane'
 import { isolationLabel } from '@/lib/plugins'
 import { appBinding, appPresentation } from '@/test/application-plane'
 
@@ -44,5 +44,13 @@ describe('通用应用展示，不猜业务或设备', () => {
     expect(applicationRunningState(undefined, 'running')).toBe('unknown')
     expect(applicationRunningState(true, undefined)).toBe('running')
     expect(applicationRunningState(false, 'unknown')).toBe('stopped')
+  })
+  it.each([
+    ['ok', '成功'], ['succeeded', '成功'], ['failed', '失败'], ['pending', '处理中'], ['sent', '已发送'],
+  ])('应用状态 %s 在主视图显示中文', (status, label) => {
+    expect(applicationResultSummary({ status }).text).toBe(`状态 ${label}`)
+  })
+  it('未知应用状态不进入主视图，原文仍由结果原文承载', () => {
+    expect(applicationResultSummary({ status: 'vendor_unknown' }).text).toBeUndefined()
   })
 })

@@ -18,6 +18,7 @@ import { api, isNotFound } from '@/lib/api'
 import { useLive } from '@/store/ws'
 import { useNow } from '@/hooks/useNow'
 import { useDeviceDescriptor } from '@/hooks/useDescriptor'
+import { useEdges } from '@/hooks/useEdges'
 import type { DescriptorSource } from '@/hooks/useDescriptor'
 import {
   deviceStatusMeta, entityTitle, formatTimestamp, formatValue, metricTiles, observationsOf, primaryObservation,
@@ -121,9 +122,17 @@ export default function DeviceDetail() {
   const { data: adapters } = useQuery({
     queryKey: ['adapters'], queryFn: api.adapters, staleTime: 5 * 60_000,
   })
+  const edgeList = useEdges()
 
   const d = live ?? rest
   usePageTitle(d ? (d.name || d.id) : '设备')
+
+  const edgeOnline = edgeList.list.find((edge) => edge.edge_id === d?.edge_id)?.online
+  const actionsOnline = Boolean(d?.online) && edgeOnline !== false
+  const actionsOfflineReason = actionsOnline ? undefined
+    : edgeOnline === false
+      ? '所属网关当前离线，操作暂不可用。网关离线期间不能下发操作，恢复连接后再试。'
+      : '设备当前离线，操作暂不可用。请检查设备供电和串口连接，设备恢复后会自动刷新。'
 
   // 命令白名单唯一事实源是后端 /api/adapters；前端不自建清单
   const adapterCommands = useMemo(() => {
@@ -295,7 +304,7 @@ export default function DeviceDetail() {
           {d.name || deviceId}
         </h1>
         <Badge tone={deviceStatusMeta(d.online, descriptor?.status).tone}>{deviceStatusMeta(d.online, descriptor?.status).label}</Badge>
-        <span className="num ml-auto truncate font-mono text-[11px] text-ink-3" title={`设备键 ${d.id}`}>
+        <span className="num ml-auto truncate font-mono text-[11px] text-ink-3" title={`设备编号 ${d.id}`}>
           {d.online ? `更新于 ${timeAgo(d.updated_at)}` : `最后见 ${timeAgo(d.last_seen)}`}
         </span>
       </header>
@@ -362,7 +371,7 @@ export default function DeviceDetail() {
                   ? <p className="py-6 text-center text-sm text-ink-3">还没有事件</p>
                   : <EventFeed events={events} showDevice={false} limit={8} />}
               </Panel>
-              <CommandHistory deviceId={key} targetLabel={d.name || deviceId} actions={commands.actions} limit={8} />
+              <CommandHistory deviceId={key} targetLabel={d.name || deviceId} actions={commands.actions} limit={8} online={actionsOnline} />
             </div>
           </div>
         </TabPanel>
@@ -462,7 +471,7 @@ export default function DeviceDetail() {
                 ? <Panel title="设备操作" className="lg:col-span-2">
                   <p className="py-4 text-center text-sm text-ink-3">设备功能加载失败，操作列表暂不可用。</p>
                 </Panel>
-                : <ActionPanel deviceId={key} targetLabel={d.name || deviceId} set={commands} className="lg:col-span-2" />}
+                : <ActionPanel deviceId={key} targetLabel={d.name || deviceId} set={commands} online={actionsOnline} offlineReason={actionsOfflineReason} className="lg:col-span-2" />}
               {actuators.length > 0 && (
                 <Panel title={<span className="flex items-center gap-1.5"><Zap size={14} />执行器状态</span>}>
                   <dl className="space-y-2.5">
@@ -484,7 +493,7 @@ export default function DeviceDetail() {
       {tab === 'events' && (
         <TabPanel value={tab}>
           <div className="space-y-5">
-            <CommandHistory deviceId={key} targetLabel={d.name || deviceId} actions={commands.actions} />
+            <CommandHistory deviceId={key} targetLabel={d.name || deviceId} actions={commands.actions} online={actionsOnline} />
             <details className="card overflow-hidden">
               <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-4 py-3 text-[13px] font-semibold">
                 <span className="flex items-center gap-1.5"><Activity size={14} />设备事件</span>
@@ -495,7 +504,7 @@ export default function DeviceDetail() {
                   <div className="mb-3 flex items-center gap-2">
                     <label htmlFor="ev-kind" className="shrink-0 text-[12px] text-ink-3">筛选</label>
                     <select id="ev-kind" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}
-                      className="input input-sm min-w-0 max-w-[18rem]">
+                      className="input input-sm min-h-11 min-w-0 max-w-[18rem] sm:min-h-0">
                       <option value="">全部事件</option>
                       {eventKinds.map(([t, l]) => <option key={t} value={t}>{optionLabel(l, 40)}</option>)}
                     </select>
@@ -509,8 +518,8 @@ export default function DeviceDetail() {
                       <>
                         <EventFeed events={shownEvents} showDevice={false} limit={30} dayGrouped />
                         {shownEvents.length > 30 && (
-                          <Link to="/activity" className="link mt-3 flex items-center gap-0.5 border-t border-hairline pt-3 text-xs">
-                            仅显示最近 30 条（共 {shownEvents.length} 条）· 去活动页查完整历史 <ArrowRight size={12} />
+                          <Link to="/activity" className="link mt-3 flex min-h-11 items-center gap-0.5 border-t border-hairline pt-3 text-xs">
+                            仅显示最近 30 条（共 {shownEvents.length} 条）· 查看完整运行记录 <ArrowRight size={12} />
                           </Link>
                         )}
                       </>

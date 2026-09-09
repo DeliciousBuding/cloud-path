@@ -275,7 +275,7 @@ map 遍历顺序不是路由规则。插件级查询 `DriverClient(pluginID)` / 
 
 ```text
 sdk/go                  Go helper/client/server
-proto/                  语言无关 protobuf
+proto/                  语言无关 Protocol v1 文本
 spec/                   Manifest/Capability JSON Schema
 testing/plugin-harness  conformance runner + mock Core
 ```

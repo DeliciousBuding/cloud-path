@@ -13,7 +13,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	_ "github.com/DeliciousBuding/cloud-path/examples/demo" // 注册 stcb 适配器（命令白名单）
+	_ "github.com/DeliciousBuding/cloud-path/examples/demo" // 注册 demo 适配器（命令白名单）
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
 )

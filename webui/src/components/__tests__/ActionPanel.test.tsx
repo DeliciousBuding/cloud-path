@@ -66,6 +66,15 @@ describe('命令集来源与空态', () => {
     expect(screen.getByRole('button', { name: '断开' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '恢复出厂' })).toBeInTheDocument()
   })
+
+  it('设备或所属网关离线时保留操作说明，但禁用全部下发入口', () => {
+    renderWithProviders(<ActionPanel deviceId={KEY} set={declared} online={false}
+      offlineReason="所属网关当前离线，操作暂不可用。" />)
+    expect(screen.getByRole('status')).toHaveTextContent('所属网关当前离线，操作暂不可用。')
+    expect(screen.getByRole('button', { name: '闭合' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '恢复出厂' })).toBeDisabled()
+    expect(screen.getByRole('spinbutton', { name: 'ms' })).toBeDisabled()
+  })
 })
 
 describe('actions.inputSchema → 参数输入', () => {

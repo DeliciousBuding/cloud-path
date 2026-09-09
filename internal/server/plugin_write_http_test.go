@@ -9,6 +9,32 @@ import (
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 )
 
+type stableAPIErrorBody struct {
+	Error     string `json:"error"`
+	Code      string `json:"code"`
+	Message   string `json:"message"`
+	RequestID string `json:"request_id"`
+}
+
+func assertStableAPIError(t *testing.T, resp *http.Response, status int, code string) stableAPIErrorBody {
+	t.Helper()
+	raw := readBody(t, resp)
+	if resp.StatusCode != status {
+		t.Fatalf("status = %d body=%s, want %d", resp.StatusCode, raw, status)
+	}
+	var body stableAPIErrorBody
+	if err := json.Unmarshal([]byte(raw), &body); err != nil {
+		t.Fatalf("decode stable error body %q: %v", raw, err)
+	}
+	if body.Error != code || body.Code != code || body.Message == "" || body.RequestID == "" {
+		t.Fatalf("stable error body = %+v, want error/code=%q with message and request_id", body, code)
+	}
+	if got := resp.Header.Get("X-Request-ID"); got != body.RequestID {
+		t.Fatalf("X-Request-ID = %q, body request_id = %q", got, body.RequestID)
+	}
+	return body
+}
+
 // TestPluginWriteOverRealHTTPAuth 锁定真实 HTTP 鉴权链路（账号模式 + 租户令牌）：
 // 未认证 401、viewer 只读 403、operator 可写 200、admin 可 purge。
 func TestPluginWriteOverRealHTTPAuth(t *testing.T) {
@@ -29,14 +55,10 @@ func TestPluginWriteOverRealHTTPAuth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	readBody(t, resp)
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("未认证写 = %d, want 401", resp.StatusCode)
-	}
+	assertStableAPIError(t, resp, http.StatusUnauthorized, apiErrAuthenticationRequired)
 
-	if resp := pluginREST(t, ts, readTok, http.MethodPost, "/api/plugin-instances", create); resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("viewer 写 = %d, want 403", resp.StatusCode)
-	}
+	resp = pluginREST(t, ts, readTok, http.MethodPost, "/api/plugin-instances", create)
+	assertStableAPIError(t, resp, http.StatusForbidden, apiErrPermissionDenied)
 	resp = pluginREST(t, ts, writeTok, http.MethodPost, "/api/plugin-instances", create)
 	raw := readBody(t, resp)
 	if resp.StatusCode != http.StatusOK {
@@ -53,6 +75,25 @@ func TestPluginWriteOverRealHTTPAuth(t *testing.T) {
 	if resp := pluginREST(t, ts, adminTok, http.MethodDelete, "/api/plugin-instances/box1",
 		`{"purge":true}`); resp.StatusCode != http.StatusOK {
 		t.Fatalf("admin purge = %d", resp.StatusCode)
+	}
+}
+
+// TestViewerCommandAndApplicationJobShareStableError 锁定 Lane Y 发现的真实 UI 缺口：
+// viewer 下发设备命令与执行应用 job 都必须返回同一个稳定 403 错误体，前端不再分别解析
+// "viewer 只读" 与 "permission denied" 两套文本。
+func TestViewerCommandAndApplicationJobShareStableError(t *testing.T) {
+	st, _, ts, _, a, _ := setupPluginSync(t)
+	readTok := issueTenantToken(t, st, a, `["read"]`)
+	for _, tc := range []struct {
+		name, path, body string
+	}{
+		{"device command", "/api/devices/e1/d1/commands", `{"cmd":"dump"}`},
+		{"application job", "/api/plugin-instances/box1/jobs/manual-update/run", `{"args_json":"{}","idempotency_key":"viewer-check"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := pluginREST(t, ts, readTok, http.MethodPost, tc.path, tc.body)
+			assertStableAPIError(t, resp, http.StatusForbidden, apiErrPermissionDenied)
+		})
 	}
 }
 

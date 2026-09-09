@@ -581,14 +581,3 @@ export function shortDigest(digest: string | undefined): string {
   const hex = digest.replace(/^[a-z0-9-]+:/i, '')
   return hex.length > 12 ? `${hex.slice(0, 12)}…` : hex
 }
-
-/** 按 Edge 归组实例（「已安装」分区用：哪台 Edge 上跑着什么） */
-export function groupByEdge(instances: PluginInstanceView[]): Map<string, PluginInstanceView[]> {
-  const out = new Map<string, PluginInstanceView[]>()
-  for (const v of instances) {
-    const arr = out.get(v.edge_id)
-    if (arr) arr.push(v)
-    else out.set(v.edge_id, [v])
-  }
-  return out
-}

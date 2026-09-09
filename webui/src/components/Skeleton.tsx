@@ -21,15 +21,6 @@ export function RowSkeleton({ rows = 5 }: { rows?: number }) {
   )
 }
 
-/** 统计卡骨架 */
-export function StatSkeleton() {
-  return (
-    <div className="card p-3.5 sm:p-4">
-      <Skeleton className="h-3 w-16" />
-      <Skeleton className="mt-3 h-7 w-20" />
-    </div>
-  )
-}
 /** 整页骨架（懒加载路由切换时的 Suspense 回退） */
 export function PageSkeleton() {
   return (

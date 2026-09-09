@@ -225,11 +225,11 @@ function EventRow({ e, first, showDevice, name }: {
         {showDevice && (
           <Link
             to={`/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`}
-            className={cn('min-w-0 max-w-[10rem] truncate text-[12px] text-ink-3 transition-colors hover:text-accent lg:col-start-2',
+            className={cn('flex min-h-11 min-w-0 max-w-[10rem] items-center text-[12px] text-ink-3 transition-colors hover:text-accent sm:min-h-0 lg:col-start-2',
               !name && 'num font-mono')}
             title={`${e.device_id} · 查看设备`}
           >
-            {name || devId}
+            <span className="min-w-0 truncate">{name || devId}</span>
           </Link>
         )}
         {summary && (

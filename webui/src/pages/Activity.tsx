@@ -191,7 +191,7 @@ export default function Activity() {
                       return next
                     })}
                     aria-pressed={types.has(t)} title={`原始类型：${t}`}
-                    className={cn('max-w-full truncate rounded-full px-3 py-1 text-[12px] font-medium transition-colors',
+                    className={cn('min-h-11 max-w-full truncate rounded-full px-3 py-1 text-[12px] font-medium transition-colors sm:min-h-0',
                       types.has(t) ? 'bg-accent text-accent-ink' : 'bg-ink-3/10 text-ink-2 hover:bg-ink-3/16')}
                   >
                     {eventDisplayLabel(t, index)}
@@ -323,7 +323,7 @@ function CommandRow({ c, names, index }: {
         )}
         <Link
           to={`/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`}
-          className="min-w-0 max-w-full truncate text-[12px] text-ink-3 transition-colors hover:text-accent lg:col-start-4"
+          className="flex min-h-11 min-w-0 max-w-full items-center truncate text-[12px] text-ink-3 transition-colors hover:text-accent lg:col-start-4 lg:min-h-0"
           title={`${c.device_id} · 查看设备`}
         >
           查看 {target}

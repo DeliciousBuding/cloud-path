@@ -63,7 +63,10 @@
 | `GET /ws` | 读 | 浏览器实时通道（快照 + fan-out）；Origin 策略见下 |
 | `GET /ws/edge` | edge 令牌 | edge 接入；hello 携带 `token` |
 
-错误统一 `{"error":"<msg>"}`；`401` 未认证、`403` 无权限/来源受限、`404` 不存在、`409` 冲突、`429` 限流。
+鉴权/RBAC 中间件在业务 handler 之前拒绝时统一返回
+`{"error":"<code>","code":"<code>","message":"<人读文本>","request_id":"…"}`：
+`authentication_required`（401）、`permission_denied`（403 角色不足）、`write_forbidden`（403 来源受限）。
+其它 handler 的既有错误仍至少保留 `error` 兼容字段；插件写面完整错误表见 §5.6。
 
 路由表之外的 `/api/*`（含 `/api/auth/*` 下不存在的子路径）一律 `404 {"error":"未知 API 端点"}`，
 **不会**回落到内嵌前端的 `index.html`；缺失的 `/assets/*` 同样回 `404`。SPA 的 `index.html`
@@ -86,7 +89,7 @@
 | `operator` | viewer + 下发设备命令、操作已授权 Plugin/Application Instance |
 | `admin` | operator + 管理本租户用户、服务令牌、插件安装/权限与租户设置 |
 
-跨租户资源统一返回 `404`；已认证但角色不足返回 `403`。禁用用户或重置密码后撤销其全部会话。
+跨租户资源统一返回 `404`；已认证但角色不足返回 `403 permission_denied`（错误体见 §2.2）。禁用用户或重置密码后撤销其全部会话。
 最后一个可用 admin 不允许被禁用或降级，返回 `409`。
 
 ### 3.2 用户管理端点

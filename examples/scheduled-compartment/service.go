@@ -97,12 +97,6 @@ type Service struct {
 
 var _ application.ApplicationServer = (*Service)(nil)
 
-// ApplicationID returns the manifest application id.
-func ApplicationID() string { return pluginIDValue }
-
-// Version returns the manifest application version.
-func Version() string { return pluginVersion }
-
 // New returns a fresh, uninitialized Scheduled Compartment service.
 func New() *Service {
 	return &Service{

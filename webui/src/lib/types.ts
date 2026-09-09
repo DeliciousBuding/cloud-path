@@ -332,13 +332,6 @@ export interface CapabilityDoc {
   spec?: CapabilitySpec
 }
 
-/** Descriptor 接口的宽容载荷：裸 Descriptor / {descriptor} / {descriptor,capabilities} / 列表 / 映射 */
-export interface DescriptorEnvelope {
-  descriptor?: DeviceDescriptor
-  descriptors?: DeviceDescriptor[]
-  capabilities?: CapabilityDoc[]
-  [k: string]: unknown
-}
 /* ================================================================== *
  * v0.1 收口：Overview 聚合读面 + 插件控制面（逐字镜像 internal/api/types.go）
  *

@@ -44,12 +44,14 @@ function controlPath(deviceId: string): string {
 
 /** 操作记录：REST 轮询该设备的操作与执行结果（含超时/失败原因）。
  *  普通用户只看人话结果；状态码、原始返回与参数只放在「技术详情」里。 */
-export function CommandHistory({ deviceId, targetLabel, actions, limit, footer }: {
+export function CommandHistory({ deviceId, targetLabel, actions, limit, footer, online = true }: {
   deviceId: string; targetLabel?: string; actions?: CommandAction[];
   /** 展示上限（概览首屏用：右栏不该拉到 20 行把左栏踢出空洞）；缺省全显 */
   limit?: number;
   /** 被截断时的出口（如「到控制页看全部」） */
   footer?: ReactNode
+  /** 设备离线时禁止从历史记录重试；缺省保持既有行为。 */
+  online?: boolean
 }) {
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['device-commands', deviceId],
@@ -115,11 +117,13 @@ export function CommandHistory({ deviceId, targetLabel, actions, limit, footer }
                       <span className="font-medium text-bad">{info.message}</span>
                       <span className="text-ink-3"> · {info.next}</span>
                     </span>
-                    {action && !retryError ? (
+                    {!online ? (
+                      <span className="shrink-0 text-ink-3">设备恢复在线后可重试</span>
+                    ) : action && !retryError ? (
                       <CommandButton deviceId={deviceId} targetLabel={targetLabel} action={action} args={c.args ?? ''}
                         buttonLabel="重试" buttonAriaLabel={`重试${meta.label}`} className="btn-sm min-h-11 w-full sm:min-h-0 sm:w-auto" />
                     ) : (
-                      <Link to={controlPath(deviceId)} className="link shrink-0">去设备操作中重试</Link>
+                      <Link to={controlPath(deviceId)} className="link inline-flex min-h-11 shrink-0 items-center sm:min-h-0">去设备操作中重试</Link>
                     )}
                   </div>
                 )}

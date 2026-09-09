@@ -47,6 +47,12 @@ const (
 	defaultSessionDays     = 7
 	maxCommandArgsLen      = 64
 	defaultTenantSlug      = "default"
+
+	// 鉴权/RBAC 中间件在进入业务 handler 前拒绝请求时使用的稳定错误码。
+	// 与插件写面 §5.6 同形，前端可统一按 code 处理，不再猜测 error 文本。
+	apiErrAuthenticationRequired = "authentication_required"
+	apiErrPermissionDenied       = "permission_denied"
+	apiErrWriteForbidden         = "write_forbidden"
 )
 
 // Config 是服务配置。
@@ -936,14 +942,14 @@ func (s *Server) authWrite(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if p := s.currentPrincipal(r); p != nil {
 			if !auth.RoleAllows(p.Role, string(api.RoleOperator)) {
-				writeJSON(w, http.StatusForbidden, map[string]string{"error": "viewer 只读"})
+				writeAPIError(w, r, http.StatusForbidden, apiErrPermissionDenied, "当前账号无权执行此操作")
 				return
 			}
 			h(w, r)
 			return
 		}
 		if s.accountMode() {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+			writeAPIError(w, r, http.StatusUnauthorized, apiErrAuthenticationRequired, "需要登录或有效令牌")
 			return
 		}
 		// 无凭据写操作的兜底放行只看真实 TCP 对端（不采信任何转发头）。
@@ -952,8 +958,7 @@ func (s *Server) authWrite(h http.HandlerFunc) http.HandlerFunc {
 		// （setup 侧已按 trusted-proxy 感知的真实客户端 IP 收紧，见 setupFromLocalClient），
 		// 一旦进入账号模式本分支不可达。
 		if !auth.IsLoopbackRemote(r) {
-			writeJSON(w, http.StatusForbidden, map[string]string{
-				"error": "写操作需要回环来源或有效凭据"})
+			writeAPIError(w, r, http.StatusForbidden, apiErrWriteForbidden, "写操作需要回环来源或有效凭据")
 			return
 		}
 		h(w, r)
@@ -969,7 +974,7 @@ func (s *Server) requireAPIAuth(next http.Handler) http.Handler {
 		}
 		p := s.currentPrincipal(r)
 		if p == nil {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+			writeAPIError(w, r, http.StatusUnauthorized, apiErrAuthenticationRequired, "需要登录或有效令牌")
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), p)))
@@ -1018,6 +1023,17 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		slog.Debug("write json", "err", err)
 	}
+}
+
+// writeAPIError 输出鉴权/RBAC 前置拒绝的稳定错误体。业务 handler 的既有
+// {"error":"..."} 兼容形状不在此 helper 内改写，避免把本次收口扩散成全 API 重写。
+func writeAPIError(w http.ResponseWriter, r *http.Request, status int, code, message string) {
+	writeJSON(w, status, map[string]any{
+		"error":      code,
+		"code":       code,
+		"message":    message,
+		"request_id": audit.RequestID(r.Context()),
+	})
 }
 
 // queryInt 解析整型查询参数：缺省/非法/负数一律回退 def，超过 max（>0）则夹到 max。

@@ -100,7 +100,7 @@ function EdgeRow({ f }: { f: EdgeFacts }) {
       {/* 节点 ID 是运维标识：mono；点击进详情 */}
       <div className="flex min-w-0 items-center gap-2">
         <Link to={`/edges/${encodeURIComponent(e.edge_id)}`}
-          className="min-w-0 truncate font-mono text-[13px] font-medium no-underline hover:text-accent"
+          className="inline-flex min-h-11 min-w-0 items-center truncate font-mono text-[13px] font-medium no-underline hover:text-accent sm:min-h-0"
           title={`${e.edge_id} · 查看详情`}>
           {e.edge_id}
         </Link>

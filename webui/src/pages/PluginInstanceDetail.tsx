@@ -160,7 +160,7 @@ export default function PluginInstanceDetail() {
           )}
 
           <details className="min-w-0">
-            <summary className="mb-4 flex min-h-11 cursor-pointer items-center text-sm text-ink-2">查看详细信息</summary>
+            <summary className="mb-4 flex min-h-11 cursor-pointer items-center text-sm text-ink-2">查看设置、权限与密钥</summary>
             {facts}
           </details>
         </>

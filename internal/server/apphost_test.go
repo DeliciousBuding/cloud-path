@@ -13,6 +13,7 @@ import (
 	"github.com/DeliciousBuding/cloud-path/internal/api"
 	"github.com/DeliciousBuding/cloud-path/internal/appruntime"
 	"github.com/DeliciousBuding/cloud-path/internal/model"
+	"github.com/DeliciousBuding/cloud-path/internal/pluginhost"
 	"github.com/DeliciousBuding/cloud-path/internal/server/storeport"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
 	sdkapplication "github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/application"
@@ -273,6 +274,85 @@ func TestAppHostObservedProjectionFeedsPlane(t *testing.T) {
 	}
 	if view.Drift || view.Stale {
 		t.Fatalf("view drift=%v stale=%v（本地宿主：applied 即 desired，observed 刚上报）", view.Drift, view.Stale)
+	}
+}
+
+// TestAppHostStartReportsObservedImmediately 锁定启动成功后的 observed 投影不等 30s
+// tick：真实 fixture 进程 startInstance 返回时，控制面 plane/API 读面必须已是 running。
+func TestAppHostStartReportsObservedImmediately(t *testing.T) {
+	_, srv, _, mem, tid, _ := setupPluginSync(t)
+	paths := versionedFixtureBinaries(t, "0.1.0")
+	h, err := NewAppHost(srv, AppHostConfig{
+		Enabled:    true,
+		PluginsDir: t.TempDir(),
+		LockPath:   filepath.Join(t.TempDir(), "plugins.lock"),
+		StateDir:   t.TempDir(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(h.Close)
+	srv.SetAppHost(h)
+	if err := h.mgr.RegisterInstallation(pluginhost.Installation{
+		PluginID: appRoutingPlugin, Version: "0.1.0", Path: paths["0.1.0"], Kind: pluginhost.KindApplication,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	const instanceID = "box-immediate"
+	tenantStr := strconv.FormatInt(tid, 10)
+	if err := h.mgr.ReconcileInstance(context.Background(), pluginhost.InstanceSpec{
+		Tenant: tenantStr, ID: instanceID, PluginID: appRoutingPlugin, Version: "0.1.0",
+	}, true); err != nil {
+		t.Fatal(err)
+	}
+	config, err := json.Marshal(map[string]string{"target": instanceID, "version": "0.1.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrapped, err := json.Marshal(map[string]string{appConfigKey: string(config)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().Unix()
+	portRow := storeport.PluginInstanceRow{
+		TenantID: tid, EdgeID: AppHostEdgeID, InstanceID: instanceID,
+		PluginID: appRoutingPlugin, Version: "0.1.0", Enabled: true,
+		ConfigJSON: string(wrapped), CreatedAt: now, UpdatedAt: now,
+	}
+	rev, err := mem.CreatePluginInstance(portRow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	portRow.Revision = rev
+	srv.plugin.remember(portRow)
+
+	row := store.PluginInstanceRow{
+		TenantID: tid, EdgeID: AppHostEdgeID, InstanceID: instanceID,
+		PluginID: appRoutingPlugin, Version: "0.1.0", Enabled: true,
+		ConfigJSON: string(wrapped), Revision: rev,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := h.startInstance(ctx, row); err != nil {
+		t.Fatal(err)
+	}
+
+	// 不调用 reportObserved、不等待 observedLoop tick，直接检查投影。
+	srv.plugin.mu.Lock()
+	ep := srv.plugin.tenants[tid].edges[AppHostEdgeID]
+	observed, ok := ep.observed[instanceID]
+	applied, desired := ep.appliedRevision, ep.desiredRevision
+	srv.plugin.mu.Unlock()
+	if !ok || !observed.HostOnline || observed.State != string(appruntime.StateRunning) {
+		t.Fatalf("immediate observed = ok:%v %+v", ok, observed)
+	}
+	if applied != desired || desired == 0 {
+		t.Fatalf("applied=%d desired=%d, want immediate convergence", applied, desired)
+	}
+	view := srv.pluginInstanceView(tid, "", AppHostEdgeID, instanceID)
+	if !view.HasObserved || !view.EdgeOnline || view.Observed == nil || view.Observed.State != string(appruntime.StateRunning) {
+		t.Fatalf("immediate API view = has_observed:%v edge_online:%v observed:%+v", view.HasObserved, view.EdgeOnline, view.Observed)
 	}
 }
 

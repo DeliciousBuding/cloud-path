@@ -137,9 +137,25 @@ export function applicationResultSummary(value: unknown): { text?: string; usedK
     const text = scalar(record[key])
     if (text) { add(key, text); break }
   }
+  const statusText = (raw: string): string | undefined => {
+    switch (raw.trim().toLowerCase()) {
+      case 'ok':
+      case 'succeeded':
+        return '成功'
+      case 'failed':
+        return '失败'
+      case 'pending':
+        return '处理中'
+      case 'sent':
+        return '已发送'
+      default:
+        return undefined
+    }
+  }
   for (const key of ['state', 'status']) {
     const text = scalar(record[key])
-    if (text) { add(key, text, '状态'); break }
+    const label = text ? statusText(text) : undefined
+    if (label) { add(key, label, '状态'); break }
   }
   const count = record.run_count
   if (typeof count === 'number' && Number.isFinite(count)) add('run_count', String(count), '执行次数')
