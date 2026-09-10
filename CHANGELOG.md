@@ -45,7 +45,9 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 - 插件目录：新增 monorepo 根 `plugins.yaml` catalog 解析与校验；`tagPrefix` 必须严格等于插件 `path`，条目可用 `id`、`slug` 或 `path` 精确选择，`archived: true` 不进入搜索/检查/安装候选。
 - Release：catalog 插件按 `<path>/v*` 列出 Release 并选最高 semver，再断言 tag 严格等于 `<path>/v<manifest.version>`；单插件仓库继续使用 `/releases/latest`。
 - 锁与信任：`LockedPlugin`/`RegistryEntry` 增加可选 `tag`、`pluginPath`；旧 lock 保持可读并继续使用格式版本 1。更新跨 source 迁移必须显式 `--allow-source-change`，且不能把 verified 安装降级为 unreviewed TOFU。
-- CLI：`inspect`/`install` 增加 `--plugin`，`update` 增加 `--source`、`--plugin`、`--allow-source-change`；`search` 在 topic 命中上展开非 archived catalog 候选，并对单个 catalog 失败保留 topic 回退和安全 warning。
+- CLI：`inspect`/`install` 增加 `--plugin`，`update` 增加 `--source`、`--plugin`、`--allow-source-change`；`install` 在替换已安装插件时也接受 `--allow-source-change`；`search` 在 topic 命中上展开非 archived catalog 候选，并对单个 catalog 失败保留 topic 回退和安全 warning。
+- 信任硬化：install/reinstall 自动读取同 ID 的已有 lock，继续受 verified/source/publisher 门禁；update 的目标 lock ID 与解析出的 manifest ID 强绑定。catalog entry 的 `id`/`kind` 必须与 `<path>/plugin.yaml` 一致，空 catalog 也不回退到单插件布局。
+- 资产选择：catalog `asset` 按 `<asset>_<version>_<goos>_<goarch>[.exe]` 绑定当前平台；没有精确架构时 fail-closed，不再回退到同 OS 的其它架构。
 
 ## v0.2.42 — 2026-09-10
 

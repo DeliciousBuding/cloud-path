@@ -94,3 +94,18 @@ func TestExpandCatalogsKeepsTopicFallbackAndWarnsOnSingleFailure(t *testing.T) {
 		t.Fatalf("topic fallback was not preserved: %+v", seen)
 	}
 }
+func TestEmptyPluginCatalogFailsClosedInsteadOfLegacyFallback(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/repos/example/plugins/contents/plugins.yaml", func(w http.ResponseWriter, r *http.Request) {
+		writeContentsJSON(t, w, nil)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	client := ghClient(srv)
+	if _, err := client.FetchCatalog(context.Background(), Repo{Owner: "example", Name: "plugins", URL: "https://github.com/example/plugins"}); !errors.Is(err, ErrInvalidCatalog) {
+		t.Fatalf("empty catalog must be invalid, got %v", err)
+	}
+	if _, err := ResolveManifestSource(context.Background(), client, "example/plugins", "", ""); !errors.Is(err, ErrInvalidCatalog) {
+		t.Fatalf("empty catalog must not fall back to root plugin.yaml, got %v", err)
+	}
+}

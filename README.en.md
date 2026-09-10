@@ -138,10 +138,13 @@ Runtime, SQLite persistence, Registry CLI, and release/deployment assets. See
 [docs/architecture.md](docs/architecture.md) for the full current-versus-target list.
 
 The plugin CLI supports both legacy single-plugin repositories and monorepo
-catalogs. A monorepo keeps a root `plugins.yaml`; install/inspect select an entry
-with an exact `--plugin <slug|id|path>` selector, and each entry uses the exact
-release tag `<path>/v<manifest.version>`. Archived entries are excluded. The
-catalog contract is [spec/plugin-catalog.schema.json](spec/plugin-catalog.schema.json).
+catalogs. A monorepo keeps a root `plugins.yaml`; install/inspect require an exact
+`--plugin <slug|id|path>` selector, and each entry uses the exact release tag
+`<path>/v<manifest.version>`. Assets are resolved from the catalog-declared base
+name for the current platform without falling back to another architecture.
+Replacing an installed entry from another source requires `--allow-source-change`
+and never downgrades verified trust. Archived entries are excluded. The catalog
+contract is [spec/plugin-catalog.schema.json](spec/plugin-catalog.schema.json).
 
 Not current capabilities: Connector runtime and notification delivery (`SendNotification` fails
 closed with `not_implemented`), Transform/WASM, multi-Server scaling, distributed quotas,

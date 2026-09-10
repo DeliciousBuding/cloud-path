@@ -211,6 +211,7 @@ func runInstall(args []string) int {
 	asset := fs.String("asset", "", "exact Release asset name")
 	digest := fs.String("digest", "", "expected sha256 hex (sha256:<hex> or sha256-<base64>)")
 	yes := fs.Bool("yes", false, "confirm displayed permissions")
+	allowSourceChange := fs.Bool("allow-source-change", false, "allow replacing an installed plugin from a different source")
 	trust := registerTrustFlags(fs)
 	fs.SetOutput(os.Stderr)
 	if err := parseCommandFlags(fs, args); err != nil {
@@ -221,7 +222,7 @@ func runInstall(args []string) int {
 	}
 	source := fs.Arg(0)
 	if source == "" {
-		fmt.Fprintln(os.Stderr, "Usage: cloudpath plugin install <id|url> [-plugin SELECTOR] [-asset NAME] [-digest HASH] [-registry-index PATH] [-allow-unreviewed] [-yes]")
+		fmt.Fprintln(os.Stderr, "Usage: cloudpath plugin install <id|url> [-plugin SELECTOR] [-asset NAME] [-digest HASH] [-registry-index PATH] [-allow-unreviewed] [-allow-source-change] [-yes]")
 		return 2
 	}
 
@@ -232,12 +233,13 @@ func runInstall(args []string) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	result, err := installer.Install(ctx, registry.InstallOptions{
-		Source:          source,
-		Plugin:          *pluginSelector,
-		Asset:           *asset,
-		Digest:          *digest,
-		ConfirmPerms:    *yes,
-		AllowUnreviewed: trust.allowUnreviewed(),
+		Source:            source,
+		Plugin:            *pluginSelector,
+		Asset:             *asset,
+		Digest:            *digest,
+		ConfirmPerms:      *yes,
+		AllowUnreviewed:   trust.allowUnreviewed(),
+		AllowSourceChange: *allowSourceChange,
 	})
 	if err != nil {
 		return reportError(err, installErrorCode(err))
@@ -417,12 +419,12 @@ func runUpdate(args []string) int {
 	}
 	selector := strings.TrimSpace(*pluginSelector)
 	if selector == "" {
-		if strings.TrimSpace(entry.PluginPath) != "" {
-			selector = entry.PluginPath
-		} else if updateSource != entry.Source {
-			// Migrating from a legacy single-plugin repository to a monorepo can
-			// default to the installed plugin id; --plugin still overrides it.
+		if updateSource != entry.Source {
+			// Cross-repository migration defaults to the stable plugin id, which
+			// is accepted by both a monorepo catalog and a legacy single-plugin repo.
 			selector = pluginID
+		} else if strings.TrimSpace(entry.PluginPath) != "" {
+			selector = entry.PluginPath
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
@@ -609,6 +611,7 @@ Commands:
   inspect <id|url>     Validate a selected root or catalog plugin.yaml
   install <id|url>     Download release asset, verify digest, write plugins.d/ and plugins.lock
                        Monorepo installs require --plugin <slug|id|path>.
+                       Replacing from another source requires --allow-source-change.
   enable <id>          Persist an enabled plugin instance (desired state only)
   disable <id>         Persist a disabled plugin instance (desired state only)
   update <id>          Upgrade an installed plugin; use --source URL

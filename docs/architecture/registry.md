@@ -66,6 +66,7 @@ plugins:
 - `archived: true` 的条目不进入 search、inspect、install 候选；
 - monorepo Release tag 必须是 `<path>/v<manifest.version>`；安装时列出匹配前缀的 Release，
   选取最高 semver 后仍断言精确 tag，不一致即 fail-closed；
+- catalog 条目的 `id`、`kind` 必须与 `<path>/plugin.yaml` 完全一致；空 catalog 视为无效，不回退到单插件布局；
 - 单插件仓库继续使用根 `plugin.yaml` 与 `/releases/latest`，行为不变。
 
 ## 3. CLI 子命令面（`cloudpath plugin`）
@@ -74,7 +75,7 @@ plugins:
 cloudpath plugin search <query>       # GitHub topic + 受限展开 monorepo catalog
 cloudpath plugin inspect <source>     # 单插件：根 plugin.yaml
 cloudpath plugin inspect <source> --plugin <slug|id|path>
-cloudpath plugin install <source>     # 单插件；monorepo 必须带 --plugin
+cloudpath plugin install <source> [--plugin SELECTOR] [--allow-source-change]
 cloudpath plugin update <id> [--source URL] [--plugin SELECTOR] [--allow-source-change]
 cloudpath plugin enable <id>          # 写入启用期望态
 cloudpath plugin disable <id>         # 写入停用期望态
@@ -84,19 +85,21 @@ cloudpath plugin remove <id>          # 卸载（默认保留数据，purge 另�
 ```
 
 更新默认继续使用 lock 中的 `source`。迁移到另一个 source（例如旧单插件仓库到 monorepo）必须
-同时给出 `--source` 与 `--allow-source-change`；该开关只允许 source 变化，不能把 verified 安装
-降级为 unreviewed TOFU，也不放宽 digest/permission/publisher 校验。monorepo 更新默认用 lock 的
-`pluginPath`（缺失时用 plugin id）作为 selector，也可用 `--plugin` 覆盖。
+同时给出 `--source` 与 `--allow-source-change`；`install` 用于替换已有插件且 source 变化时同样要求
+该标志。该开关只允许 source 变化，不能把 verified 安装降级为 unreviewed TOFU，也不放宽
+digest/permission/publisher 校验。同 source 更新默认用 lock 的 `pluginPath` 作为 selector；跨 source
+更新默认用稳定 plugin id，可用 `--plugin` 覆盖。
 
 ## 4. 验证链（install 前强制，任一失败即拒绝）
 
 1. 解析单插件或 catalog source；catalog 必须有精确、非 archived 的 `--plugin` 选择；
-2. 读取根 `plugin.yaml` 或 `<path>/plugin.yaml`，通过 `spec/plugin-manifest.schema.json`
-   （二进制内嵌同一份 schema，`-schema PATH` 可覆盖；install 会打印 schema 来源）；
+2. 读取根 `plugin.yaml` 或 `<path>/plugin.yaml`，断言 catalog entry 的 `id`/`kind` 与 manifest 一致，
+   并通过 `spec/plugin-manifest.schema.json`（二进制内嵌同一份 schema，`-schema PATH` 可覆盖；install 会打印 schema 来源）；
 3. `compatibility.core` 包含当前 Core 版本，protocol/kind 合法；
 4. 解析并固定精确 Release tag；单插件 `/releases/latest`，monorepo 按 `<path>/v` 选择并核对
    manifest version；
-5. 选择资产并校验 sha256（可选 attestation）；catalog 的 `asset` 只是首选资产名；
+5. 选择资产并校验 sha256（可选 attestation）；catalog 的 `asset` 是资产 base name，按
+   `<asset>_<version>_<goos>_<goarch>[.exe]` 精确匹配当前平台，缺失或歧义即 fail-closed；
 6. 权限披露展示并确认；
 7. 写 `plugins.lock`，记录精确 tag 与 monorepo `pluginPath`。
 

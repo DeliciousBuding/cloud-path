@@ -37,6 +37,9 @@ func (c *GitHubClient) FetchRepositoryFile(ctx context.Context, repo Repo, path 
 		return nil, fmt.Errorf("fetch %s/%s: %w", repo.URL, path, err)
 	}
 	if strings.TrimSpace(body.Content) == "" {
+		if path == "plugins.yaml" {
+			return nil, fmt.Errorf("%w: %s has an empty %s", ErrInvalidCatalog, repo.URL, path)
+		}
 		return nil, fmt.Errorf("%w: %s has no %s", ErrNotFound, repo.URL, path)
 	}
 	if !strings.EqualFold(body.Encoding, "base64") {
