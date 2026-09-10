@@ -2,6 +2,7 @@ import { lazy, Suspense, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Box } from 'lucide-react'
 import { Badge, Panel } from '@/components/ui'
+import { useNow } from '@/hooks/useNow'
 import type { DeviceDescriptor, DeviceView } from '@/lib/types'
 import { resolveDeviceTwin } from './device-twin'
 
@@ -18,7 +19,9 @@ export function DeviceTwinPanel({ device, descriptor }: {
   descriptor: DeviceDescriptor | null
 }) {
   const { t } = useTranslation('devices')
-  const resolution = useMemo(() => resolveDeviceTwin(device, descriptor), [device, descriptor])
+  const now = useNow()
+  const nowSeconds = Math.floor(now.getTime() / 1000)
+  const resolution = useMemo(() => resolveDeviceTwin(device, descriptor, nowSeconds), [device, descriptor, nowSeconds])
   if (!resolution) return null
 
   return (

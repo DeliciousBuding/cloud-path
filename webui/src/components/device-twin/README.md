@@ -20,7 +20,7 @@ Current STC-B mapping:
 | powered | `DeviceView.online` |
 | LED mask | `led-bank.mask`, then raw fallback |
 | display mode/page | `display.mode` / `display.page`, then raw fallback |
-| display glyphs | only when a future `display.digits` observation exists; otherwise blank |
+| display glyphs | explicit `display.digits` when reported; otherwise the clock page is derived from `clock.time` and the device timestamp |
 
 The renderer must never invent glyphs or turn a missing observation into a
 successful device state. Adapters without a frontend model fail closed.

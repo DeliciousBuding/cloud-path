@@ -8,8 +8,8 @@ const device: DeviceView = {
   adapter: 'stcb',
   online: true,
   state: {},
-  updated_at: 1,
-  last_seen: 1,
+  updated_at: 1_000,
+  last_seen: 1_000,
 }
 
 const descriptor: DeviceDescriptor = {
@@ -27,6 +27,15 @@ const descriptor: DeviceDescriptor = {
       },
     },
     {
+      entity_id: 'clock',
+      unique_key: 'clock',
+      category: 'sensor',
+      capabilities: ['cloudpath.dev/capability/clock@1'],
+      observations: {
+        time: { capability: 'cloudpath.dev/capability/clock@1', property: 'time', value: '12:34:05' },
+      },
+    },
+    {
       entity_id: 'display',
       unique_key: 'display',
       category: 'actuator',
@@ -40,11 +49,11 @@ const descriptor: DeviceDescriptor = {
 }
 
 describe('device twin resolution', () => {
-  it('maps descriptor observations to the STC-B renderer without inventing display glyphs', () => {
-    const resolution = resolveDeviceTwin(device, descriptor)
+  it('maps descriptor observations and derives only the reported clock face', () => {
+    const resolution = resolveDeviceTwin(device, descriptor, 1_010)
     expect(resolution?.visualState).toEqual({
       powered: true,
-      display: '        ',
+      display: '12-34-15',
       ledMask: 42,
       ledColor: 'blue',
     })

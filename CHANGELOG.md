@@ -36,6 +36,11 @@ shasum -a 256 -c checksums.txt --ignore-missing      # macOS
 certutil -hashfile <文件> SHA256                      # Windows（逐项对照）
 ```
 
+## v0.2.34 — 2026-09-10
+
+- 设备页：STC-B 参考设备在标题与分区之间显示只读 3D 数字孪生；模型按 adapter 在 WebUI 内懒加载，不改 Driver、Manifest、API 或 Core 契约。
+- 数字孪生：在线状态与 LED mask 实时映射到模型；时钟页用 `clock.time` 和设备更新时间锚定 `HH-MM-SS`，秒位按本地时间连续走秒，未上报的字形不作推测。
+
 ## v0.2.33 — 2026-09-10
 
 - 应用命令路由：实体解析只选择唯一在线设备；离线候选不再被误选，多个在线候选 fail-closed，避免同租户遗留设备劫持执行器命令。

@@ -47,15 +47,30 @@ function textValue(value: unknown): string | undefined {
   return normalized ? normalized.slice(0, 48) : undefined
 }
 
-function resolveStcb(device: DeviceView, descriptor: DeviceDescriptor | null): DeviceTwinResolution {
+function clockDisplay(value: unknown, updatedAt: number, nowSeconds: number): string | undefined {
+  const raw = textValue(value)
+  const match = raw?.match(/^(\d{1,2}):(\d{2}):(\d{2})$/)
+  if (!match || !Number.isFinite(updatedAt) || !Number.isFinite(nowSeconds)) return undefined
+  const elapsed = Math.max(0, Math.min(6 * 60 * 60, Math.floor(nowSeconds - updatedAt)))
+  const seconds = ((Number(match[1]) * 60 * 60 + Number(match[2]) * 60 + Number(match[3])) + elapsed) % (24 * 60 * 60)
+  const hour = Math.floor(seconds / 3600)
+  const minute = Math.floor((seconds % 3600) / 60)
+  const second = seconds % 60
+  return `${String(hour).padStart(2, '0')}-${String(minute).padStart(2, '0')}-${String(second).padStart(2, '0')}`
+}
+
+function resolveStcb(device: DeviceView, descriptor: DeviceDescriptor | null, nowSeconds: number): DeviceTwinResolution {
   const ledMask = integerInRange(
     observationValue(descriptor, 'led-bank', 'mask') ?? rawValue(device, ['led-bank.mask', 'led_mask', 'led']),
     0,
     255,
   ) ?? 0
-  const display = displayText(observationValue(descriptor, 'display', 'digits') ?? rawValue(device, ['display.digits', 'digits'])) ?? '        '
+  const reportedDisplay = displayText(observationValue(descriptor, 'display', 'digits') ?? rawValue(device, ['display.digits', 'digits']))
   const mode = textValue(observationValue(descriptor, 'display', 'mode') ?? rawValue(device, ['display.mode', 'Display']))
   const page = textValue(observationValue(descriptor, 'display', 'page') ?? rawValue(device, ['display.page', 'Page']))
+  const clock = observationValue(descriptor, 'clock', 'time') ?? rawValue(device, ['clock.time', 'clock'])
+  const derivedClock = mode === 'clock' || page === 'clock' ? clockDisplay(clock, device.updated_at, nowSeconds) : undefined
+  const display = reportedDisplay ?? derivedClock ?? '        '
 
   return {
     id: 'stcb',
@@ -82,7 +97,8 @@ function resolveStcb(device: DeviceView, descriptor: DeviceDescriptor | null): D
 export function resolveDeviceTwin(
   device: DeviceView,
   descriptor: DeviceDescriptor | null,
+  nowSeconds = Math.floor(Date.now() / 1000),
 ): DeviceTwinResolution | undefined {
   if (device.adapter !== 'stcb') return undefined
-  return resolveStcb(device, descriptor)
+  return resolveStcb(device, descriptor, nowSeconds)
 }
