@@ -253,6 +253,21 @@ body {
 }
 @keyframes shimmer { 100% { transform: translateX(100%); } }
 
+/* 数字孪生事件：短暂抵达提示 + 边缘脉冲；不改变硬件模型状态。 */
+.twin-event-in { animation: twin-event-in 180ms var(--ease-standard) both; }
+.twin-event-ring { animation: twin-event-ring 900ms ease-in-out 2; }
+@keyframes twin-event-in {
+  from { opacity: 0; transform: translateY(-6px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes twin-event-ring {
+  0%, 100% { opacity: .55; }
+  45% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .twin-event-in, .twin-event-ring { animation: none; }
+}
+
 /* 键盘焦点：细环，不破坏圆角视觉 */
 :focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);

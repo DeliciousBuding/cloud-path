@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { Link, useParams, useSearchParams } from 'react-router'
@@ -15,6 +15,7 @@ import {
 import { ActionPanel } from '@/components/ActionPanel'
 import { CommandHistory } from '@/components/CommandHistory'
 import { DeviceTwinPanel } from '@/components/device-twin/DeviceTwinPanel'
+import { reportDeviceTwinActivity } from '@/components/device-twin/activity'
 import { supportsDeviceTwin } from '@/components/device-twin/device-twin'
 import { EventFeed, eventDisplayLabel } from '@/components/EventFeed'
 import { RowSkeleton } from '@/components/Skeleton'
@@ -32,7 +33,7 @@ import {
   qualityTone, summarizeRaw, unitLabel, widgetFor,
 } from '@/lib/descriptor'
 import type { CapabilityIndex, CommandSet, SummaryValue } from '@/lib/descriptor'
-import { fmtDateTime, mergeEvents, optionLabel, payloadLabel, timeAgo } from '@/lib/format'
+import { eventTone, fmtDateTime, mergeEvents, optionLabel, payloadLabel, timeAgo } from '@/lib/format'
 import { orderSeriesKeys, seriesLabel, seriesUnit } from '@/lib/series'
 import { resolveDriverDeviceUI } from '@/lib/plugin-ui'
 import type { DriverDeviceUIResolution } from '@/lib/plugin-ui'
@@ -123,6 +124,8 @@ export default function DeviceDetail() {
   const live = useLive((s) => s.devices[key])
   const liveEvents = useLive((s) => s.events)
   const series = useLive((s) => s.series[key]) ?? {}
+  const seenTwinEvent = useRef<number | null>(null)
+  const twinPageMountedAt = useRef(Date.now() / 1000)
 
   const { data: rest, error: devError, isPending: devIsPending, refetch } = useQuery({
     queryKey: ['device', key], queryFn: () => api.device(edgeId, deviceId),
@@ -258,6 +261,33 @@ export default function DeviceDetail() {
     () => (kindFilter ? events.filter((e) => e.type === kindFilter) : events),
     [events, kindFilter],
   )
+
+  useEffect(() => {
+    seenTwinEvent.current = null
+    twinPageMountedAt.current = Date.now() / 1000
+  }, [key])
+
+  // 把实时设备事件送到当前设备页的孪生卡片；首屏已有历史不回放。
+  useEffect(() => {
+    const latest = liveEvents.find((event) => event.device_id === key)
+    if (!latest || seenTwinEvent.current === latest.id) return
+    seenTwinEvent.current = latest.id
+    if (latest.ts + 1 < twinPageMountedAt.current) return
+    const declaredTone = eventTone(latest.type, capabilities)
+    const tone = declaredTone !== 'idle'
+      ? declaredTone
+      : /(?:^|[._:-])(failed|failure|error|alarm|quake|away)(?:$|[._:-])/i.test(latest.type)
+        ? 'bad'
+        : 'accent'
+    reportDeviceTwinActivity({
+      id: `event-${latest.id}`,
+      deviceId: key,
+      label: eventDisplayLabel(latest.type, capabilities, payloadLabel(latest.payload)),
+      detail: payloadLabel(latest.payload),
+      tone,
+      at: latest.ts,
+    })
+  }, [capabilities, key, liveEvents])
 
   // 序列键 = raw 顶层字段名（entity.property 点分）：排序规则收敛在 lib/series.ts，
   // 设备详情与趋势详情共用同一展示推导。

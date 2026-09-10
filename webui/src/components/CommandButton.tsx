@@ -9,6 +9,7 @@ import { useAuth } from '@/store/auth'
 import { useLive } from '@/store/ws'
 import { toast } from '@/store/toast'
 import { cn } from '@/lib/cn'
+import { reportDeviceTwinActivity } from './device-twin/activity'
 import { ConfirmDialog } from './ConfirmDialog'
 import { Button } from './ui'
 import { commandScope } from './command/scope'
@@ -88,8 +89,14 @@ function ScopedCommandButton({ deviceId, targetLabel, action, args, buttonLabel,
     setBusy(false)
     setPendingId(null)
     refreshHistory()
-    if (ack.status === 'ok') toast.ok(t('command.completed', { label }), ackDetailCopy(ack.detail, t('command.ackDetail')))
-    else toast.bad(t('command.failed', { label }), t('command.failedDetail'))
+    if (ack.status === 'ok') {
+      const detail = ackDetailCopy(ack.detail, t('command.ackDetail'))
+      toast.ok(t('command.completed', { label }), detail)
+      reportDeviceTwinActivity({ id: `command-${pendingId}-ok`, deviceId, tone: 'ok', label: t('command.completed', { label }), detail, at: Date.now() / 1000 })
+    } else {
+      toast.bad(t('command.failed', { label }), t('command.failedDetail'))
+      reportDeviceTwinActivity({ id: `command-${pendingId}-failed`, deviceId, tone: 'bad', label: t('command.failed', { label }), detail: t('command.failedDetail'), at: Date.now() / 1000 })
+    }
   }, [acks, pendingId, label, current, refreshHistory])
 
   useEffect(() => {
@@ -102,6 +109,7 @@ function ScopedCommandButton({ deviceId, targetLabel, action, args, buttonLabel,
       setPendingId(null)
       refreshHistory()
       toast.info(t('command.pending', { label }), t('command.pendingDetail'))
+      reportDeviceTwinActivity({ id: `command-${pendingId}-timeout`, deviceId, tone: 'warn', label: t('command.pending', { label }), detail: t('command.pendingDetail'), at: Date.now() / 1000 })
     }, ACK_TIMEOUT_MS)
     return () => clearTimeout(timer)
   }, [pendingId, label, current, refreshHistory])
@@ -117,11 +125,14 @@ function ScopedCommandButton({ deviceId, targetLabel, action, args, buttonLabel,
       if (!current()) return
       setPendingId(cv.id)
       refreshHistory()
+      reportDeviceTwinActivity({ id: `command-${cv.id}-sent`, deviceId, tone: 'accent', label: t('command.running'), detail: label, at: Date.now() / 1000 })
     } catch (e) {
       if (!current()) return
       sending.current = false
       setBusy(false)
-      toast.bad(t('command.notRun', { label }), commandErrorCopy(e))
+      const detail = commandErrorCopy(e)
+      toast.bad(t('command.notRun', { label }), detail)
+      reportDeviceTwinActivity({ id: `command-request-${Date.now()}-failed`, deviceId, tone: 'bad', label: t('command.notRun', { label }), detail, at: Date.now() / 1000 })
     }
   }
 

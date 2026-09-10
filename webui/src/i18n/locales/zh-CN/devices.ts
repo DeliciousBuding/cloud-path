@@ -95,6 +95,7 @@ export default {
     loadFailed: '3D 模型加载失败',
     aria: 'STC-B 开发板三维数字孪生模型',
     expand: '展开 3D 模型',
+    eventLive: '实时事件',
     collapse: '收起 3D 模型',
     note: '在线、LED 与显示模式来自当前设备状态；未上报的字形不推测，模型为只读视图。',
     indicator: { led: 'LED', mode: '显示模式', page: '页面' },
