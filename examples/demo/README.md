@@ -91,7 +91,7 @@ Edge/Core 生成。
 ## 最小配置（无硬件）
 
 ```yaml
-server: wss://cloudpath.vectorcontrol.tech/ws/edge
+server: wss://cloudpath.example.com/ws/edge
 token: ${CLOUDPATH_TOKEN}
 edge_id: my-laptop
 

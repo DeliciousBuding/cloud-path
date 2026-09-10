@@ -82,7 +82,7 @@ func TestReconnectBackoffKeepsRetrying(t *testing.T) {
 // ---- wss://（公网 TLS）----
 
 // TestWSSDialOverTLS 用真实 TLS server 验证 wss:// 拨号真的能工作：
-// 公网部署（cloudpath.vectorcontrol.tech）走的就是这条路径。
+// 公网部署通过受控 TLS 入口走的就是这条路径。
 func TestWSSDialOverTLS(t *testing.T) {
 	rec := startEdgeRecorder(t, true)
 	cfg := demoConfig(rec.url("wss"), "d1")

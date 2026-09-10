@@ -1,6 +1,6 @@
 # Plugin UI Contribution 设计
 
-最后更新：2026-09-09
+最后更新：2026-09-10
 
 > 状态：本文定义 CloudPath 插件 UI 的正式契约。`ui` 是 Manifest 的声明式贡献，
 > 不是任意 React bundle 注入。Core 负责校验、路由、权限和渲染；插件只声明页面
@@ -242,9 +242,9 @@ GET /api/plugin-ui/assets/{pluginID}/{version}/{path:.*}
 | 插件 | route | 首页重点 | 主要动作 | 主要记录 |
 |---|---|---|---|---|
 | scheduled-compartment | `/apps/pillbox` | 下一次提醒、确认状态、计划 | start-reminder、confirm-window | window |
-| hall-pillbox | `/apps/hall-pillbox` | 开盖确认、磁场/开窗状态 | start-window、confirm-window | window |
+| ~~hall-pillbox~~（已退役） | ~~`/apps/hall-pillbox`~~ | 已退役：药盒能力并入 scheduled-compartment | — | — |
 | button-indicator | `/apps/service-desk` | 当前呼叫、确认队列 | request、acknowledge | request |
-| environment-guard | `/apps/environment` | 温度、光照、阈值状态 | arm/disarm、阈值配置 | alert |
+| ~~environment-guard~~（已退役） | ~~`/apps/environment`~~ | 已退役：监测能力并入 sensor-alert | — | — |
 | music-player | `/apps/music` | 曲目、播放状态、进度 | play、stop | playback |
 | sensor-alert | `/apps/sensor-alert` | 当前告警、阈值、静默状态 | arm/disarm、静默配置 | alert |
 | stcb-driver | 无导航 | 设备详情扩展：诊断、原始端口、校准 | 设备动作由 Capability 决定 | 无业务记录 |
@@ -256,7 +256,7 @@ GET /api/plugin-ui/assets/{pluginID}/{version}/{path:.*}
 - Manifest UI schema 与校验；
 - 插件目录 API 的安全 UI 投影；
 - WebUI 动态导航、`/apps/:route` 路由和通用 Application Console；
-- 六个 Application 的 `ui` 声明与页面配置；
+- 四个现役 Application 的 `ui` 声明与页面配置；退役插件只保留历史兼容说明，不再进入现役组合。
 - Driver 设备详情 UI section 投影；
 - 自定义 iframe bridge 的契约和 fail-closed 行为；
 - 单元/集成测试、文档和契约检查。

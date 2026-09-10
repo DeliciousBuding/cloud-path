@@ -11,7 +11,7 @@
 > [docs/architecture/github-ecosystem.md](../../docs/architecture/github-ecosystem.md)。
 
 **这不是现役应用更新工具。** [scheduled-compartment](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment)
-已在独立仓演进；它与 button-indicator、environment-guard 的源码入口见
+已在独立仓演进；现役应用源码入口见
 [官方仓库组合](../../docs/architecture/repository-strategy.md)。修复与升级在各自仓库进行，
 不得把此生成器或 scaffold 的输出覆盖、推送到已有应用仓。下文只说明历史 bootstrap。
 

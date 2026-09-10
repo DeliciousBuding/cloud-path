@@ -162,7 +162,7 @@ Topic 只是候选集合，不是信任证明。CLI 搜到仓库后还必须检�
 
 | 能力 | 当前状态 | 边界 |
 |---|---|---|
-| 设备扩展 | 外部 Driver Plugin + Driver Protocol v1，由 Edge Plugin Host 运行；内置 `demo` 仅作无硬件参考 | 同一外部 Driver 的多实例多设备映射与串口注入已实现；命令/事件按 `(device_id, entity_id)` 匹配；多块真板的现场 E2E 仍需按设备 ACK 验证 |
+| 设备扩展 | 外部 Driver Plugin + Driver Protocol v1，由 Edge Plugin Host 运行；内置 `demo` 仅作无硬件参考 | 同一外部 Driver 的多实例多设备映射与串口注入已实现；命令/事件按 `(device_id, entity_id)` 匹配；维护者已完成受控三块 STC-B 验证，其他硬件仍需按设备 ACK 和事件复核 |
 | 状态模型 | Descriptor / Entity / Capability + typed Observation；`State.Raw` 仅保留兼容与诊断 | 旧 raw 读面继续可用，不伪装成 typed 语义 |
 | UI | Descriptor / Capability 驱动设备视图、能力动作与命令表单 | 任意第三方 React bundle 注入仍是非目标 |
 | STC-B | 已拆为独立 Driver Plugin [`cloud-path-driver-stcb`](https://github.com/DeliciousBuding/cloud-path-driver-stcb)，Core 生产二进制不再内置 STC-B | 发布版本以插件仓库 tag 为准 |

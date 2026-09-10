@@ -69,9 +69,14 @@ UI 贡献不是独立的可执行插件类型：当前由 Descriptor/Capability 
 | [cloud-path-driver-stcb](https://github.com/DeliciousBuding/cloud-path-driver-stcb) | **独立 Driver Plugin** | STC-B 参考驱动；经 GitHub discover/install 由 Plugin Host 运行 |
 | [cloud-path-app-scheduled-compartment](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment) | **独立 Application Plugin** | 定时隔间应用的现役源码、配置与发布说明 |
 | [cloud-path-app-button-indicator](https://github.com/DeliciousBuding/cloud-path-app-button-indicator) | **独立 Application Plugin** | 按键指示应用的现役源码、配置与发布说明 |
-| [cloud-path-app-environment-guard](https://github.com/DeliciousBuding/cloud-path-app-environment-guard) | **独立 Application Plugin** | 环境监护应用的现役源码、配置与发布说明 |
+| [cloud-path-app-music-player](https://github.com/DeliciousBuding/cloud-path-app-music-player) | **独立 Application Plugin** | 音乐播放应用的现役源码、配置与发布说明 |
+| [cloud-path-app-sensor-alert](https://github.com/DeliciousBuding/cloud-path-app-sensor-alert) | **独立 Application Plugin** | 传感器告警应用的现役源码、配置与发布说明 |
+| [cloud-path-app-environment-guard](https://github.com/DeliciousBuding/cloud-path-app-environment-guard) | **独立 Application Plugin（已退役）** | 不再现役；监测能力由 `cloud-path-app-sensor-alert` 覆盖，历史仓库不作为新安装入口 |
+| [cloud-path-app-hall-pillbox](https://github.com/DeliciousBuding/cloud-path-app-hall-pillbox) | **独立 Application Plugin（已退役）** | 不再现役；定时隔间能力由 `cloud-path-app-scheduled-compartment` 覆盖，历史仓库不作为新安装入口 |
 | [examples/scheduled-compartment/](examples/scheduled-compartment/README.md) | **Core 参考 / 历史 bootstrap** | 只依赖公开 SDK 的参考快照；[deploy/split/](deploy/split/README.md) 不用于更新现役应用 |
 | [templates/go-plugin/](templates/go-plugin/README.md) | 官方 Go 插件模板 | 新插件的起步材料，带 CI、Release 与 manifest 校验器；不是已有应用的更新源 |
+
+现役应用组合为 `scheduled-compartment`、`button-indicator`、`music-player`、`sensor-alert`；STC-B 由 `cloud-path-driver-stcb` 提供。
 
 **现役应用的源码事实源是各自独立仓库。** 修复与升级在对应仓库进行，不要从 Core 示例或
 split/scaffold 重新生成并覆盖已独立演进的应用。可安装版本、资产与摘要以各仓 Release 为准，
@@ -439,11 +444,9 @@ Registry CLI、WebUI，以及发布和部署物料。代码和测试能证明软
 
 **真板证据边界**
 
-- 多实例多设备映射和串口注入已有协议级回归测试，但尚未完成同一外部 Driver 驱动多块真板、
-  覆盖拔插、重连和操作 ACK 的现场 E2E。
-- 现有 STC-B 单板链路可用于回归；新结论必须附真板日志、操作 ACK 和设备事件。
-- 操作和事件路由已按 `(device_id, entity_id)` 匹配；旧绑定未给 `device_id` 时仅在实体唯一时兼容。
-  多板链路仍以现场 E2E 与设备 ACK 作为真板验证依据。
+- 维护者已在受控环境完成同一 Driver 驱动三块 STC-B 的注册、独立命令与设备 ACK 验证；原始日志、设备标识和部署细节保持私有。
+- 真板验证不替代租户边界：同租户内的 `entity_id` 仍未按设备限定。多块同型号设备应使用 Core v0.2.40+ 的显式 `device_id` 绑定或拆分租户，并在自己的硬件上复核操作 ACK 与设备事件。
+- 新结论不能只引用代码、模拟插件或 CI；必须给出真板日志、操作 ACK 和设备事件。
 
 **尚未实现**
 

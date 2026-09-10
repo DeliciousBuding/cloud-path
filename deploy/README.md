@@ -238,7 +238,7 @@ rm -f /tmp/cp.jar
 ## 6. 步骤 6 — nginx 站点（HTTPS + WSS）
 
 ```bash
-scp deploy/nginx/cloudpath.vectorcontrol.tech.conf "$HOST:/tmp/cloudpath-site.conf"
+scp deploy/nginx/cloudpath-public.conf "$HOST:/tmp/cloudpath-site.conf"
 ssh "$HOST" 'sudo install -D -o root -g root -m 0644 /tmp/cloudpath-site.conf /etc/nginx/sites-available/cloudpath.conf'
 ssh "$HOST" 'sudo ln -s /etc/nginx/sites-available/cloudpath.conf /etc/nginx/sites-enabled/cloudpath.conf'
 ```
@@ -466,7 +466,7 @@ curl -fsS "https://${SITE}/healthz"
 |---|---|
 | [systemd/cloudpath-server.service](systemd/cloudpath-server.service) | systemd 单元（加固 + 资源上限 + 持久化路径） |
 | [systemd/cloudpath-server.env.example](systemd/cloudpath-server.env.example) | 环境变量模板（只有变量名，按 0600 安装） |
-| [nginx/cloudpath.vectorcontrol.tech.conf](nginx/cloudpath.vectorcontrol.tech.conf) | 可直接安装的公网站点示例（HTTPS + WSS + CDN 真实 IP）；域名与证书路径需替换 |
+| [nginx/cloudpath-public.conf](nginx/cloudpath-public.conf) | 可直接安装的公网站点示例（HTTPS + WSS + CDN 真实 IP）；域名与证书路径需替换 |
 | [nginx.conf](nginx.conf) | 与主机无关的通用反代模板（`console.example.com`） |
 | [edge/README.md](edge/README.md) | 客户端（使用者自己电脑）分发与 `edge.yaml` 填写指引 |
 | [compose/.env.example](compose/.env.example) | 容器/compose 形态的环境变量模板（唯一副本） |

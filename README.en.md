@@ -62,21 +62,29 @@ declaration but no runtime. UI contributions are not an executable plugin type; 
 current WebUI renders Descriptor/Capability schemas for device views, capability actions, and
 command forms. Arbitrary page schemas and third-party JavaScript remain target-state work.
 
-Current plugin repositories:
+Plugin repositories (active and retired):
 
 - [cloud-path-driver-stcb](https://github.com/DeliciousBuding/cloud-path-driver-stcb)
 - [cloud-path-app-scheduled-compartment](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment)
 - [cloud-path-app-button-indicator](https://github.com/DeliciousBuding/cloud-path-app-button-indicator)
-- [cloud-path-app-environment-guard](https://github.com/DeliciousBuding/cloud-path-app-environment-guard)
+- [cloud-path-app-music-player](https://github.com/DeliciousBuding/cloud-path-app-music-player)
+- [cloud-path-app-sensor-alert](https://github.com/DeliciousBuding/cloud-path-app-sensor-alert)
+- [cloud-path-app-environment-guard](https://github.com/DeliciousBuding/cloud-path-app-environment-guard) — **retired**; sensor-alert now owns the monitoring capability
+- [cloud-path-app-hall-pillbox](https://github.com/DeliciousBuding/cloud-path-app-hall-pillbox) — **retired**; scheduled-compartment now owns the timed-compartment capability
+
+The current application set is scheduled-compartment, button-indicator, music-player, and
+sensor-alert; STC-B is provided by cloud-path-driver-stcb.
 
 Application repositories are the source of truth for application code and releases. Core
 examples and split/scaffold tooling are reference or historical bootstrap material; do not use
 them to overwrite an independently maintained application.
 
 **Identity-chain boundary:** command and event routing match `(device_id, entity_id)`. Legacy
-bindings without `device_id` remain compatible only while the entity resolves uniquely; with
-multiple boards, select an explicit device target. Multi-board hardware evidence is still
-required before claiming field validation.
+bindings without `device_id` remain compatible only while the entity resolves uniquely. Within
+one tenant, entity IDs are not yet device-scoped, so duplicate same-model boards should use an
+explicit target or separate tenants. Maintainers have completed a controlled three-board STC-B
+validation; raw logs and deployment details remain private, and downstream users must still
+verify each board's command acknowledgement and event stream on their own hardware.
 
 ## Quick start (local)
 
@@ -134,9 +142,11 @@ closed with `not_implemented`), Transform/WASM, multi-Server scaling, distribute
 centralized KMS/Vault, MQTT/Modbus gateways, remote OTA, time-series analytics, and arbitrary
 third-party React bundles in the main WebUI.
 
-Real-hardware verification is separate from implementation. Protocol tests, mocked plugins, CI,
-or a merged source change do not prove a new multi-board hardware path. Evidence must include
-the real board log, command acknowledgement, and device event.
+Real-hardware verification is separate from implementation. The maintainers completed a
+controlled three-board STC-B validation, but it does not transfer to another driver or
+deployment. Protocol tests, mocked plugins, CI, or a merged source change still do not prove a
+new multi-board hardware path; reproduce the setup and retain the real board log, command
+acknowledgement, and device event.
 
 ## Docs
 
