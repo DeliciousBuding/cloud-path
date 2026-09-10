@@ -239,15 +239,34 @@ function fieldDraft(fields: CommandField[], args: string): Draft | null {
   return Object.fromEntries(entries)
 }
 
+function defaultDraft(fields: CommandField[]): Draft {
+  const draft: Draft = {}
+  for (const field of fields) {
+    const value = field.defaultValue
+    if (value === undefined) continue
+    if (field.type === 'enum') {
+      const index = field.choices?.findIndex((choice) => choice === value) ?? -1
+      if (index >= 0) draft[field.key] = String(index)
+    } else if (field.type === 'boolean') {
+      draft[field.key] = value === true ? 'true' : 'false'
+    } else if (field.type !== 'array' && field.type !== 'object-rows') {
+      draft[field.key] = String(value)
+    }
+  }
+  return draft
+}
+
 export function SchemaActionInput({ action, validate, description, emptyHint, validationSource,
   showTitle = true, emptyArgs = '', disabled, onEdit, renderSubmit }: SchemaActionInputProps) {
   const id = useId()
   const { t } = useTranslation('common')
   const form = useMemo(() => action.inputSchema ? commandForm(action.inputSchema) : null, [action.inputSchema])
   const unsupported = useMemo(() => action.inputSchema ? unsupportedSchemaKeywords(action.inputSchema) : [], [action.inputSchema])
+  const initialFields = form?.choices ? form.choices[0]?.fields ?? [] : form?.fields ?? []
+  const initialValues = defaultDraft(initialFields)
   const [branch, setBranch] = useState(0)
-  const [values, setValues] = useState<Draft>({})
-  const [edited, setEdited] = useState(false)
+  const [values, setValues] = useState<Draft>(initialValues)
+  const [edited, setEdited] = useState(Object.keys(initialValues).length > 0)
   const [json, setJSON] = useState<string | null>(form ? null : emptyArgs)
   const activeFields = form?.choices ? form.choices[branch]?.fields ?? [] : form?.fields ?? []
   const built = fieldArgs(activeFields, values)
@@ -266,8 +285,10 @@ export function SchemaActionInput({ action, validate, description, emptyHint, va
   }
   const chooseBranch = (index: number) => {
     onEdit?.()
+    const nextValues = defaultDraft(form?.choices?.[index]?.fields ?? [])
     setBranch(index)
-    setEdited(false)
+    setValues(nextValues)
+    setEdited(Object.keys(nextValues).length > 0)
   }
 
   const fieldsUI = activeFields.length > 0 ? (

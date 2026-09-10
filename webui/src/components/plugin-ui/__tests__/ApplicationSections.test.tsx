@@ -1,6 +1,6 @@
 import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { ApplicationSection } from '@/components/plugin-ui/ApplicationSections'
+import { ApplicationSection, ApplicationStatusStrip } from '@/components/plugin-ui/ApplicationSections'
 import { renderWithProviders } from '@/test/render'
 import type { AppDomainRecordView, AppDomainRecordsView, PluginCatalogView, PluginInstanceView, PluginUISection } from '@/lib/types'
 
@@ -141,5 +141,38 @@ describe('Application section recordType isolation', () => {
     ])
     expect(screen.getByText('21')).toBeInTheDocument()
     expect(screen.queryByText('999')).not.toBeInTheDocument()
+  })
+
+  it('metrics 不渲染没有值的方块，缺值交给空状态说明', () => {
+    renderSection({ type: 'metrics', recordType: 'sensor', fields: [
+      { key: 'temperature', label: '温度' },
+      { key: 'humidity', label: '湿度' },
+    ] }, [record('sensor', 'sensor-1', { temperature: 21 }, 1)])
+    expect(screen.getByText('温度')).toBeInTheDocument()
+    expect(screen.getByText('21')).toBeInTheDocument()
+    expect(screen.queryByText('湿度')).not.toBeInTheDocument()
+    expect(screen.queryByText('未填写')).not.toBeInTheDocument()
+  })
+})
+
+describe('页面顶部状态条是唯一权威状态', () => {
+  it('设置已停用且未上报 → 说明「已停止」，并说清仍可查看历史与设置', () => {
+    renderWithProviders(<ApplicationStatusStrip instance={{
+      ...instance, has_observed: false, observed: undefined,
+      desired: { ...instance.desired, enabled: false },
+    }} />)
+    expect(screen.getByText('已停止')).toBeInTheDocument()
+    expect(screen.getByText(/设置已停用/)).toBeInTheDocument()
+    expect(screen.getByText(/仍可查看历史记录和设置/)).toBeInTheDocument()
+    // 不再出现自相矛盾的机器状态表
+    expect(screen.queryByText('状态待确认')).not.toBeInTheDocument()
+    expect(screen.queryByText(/还没有收到/)).not.toBeInTheDocument()
+  })
+
+  it('运行正常时给出一句话状态，不展开 desired/observed 对照表', () => {
+    renderWithProviders(<ApplicationStatusStrip instance={instance} />)
+    expect(screen.getByText('运行正常')).toBeInTheDocument()
+    expect(screen.queryByText('保存的设置')).not.toBeInTheDocument()
+    expect(screen.queryByText('当前运行情况')).not.toBeInTheDocument()
   })
 })

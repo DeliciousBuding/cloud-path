@@ -1,11 +1,12 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ChevronRight } from 'lucide-react'
 import { SchemaActionInput } from '@/components/command/SchemaActionInput'
 import { Button } from '@/components/ui'
 import { useApplicationAction } from '@/hooks/useApplicationAction'
 import { applicationResultSummary } from '@/lib/application-plane'
 import { appActionError, appActionScope, appJobArgsError, appJobSchema, manualAppJobs } from '@/lib/application-actions'
-import { commandHasInput } from '@/lib/command-schema'
+import { commandHasMeaningfulInput } from '@/lib/command-schema'
 import type { AppJobsView, AppJobView } from '@/lib/types'
 import { useAuth } from '@/store/auth'
 
@@ -30,22 +31,24 @@ function ActionResult({ json }: { json: string }) {
   </div>
 }
 
-function ActionForm({ instanceID, job, scope, schema, enabled, hasInput }: {
-  instanceID: string; job: AppJobView; scope: string; schema: Record<string, unknown>; enabled: boolean; hasInput: boolean
+function ActionForm({ instanceID, job, scope, schema, enabled, compact = false, submitLabel }: {
+  instanceID: string; job: AppJobView; scope: string; schema: Record<string, unknown>; enabled: boolean
+  compact?: boolean; submitLabel?: string
 }) {
   const { t } = useTranslation('plugin')
   const { mutation, request, run, edit } = useApplicationAction(instanceID, job, schema, scope, enabled)
   const title = job.title?.trim() || job.id
+  const idleLabel = submitLabel ?? t('actions.run')
   return <div className="min-w-0">
     <SchemaActionInput action={{ label: title, inputSchema: schema, inputPlaceholder: t('actions.inputPlaceholder') }}
-      validate={(args) => appJobArgsError(args, schema)} emptyArgs="{}"
-      description={hasInput ? t('actions.inputDescription') : t('actions.noInputDescription')}
-      emptyHint={hasInput ? t('actions.inputHint') : t('actions.noInputHint')}
+      validate={(args) => appJobArgsError(args, schema)} emptyArgs="{}" showTitle={false}
+      description={compact ? t('actions.noInputDescription') : t('actions.inputDescription')}
+      emptyHint={t('actions.noInputHint')}
       validationSource={t('actions.validationSource')} disabled={!enabled || mutation.isPending} onEdit={edit}
       renderSubmit={(args, error) => <Button className="shrink-0" loading={mutation.isPending}
         aria-label={mutation.isError ? t('actions.retryAria', { title }) : mutation.isSuccess ? t('actions.againAria', { title }) : t('actions.runAria', { title })}
         disabled={!enabled || Boolean(error)} onClick={() => run(args)}>
-        {mutation.isPending ? t('actions.waiting') : mutation.isError ? t('actions.retry') : mutation.isSuccess ? t('actions.again') : t('actions.run')}
+        {submitLabel ? idleLabel : mutation.isPending ? t('actions.waiting') : mutation.isError ? t('actions.retry') : mutation.isSuccess ? t('actions.again') : t('actions.run')}
       </Button>} />
     {mutation.isError && <div className="mt-3 min-w-0 space-y-2 rounded-tile border border-hairline p-3">
       <p role="alert" className="break-words text-body text-bad">{appActionError(mutation.error)}</p>
@@ -73,11 +76,32 @@ function ActionForm({ instanceID, job, scope, schema, enabled, hasInput }: {
 function Action({ instanceID, job, scope, enabled }: {
   instanceID: string; job: AppJobView; scope: string | null; enabled: boolean
 }) {
+  const { t } = useTranslation('plugin')
   const { schema, error } = useMemo(() => appJobSchema(job.input_schema_json), [job.input_schema_json])
-  const hasInput = useMemo(() => schema ? commandHasInput(schema) : false, [schema])
-  return <article aria-label={job.title?.trim() || job.id} className="min-w-0 py-4 first:pt-0 last:pb-0">
-    {scope && schema ? <ActionForm instanceID={instanceID} job={job} scope={scope} schema={schema} enabled={enabled} hasInput={hasInput} />
-      : <h3 className="break-words text-body font-medium [overflow-wrap:anywhere]">{job.title?.trim() || job.id}</h3>}
+  const needsInput = useMemo(() => schema ? commandHasMeaningfulInput(schema) : false, [schema])
+  const title = job.title?.trim() || job.id
+  if (!scope || !schema) return <article className="min-w-0 py-4 first:pt-0 last:pb-0">
+    <h3 className="break-words text-body font-medium [overflow-wrap:anywhere]">{title}</h3>
+    {error && <p role="alert" className="mt-2 text-meta text-bad">{error}</p>}
+  </article>
+  // 无需填写参数的操作：按钮本身就是操作名，不再额外挂一个同名标题。
+  if (!needsInput) return <article aria-label={title} className="min-w-0 py-3 first:pt-0 last:pb-0">
+    <ActionForm instanceID={instanceID} job={job} scope={scope} schema={schema} enabled={enabled}
+      submitLabel={title} compact />
+    {error && <p role="alert" className="mt-2 text-meta text-bad">{error}</p>}
+  </article>
+  return <article aria-label={title} className="min-w-0 py-4 first:pt-0 last:pb-0">
+    <h3 className="break-words text-body font-medium [overflow-wrap:anywhere]">{title}</h3>
+    <p className="mt-1 text-meta text-ink-3">{t('actions.parametersNeeded')}</p>
+    <details className="group mt-3 min-w-0 rounded-tile border border-hairline bg-surface-2/60">
+      <summary className="flex min-h-touch cursor-pointer list-none items-center gap-1.5 px-3.5 py-2.5 text-meta font-medium text-ink-2">
+        <ChevronRight size={13} className="shrink-0 transition-transform group-open:rotate-90" />
+        {t('actions.openParameters')}
+      </summary>
+      <div className="border-t border-hairline px-3.5 py-3">
+        <ActionForm instanceID={instanceID} job={job} scope={scope} schema={schema} enabled={enabled} />
+      </div>
+    </details>
     {error && <p role="alert" className="mt-2 text-meta text-bad">{error}</p>}
   </article>
 }

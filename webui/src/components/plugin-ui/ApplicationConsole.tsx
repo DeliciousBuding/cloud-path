@@ -7,7 +7,7 @@ import { ButtonLink, Panel } from '@/components/ui'
 import { useApplicationPlane } from '@/hooks/useApplicationPlane'
 import { applicationRunningState } from '@/lib/application-plane'
 import { resolveLocalizedText } from '@/i18n/pluginText'
-import { ApplicationSection } from './ApplicationSections'
+import { ApplicationSection, ApplicationStatusStrip } from './ApplicationSections'
 import type { PluginCatalogView, PluginInstanceView, PluginUIPage } from '@/lib/types'
 
 export function ApplicationConsole({ instance, catalog, page, readOnly, lifecycleKey }: {
@@ -34,26 +34,39 @@ export function ApplicationConsole({ instance, catalog, page, readOnly, lifecycl
     </Panel>
   }
 
+  // 页面顶部只留一条权威状态。声明里的 `status` 区块不再单独渲染，
+  // 否则同一件事会出现两遍，而且互相矛盾（例如「运行中」和「尚未收到」同时出现）。
+  const visible = page.sections
+    .map((section, index) => ({ section, index }))
+    .filter((item) => item.section.type !== 'status')
+  const isAdvanced = ({ type, source }: typeof page.sections[number]) => type === 'form' || type === 'diagnostics'
+    || (type === 'table' && source === 'bindings')
+  const main = visible.filter((item) => !isAdvanced(item.section))
+  const advanced = visible.filter((item) => isAdvanced(item.section))
+  const renderSection = ({ section, index }: typeof visible[number]) => <ApplicationSection
+    key={`${section.type}:${index}`}
+    instance={instance}
+    catalog={catalog}
+    section={section}
+    records={records}
+    bindings={bindings}
+    jobs={jobs}
+    presentation={presentation}
+    running={actionRunning}
+    readOnly={readOnly}
+    lifecycleKey={lifecycleKey}
+  />
+
   return <div className="space-y-5" aria-label={pageTitle}>
-    {!instance.desired.enabled && <div role="status" className="rounded-tile bg-warn/12 px-3.5 py-3 text-body text-warn">
-      {t('console.disabled')}
-    </div>}
-    {instance.stale && <div role="status" className="rounded-tile bg-warn/12 px-3.5 py-3 text-body text-warn">
-      {t('console.stale')}
-    </div>}
-    {page.sections.map((section, index) => <ApplicationSection
-      key={`${section.type}:${index}`}
-      instance={instance}
-      catalog={catalog}
-      section={section}
-      records={records}
-      bindings={bindings}
-      jobs={jobs}
-      presentation={presentation}
-      running={actionRunning}
-      readOnly={readOnly}
-      lifecycleKey={lifecycleKey}
-    />)}
+    <ApplicationStatusStrip instance={instance} />
+    {main.map(renderSection)}
+    {advanced.length > 0 && <details className="min-w-0 rounded-panel border border-hairline bg-surface px-4 py-3.5">
+      <summary className="flex min-h-touch cursor-pointer list-none items-center justify-between gap-3 text-compact font-medium">
+        <span>{t('console.advanced')}</span>
+        <span className="text-meta font-normal text-ink-3">{t('console.advancedHint')}</span>
+      </summary>
+      <div className="mt-4 space-y-5">{advanced.map(renderSection)}</div>
+    </details>}
     <p role="status" className="text-meta text-ink-3">
       {status === 'open' ? t('console.realtimeOpen') : status === 'connecting' ? t('console.realtimeConnecting') : t('console.realtimeClosed')}
     </p>

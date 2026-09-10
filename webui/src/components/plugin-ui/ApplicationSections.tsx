@@ -13,11 +13,11 @@ import { RowSkeleton } from '@/components/Skeleton'
 import { StructuredValue } from '@/components/StructuredValue'
 import { StaticDataTable, dataTableFeatures } from '@/components/data-table'
 import { ApplicationActions } from '@/components/plugin/ApplicationActions'
-import { InstanceStatusSummary } from '@/components/plugin/DesiredObserved'
 import { PluginConfigForm } from './PluginConfigForm'
 import { PluginUIBridge } from './PluginUIBridge'
 import { ApiError } from '@/lib/api'
 import { appTime, bindingLabels, recordFieldLabel, recordHeadline, recordTimestamp, scheduleSummary, scheduleZone } from '@/lib/application-plane'
+import { instanceStatus } from '@/lib/plugins'
 import { resolveUIFieldLabel, resolveUIFieldValue } from '@/lib/plugin-ui'
 import { resolveLocalizedText } from '@/i18n/pluginText'
 import { safeConfigEntries } from '@/lib/plugins'
@@ -60,6 +60,22 @@ function SectionIntro({ section }: { section: PluginUISection }) {
   const text = resolveLocalizedText(section, 'description')
   if (!text) return null
   return <p className="mb-3 text-meta leading-relaxed text-ink-3">{text}</p>
+}
+
+export function ApplicationStatusStrip({ instance }: { instance: PluginInstanceView }) {
+  const { t } = useTranslation('plugin')
+  const status = instanceStatus(instance)
+  const tone = status.tone === 'ok' ? 'bg-ok/10 text-ok' : status.tone === 'warn' ? 'bg-warn/12 text-warn'
+    : status.tone === 'bad' ? 'bg-bad/10 text-bad' : 'bg-ink-3/10 text-ink-2'
+  const next = status.next ?? (!instance.desired.enabled ? t('console.disabled') : undefined)
+  return <div className={`flex min-w-0 items-start gap-2.5 rounded-tile px-3.5 py-3 ${tone}`} role="status">
+    <span className="mt-0.5 h-2 w-2 shrink-0 rounded-pill bg-current" aria-hidden="true" />
+    <div className="min-w-0">
+      <p className="text-compact font-semibold">{status.label}</p>
+      <p className="mt-0.5 text-meta leading-relaxed text-ink-2">{status.summary}</p>
+      {next && <p className="mt-1 text-meta leading-relaxed text-ink-2">{t('desired.next', { text: next })}</p>}
+    </div>
+  </div>
 }
 
 function ReadContent<T>({ title, query, empty, emptyText, children }: {
@@ -347,8 +363,10 @@ function metricEntries(section: PluginUISection, records: AppDomainRecordView[])
     .filter(([key, value]) => !TECHNICAL_METRIC_KEY.test(key) && (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string'))
     .slice(0, 4)
     .map(([key]): PluginUIField => ({ key, label: recordFieldLabel(key) }))
+  // 概览方块只放「确实有值」的字段：一个写着「未填写」的大方块不提供任何信息，
+  // 只会让用户以为页面坏了。没有值的字段交给空状态文案解释。
   return fields.map((field) => ({ field, value: recordValue(source, field.key), source }))
-    .filter(({ field, value }) => !field.hideWhenEmpty || (value !== undefined && value !== null && value !== ''))
+    .filter(({ value }) => value !== undefined && value !== null && value !== '')
 }
 
 function MetricsSection({ section, query }: { section: PluginUISection; query: SectionQuery<AppDomainRecordsView> }) {
@@ -430,7 +448,7 @@ export function ApplicationSection(props: ApplicationSectionProps) {
   const rows = records.data?.records ?? []
   switch (section.type) {
     case 'status':
-      return <Panel title={sectionTitle(section, t('sections.status'))}><SectionIntro section={section} /><InstanceStatusSummary v={instance} /></Panel>
+      return <ApplicationStatusStrip instance={instance} />
     case 'metrics':
       return <MetricsSection section={section} query={records} />
     case 'actions':

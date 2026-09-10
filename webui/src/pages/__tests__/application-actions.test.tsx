@@ -19,7 +19,10 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
 const execute = () => screen.getByRole('button', { name: '执行「更新计数」' })
 const countInput = () => screen.getByRole('combobox', { name: /次数/ })
-async function ready() { return screen.findByRole('combobox', { name: /次数/ }) }
+async function ready() {
+  fireEvent.click(await screen.findByText('填写参数'))
+  return screen.findByRole('combobox', { name: /次数/ })
+}
 
 // All interactions use the actual REST/query/auth/form paths, not mocked hook success.
 describe('应用操作的授权、生命周期与明确用户意图', () => {
@@ -100,7 +103,8 @@ describe('应用操作的授权、生命周期与明确用户意图', () => {
     expect(await screen.findByText('无需填写参数，点击即可执行。')).toBeVisible()
     expect(screen.queryByText('参数内容')).not.toBeInTheDocument()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '执行「刷新记录」' })).toBeEnabled()
+    // 按钮本身就是操作名，不再挂一个「刷新记录」标题 + 通用「执行操作」按钮。
+    expect(screen.getByRole('button', { name: '执行「刷新记录」' })).toHaveTextContent('刷新记录')
   })
 
   it.each(['stopped', 'unknown', 'starting', 'degraded'])('控制面状态 %s 即使旧 jobs 说 running 也禁止执行', async (runtimeState) => {

@@ -191,6 +191,21 @@ describe('desired / observed 永远分别呈现', () => {
     expect(s.next).toMatch(/恢复网关连接/)
   })
 
+  it('设置已停用且未上报 → 「已停止」，不是「状态待确认」', () => {
+    const v = instance({
+      has_observed: false, observed: undefined,
+      desired: { ...instance().desired, enabled: false },
+    })
+    const s = instanceStatus(v)
+    expect(s.key).toBe('stopped')
+    expect(s.label).toBe('已停止')
+    expect(s.summary).toMatch(/停用/)
+    expect(s.needsAttention).toBe(false)
+    // 关掉的应用不该再提示“等待运行状态”，也不该给出“重新应用设置”这类误导下一步。
+    expect(s.summary).not.toMatch(/还没有收到/)
+    expect(s.next).toBeUndefined()
+  })
+
   it('stale=true → 独立「已过期」状态，并声明下面的是历史事实', () => {
     const s = syncState(instance({ stale: true }))
     expect(s.key).toBe('stale')

@@ -269,6 +269,8 @@ export interface CommandField {
   examples?: unknown[]
   minItems?: number
   maxItems?: number
+  /** Declared default/const value. Presentation only; validation still uses the schema. */
+  defaultValue?: unknown
 }
 
 export interface CommandFormChoice {
@@ -333,10 +335,12 @@ export function commandFields(schema: Schema): CommandField[] | null {
     } else if (type !== 'string' && type !== 'number' && type !== 'integer' && type !== 'boolean' && type !== 'enum') return null
     const title = typeof prop.title === 'string' && prop.title.trim() ? prop.title : undefined
     const description = typeof prop.description === 'string' && prop.description.trim() ? prop.description : undefined
+    const defaultValue = Object.hasOwn(prop, 'const') ? prop.const : undefined
     fields.push({ key, label: propertyLabel(key, prop), description: title && description !== title ? description : undefined,
       required: Array.isArray(schema.required) && schema.required.includes(key), type, schema: prop, choices, choiceLabels,
       itemType, fields: nestedFields, examples: Array.isArray(prop.examples) ? prop.examples : undefined,
-      minItems: count(prop.minItems) ? prop.minItems : undefined, maxItems: count(prop.maxItems) ? prop.maxItems : undefined })
+      minItems: count(prop.minItems) ? prop.minItems : undefined, maxItems: count(prop.maxItems) ? prop.maxItems : undefined,
+      defaultValue })
   }
   return fields
 }
@@ -389,4 +393,14 @@ export function commandForm(schema: Schema): CommandForm | null {
     return { fields: [] }
   }
   return null
+}
+
+
+/** Strict form fields still need user input only when a required field has no declared default/const. */
+export function commandHasMeaningfulInput(schema?: Schema): boolean {
+  if (!commandHasInput(schema)) return false
+  const form = schema ? commandForm(schema) : null
+  if (!form) return true
+  const fields = form.choices ? form.choices.flatMap((choice) => choice.fields) : form.fields
+  return fields.some((field) => field.required && field.defaultValue === undefined)
 }

@@ -224,6 +224,15 @@ export function instanceStatus(v: PluginInstanceView): InstanceStatus {
   const state = stateMeta(v.observed?.state)
   const health = healthMeta(v.observed?.health)
 
+  // 设置已停用且宿主未上报：用户主动关掉了应用，这里就是「已停止」，
+  // 不能报成「状态待确认 / 还没有收到运行状态」——那会让关掉的应用看起来像故障。
+  if (!v.desired.enabled && !v.has_observed) {
+    return {
+      key: 'stopped', label: pluginText('status.stopped.label'), tone: 'idle',
+      summary: pluginText('status.disabledSummary'), needsAttention: false, priority: 2,
+    }
+  }
+
   if (!v.has_observed) {
     const hostOffline = !serverHosted && v.desired.enabled && !v.edge_online
     if (hostOffline) {
