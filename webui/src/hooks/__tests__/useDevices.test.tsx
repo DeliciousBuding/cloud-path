@@ -34,6 +34,16 @@ describe('useDevices：REST / WS 权威边界', () => {
     expect(result.current.loading).toBe(false)
   })
 
+  it('WS 状态先到时，REST 元数据补回 adapter/name/port', async () => {
+    const rest = makeDeviceView({ id: KEY, edge_id: 'edge-1', adapter: 'stcb', name: 'STC-B #3 (COM5)', port: 'COM5', online: true })
+    const live = makeDeviceView({ id: KEY, edge_id: 'edge-1', adapter: '', name: '', port: '', online: true, state: { 'clock.time': '15:30:00' } })
+    installFetch(() => stubResponse(200, { devices: [rest] }))
+    useLive.setState({ status: 'open', connectionEpoch: 1, snapshotEpoch: 1, devices: { [KEY]: live } })
+    const { result } = renderHook(() => useDevices(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.list[0]?.adapter).toBe('stcb'))
+    expect(result.current.list[0]).toMatchObject({ name: 'STC-B #3 (COM5)', port: 'COM5', online: true })
+  })
+
   it('WS closed 后 REST 轮询重新成为权威，旧实时态不能粘住', async () => {
     installFetch(() => stubResponse(200, { devices: [REST_ONLINE] }))
     useLive.setState({ status: 'closed', devices: { [KEY]: LIVE_OFFLINE } })

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useLive } from '@/store/ws'
 import { authIdentity, useAuth } from '@/store/auth'
+import { mergeDeviceMetadata } from '@/lib/devices'
 import type { DeviceView } from '@/lib/types'
 
 export interface DevicesResult {
@@ -40,11 +41,12 @@ export function useDevices(): DevicesResult {
   // open 只表示握手成功；必须等本次连接的 snapshot 落地后才把空集合当成权威事实。
   const liveAuthoritative = status === 'open' &&
     (connectionEpoch === 0 || snapshotEpoch === connectionEpoch)
+  const restByID = new Map((data?.devices ?? []).map((device) => [device.id, device]))
   const merged: Record<string, DeviceView> = {}
   if (liveAuthoritative) {
     // 本次连接的 snapshot 是权威集合；REST 里只可能更旧，不能把已删/不属于当前
     // 租户的键补回来。
-    for (const [k, d] of Object.entries(live)) merged[k] = d
+    for (const [k, d] of Object.entries(live)) merged[k] = mergeDeviceMetadata(d, restByID.get(k))
   } else if (data !== undefined) {
     // REST 已成功返回时它就是权威集合；不能把已断开的旧 live 键补回来。
     for (const d of data.devices) merged[d.id] = d
