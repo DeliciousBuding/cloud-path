@@ -31,6 +31,8 @@ export function DeviceRow({ d }: { d: DeviceView }) {
     : t('status.offline')
   const name = d.name || devId || d.id
   const seen = d.online ? d.updated_at : d.last_seen
+  // 鼠标/键盘意图出现后再取详情路由 chunk；不进入页面就不下载。
+  const preloadDeviceDetail = () => { void import('@/pages/DeviceDetail') }
   const gatewayTitle = [d.edge_id, d.adapter ? t('row.deviceType', { type: d.adapter }) : '', d.port]
     .filter(Boolean).join(' · ')
   return (
@@ -41,6 +43,8 @@ export function DeviceRow({ d }: { d: DeviceView }) {
           to={`/devices/${encodeURIComponent(edgeId ?? '')}/${encodeURIComponent(devId ?? '')}`}
           className="flex min-h-touch min-w-0 items-center gap-1 text-compact font-medium no-underline hover:text-accent sm:min-h-0"
           title={`${name} · ${d.id}`}
+          onPointerEnter={preloadDeviceDetail}
+          onFocus={preloadDeviceDetail}
         >
           <span className="min-w-0 truncate">{name}</span>
           <ChevronRight size={11} className="shrink-0 text-ink-3" />

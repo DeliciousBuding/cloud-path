@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { Link, useParams, useSearchParams } from 'react-router'
@@ -16,7 +16,6 @@ import { ActionPanel } from '@/components/ActionPanel'
 import { CommandHistory } from '@/components/CommandHistory'
 import { DeviceTwinPanel } from '@/components/device-twin/DeviceTwinPanel'
 import { supportsDeviceTwin } from '@/components/device-twin/device-twin'
-import { TimeSeriesChart } from '@/components/charts'
 import { EventFeed, eventDisplayLabel } from '@/components/EventFeed'
 import { RowSkeleton } from '@/components/Skeleton'
 import { StaticDataTable, dataTableFeatures } from '@/components/data-table'
@@ -39,6 +38,11 @@ import { resolveDriverDeviceUI } from '@/lib/plugin-ui'
 import type { DriverDeviceUIResolution } from '@/lib/plugin-ui'
 import { resolveLocalizedText } from '@/i18n/pluginText'
 import type { DeviceDescriptor, DeviceView, PluginUISection } from '@/lib/types'
+
+// Recharts 只在高级状态趋势视图真正打开时加载；默认概览/操作页不下载图表库。
+const TimeSeriesChart = lazy(() =>
+  import('@/components/charts/TimeSeriesChart').then(({ TimeSeriesChart: Component }) => ({ default: Component })),
+)
 
 const DESCRIPTOR_SOURCE_KEY: Record<DescriptorSource, string> = {
   ws: 'source.ws', inline: 'source.inline', rest: 'source.rest', bulk: 'source.bulk', none: 'source.none', error: 'source.error',
@@ -485,14 +489,16 @@ export default function DeviceDetail() {
                                 <Maximize2 size={12} className="text-ink-3 transition-colors group-hover:text-accent" aria-hidden="true" />
                               </span>
                             </div>
-                            <TimeSeriesChart
-                              points={pts}
-                              kind={chartKind}
-                              height={104}
-                              unit={unit}
-                              emptyLabel={unit ? t('trend.samplingWithUnit', { unit }) : t('trend.sampling')}
-                              ariaLabel={seriesLabel(k, descriptor, capabilities)}
-                            />
+                            <Suspense fallback={<div style={{ height: 104 }} />}>
+                              <TimeSeriesChart
+                                points={pts}
+                                kind={chartKind}
+                                height={104}
+                                unit={unit}
+                                emptyLabel={unit ? t('trend.samplingWithUnit', { unit }) : t('trend.sampling')}
+                                ariaLabel={seriesLabel(k, descriptor, capabilities)}
+                              />
+                            </Suspense>
                           </Link>
                         )
                       })}
