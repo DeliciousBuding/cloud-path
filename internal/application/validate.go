@@ -3,6 +3,7 @@ package application
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Validate checks a proposed binding list against the declared requirements and
@@ -36,42 +37,51 @@ func (b Binder) Validate(requirements []Requirement, candidates []Candidate, bin
 		reqByID[r.ID] = r
 	}
 
-	candByID := map[string]Candidate{}
-	for _, c := range candidates {
-		candByID[c.EntityID] = c
-	}
-
 	countByReq := map[string]int{}
-	entityReqs := map[string][]string{}
+	targetReqs := map[string][]string{}
+	targetLabels := map[string]string{}
+	entityDevices := map[string]map[string]bool{}
 
 	for _, bnd := range bindings {
 		if bnd.RequirementID == "" {
-			issues = append(issues, Issue{Code: CodeEmptyRequirementID, EntityID: bnd.EntityID, Message: "binding has empty requirement id"})
+			issues = append(issues, Issue{Code: CodeEmptyRequirementID, EntityID: bnd.EntityID, DeviceID: bnd.DeviceID, Message: "binding has empty requirement id"})
 			continue
 		}
 		if bnd.EntityID == "" {
-			issues = append(issues, Issue{Code: CodeEmptyEntityID, RequirementID: bnd.RequirementID, Message: "binding has empty entity id"})
+			issues = append(issues, Issue{Code: CodeEmptyEntityID, RequirementID: bnd.RequirementID, DeviceID: bnd.DeviceID, Message: "binding has empty entity id"})
 			continue
 		}
 		req, ok := reqByID[bnd.RequirementID]
 		if !ok {
-			issues = append(issues, Issue{Code: CodeUnknownRequirement, RequirementID: bnd.RequirementID, EntityID: bnd.EntityID, Message: fmt.Sprintf("requirement id %q is not declared", bnd.RequirementID)})
+			issues = append(issues, Issue{Code: CodeUnknownRequirement, RequirementID: bnd.RequirementID, EntityID: bnd.EntityID, DeviceID: bnd.DeviceID, Message: fmt.Sprintf("requirement id %q is not declared", bnd.RequirementID)})
 			continue
 		}
-		cand, ok := candByID[bnd.EntityID]
-		if !ok {
-			issues = append(issues, Issue{Code: CodeUnknownEntity, RequirementID: bnd.RequirementID, EntityID: bnd.EntityID, Message: fmt.Sprintf("entity id %q is not a known candidate", bnd.EntityID)})
+		cand, matches := candidateForBinding(candidates, bnd)
+		if matches == 0 {
+			issues = append(issues, Issue{Code: CodeUnknownEntity, RequirementID: bnd.RequirementID, EntityID: bnd.EntityID, DeviceID: bnd.DeviceID, Message: fmt.Sprintf("entity id %q is not a known candidate on device %q", bnd.EntityID, bnd.DeviceID)})
+			continue
+		}
+		if matches > 1 {
+			issues = append(issues, Issue{Code: CodeAmbiguousEntity, RequirementID: bnd.RequirementID, EntityID: bnd.EntityID, DeviceID: bnd.DeviceID, Message: fmt.Sprintf("entity id %q matches multiple devices; device_id is required", bnd.EntityID)})
 			continue
 		}
 		if b.TenantID != "" && cand.TenantID != b.TenantID {
-			issues = append(issues, Issue{Code: CodeCrossTenant, RequirementID: bnd.RequirementID, EntityID: bnd.EntityID, Message: fmt.Sprintf("entity %q belongs to tenant %q, expected %q", bnd.EntityID, cand.TenantID, b.TenantID)})
+			issues = append(issues, Issue{Code: CodeCrossTenant, RequirementID: bnd.RequirementID, EntityID: bnd.EntityID, DeviceID: cand.DeviceID, Message: fmt.Sprintf("entity %q on device %q belongs to tenant %q, expected %q", bnd.EntityID, cand.DeviceID, cand.TenantID, b.TenantID)})
 			continue
 		}
 		if ok, code, msg := candidateProvidesCapability(cand, req.Capability); !ok {
-			issues = append(issues, Issue{Code: code, RequirementID: bnd.RequirementID, EntityID: bnd.EntityID, Message: msg})
+			issues = append(issues, Issue{Code: code, RequirementID: bnd.RequirementID, EntityID: bnd.EntityID, DeviceID: cand.DeviceID, Message: msg})
 		}
+		key := candidateTargetKey(cand.DeviceID, cand.EntityID)
 		countByReq[req.ID]++
-		entityReqs[bnd.EntityID] = append(entityReqs[bnd.EntityID], bnd.RequirementID)
+		targetReqs[key] = append(targetReqs[key], bnd.RequirementID)
+		targetLabels[key] = targetLabel(cand.DeviceID, cand.EntityID)
+		if cand.DeviceID != "" {
+			if entityDevices[cand.EntityID] == nil {
+				entityDevices[cand.EntityID] = map[string]bool{}
+			}
+			entityDevices[cand.EntityID][cand.DeviceID] = true
+		}
 	}
 
 	// Cardinality checks per declared requirement.
@@ -101,9 +111,9 @@ func (b Binder) Validate(requirements []Requirement, candidates []Candidate, bin
 		}
 	}
 
-	// Duplicate occupation: an entity bound to more than one requirement (or
-	// more than one slot) while none of the occupying requirements allows reuse.
-	for entity, reqs := range entityReqs {
+	// Duplicate occupation is per provider target, not per local entity id:
+	// two different boards may each legitimately expose "buzzer" or "key1".
+	for key, reqs := range targetReqs {
 		if len(reqs) <= 1 {
 			continue
 		}
@@ -115,11 +125,53 @@ func (b Binder) Validate(requirements []Requirement, candidates []Candidate, bin
 			}
 		}
 		if !allowed {
-			issues = append(issues, Issue{Code: CodeDuplicateOccupation, EntityID: entity, Message: fmt.Sprintf("entity %q is occupied by requirements %v while reuse is not allowed", entity, reqs)})
+			issues = append(issues, Issue{Code: CodeDuplicateOccupation, EntityID: targetEntityID(key), Message: fmt.Sprintf("target %s is occupied by requirements %v while reuse is not allowed", targetLabels[key], reqs)})
 		}
 	}
 
+	for entityID, devices := range entityDevices {
+		if len(devices) <= 1 {
+			continue
+		}
+		issues = append(issues, Issue{
+			Code: CodeAmbiguousEntity, EntityID: entityID,
+			Message: fmt.Sprintf("entity id %q is bound to multiple devices; application protocol requires distinct entity ids per target", entityID),
+		})
+	}
+
 	return ValidationResult{Valid: len(issues) == 0, Issues: issues}
+}
+
+func candidateForBinding(candidates []Candidate, bnd Binding) (Candidate, int) {
+	var first Candidate
+	matches := 0
+	for _, candidate := range candidates {
+		if candidate.EntityID != bnd.EntityID {
+			continue
+		}
+		if bnd.DeviceID != "" && candidate.DeviceID != bnd.DeviceID {
+			continue
+		}
+		if matches == 0 {
+			first = candidate
+		}
+		matches++
+	}
+	return first, matches
+}
+
+func targetLabel(deviceID, entityID string) string {
+	if deviceID == "" {
+		return fmt.Sprintf("entity %q", entityID)
+	}
+	return fmt.Sprintf("entity %q on device %q", entityID, deviceID)
+}
+
+func targetEntityID(key string) string {
+	if i := strings.LastIndexByte(key, 0); i >= 0 {
+		return key[i+1:]
+	}
+	return key
 }
 
 func missingRequiredIssue(req Requirement) Issue {

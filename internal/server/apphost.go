@@ -93,8 +93,9 @@ const AppHostEdgeID = "server"
 type appInstanceRun struct {
 	row            store.PluginInstanceRow
 	tenantStr      string
-	reqByEntity    map[string]string              // entityID → requirementID（事件扇入路由）
 	bindings       []api.AppBindingView           // 启动时 Binder 权威匹配的绑定快照（D1 读面）
+	requirements   []coreapplication.Requirement  // 设备选择器读面
+	candidates     []coreapplication.Candidate    // 设备选择器读面
 	jobIDs         []string                       // 应用声明的 job（包含手动操作）
 	jobDescriptors []sdkapplication.JobDescriptor // immutable runtime declaration snapshot
 	tz             *time.Location                 // 应用配置声明的时区（通用 durable schedule_job 使用）
@@ -225,18 +226,34 @@ func (h *AppHost) ctxOrBackground() context.Context {
 // InstanceBindings 返回实例的 Capability 绑定投影（运行态）。ok=false 表示
 // 实例未运行或 AppHost 未启用——绑定只存在于实例运行期间。
 // instance id 不跨租户全局唯一，因此运行记录按 (tenant, instance) 寻址。
-func (h *AppHost) InstanceBindings(tenantID int64, instanceID string) ([]api.AppBindingView, bool) {
+func (h *AppHost) InstanceBindings(tenantID int64, instanceID string) (api.AppBindingsView, bool) {
 	if h == nil {
-		return nil, false
+		return api.AppBindingsView{InstanceID: instanceID}, false
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	run, ok := h.running[appInstKey{tenantID, instanceID}]
 	if !ok {
-		return nil, false
+		return api.AppBindingsView{InstanceID: instanceID}, false
 	}
-	out := append([]api.AppBindingView(nil), run.bindings...)
-	return out, true
+	view := api.AppBindingsView{
+		InstanceID: instanceID,
+		Running:    true,
+		Bindings:   append([]api.AppBindingView(nil), run.bindings...),
+	}
+	for _, req := range run.requirements {
+		view.Requirements = append(view.Requirements, api.AppBindingRequirementView{
+			ID: req.ID, Capability: req.Capability, Cardinality: string(req.Cardinality),
+			MinItems: req.MinItems, AllowReuse: req.AllowReuse,
+		})
+	}
+	for _, candidate := range run.candidates {
+		view.Candidates = append(view.Candidates, api.AppBindingCandidateView{
+			EntityID: candidate.EntityID, DeviceID: candidate.DeviceID, Name: candidate.Name,
+			Capabilities: append([]string(nil), candidate.Capabilities...),
+		})
+	}
+	return view, true
 }
 
 // InstanceJobs 返回实例声明的 job id 列表（运行态）。
@@ -530,13 +547,17 @@ func (h *AppHost) startInstance(ctx context.Context, row store.PluginInstanceRow
 		return fmt.Errorf("start: %w", err)
 	}
 
-	run := &appInstanceRun{row: row, tenantStr: tenantStr, reqByEntity: map[string]string{}}
+	run := &appInstanceRun{
+		row: row, tenantStr: tenantStr,
+		requirements: append([]coreapplication.Requirement(nil), reqs...),
+		candidates:   append([]coreapplication.Candidate(nil), candidates...),
+	}
 	for _, b := range bs.Bindings {
-		run.reqByEntity[b.EntityID] = b.RequirementID
 		run.bindings = append(run.bindings, api.AppBindingView{
 			RequirementID: b.RequirementID,
 			Capability:    reqCap[b.RequirementID],
 			EntityID:      b.EntityID,
+			DeviceID:      b.DeviceID,
 		})
 	}
 	for _, j := range desc.Jobs {
@@ -592,7 +613,7 @@ type routedEvent struct {
 // routeDeviceEvent 返回应收到该设备事件的应用路由：同租户且绑定该实体的实例。
 // 隔离在此层强制——跨租户设备的 event 绝不路由给其他租户的应用，未绑定实体
 // 不投递。纯函数（只读 h.running 快照），是 DispatchDeviceEvent 的可测内核。
-func (h *AppHost) routeDeviceEvent(deviceTenantID int64, entityID string) []routedEvent {
+func (h *AppHost) routeDeviceEvent(deviceTenantID int64, deviceKey, entityID string) []routedEvent {
 	if entityID == "" {
 		return nil
 	}
@@ -603,8 +624,14 @@ func (h *AppHost) routeDeviceEvent(deviceTenantID int64, entityID string) []rout
 		if r.row.TenantID != deviceTenantID {
 			continue
 		}
-		if req, ok := r.reqByEntity[entityID]; ok {
-			out = append(out, routedEvent{run: r, req: req})
+		for _, binding := range r.bindings {
+			if binding.EntityID != entityID {
+				continue
+			}
+			if binding.DeviceID != "" && binding.DeviceID != deviceKey {
+				continue
+			}
+			out = append(out, routedEvent{run: r, req: binding.RequirementID})
 		}
 	}
 	return out
@@ -618,7 +645,7 @@ func (h *AppHost) DispatchDeviceEvent(deviceTenantID int64, deviceKey, entityID,
 	if h == nil || entityID == "" {
 		return
 	}
-	routes := h.routeDeviceEvent(deviceTenantID, entityID)
+	routes := h.routeDeviceEvent(deviceTenantID, deviceKey, entityID)
 	if len(routes) == 0 {
 		h.logger.Info("apphost event unrouted", "entity", entityID,
 			"type", eventType, "device", deviceKey, "tenant", deviceTenantID)
@@ -1036,7 +1063,7 @@ func (e *appEffectExecutor) execRequestCommand(ctx context.Context, effect appru
 	if err != nil {
 		return fmt.Errorf("apphost: effect tenant %q: %w", effect.TenantID, err)
 	}
-	deviceKey, routeErr := e.host.srv.deviceKeyForEntity(p.EntityID)
+	deviceKey, routeErr := e.host.srv.deviceKeyForBinding(p.DeviceID, p.EntityID)
 	if routeErr != nil {
 		err := fmt.Errorf("apphost: %w", routeErr)
 		e.host.dispatchRequestCompleted(ref, sdkapplication.CommandStateFailed, err.Error())
@@ -1071,11 +1098,9 @@ func (e *appEffectExecutor) execRequestCommand(ctx context.Context, effect appru
 
 // ---- Server 侧辅助（AppHost 接线所需）----
 
-// appCandidates 构造某租户的全部可绑定实体（来自最近 Descriptor 快照）。
-//
-// 已知边界：Candidate.EntityID 是设备内局部 ID（如 key1）；多台同型号设备会出现
-// 同名实体，当前按先注册者绑定。命令侧 deviceKeyForEntity 只接受唯一在线提供者，
-// 多在线候选 fail-closed；完整消歧仍需协议层引入限定实体 ID（device/entity）。
+// appCandidates constructs every bindable entity for a tenant. EntityID remains
+// device-local, while DeviceID is retained in the binding and used to route
+// effects to the exact provider selected by the Binder.
 func (s *Server) appCandidates(tenantID int64) []coreapplication.Candidate {
 	// Resolve ownership outside the memory lock. Never relabel all devices as
 	// the requesting tenant merely to make the binder accept them.
@@ -1114,9 +1139,36 @@ func (s *Server) appCandidates(tenantID int64) []coreapplication.Candidate {
 	return out
 }
 
-// deviceKeyForEntity 返回唯一在线设备提供的实体 key（"<edge>/<dev>"）。
-// EntityID 仍是设备内局部标识；多台同型号设备可能同名。离线候选永远不能被误选，
-// 多个在线候选也必须 fail-closed，等待协议层引入设备限定实体 ID。
+// deviceKeyForBinding routes a bound effect. Explicit DeviceID is authoritative;
+// legacy bindings without one retain the unique-online-provider fallback.
+func (s *Server) deviceKeyForBinding(deviceID, entityID string) (string, error) {
+	if deviceID == "" {
+		return s.deviceKeyForEntity(entityID)
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	desc, ok := s.descriptors[deviceID]
+	if !ok {
+		return "", fmt.Errorf("entity %q target device %q has no descriptor", entityID, deviceID)
+	}
+	found := false
+	for _, entity := range desc.Entities {
+		if entity.EntityID == entityID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return "", fmt.Errorf("entity %q not found on target device %q", entityID, deviceID)
+	}
+	if v, ok := s.devices[deviceID]; !ok || !v.Online {
+		return "", fmt.Errorf("target device %q is offline", deviceID)
+	}
+	return deviceID, nil
+}
+
+// deviceKeyForEntity is the compatibility path for bindings created before
+// DeviceID was persisted. It accepts exactly one online provider.
 func (s *Server) deviceKeyForEntity(entityID string) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

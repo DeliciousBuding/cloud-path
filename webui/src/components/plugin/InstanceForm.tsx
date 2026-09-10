@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { KeyRound, Plus, X } from 'lucide-react'
 import { Button, Checkbox, IconButton, Input, Select, Textarea, TextField } from '@/components/ui'
 import { declaredConfigGroups, PermissionList, PluginErrorNote } from './PluginFacts'
+import { DeviceBindingSelector } from './DeviceBindingSelector'
 import { useEdges } from '@/hooks/useEdges'
 import { useCreateInstance, useUpdateInstance } from '@/hooks/usePlugins'
 import { applyConfigFields, PluginConfigFields, validateConfigFields, valuesFromConfigFields } from '@/components/plugin-ui/PluginConfigForm'
@@ -334,20 +335,18 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
       <details className="rounded-tile border border-hairline p-3.5" open={mode === 'edit' && (rows.length > 0 || refsText.length > 0)}>
         <summary className="cursor-pointer text-compact font-medium">{t('form.advanced')}</summary>
         <div className="mt-4 space-y-4">
-          {baseConfig.app_bindings !== undefined && (
-            <div className="rounded-tile bg-surface-2 p-3">
-              <p className="text-compact font-medium">{t('form.bindingOverride')}</p>
-              <p className="mt-1 text-meta leading-relaxed text-ink-3">{t('form.bindingOverrideHint')}</p>
-              <Button type="button" variant="ghost" size="sm" className="mt-2"
-                onClick={() => setBaseConfig((current) => {
-                  const next = { ...current }
-                  delete next.app_bindings
-                  return next
-                })}>
-                {t('form.resetBindings')}
-              </Button>
-            </div>
-          )}
+          {pluginKind === 'application' && mode === 'edit' && instance?.desired?.instance_id ? (
+            <DeviceBindingSelector
+              instanceId={instance.desired.instance_id}
+              value={baseConfig.app_bindings}
+              onChange={(next) => setBaseConfig((current) => {
+                const updated = { ...current }
+                if (next === undefined) delete updated.app_bindings
+                else updated.app_bindings = next
+                return updated
+              })}
+            />
+          ) : null}
           <div>
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="text-compact font-medium">{t('form.pluginConfig')}</p>

@@ -63,7 +63,7 @@ func (h *AppHost) observationDeliveries(tenantID int64, deviceKey string, online
 			if occurred.IsZero() {
 				occurred = time.Now()
 			}
-			for _, route := range h.routeDeviceEvent(tenantID, set.EntityID) {
+			for _, route := range h.routeDeviceEvent(tenantID, deviceKey, set.EntityID) {
 				// One entity may expose several capabilities; a binding only authorizes
 				// the requirement's capability, not all of the entity's other properties.
 				matches := false

@@ -342,7 +342,7 @@ jobs 响应新增 `job_descriptors`：每项含 `id`、`title`、`input_schema_j
   领域记录与真实设备 ACK 是异步副作用的后验。失败/超时不自动重试。审计只存实例/任务/结果，不存输入值。
 
 实例 config 仍为 string map，单值上限 4096 字节、总请求上限 8 KiB。
-可选 `app_bindings` 值为 JSON 数组字符串，最多64项，每项是 `{requirement_id,entity_id}`。
+可选 `app_bindings` 值为 JSON 数组字符串，最多64项，每项是 `{requirement_id,entity_id,device_id?}`；`device_id` 使用设备的稳定键 `"<edge>/<device>"`，多设备同名实体必须显式填写。
 它是完整选择：缺少必要实体、跨租户、不支持所需能力、未知字段或重复占用均拒绝，不回退自动选择。
 数组顺序保留给插件；未配置此键时沿用自动匹配。运行态绑定只展示已通过校验的结果。
 

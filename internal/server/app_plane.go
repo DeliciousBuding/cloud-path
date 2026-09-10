@@ -1,10 +1,13 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
+	"sort"
 	"strconv"
 
 	"github.com/DeliciousBuding/cloud-path/internal/api"
+	"github.com/DeliciousBuding/cloud-path/internal/application"
 	"github.com/DeliciousBuding/cloud-path/internal/auth"
 
 	"github.com/go-chi/chi/v5"
@@ -110,13 +113,136 @@ func (s *Server) handlePluginInstanceBindings(w http.ResponseWriter, r *http.Req
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 		return
 	}
-	bindings, running := s.appHost.InstanceBindings(tenantID, instanceID)
-	if bindings == nil {
-		bindings = []api.AppBindingView{}
+	view, _ := s.appHost.InstanceBindings(tenantID, instanceID)
+	if !view.Running {
+		view = s.fallbackBindingOptions(tenantID, instanceID)
 	}
-	writeJSON(w, http.StatusOK, api.AppBindingsView{
-		InstanceID: instanceID, Running: running, Bindings: bindings,
-	})
+	if view.Bindings == nil {
+		view.Bindings = []api.AppBindingView{}
+	}
+	if view.Requirements == nil {
+		view.Requirements = []api.AppBindingRequirementView{}
+	}
+	if view.Candidates == nil {
+		view.Candidates = []api.AppBindingCandidateView{}
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+// fallbackBindingOptions keeps the target editor usable while an application is
+// stopped or failed. It derives only requirement ids/capabilities from the saved
+// explicit binding and current device descriptors; it never pretends the
+// instance is running.
+func (s *Server) fallbackBindingOptions(tenantID int64, instanceID string) api.AppBindingsView {
+	view := api.AppBindingsView{InstanceID: instanceID, Running: false}
+	if s.cfg.Store == nil {
+		return view
+	}
+	row, ok, err := s.cfg.Store.GetPluginInstance(tenantID, AppHostEdgeID, instanceID)
+	if err != nil || !ok {
+		return view
+	}
+	var config map[string]string
+	if json.Unmarshal([]byte(row.ConfigJSON), &config) != nil || config[appBindingsKey] == "" {
+		return view
+	}
+	var saved []application.Binding
+	if json.Unmarshal([]byte(config[appBindingsKey]), &saved) != nil || len(saved) == 0 {
+		return view
+	}
+	candidates := s.appCandidates(tenantID)
+	reqCap := map[string]string{}
+	for _, binding := range saved {
+		capability := ""
+		for _, candidate := range candidates {
+			if candidate.EntityID != binding.EntityID {
+				continue
+			}
+			if binding.DeviceID != "" && candidate.DeviceID != binding.DeviceID {
+				continue
+			}
+			if len(candidate.Capabilities) == 1 {
+				capability = candidate.Capabilities[0]
+				break
+			}
+		}
+		if capability == "" {
+			continue
+		}
+		reqCap[binding.RequirementID] = capability
+		deviceID := binding.DeviceID
+		if deviceID == "" {
+			matches := 0
+			for _, candidate := range candidates {
+				if candidate.EntityID != binding.EntityID || !containsString(candidate.Capabilities, capability) {
+					continue
+				}
+				deviceID = candidate.DeviceID
+				matches++
+			}
+			if matches != 1 {
+				deviceID = ""
+			}
+		}
+		view.Bindings = append(view.Bindings, api.AppBindingView{
+			RequirementID: binding.RequirementID, Capability: capability,
+			EntityID: binding.EntityID, DeviceID: deviceID,
+		})
+	}
+	counts := map[string]int{}
+	for _, binding := range view.Bindings {
+		counts[binding.RequirementID]++
+	}
+	requirementIDs := make([]string, 0, len(reqCap))
+	for requirementID := range reqCap {
+		requirementIDs = append(requirementIDs, requirementID)
+	}
+	sort.Strings(requirementIDs)
+	for _, requirementID := range requirementIDs {
+		cardinality := "one"
+		minItems := 0
+		if counts[requirementID] > 1 {
+			cardinality = "one-or-more"
+			minItems = counts[requirementID]
+		}
+		view.Requirements = append(view.Requirements, api.AppBindingRequirementView{
+			ID: requirementID, Capability: reqCap[requirementID], Cardinality: cardinality, MinItems: minItems,
+		})
+	}
+	for _, candidate := range candidates {
+		for _, capability := range candidate.Capabilities {
+			if !hasCapability(stringMapValues(reqCap), capability) {
+				continue
+			}
+			view.Candidates = append(view.Candidates, api.AppBindingCandidateView{
+				EntityID: candidate.EntityID, DeviceID: candidate.DeviceID, Name: candidate.Name,
+				Capabilities: append([]string(nil), candidate.Capabilities...),
+			})
+			break
+		}
+	}
+	return view
+}
+
+func stringMapValues(in map[string]string) []string {
+	out := make([]string, 0, len(in))
+	for _, value := range in {
+		out = append(out, value)
+	}
+	return out
+}
+
+func hasCapability(capabilities []string, want string) bool {
+	return containsString(capabilities, want)
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 // handlePluginInstanceJobs GET /api/plugin-instances/{id}/jobs

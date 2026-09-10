@@ -76,6 +76,7 @@ type CreateDomainRecord struct {
 // RequestCommand is the bounded payload for EffectRequestCommand.
 type RequestCommand struct {
 	EntityID       string
+	DeviceID       string
 	Action         string
 	ArgsJSON       string
 	IdempotencyKey string
@@ -112,6 +113,7 @@ const (
 	maxVersionLen              = 64
 	maxActionLen               = 128
 	maxArgsJSONBytes           = 64 * 1024
+	maxDeviceIDLen             = 256
 	maxDeadlineLen             = 64
 	maxScheduleIDLen           = 256
 	maxCronLen                 = 256
@@ -161,14 +163,16 @@ func EffectFromSDK(raw *sdkapplication.ApplicationEffect, src EffectSource) (Eff
 			":" + hex.EncodeToString(contentDigest[:8])
 		return newEffect(EffectCreateDomainRecord, key, src, payload)
 	case *sdkapplication.RequestCommand:
-		if !entityBound(src, v.EntityID) {
-			return Effect{}, fmt.Errorf("%w: entity %q is not bound to this instance", ErrCrossTenantEffect, v.EntityID)
+		binding, err := commandBinding(src.Bindings, v.EntityID)
+		if err != nil {
+			return Effect{}, fmt.Errorf("%w: %v", ErrCrossTenantEffect, err)
 		}
-		if !entityInTenant(src, v.EntityID) {
-			return Effect{}, fmt.Errorf("%w: entity %q is not in tenant %q", ErrCrossTenantEffect, v.EntityID, src.TenantID)
+		if !bindingInTenant(src, binding) {
+			return Effect{}, fmt.Errorf("%w: entity %q on device %q is not in tenant %q", ErrCrossTenantEffect, v.EntityID, binding.DeviceID, src.TenantID)
 		}
 		payload := &RequestCommand{
 			EntityID:       v.EntityID,
+			DeviceID:       binding.DeviceID,
 			Action:         v.Action,
 			ArgsJSON:       v.ArgsJSON,
 			IdempotencyKey: v.IdempotencyKey,
@@ -292,18 +296,34 @@ var ErrCrossTenantEffect = errors.New("appruntime: cross-tenant application effe
 // ErrInvalidEffect is the base error for malformed effects.
 var ErrInvalidEffect = errors.New("appruntime: invalid effect")
 
-func entityBound(src EffectSource, entityID string) bool {
-	for _, b := range src.Bindings {
-		if b.EntityID == entityID {
-			return true
+func commandBinding(bindings []coreapplication.Binding, entityID string) (coreapplication.Binding, error) {
+	var out coreapplication.Binding
+	found := false
+	for _, binding := range bindings {
+		if binding.EntityID != entityID {
+			continue
+		}
+		if !found {
+			out = binding
+			found = true
+			continue
+		}
+		if binding.DeviceID != out.DeviceID {
+			return coreapplication.Binding{}, fmt.Errorf("entity %q is bound to multiple devices; application protocol cannot disambiguate the effect", entityID)
 		}
 	}
-	return false
+	if !found {
+		return coreapplication.Binding{}, fmt.Errorf("entity %q is not bound to this instance", entityID)
+	}
+	return out, nil
 }
 
-func entityInTenant(src EffectSource, entityID string) bool {
-	for _, c := range src.Candidates {
-		if c.EntityID == entityID && c.TenantID == src.TenantID {
+func bindingInTenant(src EffectSource, binding coreapplication.Binding) bool {
+	for _, candidate := range src.Candidates {
+		if candidate.EntityID != binding.EntityID || candidate.TenantID != src.TenantID {
+			continue
+		}
+		if binding.DeviceID == "" || candidate.DeviceID == binding.DeviceID {
 			return true
 		}
 	}
@@ -376,6 +396,9 @@ func validateRequestCommand(p *RequestCommand) []error {
 	var errs []error
 	if strings.TrimSpace(p.EntityID) == "" {
 		errs = append(errs, errors.New("request_command entity_id must not be empty"))
+	}
+	if len(p.DeviceID) > maxDeviceIDLen {
+		errs = append(errs, errors.New("request_command device_id exceeds size bound"))
 	}
 	if strings.TrimSpace(p.Action) == "" || len(p.Action) > maxActionLen {
 		errs = append(errs, errors.New("request_command action must be non-empty and bounded"))

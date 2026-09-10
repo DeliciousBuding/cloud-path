@@ -73,11 +73,10 @@ Application repositories are the source of truth for application code and releas
 examples and split/scaffold tooling are reference or historical bootstrap material; do not use
 them to overwrite an independently maintained application.
 
-**Identity-chain boundary:** command and event routing currently assumes globally unique
-`entity_id`. `(device_key, entity_id)` is not yet threaded through binding and routing, so reuse
-of an `entity_id` across multiple boards of the same model can make entity binding or event
-routing ambiguous. Until that interface and multi-board hardware evidence exist, use the
-single-board boundary or require the Driver to keep `entity_id` globally unique.
+**Identity-chain boundary:** command and event routing match `(device_id, entity_id)`. Legacy
+bindings without `device_id` remain compatible only while the entity resolves uniquely; with
+multiple boards, select an explicit device target. Multi-board hardware evidence is still
+required before claiming field validation.
 
 ## Quick start (local)
 

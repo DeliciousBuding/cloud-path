@@ -1,19 +1,17 @@
 package application
 
 // Binder carries the tenant scope and instance identity for a binding
-// operation. The engine matches and validates candidates purely by Capability
-// and tenant; a Binder never couples to a Driver.
+// operation. Matching uses Capability, tenant and the Core-only provider
+// identity. It never couples the Application Protocol to a Driver.
 type Binder struct {
 	ApplicationID    string
 	PluginInstanceID string
 	TenantID         string
 }
 
-// Match auto-selects a candidate entity for every requirement within the
-// binder's tenant scope. It returns a fully valid BindingSet, or a
-// *BindingError carrying the machine-readable issues when no valid set can be
-// produced. Matching only uses Capability ID/version compatibility and tenant;
-// it never references Driver ID, a port, or a hardware field.
+// Match auto-selects a candidate for every requirement within the binder's
+// tenant scope. The returned binding retains Candidate.DeviceID so later
+// command effects can be routed to the exact provider selected here.
 func (b Binder) Match(requirements []Requirement, candidates []Candidate) (BindingSet, error) {
 	if err := validateRequirementList(requirements); err != nil {
 		return BindingSet{}, &BindingError{Result: ValidationResult{
@@ -34,9 +32,13 @@ func (b Binder) Match(requirements []Requirement, candidates []Candidate) (Bindi
 			}
 			return BindingSet{}, err
 		}
-		for _, entity := range picked {
-			bindings = append(bindings, Binding{RequirementID: req.ID, EntityID: entity})
-			used[entity] = true
+		for _, candidate := range picked {
+			bindings = append(bindings, Binding{
+				RequirementID: req.ID,
+				EntityID:      candidate.EntityID,
+				DeviceID:      candidate.DeviceID,
+			})
+			used[candidateTargetKey(candidate.DeviceID, candidate.EntityID)] = true
 		}
 	}
 
@@ -54,10 +56,10 @@ func (b Binder) Match(requirements []Requirement, candidates []Candidate) (Bindi
 	return bs, nil
 }
 
-// matchRequirement resolves one requirement to a list of entity IDs. It picks
-// unused candidates first, and only falls back to already-used entities when
-// the requirement allows reuse.
-func matchRequirement(req Requirement, candidates []Candidate, used map[string]bool) ([]string, error) {
+// matchRequirement resolves one requirement to candidate providers. It picks
+// unused targets first, and only falls back to already-used targets when the
+// requirement allows reuse.
+func matchRequirement(req Requirement, candidates []Candidate, used map[string]bool) ([]Candidate, error) {
 	var avail []Candidate
 	for _, c := range candidates {
 		if ok, _, _ := candidateProvidesCapability(c, req.Capability); ok {
@@ -70,20 +72,20 @@ func matchRequirement(req Requirement, candidates []Candidate, used map[string]b
 		if len(avail) == 0 {
 			return nil, nil
 		}
-		e := firstUnused(avail, used, req.AllowReuse)
-		if e == "" {
+		candidate, ok := firstUnused(avail, used, req.AllowReuse)
+		if !ok {
 			return nil, &BindingError{Result: duplicateOccupationResult(req, "")}
 		}
-		return []string{e}, nil
+		return []Candidate{candidate}, nil
 	case CardinalityOne:
 		if len(avail) == 0 {
 			return nil, &BindingError{Result: missingRequiredResult(req)}
 		}
-		e := firstUnused(avail, used, req.AllowReuse)
-		if e == "" {
+		candidate, ok := firstUnused(avail, used, req.AllowReuse)
+		if !ok {
 			return nil, &BindingError{Result: duplicateOccupationResult(req, "")}
 		}
-		return []string{e}, nil
+		return []Candidate{candidate}, nil
 	case CardinalityOneOrMore:
 		n := req.MinItems
 		if n < 1 {
@@ -120,30 +122,33 @@ func tenantCandidates(candidates []Candidate, tenant string) []Candidate {
 	return out
 }
 
-// firstUnused returns the first candidate that is not occupied, or, when
-// allowReuse is set, the first candidate regardless of occupation.
-func firstUnused(avail []Candidate, used map[string]bool, allowReuse bool) string {
+// firstUnused returns the first candidate target that is not occupied, or,
+// when allowReuse is set, the first candidate regardless of occupation.
+func firstUnused(avail []Candidate, used map[string]bool, allowReuse bool) (Candidate, bool) {
 	for _, c := range avail {
-		if !used[c.EntityID] {
-			return c.EntityID
+		if !used[candidateTargetKey(c.DeviceID, c.EntityID)] {
+			return c, true
 		}
 	}
 	if allowReuse && len(avail) > 0 {
-		return avail[0].EntityID
+		return avail[0], true
 	}
-	return ""
+	return Candidate{}, false
 }
 
-// pickN selects up to n distinct candidate entity IDs, preferring unused ones.
-// If allowReuse is set, it fills shortfalls with already-used entities.
-func pickN(avail []Candidate, used map[string]bool, allowReuse bool, n int) []string {
-	var picked []string
+// pickN selects up to n distinct candidate targets, preferring unused ones.
+// If allowReuse is set, it fills shortfalls with already-used targets.
+func pickN(avail []Candidate, used map[string]bool, allowReuse bool, n int) []Candidate {
+	var picked []Candidate
+	seen := map[string]bool{}
 	for _, c := range avail {
 		if len(picked) >= n {
 			break
 		}
-		if !used[c.EntityID] {
-			picked = append(picked, c.EntityID)
+		key := candidateTargetKey(c.DeviceID, c.EntityID)
+		if !used[key] && !seen[key] {
+			picked = append(picked, c)
+			seen[key] = true
 		}
 	}
 	if allowReuse {
@@ -151,19 +156,19 @@ func pickN(avail []Candidate, used map[string]bool, allowReuse bool, n int) []st
 			if len(picked) >= n {
 				break
 			}
-			if used[c.EntityID] && !contains(picked, c.EntityID) {
-				picked = append(picked, c.EntityID)
+			key := candidateTargetKey(c.DeviceID, c.EntityID)
+			if used[key] && !seen[key] {
+				picked = append(picked, c)
+				seen[key] = true
 			}
 		}
 	}
 	return picked
 }
 
-func contains(list []string, v string) bool {
-	for _, s := range list {
-		if s == v {
-			return true
-		}
+func candidateTargetKey(deviceID, entityID string) string {
+	if deviceID == "" {
+		return entityID
 	}
-	return false
+	return deviceID + "\x00" + entityID
 }

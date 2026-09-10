@@ -593,6 +593,44 @@ func TestRejectUnknownEffect(t *testing.T) {
 	}
 }
 
+func TestEffectFromSDKCarriesBoundDevice(t *testing.T) {
+	bindings := []coreapplication.Binding{{RequirementID: "reminder-output", EntityID: "alarm-1", DeviceID: "edge/board-2"}}
+	candidates := []coreapplication.Candidate{{EntityID: "alarm-1", DeviceID: "edge/board-2", TenantID: "tenant-a", Capabilities: []string{testCapAlarm}}}
+	raw := &sdkapplication.ApplicationEffect{
+		PluginInstanceID: "inst-1",
+		SchemaVersion:    sdkapplication.SchemaVersion,
+		Union: &sdkapplication.RequestCommand{
+			EntityID: "alarm-1", Action: "beep", IdempotencyKey: "cmd-device",
+		},
+	}
+	got, err := EffectFromSDK(raw, EffectSource{PluginInstanceID: "inst-1", TenantID: "tenant-a", Bindings: bindings, Candidates: candidates})
+	if err != nil {
+		t.Fatalf("EffectFromSDK: %v", err)
+	}
+	if got.RequestCommand == nil || got.RequestCommand.DeviceID != "edge/board-2" {
+		t.Fatalf("device target = %+v", got.RequestCommand)
+	}
+}
+
+func TestEffectFromSDKRejectsAmbiguousEntityBinding(t *testing.T) {
+	bindings := []coreapplication.Binding{
+		{RequirementID: "left", EntityID: "alarm-1", DeviceID: "edge/board-1"},
+		{RequirementID: "right", EntityID: "alarm-1", DeviceID: "edge/board-2"},
+	}
+	candidates := []coreapplication.Candidate{
+		{EntityID: "alarm-1", DeviceID: "edge/board-1", TenantID: "tenant-a", Capabilities: []string{testCapAlarm}},
+		{EntityID: "alarm-1", DeviceID: "edge/board-2", TenantID: "tenant-a", Capabilities: []string{testCapAlarm}},
+	}
+	raw := &sdkapplication.ApplicationEffect{
+		PluginInstanceID: "inst-1",
+		SchemaVersion:    sdkapplication.SchemaVersion,
+		Union:            &sdkapplication.RequestCommand{EntityID: "alarm-1", Action: "beep", IdempotencyKey: "cmd-ambiguous"},
+	}
+	if _, err := EffectFromSDK(raw, EffectSource{PluginInstanceID: "inst-1", TenantID: "tenant-a", Bindings: bindings, Candidates: candidates}); !errors.Is(err, ErrCrossTenantEffect) {
+		t.Fatalf("ambiguous binding error = %v, want ErrCrossTenantEffect", err)
+	}
+}
+
 func TestRejectCrossTenantEffect(t *testing.T) {
 	exec := &fakeExecutor{}
 	stream := newFakeStream()

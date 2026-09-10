@@ -262,11 +262,10 @@ WebUI 的表单、确认、身份切换、应用记录/绑定/任务呈现规则
   Core 不从 raw 的字段名猜实体或伪造样本。AppHost 只向同租户、实际绑定了该实体和能力的应用投递
   `cloudpath.dev/event/property-observed@1` CapabilityEvent，PayloadJSON 是一条完整 Observation。
   保留 observed_at / received_at / quality / sequence；离线状态降为 unavailable，不升级坏数据为正常。
-  **身份边界**：命令/事件当前只按全局唯一 `entity_id` 绑定和路由，`(device_key, entity_id)` 尚未贯穿；
-  同租户同型号多板必须由 Driver 保证 `entity_id` 全局唯一，否则属于单板边界，不承诺多板正确路由。
+  **身份边界**：绑定保留可选的 `device_id`，命令按 `(device_id, entity_id)` 精确路由；未给 `device_id` 的旧绑定仅在实体唯一时兼容。事件扇入同样按设备与实体匹配。
 - **明确分配**：实例 config 的可选 `app_bindings` 是完整 Binding 数组的 JSON 字符串，按给定顺序选择稳定
-  entity_id。复用 Binder.Validate 核对实际设备租户、能力、基数与重复占用；非法选择必须失败，不能换绑
-  到任意在线实体。缺省仍自动匹配。应用只接收 ValidateBinding，不读取此控制面配置。
+  `(device_id, entity_id)`。复用 Binder.Validate 核对实际设备租户、能力、基数与重复占用；非法选择必须失败，
+  不能换绑到任意在线实体。缺省仍自动匹配并记录确定的设备目标。应用只接收 ValidateBinding，不读取此控制面配置。
 - **用户操作**：JobDescriptor.manual_only=true 的任务只由 operator/admin 显式请求，绝不进入分钟循环。
   名称、标题和输入 schema 来自运行中插件，不在 Core 维护应用动作列表。未设置此标记的旧任务保持既有
   自动执行语义；durable schedule_job 仍是显式声明的调度路径。
