@@ -322,6 +322,7 @@ cloudpath plugin inspect <repo>           # 单插件仓库：根 plugin.yaml
 cloudpath plugin inspect <repo> --plugin <slug|id|path>
 cloudpath plugin install <repo-or-id> --digest sha256:<hex> --yes
 cloudpath plugin install <repo> --plugin <slug|id|path> --digest sha256:<hex> --yes
+cloudpath plugin install <repo> --plugin <slug|id|path> --allow-source-change --digest sha256:<hex> --yes
 cloudpath plugin update <id> [--source <repo> --allow-source-change] [--plugin <slug|id|path>]
 # 发布的二进制内嵌 manifest schema：干净机器上无需仓库 checkout，
 # -schema PATH 只用于覆盖；install 输出会打印 schema 来源（file:/embedded）

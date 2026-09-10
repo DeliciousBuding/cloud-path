@@ -3,10 +3,13 @@ package registry
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -19,7 +22,7 @@ plugins:
     kind: Driver
     path: drivers/example
     tagPrefix: drivers/example
-    asset: driver-windows-amd64.exe
+    asset: driver
     archived: false
   - id: io.github.example.retired
     slug: retired-driver
@@ -31,9 +34,17 @@ plugins:
 
 func catalogInstallServer(t *testing.T, tag string) (*httptest.Server, []byte) {
 	t.Helper()
-	manifest := readFixture(t, "plugin.yaml")
+	return catalogInstallServerWithManifest(t, tag, readFixture(t, "plugin.yaml"))
+}
+
+func catalogInstallServerWithManifest(t *testing.T, tag string, manifest []byte) (*httptest.Server, []byte) {
+	t.Helper()
 	assetData := []byte("catalog-payload")
-	var assetURL string
+	currentAsset := fmt.Sprintf("driver_0.1.0_%s_%s", runtime.GOOS, runtime.GOARCH)
+	if runtime.GOOS == "windows" {
+		currentAsset += ".exe"
+	}
+	var assetURL, checksumURL string
 	mux := http.NewServeMux()
 	mux.HandleFunc("/repos/example/plugins/contents/plugins.yaml", func(w http.ResponseWriter, r *http.Request) {
 		writeContentsJSON(t, w, []byte(catalogInstallYAML))
@@ -45,14 +56,19 @@ func catalogInstallServer(t *testing.T, tag string) (*httptest.Server, []byte) {
 		_ = json.NewEncoder(w).Encode([]Release{
 			{TagName: "other/v9.9.9", Name: "other"},
 			{TagName: tag, Name: tag, Assets: []ReleaseAsset{
-				{Name: "driver-linux-amd64", URL: assetURL, Size: int64(len(assetData))},
-				{Name: "driver-windows-amd64.exe", URL: assetURL, Size: int64(len(assetData))},
+				{Name: currentAsset, URL: assetURL, Size: int64(len(assetData))},
+				{Name: "driver_0.1.0_plan9_mips", URL: assetURL, Size: int64(len(assetData))},
+				{Name: "checksums.txt", URL: checksumURL},
 			}},
 		})
 	})
 	mux.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write(assetData) })
+	mux.HandleFunc("/checksum", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(SHA256Bytes(assetData) + "  " + currentAsset + "\n"))
+	})
 	srv := httptest.NewServer(mux)
 	assetURL = srv.URL + "/download"
+	checksumURL = srv.URL + "/checksum"
 	t.Cleanup(srv.Close)
 	return srv, assetData
 }
@@ -73,8 +89,12 @@ func TestInstallCatalogUsesPrefixReleaseAndRecordsCoordinates(t *testing.T) {
 	if res.LockEntry.Tag != "drivers/example/v0.1.0" || res.LockEntry.PluginPath != "drivers/example" {
 		t.Fatalf("lock coordinates = tag %q path %q", res.LockEntry.Tag, res.LockEntry.PluginPath)
 	}
-	if !strings.HasSuffix(res.AssetPath, SHA256Bytes(assetData)+".exe") {
-		t.Fatalf("catalog preferred .exe asset was not selected: %s", res.AssetPath)
+	wantSuffix := SHA256Bytes(assetData)
+	if runtime.GOOS == "windows" {
+		wantSuffix += ".exe"
+	}
+	if !strings.HasSuffix(res.AssetPath, wantSuffix) {
+		t.Fatalf("catalog asset for %s/%s was not selected: %s", runtime.GOOS, runtime.GOARCH, res.AssetPath)
 	}
 	lock, err := LoadLockFile(filepath.Join(pluginsDir, "plugins.lock"))
 	if err != nil {
@@ -180,5 +200,122 @@ func TestUpdateSourceMigrationGate(t *testing.T) {
 	tofu := trustPlan{mode: TrustModeUnreviewedTOFU, verified: false}
 	if err := validateUpdateTrust(existing, repo, tofu, true); err == nil {
 		t.Fatal("--allow-source-change must never downgrade verified to unreviewed TOFU")
+	}
+}
+func TestCatalogSelectorRejectsManifestIdentityMismatch(t *testing.T) {
+	manifest := readFixture(t, "plugin.yaml")
+	mismatched := strings.Replace(string(manifest), "id: io.github.example.driver", "id: io.github.example.other", 1)
+	if mismatched == string(manifest) {
+		t.Fatal("fixture id replacement did not apply")
+	}
+	srv, assetData := catalogInstallServerWithManifest(t, "drivers/example/v0.1.0", []byte(mismatched))
+	pluginsDir := t.TempDir()
+	inst := newInstaller(srv, pluginsDir, filepath.Join(pluginsDir, "plugins.lock"))
+	_, err := inst.Install(context.Background(), InstallOptions{
+		Source:       "example/plugins",
+		Plugin:       "example-driver",
+		Digest:       SHA256Bytes(assetData),
+		ConfirmPerms: true,
+	})
+	if !errors.Is(err, ErrInvalidCatalog) {
+		t.Fatalf("catalog selector must bind manifest identity, got %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(pluginsDir, "plugins.lock")); !os.IsNotExist(statErr) {
+		t.Fatalf("identity mismatch must not write a lock, stat err=%v", statErr)
+	}
+}
+
+func TestInstallRejectsExistingTargetManifestMismatch(t *testing.T) {
+	srv, assetData := catalogInstallServer(t, "drivers/example/v0.1.0")
+	pluginsDir := t.TempDir()
+	lockPath := filepath.Join(pluginsDir, "plugins.lock")
+	inst := newInstaller(srv, pluginsDir, lockPath)
+	_, err := inst.Install(context.Background(), InstallOptions{
+		Source:       "example/plugins",
+		Plugin:       "example-driver",
+		Digest:       SHA256Bytes(assetData),
+		ConfirmPerms: true,
+		Existing:     &LockedPlugin{ID: "io.github.example.other"},
+	})
+	if !errors.Is(err, ErrTrustDowngrade) {
+		t.Fatalf("existing target/manifest mismatch must fail closed, got %v", err)
+	}
+	if _, statErr := os.Stat(lockPath); !os.IsNotExist(statErr) {
+		t.Fatalf("mismatch must not write a lock, stat err=%v", statErr)
+	}
+}
+
+func TestInstallAutoLoadsExistingLockAndBlocksTrustDowngrade(t *testing.T) {
+	srv, assetData := catalogInstallServer(t, "drivers/example/v0.1.0")
+	pluginsDir := t.TempDir()
+	lockPath := filepath.Join(pluginsDir, "plugins.lock")
+	inst := newInstaller(srv, pluginsDir, lockPath)
+	if _, err := inst.Install(context.Background(), InstallOptions{
+		Source:       "example/plugins",
+		Plugin:       "example-driver",
+		Digest:       SHA256Bytes(assetData),
+		ConfirmPerms: true,
+	}); err != nil {
+		t.Fatalf("seed install: %v", err)
+	}
+	lock, err := LoadLockFile(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, ok := lock.Find("io.github.example.driver")
+	if !ok {
+		t.Fatal("seed lock entry missing")
+	}
+	entry.Source = "https://github.com/example/legacy"
+	lock.Upsert(*entry)
+	if err := WriteLockFile(lockPath, lock); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := inst.Install(context.Background(), InstallOptions{
+		Source:          "example/plugins",
+		Plugin:          "example-driver",
+		ConfirmPerms:    true,
+		AllowUnreviewed: true,
+	}); !errors.Is(err, ErrTrustDowngrade) {
+		t.Fatalf("install must auto-load the existing lock and reject downgrade, got %v", err)
+	}
+	after, err := LoadLockFile(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterEntry, ok := after.Find("io.github.example.driver")
+	if !ok || afterEntry.Source != "https://github.com/example/legacy" || !afterEntry.Verified {
+		t.Fatalf("failed reinstall changed trust state: %+v", afterEntry)
+	}
+}
+
+func TestCatalogAssetSelectionIsPlatformExact(t *testing.T) {
+	release := &Release{Assets: []ReleaseAsset{
+		{Name: "driver_0.1.0_windows_amd64.exe"},
+		{Name: "driver_0.1.0_windows_arm64.exe"},
+	}}
+	arm, err := selectCatalogInstallAsset(release, "driver", "0.1.0", "windows", "arm64")
+	if err != nil {
+		t.Fatalf("arm64 catalog asset: %v", err)
+	}
+	if arm.Name != "driver_0.1.0_windows_arm64.exe" {
+		t.Fatalf("arm64 selected %q", arm.Name)
+	}
+	amd, err := selectCatalogInstallAsset(release, "driver", "0.1.0", "windows", "amd64")
+	if err != nil {
+		t.Fatalf("amd64 catalog asset: %v", err)
+	}
+	if amd.Name != "driver_0.1.0_windows_amd64.exe" {
+		t.Fatalf("amd64 selected %q", amd.Name)
+	}
+	if _, err := selectCatalogInstallAsset(release, "driver", "0.1.0", "darwin", "arm64"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing platform must fail closed, got %v", err)
+	}
+	generic, err := selectInstallAssetForPlatform(release, "", "windows", "arm64")
+	if err != nil {
+		t.Fatalf("generic arm64 selection: %v", err)
+	}
+	if generic.Name != "driver_0.1.0_windows_arm64.exe" {
+		t.Fatalf("generic selection ignored architecture: %q", generic.Name)
 	}
 }

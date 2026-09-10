@@ -76,6 +76,9 @@ func ResolveManifestSource(ctx context.Context, client *GitHubClient, source, se
 			if fetchErr != nil {
 				return nil, fetchErr
 			}
+			if err := validateCatalogManifestData(entry, data); err != nil {
+				return nil, err
+			}
 			return &ManifestSource{
 				Data:    data,
 				Path:    repo.URL + "/" + manifestPath,
@@ -129,7 +132,31 @@ func resolveLocalCatalog(root, catalogPath, selector string) (*ManifestSource, e
 	if err != nil {
 		return nil, fmt.Errorf("read catalog plugin manifest: %w", err)
 	}
+	if err := validateCatalogManifestData(entry, data); err != nil {
+		return nil, err
+	}
 	return &ManifestSource{Data: data, Path: manifestPath, Catalog: catalog, Entry: entry}, nil
+}
+
+func validateCatalogManifestData(entry *PluginCatalogEntry, data []byte) error {
+	manifest, err := ParseManifest(data)
+	if err != nil {
+		return err
+	}
+	return validateCatalogEntryManifest(entry, manifest)
+}
+
+func validateCatalogEntryManifest(entry *PluginCatalogEntry, manifest *Manifest) error {
+	if entry == nil || manifest == nil {
+		return fmt.Errorf("%w: catalog entry or manifest is nil", ErrInvalidCatalog)
+	}
+	if manifest.ID != entry.ID {
+		return fmt.Errorf("%w: catalog entry %q resolved manifest id %q", ErrInvalidCatalog, entry.ID, manifest.ID)
+	}
+	if manifest.Kind != entry.Kind {
+		return fmt.Errorf("%w: catalog entry %q kind %q resolved manifest kind %q", ErrInvalidCatalog, entry.ID, entry.Kind, manifest.Kind)
+	}
+	return nil
 }
 
 func readLocalPluginManifest(path, selector string) (*ManifestSource, error) {

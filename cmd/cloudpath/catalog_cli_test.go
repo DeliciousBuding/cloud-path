@@ -147,6 +147,50 @@ func TestCLIInstallCatalogSelectorRecordsCoordinates(t *testing.T) {
 	}
 }
 
+func TestCLIReinstallCannotDowngradeOrSwitchSourceImplicitly(t *testing.T) {
+	asset := []byte("payload")
+	srv := cliCatalogServer(t, asset)
+	_, lockPath := cliTrustEnv(t, srv)
+	if code, _, stderr := cliCapture(t, func() int {
+		return runInstall([]string{"example/plugins", "-plugin", "example-driver", "-yes", "-digest", registry.SHA256Bytes(asset)})
+	}); code != 0 {
+		t.Fatalf("seed install failed: code=%d stderr=%s", code, stderr)
+	}
+	lock, err := registry.LoadLockFile(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, ok := lock.Find("io.github.example.driver")
+	if !ok {
+		t.Fatal("seed lock entry missing")
+	}
+	entry.Source = "https://github.com/example/legacy"
+	lock.Upsert(*entry)
+	if err := registry.WriteLockFile(lockPath, lock); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := cliCapture(t, func() int {
+		return runInstall([]string{"example/plugins", "-plugin", "example-driver", "-yes", "-allow-unreviewed"})
+	})
+	if code == 0 || !strings.Contains(stderr, "downgrade") {
+		t.Fatalf("reinstall must reject verified->TOFU and implicit source change: code=%d stderr=%s", code, stderr)
+	}
+	code, _, stderr = cliCapture(t, func() int {
+		return runInstall([]string{"example/plugins", "-plugin", "example-driver", "-yes", "-digest", registry.SHA256Bytes(asset), "-allow-source-change"})
+	})
+	if code != 0 {
+		t.Fatalf("explicit reinstall source migration failed: code=%d stderr=%s", code, stderr)
+	}
+	lock, err = registry.LoadLockFile(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, ok = lock.Find("io.github.example.driver")
+	if !ok || entry.Source != "https://github.com/example/plugins" || !entry.Verified || entry.PluginPath != "drivers/example" {
+		t.Fatalf("explicit reinstall did not preserve verified monorepo binding: %+v", entry)
+	}
+}
+
 func TestCLIUpdateSourceMigrationRequiresExplicitFlag(t *testing.T) {
 	asset := []byte("payload")
 	srv := cliCatalogServer(t, asset)
@@ -194,6 +238,23 @@ func TestCLIUpdateSourceMigrationRequiresExplicitFlag(t *testing.T) {
 	entry, ok := lock.Find("io.github.example.driver")
 	if !ok || entry.Source != "https://github.com/example/plugins" || entry.PluginPath != "drivers/example" {
 		t.Fatalf("migrated lock coordinates missing: %+v", entry)
+	}
+
+	// Moving back to a legacy single-plugin repository must default to the
+	// stable plugin id instead of leaking the monorepo path selector.
+	code, _, stderr = cliCapture(t, func() int {
+		return runUpdate([]string{"io.github.example.driver", "-source", "example/driver", "-digest", registry.SHA256Bytes(asset), "-yes", "-allow-source-change"})
+	})
+	if code != 0 {
+		t.Fatalf("monorepo-to-legacy migration failed: code=%d stderr=%s", code, stderr)
+	}
+	lock, err = registry.LoadLockFile(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, ok = lock.Find("io.github.example.driver")
+	if !ok || entry.Source != "https://github.com/example/driver" || entry.PluginPath != "" || entry.Tag != "v0.1.0" {
+		t.Fatalf("legacy lock coordinates missing after reverse migration: %+v", entry)
 	}
 	_ = pluginsDir
 }

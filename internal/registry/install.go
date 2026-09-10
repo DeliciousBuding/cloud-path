@@ -138,6 +138,25 @@ func (i *Installer) Install(ctx context.Context, opts InstallOptions) (*InstallR
 	if err := ValidateManifestContract(manifest, i.CoreVersion, supported); err != nil {
 		return nil, err
 	}
+	if resolved.Entry != nil {
+		if err := validateCatalogEntryManifest(resolved.Entry, manifest); err != nil {
+			return nil, err
+		}
+	}
+
+	existing := opts.Existing
+	if existing != nil && existing.ID != manifest.ID {
+		return nil, fmt.Errorf("%w: update target %s resolved manifest %s", ErrTrustDowngrade, existing.ID, manifest.ID)
+	}
+	if existing == nil {
+		lock, err := LoadLockFile(i.LockPath)
+		if err != nil {
+			return nil, fmt.Errorf("read existing lock: %w", err)
+		}
+		if prior, ok := lock.Find(manifest.ID); ok {
+			existing = prior
+		}
+	}
 
 	pluginDir := filepath.Join(i.PluginsDir, SafePluginID(manifest.ID))
 	if !pathWithin(i.PluginsDir, pluginDir) {
@@ -160,7 +179,7 @@ func (i *Installer) Install(ctx context.Context, opts InstallOptions) (*InstallR
 	if release == nil || strings.TrimSpace(release.TagName) == "" {
 		return nil, fmt.Errorf("%w: release for %s has no tag_name", ErrNotFound, repo.URL)
 	}
-	asset, err := selectInstallAssetWithPreferred(release, opts.Asset, preferredAsset)
+	asset, err := selectInstallAssetWithPreferred(release, opts.Asset, preferredAsset, manifest.Version)
 	if err != nil {
 		return nil, err
 	}
@@ -170,8 +189,8 @@ func (i *Installer) Install(ctx context.Context, opts InstallOptions) (*InstallR
 	if err != nil {
 		return nil, err
 	}
-	if opts.Existing != nil {
-		if err := validateUpdateTrust(*opts.Existing, repo, plan, opts.AllowSourceChange); err != nil {
+	if existing != nil {
+		if err := validateUpdateTrust(*existing, repo, plan, opts.AllowSourceChange); err != nil {
 			return nil, err
 		}
 	}
@@ -414,23 +433,21 @@ func (i *Installer) checkPermissionConfirmation(pluginDir string, incoming *Mani
 	return nil
 }
 
-func selectInstallAssetWithPreferred(release *Release, requested, preferred string) (ReleaseAsset, error) {
+func selectInstallAssetWithPreferred(release *Release, requested, preferred, version string) (ReleaseAsset, error) {
 	if requested != "" {
 		return selectInstallAsset(release, requested)
 	}
 	if preferred != "" {
-		asset, err := selectInstallAsset(release, preferred)
-		if err == nil {
-			return asset, nil
-		}
-		if !errors.Is(err, ErrNotFound) {
-			return ReleaseAsset{}, err
-		}
+		return selectCatalogInstallAsset(release, preferred, version, runtime.GOOS, runtime.GOARCH)
 	}
 	return selectInstallAsset(release, "")
 }
 
 func selectInstallAsset(release *Release, requested string) (ReleaseAsset, error) {
+	return selectInstallAssetForPlatform(release, requested, runtime.GOOS, runtime.GOARCH)
+}
+
+func selectInstallAssetForPlatform(release *Release, requested, goos, goarch string) (ReleaseAsset, error) {
 	if release == nil {
 		return ReleaseAsset{}, fmt.Errorf("%w: GitHub release is nil", ErrNotFound)
 	}
@@ -442,34 +459,109 @@ func selectInstallAsset(release *Release, requested string) (ReleaseAsset, error
 		}
 		return ReleaseAsset{}, fmt.Errorf("%w: release asset %q", ErrNotFound, requested)
 	}
-	candidates := make([]ReleaseAsset, 0, len(release.Assets))
-	for _, asset := range release.Assets {
-		if !isMetadataAsset(asset.Name) {
-			candidates = append(candidates, asset)
-		}
-	}
+	candidates := downloadableAssets(release)
 	if len(candidates) == 0 {
 		return ReleaseAsset{}, fmt.Errorf("%w: release has no downloadable asset", ErrNotFound)
 	}
 	if len(candidates) == 1 {
 		return candidates[0], nil
 	}
-	platform := runtime.GOOS + "-" + runtime.GOARCH
+	matches := make([]ReleaseAsset, 0, len(candidates))
 	for _, asset := range candidates {
-		if strings.Contains(strings.ToLower(asset.Name), platform) {
-			return asset, nil
+		if assetNameHasPlatform(asset.Name, goos, goarch) {
+			matches = append(matches, asset)
 		}
 	}
+	switch len(matches) {
+	case 1:
+		return matches[0], nil
+	case 0:
+		return ReleaseAsset{}, fmt.Errorf("%w: release has no %s/%s asset; use --asset to choose explicitly", ErrNotFound, goos, goarch)
+	default:
+		return ReleaseAsset{}, fmt.Errorf("multiple %s/%s release assets, use --asset: %s", goos, goarch, joinAssetNames(matches))
+	}
+}
+
+// selectCatalogInstallAsset resolves a catalog `asset` preference without ever
+// falling back to a different architecture. The preference may be the asset
+// base name used by the release script, or an exact full asset name.
+func selectCatalogInstallAsset(release *Release, preferred, version, goos, goarch string) (ReleaseAsset, error) {
+	if release == nil {
+		return ReleaseAsset{}, fmt.Errorf("%w: GitHub release is nil", ErrNotFound)
+	}
+	preferred = strings.TrimSpace(preferred)
+	if preferred == "" {
+		return ReleaseAsset{}, fmt.Errorf("%w: catalog asset preference is empty", ErrNotFound)
+	}
+	candidates := downloadableAssets(release)
+	normalizedPreferred := normalizeAssetName(preferred)
+	normalizedExpected := normalizeAssetName(preferred + "_" + version + "_" + goos + "_" + goarch)
+	matches := make([]ReleaseAsset, 0, 1)
 	for _, asset := range candidates {
-		if strings.Contains(strings.ToLower(asset.Name), runtime.GOOS) {
-			return asset, nil
+		normalizedAsset := normalizeAssetName(asset.Name)
+		platformMatch := assetNameHasPlatform(asset.Name, goos, goarch)
+		switch {
+		case asset.Name == preferred && platformMatch:
+			matches = append(matches, asset)
+		case asset.Name == preferred && len(candidates) == 1:
+			// A single-asset legacy release may not encode platform in its name.
+			matches = append(matches, asset)
+		case normalizedAsset == normalizedExpected, normalizedAsset == normalizedExpected+"_exe":
+			matches = append(matches, asset)
+		case normalizedAsset == normalizedPreferred && platformMatch:
+			matches = append(matches, asset)
 		}
 	}
-	names := make([]string, 0, len(candidates))
-	for _, asset := range candidates {
+	switch len(matches) {
+	case 1:
+		return matches[0], nil
+	case 0:
+		return ReleaseAsset{}, fmt.Errorf("%w: release has no %s/%s asset matching catalog preference %q", ErrNotFound, goos, goarch, preferred)
+	default:
+		return ReleaseAsset{}, fmt.Errorf("multiple %s/%s release assets match catalog preference %q, use --asset: %s", goos, goarch, preferred, joinAssetNames(matches))
+	}
+}
+
+func downloadableAssets(release *Release) []ReleaseAsset {
+	candidates := make([]ReleaseAsset, 0, len(release.Assets))
+	for _, asset := range release.Assets {
+		if !isMetadataAsset(asset.Name) {
+			candidates = append(candidates, asset)
+		}
+	}
+	return candidates
+}
+
+func assetNameHasPlatform(name, goos, goarch string) bool {
+	normalized := "_" + normalizeAssetName(name) + "_"
+	pair := normalizeAssetName(goos + "_" + goarch)
+	return strings.Contains(normalized, "_"+pair+"_")
+}
+
+func normalizeAssetName(raw string) string {
+	normalized := strings.ToLower(raw)
+	normalized = strings.NewReplacer(
+		"x86_64", "amd64",
+		"x86-64", "amd64",
+		"x64", "amd64",
+		"aarch64", "arm64",
+		"macos", "darwin",
+		"osx", "darwin",
+		"win32", "windows",
+		"win64", "windows",
+	).Replace(normalized)
+	fields := strings.FieldsFunc(normalized, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9')
+	})
+	return strings.Join(fields, "_")
+}
+
+func joinAssetNames(assets []ReleaseAsset) string {
+	names := make([]string, 0, len(assets))
+	for _, asset := range assets {
 		names = append(names, asset.Name)
 	}
-	return ReleaseAsset{}, fmt.Errorf("multiple release assets, use --asset: %s", strings.Join(names, ", "))
+	return strings.Join(names, ", ")
 }
 
 func isMetadataAsset(name string) bool {

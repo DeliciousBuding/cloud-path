@@ -42,9 +42,10 @@ plugins:
     archived: false
 ```
 
-`archived: true` 的条目不得出现在 search、inspect、install 候选中；`asset` 只是可选首选
-Release 资产名，不改变 digest/permission/source 校验。 selector 只做大小写敏感的精确匹配，
-依次接受 slug、id、path。
+`archived: true` 的条目不得出现在 search、inspect、install 候选中；`asset` 是可选资产 base name，
+按 `<asset>_<version>_<goos>_<goarch>[.exe]` 选择当前平台，缺失或歧义时 fail-closed，不改变
+digest/permission/source 校验。selector 只做大小写敏感的精确匹配，依次接受 slug、id、path；
+catalog entry 的 id/kind 还必须与目标 manifest 一致。
 
 ## 2. 双通道发现
 

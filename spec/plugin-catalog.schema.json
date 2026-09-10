@@ -52,7 +52,7 @@
           "type": "string",
           "minLength": 1,
           "pattern": "^[^/\\\\\\u0000-\\u001f\\u007f]+$",
-          "description": "Optional preferred exact GitHub Release asset name."
+          "description": "Optional preferred GitHub Release asset base name. Monorepo assets should be named <asset>_<version>_<goos>_<goarch>[.exe]; Core selects only the current platform and fails closed if the asset is absent or ambiguous. A full asset name is accepted only when it matches the current platform or the release has exactly one downloadable asset."
         },
         "archived": {
           "type": "boolean",
