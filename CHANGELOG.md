@@ -36,6 +36,10 @@ shasum -a 256 -c checksums.txt --ignore-missing      # macOS
 certutil -hashfile <文件> SHA256                      # Windows（逐项对照）
 ```
 
+## v0.2.41 — 2026-09-10
+
+- 设备页：实时 `state` 先于 REST 元数据到达时，保留实时状态与时间戳，并从最近一次 REST/snapshot 事实补回 `adapter`、显示名和端口，避免新注册设备退化成裸 ID 或丢失数字孪生。
+
 ## v0.2.40 — 2026-09-10
 
 - 应用绑定：`app_bindings` 支持可选 `device_id`，实例配置页可按需求选择具体设备；自动匹配也会把目标设备写入运行态绑定。
