@@ -212,6 +212,11 @@ export default {
     missing: 'Still required: {{items}}', missingInstanceName: 'name', missingPlugin: 'application or driver to run',
     missingConnector: 'connectors cannot run as apps or drivers', missingPluginType: 'plugin type', missingLocation: 'where it runs',
     missingHostMismatch: 'the location is not right', missingVersion: 'version', missingPermissions: 'permission confirmation',
+    configuration: 'Runtime settings', configurationHint: 'Fill in the fields declared by the plugin; no JSON is required.',
+    noConfigFields: 'This application does not declare editable settings yet; existing configuration will be preserved.',
+    bindingOverride: 'Manual device links are in use',
+    bindingOverrideHint: 'The platform normally matches devices by capability. Restoring automatic matching removes the saved manual links.',
+    resetBindings: 'Restore automatic matching',
   },
   facts: {
     plugin: 'Plugin', location: 'Runs on', edgeStatus: 'Gateway status', expectedVersion: 'Target version',

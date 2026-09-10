@@ -6,9 +6,10 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { KeyRound, Plus, X } from 'lucide-react'
 import { Button, Checkbox, IconButton, Input, Select, Textarea, TextField } from '@/components/ui'
-import { PermissionList, PluginErrorNote } from './PluginFacts'
+import { declaredConfigGroups, PermissionList, PluginErrorNote } from './PluginFacts'
 import { useEdges } from '@/hooks/useEdges'
 import { useCreateInstance, useUpdateInstance } from '@/hooks/usePlugins'
+import { applyConfigFields, PluginConfigFields, validateConfigFields, valuesFromConfigFields } from '@/components/plugin-ui/PluginConfigForm'
 import { optionLabel } from '@/lib/format'
 import { normalizePluginKind, permissionCount, pluginDisplayName, secretHandleName } from '@/lib/plugins'
 import type {
@@ -23,8 +24,12 @@ const ISOLATIONS = [
 
 interface ConfigRow { key: string; value: string }
 
+const STRUCTURED_CONFIG_KEYS = new Set(['app_config', 'app_bindings'])
+
 function rowsFromConfig(config: Record<string, string> | undefined): ConfigRow[] {
-  return Object.entries(config ?? {}).map(([key, value]) => ({ key, value: String(value ?? '') }))
+  return Object.entries(config ?? {})
+    .filter(([key]) => !STRUCTURED_CONFIG_KEYS.has(key))
+    .map(([key, value]) => ({ key, value: String(value ?? '') }))
 }
 
 /** 把 secret_refs 数组与输入框文本互转（一行一个 handle） */
@@ -47,7 +52,7 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
   initialPluginId?: string
   onDone: () => void
 }) {
-  const { t } = useTranslation('plugin')
+  const { t, i18n } = useTranslation('plugin')
   const { list: edges } = useEdges()
   const d = instance?.desired
 
@@ -57,6 +62,7 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
   const [version, setVersion] = useState(d?.version ?? '')
   const [enabled, setEnabled] = useState(d?.enabled ?? true)
   const [isolation, setIsolation] = useState<'shared' | 'per-instance'>(() => legalIsolation(d?.isolation))
+  const [baseConfig, setBaseConfig] = useState<Record<string, string>>(() => ({ ...(d?.config ?? {}) }))
   const [rows, setRows] = useState<ConfigRow[]>(rowsFromConfig(d?.config))
   const [refsText, setRefsText] = useState(refsToText(d?.secret_refs))
   const [permAcked, setPermAcked] = useState(false)
@@ -92,6 +98,11 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
     || pluginKind === 'connector'
   )
 
+  const configGroups = useMemo(() => declaredConfigGroups(selected, i18n.language), [selected, i18n.language])
+  const configFields = useMemo(() => configGroups.flatMap((group) => group.fields), [configGroups])
+  const [configValues, setConfigValues] = useState<Record<string, unknown>>(() => valuesFromConfigFields(configFields, d?.config ?? {}))
+  const [configErrors, setConfigErrors] = useState<Record<string, string>>({})
+
   const secretRefs = useMemo(
     () => refsText.split(/[\n,]/).map((s) => s.trim()).filter(Boolean).map(secretHandleName),
     [refsText],
@@ -107,16 +118,21 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
   if (!effectiveVersion.trim()) missing.push(t('form.missingVersion'))
   if (perms > 0 && !permAcked) missing.push(t('form.missingPermissions'))
 
-  function buildConfig(): Record<string, string> | undefined {
-    const out: Record<string, string> = {}
-    let any = false
-    for (const r of rows) {
-      const k = r.key.trim()
-      if (!k) continue
-      out[k] = r.value
-      any = true
+  function buildConfig(): Record<string, string> | null {
+    const out: Record<string, string> = { ...baseConfig }
+    for (const row of rows) {
+      const key = row.key.trim()
+      if (!key || STRUCTURED_CONFIG_KEYS.has(key)) continue
+      out[key] = row.value
     }
-    return any ? out : undefined
+    if (configFields.length > 0) {
+      const errors = validateConfigFields(configFields, configValues, t)
+      setConfigErrors(errors)
+      if (Object.keys(errors).length > 0) return null
+      return applyConfigFields(out, configFields, configValues, t)
+    }
+    setConfigErrors({})
+    return out
   }
 
   return (
@@ -139,9 +155,14 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
               const nextID = e.target.value
               const next = catalog.find((p) => p.id === nextID)
               const nextKind = normalizePluginKind(next?.kind)
+              const nextFields = declaredConfigGroups(next, i18n.language).flatMap((group) => group.fields)
               setPluginId(nextID)
               setVersion(next?.version ?? '')
               setEdgeId(nextKind === 'application' ? 'server' : '')
+              setBaseConfig({})
+              setRows([])
+              setConfigValues(valuesFromConfigFields(nextFields, {}))
+              setConfigErrors({})
             }}>
             <optgroup label={t('form.appGroup')}>
               {createOptions.filter((p) => normalizePluginKind(p.kind) === 'application').map((p) => (
@@ -255,6 +276,44 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
         </div>
       </div>
 
+      {configFields.length > 0 && (
+        <section className="rounded-tile border border-hairline p-3.5" aria-labelledby="pi-settings-title">
+          <div className="mb-1">
+            <h3 id="pi-settings-title" className="text-compact font-medium">{t('form.configuration')}</h3>
+            <p className="mt-1 text-meta leading-relaxed text-ink-3">{t('form.configurationHint')}</p>
+          </div>
+          <div className="mt-4 space-y-5">
+            {configGroups.map((group) => (
+              <div key={group.key} className="min-w-0">
+                {(configGroups.length > 1 || group.title || group.description) && (
+                  <div className="mb-3">
+                    {group.title && <p className="text-compact font-medium text-ink-2">{group.title}</p>}
+                    {group.description && <p className="mt-0.5 text-meta leading-relaxed text-ink-3">{group.description}</p>}
+                  </div>
+                )}
+                <PluginConfigFields
+                  fields={group.fields} values={configValues} errors={configErrors} disabled={false}
+                  onChange={(key, value) => {
+                    setConfigValues((current) => ({ ...current, [key]: value }))
+                    setConfigErrors((current) => {
+                      if (!(key in current)) return current
+                      const next = { ...current }
+                      delete next[key]
+                      return next
+                    })
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+      {configFields.length === 0 && pluginKind === 'application' && (
+        <p className="rounded-tile bg-surface-2 px-3.5 py-3 text-meta leading-relaxed text-ink-3">
+          {t('form.noConfigFields')}
+        </p>
+      )}
+
       {/* ---- 权限确认 ---- */}
       <div className="rounded-tile bg-surface-2 p-3.5">
         <p className="mb-2 text-compact font-medium">{t('form.pluginPermissions')}</p>
@@ -275,6 +334,20 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
       <details className="rounded-tile border border-hairline p-3.5" open={mode === 'edit' && (rows.length > 0 || refsText.length > 0)}>
         <summary className="cursor-pointer text-compact font-medium">{t('form.advanced')}</summary>
         <div className="mt-4 space-y-4">
+          {baseConfig.app_bindings !== undefined && (
+            <div className="rounded-tile bg-surface-2 p-3">
+              <p className="text-compact font-medium">{t('form.bindingOverride')}</p>
+              <p className="mt-1 text-meta leading-relaxed text-ink-3">{t('form.bindingOverrideHint')}</p>
+              <Button type="button" variant="ghost" size="sm" className="mt-2"
+                onClick={() => setBaseConfig((current) => {
+                  const next = { ...current }
+                  delete next.app_bindings
+                  return next
+                })}>
+                {t('form.resetBindings')}
+              </Button>
+            </div>
+          )}
           <div>
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="text-compact font-medium">{t('form.pluginConfig')}</p>
@@ -348,6 +421,8 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
           mode={mode} disabled={missing.length > 0}
           onCreate={() => {
             setError(null)
+            const config = buildConfig()
+            if (!config) return null
             const body: PluginInstanceCreateRequest = {
               edge_id: effectiveEdge,
               instance_id: instanceId.trim(),
@@ -355,7 +430,7 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
               version: effectiveVersion.trim(),
               enabled,
               isolation,
-              config: buildConfig(),
+              config,
               secret_refs: secretRefs.length > 0 ? secretRefs : undefined,
               confirm_permissions: perms > 0 ? true : undefined,
             }
@@ -363,11 +438,13 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
           }}
           onUpdate={() => {
             setError(null)
+            const config = buildConfig()
+            if (!config) return null
             const body: PluginInstanceUpdateRequest = {
               version: effectiveVersion.trim() || undefined,
               enabled,
               isolation,
-              config: buildConfig(),
+              config,
               secret_refs: secretRefs,
               confirm_permissions: perms > 0 ? true : undefined,
             }
@@ -387,8 +464,8 @@ export function InstanceForm({ mode, instance, catalog, initialPluginId, onDone 
 function SubmitButton({ mode, disabled, onCreate, onUpdate, onError, instanceId, onDone }: {
   mode: 'create' | 'edit'
   disabled: boolean
-  onCreate: () => PluginInstanceCreateRequest
-  onUpdate: () => PluginInstanceUpdateRequest
+  onCreate: () => PluginInstanceCreateRequest | null
+  onUpdate: () => PluginInstanceUpdateRequest | null
   onError: (e: unknown) => void
   instanceId: string
   onDone: () => void
@@ -400,8 +477,15 @@ function SubmitButton({ mode, disabled, onCreate, onUpdate, onError, instanceId,
 
   async function run() {
     try {
-      if (mode === 'create') await create.mutateAsync(onCreate())
-      else await update.mutateAsync({ id: instanceId, body: onUpdate() })
+      if (mode === 'create') {
+        const body = onCreate()
+        if (!body) return
+        await create.mutateAsync(body)
+      } else {
+        const body = onUpdate()
+        if (!body) return
+        await update.mutateAsync({ id: instanceId, body })
+      }
       onDone()
     } catch (e) {
       onError(e) // 稳定码文案由 PluginErrorNote 呈现

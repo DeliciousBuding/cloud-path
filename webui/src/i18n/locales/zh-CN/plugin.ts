@@ -212,6 +212,11 @@ export default {
     missing: '还需要处理：{{items}}', missingInstanceName: '名称', missingPlugin: '要运行的应用或驱动',
     missingConnector: '连接器不能作为应用或驱动运行', missingPluginType: '插件类型', missingLocation: '在哪里运行',
     missingHostMismatch: '应用或驱动放错了地方', missingVersion: '版本', missingPermissions: '权限确认',
+    configuration: '运行设置', configurationHint: '按插件声明的字段填写，不需要手写 JSON。',
+    noConfigFields: '这个应用暂未声明可编辑的设置；已有配置会保留。',
+    bindingOverride: '当前使用手动设备关联',
+    bindingOverrideHint: '通常由平台按功能自动匹配设备。恢复自动匹配后，已保存的手动关联会被移除。',
+    resetBindings: '恢复自动匹配',
   },
   facts: {
     plugin: '插件', location: '在哪里运行', edgeStatus: '网关状态', expectedVersion: '目标版本',

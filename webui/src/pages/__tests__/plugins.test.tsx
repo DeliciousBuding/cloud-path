@@ -1,6 +1,6 @@
 // 插件面：三分（目录 / 已安装 / 运行项）、desired≠observed 的分离呈现、
 // 稳定错误码驱动的写操作，以及「绝不把期望当实际」的反向断言。
-import { act, screen, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { Route, Routes } from 'react-router'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -203,6 +203,44 @@ describe('插件面分区', () => {
     renderWithProviders(<Plugins />)
     await user.click(await screen.findByRole('button', { name: '新建运行项' }))
     expect(await screen.findByRole('combobox', { name: '要运行什么' })).toHaveValue(CATALOG[0].id)
+  })
+
+  it('新建运行项按 manifest 表单写入 app_config，不要求手写 JSON', async () => {
+    useAuth.setState({ status: 'in', user: { ...appUser, role: 'admin' } })
+    const application: PluginCatalogView = {
+      ...CATALOG[0], id: 'io.github.acme.reminder', kind: 'application', permissions: {},
+      contributes: {
+        applications: [{
+          id: 'io.github.acme.reminder', title: '取药提醒',
+          ui: {
+            apiVersion: 1,
+            pages: [{
+              id: 'home', title: '取药提醒',
+              sections: [{
+                type: 'form', source: 'config', title: '提醒设置',
+                fields: [{ key: 'app_config.timezone', label: '时区', type: 'string', required: true }],
+              }],
+            }],
+          },
+        }],
+      },
+    }
+    const http = route({ catalog: [application] })
+    const user = userEvent.setup()
+    renderWithProviders(<Plugins />)
+    await user.click(await screen.findByRole('button', { name: '新建运行项' }))
+
+    expect(await screen.findByText('运行设置')).toBeVisible()
+    expect(screen.getByLabelText('时区')).toBeVisible()
+    expect(screen.queryByText('app_config')).not.toBeInTheDocument()
+    await user.type(screen.getByLabelText('名称'), 'pillbox-1')
+    await user.type(screen.getByLabelText('时区'), 'Asia/Shanghai')
+    await user.click(screen.getByRole('button', { name: '创建并保存' }))
+    await waitFor(() => expect(http.to('/api/plugin-instances').some((call) => call.method === 'POST')).toBe(true))
+    const created = http.to('/api/plugin-instances').find((call) => call.method === 'POST')
+    const body = created?.body as { config?: Record<string, string> }
+    expect(JSON.parse(body.config?.app_config ?? '{}')).toEqual({ timezone: 'Asia/Shanghai' })
+    expect(body.config?.app_bindings).toBeUndefined()
   })
 
   it('目录为空 / 加载失败都是设计过的状态', async () => {
