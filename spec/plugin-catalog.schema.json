@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cloudpath.dev/schemas/plugin-catalog.schema.json",
+  "title": "CloudPath Plugin Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "plugins"],
+  "properties": {
+    "apiVersion": {
+      "const": "plugins.cloudpath.dev/v1alpha1"
+    },
+    "kind": {
+      "const": "PluginCatalog"
+    },
+    "plugins": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/plugin"
+      }
+    }
+  },
+  "$defs": {
+    "plugin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "slug", "kind", "path", "tagPrefix"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "kind": {
+          "enum": ["Driver", "Application", "Connector"]
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$",
+          "description": "Repository-relative plugin directory. The plugin manifest must be at <path>/plugin.yaml."
+        },
+        "tagPrefix": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$",
+          "description": "Must equal path. Releases use the exact tag <tagPrefix>/v<manifest.version>."
+        },
+        "asset": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^/\\\\\\u0000-\\u001f\\u007f]+$",
+          "description": "Optional preferred exact GitHub Release asset name."
+        },
+        "archived": {
+          "type": "boolean",
+          "default": false,
+          "description": "Archived entries are excluded from search, inspect, and install resolution."
+        }
+      }
+    }
+  }
+}

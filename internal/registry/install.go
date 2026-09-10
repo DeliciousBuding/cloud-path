@@ -14,6 +14,9 @@ import (
 // InstallOptions controls one install operation.
 type InstallOptions struct {
 	Source string
+	// Plugin selects one catalog entry by exact slug, id, or repository path.
+	// It is required for monorepos and ignored/rejected for single-plugin repos.
+	Plugin string
 	Asset  string
 	// Digest is an independent, user-supplied sha256 (--digest). It is never
 	// derived from a same-origin release response.
@@ -27,6 +30,10 @@ type InstallOptions struct {
 	// Existing is the previously locked plugin during an update. When set,
 	// update trust invariants are enforced before any install side effect.
 	Existing *LockedPlugin
+	// AllowSourceChange explicitly permits an update to move to a different
+	// source repository. It never permits a verified install to downgrade to
+	// unreviewed TOFU.
+	AllowSourceChange bool
 }
 
 // InstallResult is the successful local installation outcome.
@@ -103,13 +110,21 @@ func (i *Installer) Install(ctx context.Context, opts InstallOptions) (*InstallR
 		supported = 1
 	}
 
-	repo, err := ResolveRepository(opts.Source)
+	resolved, err := ResolveManifestSource(ctx, i.Client, opts.Source, opts.Plugin, "")
 	if err != nil {
 		return nil, err
 	}
-	manifestData, err := i.Client.FetchManifest(ctx, repo)
-	if err != nil {
-		return nil, err
+	if resolved.Repo.URL == "" {
+		return nil, fmt.Errorf("%w: install requires a GitHub repository source", ErrUnsupportedSource)
+	}
+	repo := resolved.Repo
+	manifestData := resolved.Data
+	pluginPath := ""
+	var tagPrefix, preferredAsset string
+	if resolved.Entry != nil {
+		pluginPath = resolved.Entry.Path
+		tagPrefix = resolved.Entry.TagPrefix
+		preferredAsset = resolved.Entry.Asset
 	}
 	schemaData, schemaSource, err := LoadManifestSchema(i.SchemaPath)
 	if err != nil {
@@ -133,21 +148,30 @@ func (i *Installer) Install(ctx context.Context, opts InstallOptions) (*InstallR
 		return nil, err
 	}
 
-	release, err := i.Client.GetLatestRelease(ctx, repo)
+	var release *Release
+	if tagPrefix != "" {
+		release, err = i.Client.GetLatestPrefixedRelease(ctx, repo, tagPrefix, manifest.Version)
+	} else {
+		release, err = i.Client.GetLatestRelease(ctx, repo)
+	}
 	if err != nil {
 		return nil, err
 	}
-	asset, err := selectInstallAsset(release, opts.Asset)
+	if release == nil || strings.TrimSpace(release.TagName) == "" {
+		return nil, fmt.Errorf("%w: release for %s has no tag_name", ErrNotFound, repo.URL)
+	}
+	asset, err := selectInstallAssetWithPreferred(release, opts.Asset, preferredAsset)
 	if err != nil {
 		return nil, err
 	}
 
-	plan, err := i.planTrust(ctx, release, asset, manifest, repo, opts)
+	binding := RegistryBindingContext{Tag: release.TagName, PluginPath: pluginPath}
+	plan, err := i.planTrust(ctx, release, asset, manifest, repo, binding, opts)
 	if err != nil {
 		return nil, err
 	}
 	if opts.Existing != nil {
-		if err := validateUpdateTrust(*opts.Existing, repo, plan); err != nil {
+		if err := validateUpdateTrust(*opts.Existing, repo, plan, opts.AllowSourceChange); err != nil {
 			return nil, err
 		}
 	}
@@ -244,6 +268,8 @@ func (i *Installer) Install(ctx context.Context, opts InstallOptions) (*InstallR
 		Version:           manifest.Version,
 		Digest:            actual,
 		Source:            repo.URL,
+		Tag:               release.TagName,
+		PluginPath:        pluginPath,
 		Verified:          verified,
 		Mode:              mode,
 		Evidence:          evidence,
@@ -271,6 +297,8 @@ func (i *Installer) Install(ctx context.Context, opts InstallOptions) (*InstallR
 		Kind:          manifest.Kind,
 		Source:        repo.URL,
 		Digest:        actual,
+		Tag:           release.TagName,
+		PluginPath:    pluginPath,
 		Protocol:      manifest.Protocol,
 		Compatibility: manifest.Compatibility.Core,
 	}
@@ -297,7 +325,7 @@ func (i *Installer) Install(ctx context.Context, opts InstallOptions) (*InstallR
 // planTrust resolves the trust mode and expected digest before any install side
 // effect. A same-origin checksum is only ever TOFU; independent evidence is
 // required for a verified result.
-func (i *Installer) planTrust(ctx context.Context, release *Release, asset ReleaseAsset, manifest *Manifest, repo Repo, opts InstallOptions) (trustPlan, error) {
+func (i *Installer) planTrust(ctx context.Context, release *Release, asset ReleaseAsset, manifest *Manifest, repo Repo, binding RegistryBindingContext, opts InstallOptions) (trustPlan, error) {
 	if opts.Digest != "" {
 		digest, err := NormalizeDigest(opts.Digest)
 		if err != nil {
@@ -313,7 +341,7 @@ func (i *Installer) planTrust(ctx context.Context, release *Release, asset Relea
 
 	if i.RegistryIndex != nil {
 		if entry, ok := i.RegistryIndex.Find(manifest.ID); ok {
-			if err := ValidateRegistryBinding(entry, manifest, repo.URL); err != nil {
+			if err := ValidateRegistryBinding(entry, manifest, repo.URL, binding); err != nil {
 				return trustPlan{}, err
 			}
 			return trustPlan{
@@ -384,6 +412,22 @@ func (i *Installer) checkPermissionConfirmation(pluginDir string, incoming *Mani
 		return fmt.Errorf("%w: permission disclosure must be confirmed: %s", ErrPermissionConfirmationRequired, incoming.PermissionSummary())
 	}
 	return nil
+}
+
+func selectInstallAssetWithPreferred(release *Release, requested, preferred string) (ReleaseAsset, error) {
+	if requested != "" {
+		return selectInstallAsset(release, requested)
+	}
+	if preferred != "" {
+		asset, err := selectInstallAsset(release, preferred)
+		if err == nil {
+			return asset, nil
+		}
+		if !errors.Is(err, ErrNotFound) {
+			return ReleaseAsset{}, err
+		}
+	}
+	return selectInstallAsset(release, "")
 }
 
 func selectInstallAsset(release *Release, requested string) (ReleaseAsset, error) {

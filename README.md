@@ -73,6 +73,7 @@ UI 贡献不是独立的可执行插件类型：当前由 Descriptor/Capability 
 | [cloud-path-app-sensor-alert](https://github.com/DeliciousBuding/cloud-path-app-sensor-alert) | **独立 Application Plugin** | 传感器告警应用的现役源码、配置与发布说明 |
 | [cloud-path-app-environment-guard](https://github.com/DeliciousBuding/cloud-path-app-environment-guard) | **独立 Application Plugin（已退役）** | 不再现役；监测能力由 `cloud-path-app-sensor-alert` 覆盖，历史仓库不作为新安装入口 |
 | [cloud-path-app-hall-pillbox](https://github.com/DeliciousBuding/cloud-path-app-hall-pillbox) | **独立 Application Plugin（已退役）** | 不再现役；定时隔间能力由 `cloud-path-app-scheduled-compartment` 覆盖，历史仓库不作为新安装入口 |
+| [cloud-path-plugins](https://github.com/DeliciousBuding/cloud-path-plugins) | **Plugin monorepo catalog** | 根 `plugins.yaml` 声明各插件 `path`/`tagPrefix`；安装/检查使用 `--plugin <slug\|id\|path>`，单插件仓库仍兼容 |
 | [examples/scheduled-compartment/](examples/scheduled-compartment/README.md) | **Core 参考 / 历史 bootstrap** | 只依赖公开 SDK 的参考快照；[deploy/split/](deploy/split/README.md) 不用于更新现役应用 |
 | [templates/go-plugin/](templates/go-plugin/README.md) | 官方 Go 插件模板 | 新插件的起步材料，带 CI、Release 与 manifest 校验器；不是已有应用的更新源 |
 
@@ -316,17 +317,23 @@ curl -fsS http://127.0.0.1:8080/api/edges                 # 网关在线状态
 ### CLI（`cloudpath`）：插件 Registry 控制面
 
 ```bash
-cloudpath plugin search <关键词>          # GitHub Topic 开放通道 + Registry 精选
-cloudpath plugin inspect <id>             # manifest/兼容范围/摘要/权限披露
+cloudpath plugin search <关键词>          # GitHub Topic 开放通道 + monorepo catalog 展开
+cloudpath plugin inspect <repo>           # 单插件仓库：根 plugin.yaml
+cloudpath plugin inspect <repo> --plugin <slug|id|path>
 cloudpath plugin install <repo-or-id> --digest sha256:<hex> --yes
+cloudpath plugin install <repo> --plugin <slug|id|path> --digest sha256:<hex> --yes
+cloudpath plugin update <id> [--source <repo> --allow-source-change] [--plugin <slug|id|path>]
 # 发布的二进制内嵌 manifest schema：干净机器上无需仓库 checkout，
 # -schema PATH 只用于覆盖；install 输出会打印 schema 来源（file:/embedded）
-cloudpath plugin enable|disable|update|remove <id>
+cloudpath plugin enable|disable|remove <id>
 cloudpath plugin host                     # 把 desired-state 变成受监督的插件进程
 ```
 
 安装前强制验证 Manifest、兼容范围、Release 资产与摘要；`plugins.lock` 记录版本、
-digest、来源与验证结果。Topic `cloudpath-plugin` 只是候选集合，不是信任证明。
+digest、来源、精确 tag/插件 path 与验证结果。Topic `cloudpath-plugin` 只是候选集合，
+不是信任证明。monorepo catalog 的 `archived: true` 条目不会出现在 search/inspect/install
+候选中；catalog Release tag 必须严格匹配 `<path>/v<manifest.version>`，否则 fail-closed。
+单插件仓库仍读取根 `plugin.yaml`，无需 `--plugin`。
 
 ---
 

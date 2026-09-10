@@ -80,10 +80,18 @@ func attestationEvidence(att *Attestation) string {
 	return "build attestation"
 }
 
+// RegistryBindingContext carries optional monorepo coordinates resolved during
+// install. A Registry entry that pins Tag or PluginPath must match both exactly.
+type RegistryBindingContext struct {
+	Tag        string
+	PluginPath string
+}
+
 // ValidateRegistryBinding enforces the fixed binding for a verified Registry
 // entry: plugin id, version, source, digest and publisher must all match the
-// resolved install. Any inconsistency fails closed.
-func ValidateRegistryBinding(entry *RegistryEntry, manifest *Manifest, source string) error {
+// resolved install. Optional Tag/PluginPath fields are checked when present.
+// The variadic context preserves the original three-argument API.
+func ValidateRegistryBinding(entry *RegistryEntry, manifest *Manifest, source string, contexts ...RegistryBindingContext) error {
 	if entry == nil || manifest == nil {
 		return fmt.Errorf("%w: registry entry or manifest is nil", ErrRegistryBindingMismatch)
 	}
@@ -102,19 +110,31 @@ func ValidateRegistryBinding(entry *RegistryEntry, manifest *Manifest, source st
 	if strings.TrimSpace(entry.VerifiedPublisher) == "" {
 		return fmt.Errorf("%w: registry entry %q has no verifiedPublisher", ErrRegistryBindingMismatch, entry.ID)
 	}
+	if entry.Tag != "" || entry.PluginPath != "" {
+		if len(contexts) == 0 {
+			return fmt.Errorf("%w: registry entry %q pins tag/pluginPath but no resolved coordinates were supplied", ErrRegistryBindingMismatch, entry.ID)
+		}
+		resolved := contexts[0]
+		if entry.Tag != "" && entry.Tag != resolved.Tag {
+			return fmt.Errorf("%w: registry tag %q != resolved tag %q", ErrRegistryBindingMismatch, entry.Tag, resolved.Tag)
+		}
+		if entry.PluginPath != "" && entry.PluginPath != resolved.PluginPath {
+			return fmt.Errorf("%w: registry pluginPath %q != resolved pluginPath %q", ErrRegistryBindingMismatch, entry.PluginPath, resolved.PluginPath)
+		}
+	}
 	return nil
 }
 
 // validateUpdateTrust enforces the update trust invariants before an install
 // side effect: an update must not downgrade a verified installation to
 // unreviewed TOFU, and it must not change source or publisher without
-// confirmation.
-func validateUpdateTrust(existing LockedPlugin, repo Repo, plan trustPlan) error {
+// corresponding explicit confirmation.
+func validateUpdateTrust(existing LockedPlugin, repo Repo, plan trustPlan, allowSourceChange bool) error {
 	if existing.Verified && plan.mode == TrustModeUnreviewedTOFU {
 		return fmt.Errorf("%w: plugin %s is verified, refusing downgrade to unreviewed trust-on-first-use", ErrTrustDowngrade, existing.ID)
 	}
-	if strings.TrimSpace(existing.Source) != "" && existing.Source != repo.URL {
-		return fmt.Errorf("%w: source changed from %s to %s without confirmation", ErrTrustDowngrade, existing.Source, repo.URL)
+	if strings.TrimSpace(existing.Source) != "" && existing.Source != repo.URL && !allowSourceChange {
+		return fmt.Errorf("%w: source changed from %s to %s without --allow-source-change", ErrTrustDowngrade, existing.Source, repo.URL)
 	}
 	if existing.VerifiedPublisher != "" && plan.mode == TrustModeVerifiedRegistry &&
 		plan.publisher != "" && plan.publisher != existing.VerifiedPublisher {

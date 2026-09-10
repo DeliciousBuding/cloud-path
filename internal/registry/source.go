@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,58 +10,154 @@ import (
 	"unicode"
 )
 
-// ManifestSource is manifest bytes plus its resolution label/path.
+// ManifestSource is manifest bytes plus its resolution label/path. Repo,
+// Catalog and Entry are populated only for remote or local catalog resolution.
 type ManifestSource struct {
-	Data []byte
-	Path string
+	Data    []byte
+	Path    string
+	Repo    Repo
+	Catalog *PluginCatalog
+	Entry   *PluginCatalogEntry
 }
 
-// ReadManifestSource reads root plugin.yaml from a local path, a GitHub
-// repository URL, or an installed plugin id under plugins.d.
+// ReadManifestSource preserves the original single-plugin resolution path. It
+// cannot select an entry from a monorepo; callers that support catalogs must use
+// ResolveManifestSource with an explicit selector.
 func ReadManifestSource(ctx context.Context, client *GitHubClient, source, pluginsDir string) (*ManifestSource, error) {
+	return ResolveManifestSource(ctx, client, source, "", pluginsDir)
+}
+
+// ResolveManifestSource reads a plugin manifest from a local path, a GitHub
+// repository, or an installed plugin id under pluginsDir. Remote repositories
+// are probed for root plugins.yaml first; a missing catalog falls back to the
+// legacy root plugin.yaml contract.
+func ResolveManifestSource(ctx context.Context, client *GitHubClient, source, selector, pluginsDir string) (*ManifestSource, error) {
 	raw := strings.TrimSpace(source)
 	if raw == "" {
 		return nil, fmt.Errorf("%w: source is empty", ErrUnsupportedSource)
 	}
 
 	if info, err := os.Stat(raw); err == nil {
-		path := raw
 		if info.IsDir() {
-			path = filepath.Join(raw, "plugin.yaml")
+			catalogPath := filepath.Join(raw, "plugins.yaml")
+			if _, err := os.Stat(catalogPath); err == nil {
+				return resolveLocalCatalog(raw, catalogPath, selector)
+			}
+			return readLocalPluginManifest(filepath.Join(raw, "plugin.yaml"), selector)
 		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil, fmt.Errorf("read local plugin.yaml: %w", err)
+		base := strings.ToLower(filepath.Base(raw))
+		if base == "plugins.yaml" || base == "plugins.yml" {
+			return resolveLocalCatalog(filepath.Dir(raw), raw, selector)
 		}
-		return &ManifestSource{Data: data, Path: path}, nil
+		return readLocalPluginManifest(raw, selector)
 	}
 
 	if strings.HasSuffix(strings.ToLower(raw), ".yaml") || strings.HasSuffix(strings.ToLower(raw), ".yml") {
 		return nil, fmt.Errorf("%w: local manifest %s", ErrNotFound, raw)
 	}
 
-	repo, err := ResolveRepository(raw)
-	if err == nil {
+	repo, repoErr := ResolveRepository(raw)
+	if repoErr == nil {
 		if client == nil {
 			client = NewGitHubClient()
+		}
+		catalogData, err := client.FetchCatalog(ctx, repo)
+		if err == nil {
+			catalog, parseErr := ParsePluginCatalog(catalogData)
+			if parseErr != nil {
+				return nil, fmt.Errorf("%s plugins.yaml: %w", repo.URL, parseErr)
+			}
+			entry, selectErr := catalog.FindActive(selector)
+			if selectErr != nil {
+				return nil, selectErr
+			}
+			manifestPath := entry.Path + "/plugin.yaml"
+			data, fetchErr := client.FetchRepositoryFile(ctx, repo, manifestPath)
+			if fetchErr != nil {
+				return nil, fetchErr
+			}
+			return &ManifestSource{
+				Data:    data,
+				Path:    repo.URL + "/" + manifestPath,
+				Repo:    repo,
+				Catalog: catalog,
+				Entry:   entry,
+			}, nil
+		}
+		if !errors.Is(err, ErrNotFound) {
+			return nil, err
 		}
 		data, err := client.FetchManifest(ctx, repo)
 		if err != nil {
 			return nil, err
 		}
-		return &ManifestSource{Data: data, Path: repo.URL + "/plugin.yaml"}, nil
+		if err := validateLegacySelector(data, selector, repo.URL); err != nil {
+			return nil, err
+		}
+		return &ManifestSource{Data: data, Path: repo.URL + "/plugin.yaml", Repo: repo}, nil
 	}
 
 	if pluginsDir != "" {
 		idPath := filepath.Join(pluginsDir, SafePluginID(raw), "plugin.yaml")
 		if pathWithin(pluginsDir, idPath) {
 			if data, err := os.ReadFile(idPath); err == nil {
+				if err := validateLegacySelector(data, selector, raw); err != nil {
+					return nil, err
+				}
 				return &ManifestSource{Data: data, Path: idPath}, nil
 			}
 		}
 	}
 
 	return nil, fmt.Errorf("%w: cannot resolve %q", ErrUnsupportedSource, raw)
+}
+
+func resolveLocalCatalog(root, catalogPath, selector string) (*ManifestSource, error) {
+	catalog, err := LoadPluginCatalog(catalogPath)
+	if err != nil {
+		return nil, err
+	}
+	entry, err := catalog.FindActive(selector)
+	if err != nil {
+		return nil, err
+	}
+	manifestPath := filepath.Join(root, filepath.FromSlash(entry.Path), "plugin.yaml")
+	if !pathWithin(root, manifestPath) {
+		return nil, fmt.Errorf("%w: catalog path %q escapes %s", ErrUnsafeArtifact, entry.Path, root)
+	}
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return nil, fmt.Errorf("read catalog plugin manifest: %w", err)
+	}
+	return &ManifestSource{Data: data, Path: manifestPath, Catalog: catalog, Entry: entry}, nil
+}
+
+func readLocalPluginManifest(path, selector string) (*ManifestSource, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read local plugin.yaml: %w", err)
+	}
+	if err := validateLegacySelector(data, selector, path); err != nil {
+		return nil, err
+	}
+	return &ManifestSource{Data: data, Path: path}, nil
+}
+
+// validateLegacySelector allows a single-plugin source to be selected by its
+// manifest id while rejecting catalog-only slug/path selectors. An empty
+// selector preserves the legacy install path unchanged.
+func validateLegacySelector(data []byte, selector, source string) error {
+	if strings.TrimSpace(selector) == "" {
+		return nil
+	}
+	manifest, err := ParseManifest(data)
+	if err != nil {
+		return err
+	}
+	if manifest.ID != selector {
+		return fmt.Errorf("%w: single-plugin source %s has no catalog selector %q (only its id is accepted)", ErrNotFound, source, selector)
+	}
+	return nil
 }
 
 // SafePluginID turns arbitrary plugin IDs into a filesystem-safe directory name.

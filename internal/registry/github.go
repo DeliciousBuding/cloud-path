@@ -32,13 +32,21 @@ type Repo struct {
 	URL   string
 }
 
-// SearchResult is a plugin candidate from the open discovery channel.
+// SearchResult is a plugin candidate from the open discovery channel. Catalog
+// fields are populated only after a monorepo plugins.yaml has been expanded.
 type SearchResult struct {
 	FullName    string `json:"full_name"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Stars       int    `json:"stargazers_count"`
 	URL         string `json:"html_url"`
+
+	PluginID   string `json:"-"`
+	Slug       string `json:"-"`
+	PluginPath string `json:"-"`
+	TagPrefix  string `json:"-"`
+	Asset      string `json:"-"`
+	Catalog    bool   `json:"-"`
 }
 
 // ReleaseAsset describes one downloadable GitHub Release asset.
@@ -50,10 +58,12 @@ type ReleaseAsset struct {
 
 // Release is a subset of GitHub Release metadata needed by the installer.
 type Release struct {
-	TagName string         `json:"tag_name"`
-	Name    string         `json:"name"`
-	URL     string         `json:"html_url"`
-	Assets  []ReleaseAsset `json:"assets"`
+	TagName    string         `json:"tag_name"`
+	Name       string         `json:"name"`
+	URL        string         `json:"html_url"`
+	Assets     []ReleaseAsset `json:"assets"`
+	Draft      bool           `json:"draft"`
+	Prerelease bool           `json:"prerelease"`
 }
 
 // GitHubClient is a small stdlib HTTP client for the GitHub REST API. BaseURL and
@@ -392,6 +402,8 @@ func (c *GitHubClient) fetch(ctx context.Context, endpoint string) ([]byte, http
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		msg := strings.TrimSpace(string(body))
 		switch {
+		case resp.StatusCode == http.StatusNotFound:
+			return nil, resp.Header, fmt.Errorf("%w: GitHub API %s: HTTP 404: %s", ErrNotFound, safeURL(endpoint), msg)
 		case resp.StatusCode == http.StatusTooManyRequests,
 			resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0":
 			if retry := resp.Header.Get("Retry-After"); retry != "" {

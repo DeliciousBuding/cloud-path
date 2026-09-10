@@ -14,6 +14,7 @@ func TestErrorCodeStable(t *testing.T) {
 		code string
 	}{
 		{registry.ErrInvalidManifest, "ERR_INVALID_MANIFEST"},
+		{registry.ErrInvalidCatalog, "ERR_INVALID_CATALOG"},
 		{registry.ErrDigestMismatch, "ERR_DIGEST_MISMATCH"},
 		{registry.ErrInvalidDigest, "ERR_INVALID_DIGEST"},
 		{registry.ErrDigestUnavailable, "ERR_DIGEST_UNAVAILABLE"},
@@ -42,6 +43,7 @@ func TestErrorCodeStable(t *testing.T) {
 func TestInstallErrorCodeStable(t *testing.T) {
 	for _, err := range []error{
 		registry.ErrInvalidManifest,
+		registry.ErrInvalidCatalog,
 		registry.ErrCoreIncompatible,
 		registry.ErrProtocolIncompatible,
 		registry.ErrDigestMismatch,

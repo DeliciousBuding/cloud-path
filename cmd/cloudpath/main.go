@@ -26,7 +26,7 @@ const (
 	defaultPluginsDir  = "plugins.d"
 	defaultLockFile    = "plugins.lock"
 	defaultSchemaPath  = "spec/plugin-manifest.schema.json"
-	defaultCoreVersion = "0.2.11"
+	defaultCoreVersion = "0.2.43"
 	defaultStateDir    = "data/plugin-state"
 	defaultDataDir     = "data/plugin-data"
 	defaultTenant      = "default"
@@ -93,10 +93,15 @@ func runSearch(args []string) int {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	results, err := registry.NewGitHubClient().Search(ctx, strings.Join(args, " "))
+	client := registry.NewGitHubClient()
+	results, err := client.Search(ctx, strings.Join(args, " "))
 	if err != nil {
 		reportError(err, 1)
 		return 1
+	}
+	results, warnings := client.ExpandCatalogs(ctx, results)
+	for _, warning := range warnings {
+		fmt.Fprintf(os.Stderr, "cloudpath: warning: catalog %s: %s\n", warning.Repository, redactSecrets(warning.Err.Error()))
 	}
 	fmt.Printf("%-40s %7s  %-48s %s\n", "NAME", "STARS", "DESCRIPTION", "URL")
 	for _, result := range results {
@@ -108,6 +113,7 @@ func runSearch(args []string) int {
 	}
 	fmt.Println()
 	fmt.Println("Topic hits are candidates only; install requires sha256 verification.")
+	fmt.Println("Catalog candidates require --plugin <slug|id|path>.")
 	return 0
 }
 
@@ -116,6 +122,7 @@ func runInspect(args []string) int {
 	pluginsDir := fs.String("plugins-dir", envOr("CLOUDPATH_PLUGINS_DIR", defaultPluginsDir), "installed plugin directory")
 	schemaPath := fs.String("schema", envOr("CLOUDPATH_SCHEMA", defaultSchemaPath), "manifest JSON Schema path")
 	lockPath := fs.String("lock", envOr("CLOUDPATH_LOCK", defaultLockFile), "plugins.lock path (used to report installed trust state)")
+	pluginSelector := fs.String("plugin", "", "catalog entry selector (exact slug, id, or repository path)")
 	fs.SetOutput(os.Stderr)
 	if err := parseCommandFlags(fs, args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -125,13 +132,13 @@ func runInspect(args []string) int {
 	}
 	source := fs.Arg(0)
 	if source == "" {
-		fmt.Fprintln(os.Stderr, "Usage: cloudpath plugin inspect <id|url> [-plugins-dir DIR] [-schema PATH] [-lock PATH]")
+		fmt.Fprintln(os.Stderr, "Usage: cloudpath plugin inspect <id|url> [-plugin SELECTOR] [-plugins-dir DIR] [-schema PATH] [-lock PATH]")
 		return 2
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	src, err := registry.ReadManifestSource(ctx, registry.NewGitHubClient(), source, *pluginsDir)
+	src, err := registry.ResolveManifestSource(ctx, registry.NewGitHubClient(), source, *pluginSelector, *pluginsDir)
 	if err != nil {
 		return reportError(err, 1)
 	}
@@ -186,6 +193,12 @@ func printInstalledTrust(lockPath, pluginID string) {
 		fmt.Printf("  publisher:     %s\n", entry.VerifiedPublisher)
 	}
 	fmt.Printf("  source:        %s\n", entry.Source)
+	if entry.Tag != "" {
+		fmt.Printf("  tag:           %s\n", entry.Tag)
+	}
+	if entry.PluginPath != "" {
+		fmt.Printf("  plugin-path:   %s\n", entry.PluginPath)
+	}
 }
 
 func runInstall(args []string) int {
@@ -194,6 +207,7 @@ func runInstall(args []string) int {
 	lockPath := fs.String("lock", envOr("CLOUDPATH_LOCK", defaultLockFile), "plugins.lock path")
 	schemaPath := fs.String("schema", envOr("CLOUDPATH_SCHEMA", defaultSchemaPath), "manifest JSON Schema path")
 	coreVersion := fs.String("core-version", envOr("CLOUDPATH_CORE_VERSION", defaultCoreVersion), "current Core version")
+	pluginSelector := fs.String("plugin", "", "catalog entry selector (exact slug, id, or repository path)")
 	asset := fs.String("asset", "", "exact Release asset name")
 	digest := fs.String("digest", "", "expected sha256 hex (sha256:<hex> or sha256-<base64>)")
 	yes := fs.Bool("yes", false, "confirm displayed permissions")
@@ -207,7 +221,7 @@ func runInstall(args []string) int {
 	}
 	source := fs.Arg(0)
 	if source == "" {
-		fmt.Fprintln(os.Stderr, "Usage: cloudpath plugin install <id|url> [-asset NAME] [-digest HASH] [-registry-index PATH] [-allow-unreviewed] [-yes]")
+		fmt.Fprintln(os.Stderr, "Usage: cloudpath plugin install <id|url> [-plugin SELECTOR] [-asset NAME] [-digest HASH] [-registry-index PATH] [-allow-unreviewed] [-yes]")
 		return 2
 	}
 
@@ -219,6 +233,7 @@ func runInstall(args []string) int {
 	defer cancel()
 	result, err := installer.Install(ctx, registry.InstallOptions{
 		Source:          source,
+		Plugin:          *pluginSelector,
 		Asset:           *asset,
 		Digest:          *digest,
 		ConfirmPerms:    *yes,
@@ -232,6 +247,12 @@ func runInstall(args []string) int {
 	fmt.Printf("  asset:     %s\n", result.AssetPath)
 	fmt.Printf("  digest:    %s\n", result.Digest)
 	fmt.Printf("  version:   %s\n", result.LockEntry.Version)
+	if result.LockEntry.Tag != "" {
+		fmt.Printf("  tag:       %s\n", result.LockEntry.Tag)
+	}
+	if result.LockEntry.PluginPath != "" {
+		fmt.Printf("  plugin-path: %s\n", result.LockEntry.PluginPath)
+	}
 	fmt.Printf("  lock:      %s\n", *lockPath)
 	fmt.Printf("  permissions: %s\n", result.Manifest.PermissionSummary())
 	fmt.Printf("  schema:      %s\n", result.SchemaSource)
@@ -354,6 +375,9 @@ func runUpdate(args []string) int {
 	dataDir := fs.String("data-dir", envOr("CLOUDPATH_DATA_DIR", defaultDataDir), "plugin data directory")
 	tenant := fs.String("tenant", envOr("CLOUDPATH_TENANT", defaultTenant), "owning tenant")
 	instance := fs.String("instance", "", "instance id (defaults to the plugin id)")
+	sourceOverride := fs.String("source", "", "new source repository for an explicit migration (defaults to the locked source)")
+	pluginSelector := fs.String("plugin", "", "monorepo catalog entry selector (defaults to the locked plugin path or id)")
+	allowSourceChange := fs.Bool("allow-source-change", false, "allow the update to move to a different source repository")
 	yes := fs.Bool("yes", false, "confirm permission expansion and permissions disclosure")
 	digest := fs.String("digest", "", "expected sha256 hex of the new artifact (sha256:<hex> or sha256-<base64>)")
 	trust := registerTrustFlags(fs)
@@ -366,7 +390,7 @@ func runUpdate(args []string) int {
 	}
 	pluginID := fs.Arg(0)
 	if pluginID == "" {
-		fmt.Fprintln(os.Stderr, "Usage: cloudpath plugin update <id> [-digest HASH] [-registry-index PATH] [-allow-unreviewed] [-yes] [-tenant NAME] [-instance ID]")
+		fmt.Fprintln(os.Stderr, "Usage: cloudpath plugin update <id> [-source URL --allow-source-change] [-plugin SELECTOR] [-digest HASH] [-registry-index PATH] [-allow-unreviewed] [-yes] [-tenant NAME] [-instance ID]")
 		return 2
 	}
 	instanceID := *instance
@@ -387,17 +411,33 @@ func runUpdate(args []string) int {
 	if err := trust.configure(installer); err != nil {
 		return reportError(err, 1)
 	}
+	updateSource := strings.TrimSpace(*sourceOverride)
+	if updateSource == "" {
+		updateSource = entry.Source
+	}
+	selector := strings.TrimSpace(*pluginSelector)
+	if selector == "" {
+		if strings.TrimSpace(entry.PluginPath) != "" {
+			selector = entry.PluginPath
+		} else if updateSource != entry.Source {
+			// Migrating from a legacy single-plugin repository to a monorepo can
+			// default to the installed plugin id; --plugin still overrides it.
+			selector = pluginID
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	// Existing activates validateUpdateTrust: an update must not downgrade a
 	// verified installation to unreviewed TOFU, and must not silently change
 	// source or verified publisher.
 	result, err := installer.Install(ctx, registry.InstallOptions{
-		Source:          entry.Source,
-		Digest:          *digest,
-		ConfirmPerms:    *yes,
-		AllowUnreviewed: trust.allowUnreviewed(),
-		Existing:        entry,
+		Source:            updateSource,
+		Plugin:            selector,
+		Digest:            *digest,
+		ConfirmPerms:      *yes,
+		AllowUnreviewed:   trust.allowUnreviewed(),
+		Existing:          entry,
+		AllowSourceChange: *allowSourceChange,
 	})
 	if err != nil {
 		return reportError(err, installErrorCode(err))
@@ -427,6 +467,12 @@ func runUpdate(args []string) int {
 	fmt.Printf("  tenant:     %s\n", state.Tenant)
 	fmt.Printf("  instance:   %s\n", state.InstanceID)
 	fmt.Printf("  version:    %s\n", state.Version)
+	if result.LockEntry.Tag != "" {
+		fmt.Printf("  tag:        %s\n", result.LockEntry.Tag)
+	}
+	if result.LockEntry.PluginPath != "" {
+		fmt.Printf("  plugin-path: %s\n", result.LockEntry.PluginPath)
+	}
 	fmt.Printf("  permissions: %s\n", result.Manifest.PermissionSummary())
 	fmt.Printf("  observed:   STOPPED (host not running)\n")
 	printTrust(result)
@@ -560,11 +606,13 @@ Usage:
 
 Commands:
   search <query>       Discover plugins by GitHub topic cloudpath-plugin
-  inspect <id|url>     Validate root plugin.yaml against manifest schema
+  inspect <id|url>     Validate a selected root or catalog plugin.yaml
   install <id|url>     Download release asset, verify digest, write plugins.d/ and plugins.lock
+                       Monorepo installs require --plugin <slug|id|path>.
   enable <id>          Persist an enabled plugin instance (desired state only)
   disable <id>         Persist a disabled plugin instance (desired state only)
-  update <id>          Upgrade an installed plugin (compatibility/permission checks)
+  update <id>          Upgrade an installed plugin; use --source URL
+                       --allow-source-change for an explicit source migration.
   remove <id>          Remove a plugin instance (data preserved unless --purge)
   host                 Run the long-lived Plugin Host (loads desired state, supervises processes)`)
 }
@@ -590,6 +638,8 @@ func errorCode(err error) string {
 	switch {
 	case errors.Is(err, registry.ErrInvalidManifest):
 		return "ERR_INVALID_MANIFEST"
+	case errors.Is(err, registry.ErrInvalidCatalog):
+		return "ERR_INVALID_CATALOG"
 	case errors.Is(err, registry.ErrDigestMismatch):
 		return "ERR_DIGEST_MISMATCH"
 	case errors.Is(err, registry.ErrInvalidDigest):
@@ -629,6 +679,7 @@ func errorCode(err error) string {
 func installErrorCode(err error) int {
 	switch {
 	case errors.Is(err, registry.ErrInvalidManifest),
+		errors.Is(err, registry.ErrInvalidCatalog),
 		errors.Is(err, registry.ErrCoreIncompatible),
 		errors.Is(err, registry.ErrProtocolIncompatible),
 		errors.Is(err, registry.ErrDigestMismatch),
@@ -652,6 +703,7 @@ func pluginErrorCode(err error) int {
 	switch {
 	case errors.Is(err, registry.ErrPermissionConfirmationRequired),
 		errors.Is(err, registry.ErrInvalidManifest),
+		errors.Is(err, registry.ErrInvalidCatalog),
 		errors.Is(err, registry.ErrCoreIncompatible),
 		errors.Is(err, registry.ErrProtocolIncompatible):
 		return 3
