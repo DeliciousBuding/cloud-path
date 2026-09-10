@@ -94,11 +94,15 @@ function resolveStcb(device: DeviceView, descriptor: DeviceDescriptor | null, no
  * 这里刻意只放已内置的参考模型，不修改 Driver/Core 契约。新增设备类型时必须
  * 在此增加独立适配器；通用页面本身不知道 STC-B 字段。
  */
+export function supportsDeviceTwin(device: DeviceView): boolean {
+  return device.adapter === 'stcb'
+}
+
 export function resolveDeviceTwin(
   device: DeviceView,
   descriptor: DeviceDescriptor | null,
   nowSeconds = Math.floor(Date.now() / 1000),
 ): DeviceTwinResolution | undefined {
-  if (device.adapter !== 'stcb') return undefined
+  if (!supportsDeviceTwin(device)) return undefined
   return resolveStcb(device, descriptor, nowSeconds)
 }

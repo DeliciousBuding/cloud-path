@@ -4,8 +4,10 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { loadBoardArtwork } from './vendor/stcb/board-artwork'
 import { createBoardModel } from './vendor/stcb/board-model'
-import { createStudio } from './vendor/stcb/render-studio'
+import { createStudio, type StudioTheme } from './vendor/stcb/render-studio'
 import type { BoardVisualState } from './vendor/stcb/visual-state'
+
+const HOME_CAMERA_POSITION = new THREE.Vector3(0, 220, 80)
 
 type StcbBoardTwinProps = {
   state: BoardVisualState
@@ -35,15 +37,36 @@ function disposeObject3D(root: THREE.Object3D) {
   geometries.forEach((geometry) => geometry.dispose())
 }
 
+function documentIsDark() {
+  return document.documentElement.classList.contains('dark')
+}
+
+function useDarkDocumentTheme() {
+  const [dark, setDark] = useState(documentIsDark)
+  useEffect(() => {
+    const root = document.documentElement
+    const sync = () => setDark(root.classList.contains('dark'))
+    const observer = new MutationObserver(sync)
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] })
+    sync()
+    return () => observer.disconnect()
+  }, [])
+  return dark
+}
+
 /** Device-page renderer. It intentionally exposes no controls beyond orbit/zoom. */
 export default function StcbBoardTwin({ state, label }: StcbBoardTwinProps) {
   const { t } = useTranslation('devices')
   const hostRef = useRef<HTMLDivElement>(null)
   const modelRef = useRef<ReturnType<typeof createBoardModel> | null>(null)
+  const studioRef = useRef<ReturnType<typeof createStudio> | null>(null)
   const invalidateRef = useRef<(() => void) | null>(null)
   const stateRef = useRef(state)
+  const darkTheme = useDarkDocumentTheme()
+  const darkThemeRef = useRef(darkTheme)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   stateRef.current = state
+  darkThemeRef.current = darkTheme
 
   useEffect(() => {
     const host = hostRef.current
@@ -56,7 +79,7 @@ export default function StcbBoardTwin({ state, label }: StcbBoardTwinProps) {
     let observer: ResizeObserver | null = null
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(36, 1, 1, 1000)
-    camera.position.set(90, 98, 108)
+    camera.position.copy(HOME_CAMERA_POSITION)
 
     const cleanup = () => {
       disposed = true
@@ -65,6 +88,7 @@ export default function StcbBoardTwin({ state, label }: StcbBoardTwinProps) {
       invalidateRef.current = null
       controls?.dispose()
       studio?.dispose()
+      studioRef.current = null
       modelRef.current = null
       disposeObject3D(scene)
       if (renderer) {
@@ -98,7 +122,8 @@ export default function StcbBoardTwin({ state, label }: StcbBoardTwinProps) {
         renderer.domElement.setAttribute('aria-hidden', 'true')
         host.appendChild(renderer.domElement)
 
-        studio = createStudio(scene, renderer, camera)
+        studio = createStudio(scene, renderer, camera, darkThemeRef.current ? 'dark' : 'light')
+        studioRef.current = studio
         controls = new OrbitControls(camera, renderer.domElement)
         controls.enableDamping = true
         controls.dampingFactor = 0.075
@@ -109,7 +134,7 @@ export default function StcbBoardTwin({ state, label }: StcbBoardTwinProps) {
         controls.target.set(0, 1, 0)
 
         const defaultTarget = new THREE.Vector3(0, 1, 0)
-        const baseDirection = new THREE.Vector3(90, 98, 108).sub(defaultTarget).normalize()
+        const baseDirection = HOME_CAMERA_POSITION.clone().sub(defaultTarget).normalize()
         const homeRight = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), baseDirection).normalize()
         const homeUp = new THREE.Vector3().crossVectors(baseDirection, homeRight)
         let homeView = true
@@ -138,7 +163,7 @@ export default function StcbBoardTwin({ state, label }: StcbBoardTwinProps) {
           let distance = 171
           for (const x of [bounds.min.x, bounds.max.x]) for (const y of [bounds.min.y, bounds.max.y]) for (const z of [bounds.min.z, bounds.max.z]) {
             const point = new THREE.Vector3(x, y, z).sub(defaultTarget)
-            distance = Math.max(distance, point.dot(baseDirection) + Math.max(Math.abs(point.dot(homeRight)) / (tan * aspect), Math.abs(point.dot(homeUp)) / tan) / 0.88)
+            distance = Math.max(distance, point.dot(baseDirection) + Math.max(Math.abs(point.dot(homeRight)) / (tan * aspect), Math.abs(point.dot(homeUp)) / tan) / 1.45)
           }
           controls!.maxDistance = Math.max(320, distance * 1.8)
           if (homeView) {
@@ -163,6 +188,12 @@ export default function StcbBoardTwin({ state, label }: StcbBoardTwinProps) {
 
     return cleanup
   }, [])
+
+  useEffect(() => {
+    const theme: StudioTheme = darkTheme ? 'dark' : 'light'
+    studioRef.current?.setTheme(theme)
+    invalidateRef.current?.()
+  }, [darkTheme])
 
   useEffect(() => {
     modelRef.current?.setVisualState(state)

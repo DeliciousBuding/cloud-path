@@ -15,6 +15,7 @@ import {
 import { ActionPanel } from '@/components/ActionPanel'
 import { CommandHistory } from '@/components/CommandHistory'
 import { DeviceTwinPanel } from '@/components/device-twin/DeviceTwinPanel'
+import { supportsDeviceTwin } from '@/components/device-twin/device-twin'
 import { TimeSeriesChart } from '@/components/charts'
 import { EventFeed, eventDisplayLabel } from '@/components/EventFeed'
 import { RowSkeleton } from '@/components/Skeleton'
@@ -111,6 +112,8 @@ export default function DeviceDetail() {
     return next
   })
   const [rangeMin, setRangeMin] = useState(0)
+  const [twinFull, setTwinFull] = useState(false)
+  const [controlsTwinFull, setControlsTwinFull] = useState(false)
   const [chartKind, setChartKind] = useState<'area' | 'line'>('area')
 
   const live = useLive((s) => s.devices[key])
@@ -198,6 +201,7 @@ export default function DeviceDetail() {
     () => (descriptor?.entities ?? []).filter((e) => e.category === 'actuator'),
     [descriptor],
   )
+  const controlsMainSpan = controlsTwinFull && actuators.length === 0 ? 'lg:col-span-3' : 'lg:col-span-2'
 
   /** 高级状态视图也遵守同一套展示词典；未知值原样保留，不猜设备语义。 */
   const displayDescriptor = useMemo(() => {
@@ -275,12 +279,32 @@ export default function DeviceDetail() {
     )
   }
 
+  const hasTwin = supportsDeviceTwin(d)
+
   const tabs: TabItem<Tab>[] = [
     { value: 'controls', label: t('detail.tabs.controls'), icon: <Command size={13} /> },
     { value: 'overview', label: t('detail.tabs.overview'), icon: <LayoutDashboard size={13} /> },
     { value: 'events', label: t('detail.tabs.events'), icon: <History size={13} /> },
     { value: 'advanced', label: t('detail.tabs.advanced'), icon: <Braces size={13} /> },
   ]
+
+  const recentEventsPanel = (
+    <Panel
+      title={<span className="flex items-center gap-1.5"><Activity size={14} />{t('detail.overview.recentEvents')}</span>}
+      right={
+        <Button variant="quiet" onClick={() => setTab('events')}
+          className="flex items-center gap-0.5 text-meta">
+          {t('detail.overview.viewRecord')} <ArrowRight size={12} />
+        </Button>
+      }>
+      {events.length === 0
+        ? <p className="py-6 text-center text-body text-ink-3">{t('detail.overview.noEvents')}</p>
+        : <EventFeed events={events} showDevice={false} limit={8} />}
+    </Panel>
+  )
+  const commandHistoryPanel = (
+    <CommandHistory deviceId={key} targetLabel={d.name || deviceId} actions={commands.actions} limit={8} online={actionsOnline} />
+  )
 
   return (
     <>
@@ -298,8 +322,6 @@ export default function DeviceDetail() {
             : t('detail.header.lastSeen', { time: timeAgo(d.last_seen) })}
         </span>
       </header>
-
-      <DeviceTwinPanel device={d} descriptor={descriptor} />
 
       <div className="mb-5 [&_button]:min-h-touch sm:[&_button]:min-h-0">
         <TabBar items={tabs} value={tab} onChange={setTab} label={t('detail.tabsAria')} />
@@ -332,39 +354,55 @@ export default function DeviceDetail() {
       {tab === 'overview' && (
         <TabPanel value={tab}>
           <div className="space-y-5">
-            {/* 首屏 KPI：一眼读懂「这台设备现在怎么样」；大字号只给主指标 */}
-            <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-              {tiles.map((t, i) => <MetricTile key={`${t.label}-${i}`} v={t} />)}
+            {/* 顶部与主区共用三栏：左侧 2 栏放 KPI，右侧 1 栏摘要，边界与下方右栏严格对齐 */}
+            <div className="grid items-stretch gap-2.5 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:col-span-2">
+                {tiles.map((tile, i) => (
+                  <div key={`${tile.label}-${i}`} className="min-w-0 [&>div]:h-full">
+                    <MetricTile v={tile} />
+                  </div>
+                ))}
+              </div>
+              <Panel title={t('detail.overview.summary')} className="h-full">
+                <dl className="grid grid-cols-2 gap-x-6 gap-y-2.5">
+                  <KeyValue k={d.online ? t('detail.overview.lastUpdate') : t('detail.overview.lastSeen')}
+                    v={<span className="num">{fmtDateTime(d.online ? d.updated_at : d.last_seen)}</span>} />
+                  <KeyValue k={t('detail.overview.capabilities')} v={descriptorFailed ? t('detail.overview.loadFailed') : descriptor ? t('detail.overview.itemCount', { count: capRefs.length }) : t('detail.overview.notSynced')} />
+                  <KeyValue k={t('detail.overview.actions')} v={descriptorFailed ? t('detail.overview.loadFailed') : t('detail.overview.itemCount', { count: commands.actions.length })} />
+                  {descriptor?.model && <KeyValue k={t('detail.diagnostics.model')} v={descriptor.model} />}
+                  {descriptor?.manufacturer && <KeyValue k={t('detail.diagnostics.manufacturer')} v={descriptor.manufacturer} />}
+                  <KeyValue k={t('detail.diagnostics.descriptorSource')} v={t(DESCRIPTOR_SOURCE_KEY[source])} />
+                </dl>
+              </Panel>
             </div>
             {tiles.length === 0 && (
               <p className="py-2 text-center text-body text-ink-3">
                 {d.online ? t('detail.overview.connectedNoPrimary') : t('detail.overview.offlineNoPrimary')}
               </p>
             )}
-            {/* 事实横条：KPI 之后立即回答「这台设备健康吗」；KV 多列铺满通栏，不搁浅在窄轨 */}
-            <Panel title={t('detail.overview.summary')}>
-              <dl className="grid gap-x-10 gap-y-2.5 sm:grid-cols-2 xl:grid-cols-3">
-                <KeyValue k={d.online ? t('detail.overview.lastUpdate') : t('detail.overview.lastSeen')}
-                  v={<span className="num">{fmtDateTime(d.online ? d.updated_at : d.last_seen)}</span>} />
-                <KeyValue k={t('detail.overview.capabilities')} v={descriptorFailed ? t('detail.overview.loadFailed') : descriptor ? t('detail.overview.itemCount', { count: capRefs.length }) : t('detail.overview.notSynced')} />
-                <KeyValue k={t('detail.overview.actions')} v={descriptorFailed ? t('detail.overview.loadFailed') : t('detail.overview.itemCount', { count: commands.actions.length })} />
-              </dl>
-            </Panel>
-            {/* 双 ledger 互为 peer：等高互不牵制，空洞无处产生；概览只看最近 8 条，全部历史在各自页 */}
-            <div className="grid items-start gap-5 lg:grid-cols-2">
-              <Panel
-                title={<span className="flex items-center gap-1.5"><Activity size={14} />{t('detail.overview.recentEvents')}</span>}
-                right={
-                  <Button variant="quiet" onClick={() => setTab('events')}
-                    className="flex items-center gap-0.5 text-meta">
-                    {t('detail.overview.viewRecord')} <ArrowRight size={12} />
-                  </Button>
-                }>
-                {events.length === 0
-                  ? <p className="py-6 text-center text-body text-ink-3">{t('detail.overview.noEvents')}</p>
-                  : <EventFeed events={events} showDevice={false} limit={8} />}
-              </Panel>
-              <CommandHistory deviceId={key} targetLabel={d.name || deviceId} actions={commands.actions} limit={8} online={actionsOnline} />
+
+            {/* 默认：事件 2 栏 + 右侧孪生/操作记录；展开：孪生全宽，下面恢复 2:1，不留空洞 */}
+            {hasTwin && twinFull && (
+              <DeviceTwinPanel
+                device={d}
+                descriptor={descriptor}
+                full
+                onToggle={() => setTwinFull(false)}
+              />
+            )}
+            <div className="grid items-start gap-5 lg:grid-cols-3">
+              <div className="lg:col-span-2">{commandHistoryPanel}</div>
+              <div className="space-y-5">
+                {hasTwin && !twinFull && (
+                  <DeviceTwinPanel
+                    device={d}
+                    descriptor={descriptor}
+                    full={false}
+                    onToggle={() => setTwinFull(true)}
+                  />
+                )}
+                {recentEventsPanel}
+              </div>
             </div>
           </div>
         </TabPanel>
@@ -474,23 +512,44 @@ export default function DeviceDetail() {
           <div className="min-w-0 space-y-5">
             {/* 观测值与操作输入分离：只读现状与操作区并排，避免「看着像已执行」 */}
             <div className="grid items-start gap-5 lg:grid-cols-3">
+              {controlsTwinFull && hasTwin && (
+                <DeviceTwinPanel
+                  device={d}
+                  descriptor={descriptor}
+                  full
+                  onToggle={() => setControlsTwinFull(false)}
+                  className="lg:col-span-3"
+                />
+              )}
               {descriptorFailed
-                ? <Panel title={t('detail.controls.title')} className="lg:col-span-2">
+                ? <Panel title={t('detail.controls.title')} className={controlsMainSpan}>
                   <p className="py-4 text-center text-body text-ink-3">{t('detail.controls.descriptorFailed')}</p>
                 </Panel>
-                : <ActionPanel deviceId={key} targetLabel={d.name || deviceId} set={commands} online={actionsOnline} offlineReason={actionsOfflineReason} className="lg:col-span-2" />}
-              {actuators.length > 0 && (
-                <Panel title={<span className="flex items-center gap-1.5"><Zap size={14} />{t('detail.controls.actuatorState')}</span>}>
-                  <dl className="space-y-2.5">
-                    {actuators.map((e) => {
-                    const o = primaryObservation(e, capabilities)
-                    const v = !o ? t('detail.controls.noData')
-                      : widgetFor(o, capabilities) === 'timestamp' ? formatTimestamp(o.value)
-                        : `${displayStateValue(o.value, t)}${o.unit ? ` ${unitLabel(o.unit) ?? o.unit}` : ''}`
-                    return <KeyValue key={e.unique_key} k={entityTitle(e)} v={v} />
-                  })}
-                  </dl>
-                </Panel>
+                : <ActionPanel deviceId={key} targetLabel={d.name || deviceId} set={commands} online={actionsOnline} offlineReason={actionsOfflineReason} className={controlsMainSpan} />}
+              {(!controlsTwinFull || actuators.length > 0) && (
+                <div className="space-y-5">
+                  {!controlsTwinFull && hasTwin && (
+                    <DeviceTwinPanel
+                      device={d}
+                      descriptor={descriptor}
+                      full={false}
+                      onToggle={() => setControlsTwinFull(true)}
+                    />
+                  )}
+                  {actuators.length > 0 && (
+                    <Panel title={<span className="flex items-center gap-1.5"><Zap size={14} />{t('detail.controls.actuatorState')}</span>}>
+                      <dl className="space-y-2.5">
+                        {actuators.map((e) => {
+                        const o = primaryObservation(e, capabilities)
+                        const v = !o ? t('detail.controls.noData')
+                          : widgetFor(o, capabilities) === 'timestamp' ? formatTimestamp(o.value)
+                            : `${displayStateValue(o.value, t)}${o.unit ? ` ${unitLabel(o.unit) ?? o.unit}` : ''}`
+                        return <KeyValue key={e.unique_key} k={entityTitle(e)} v={v} />
+                      })}
+                      </dl>
+                    </Panel>
+                  )}
+                </div>
               )}
             </div>
           </div>

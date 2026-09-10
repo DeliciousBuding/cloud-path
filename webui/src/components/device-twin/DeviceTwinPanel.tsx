@@ -1,47 +1,59 @@
-import { lazy, Suspense, useMemo } from 'react'
+import { lazy, Suspense, useId, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Box } from 'lucide-react'
-import { Badge, Panel } from '@/components/ui'
+import { Box, Maximize2, Minimize2 } from 'lucide-react'
+import { Badge, IconButton, Panel } from '@/components/ui'
+import { cn } from '@/lib/cn'
 import { useNow } from '@/hooks/useNow'
 import type { DeviceDescriptor, DeviceView } from '@/lib/types'
 import { resolveDeviceTwin } from './device-twin'
 
 const StcbBoardTwin = lazy(() => import('./StcbBoardTwin'))
 
-const INDICATOR_LABEL: Record<'led' | 'mode' | 'page', string> = {
-  led: 'twin.indicator.led',
-  mode: 'twin.indicator.mode',
-  page: 'twin.indicator.page',
-}
-
-export function DeviceTwinPanel({ device, descriptor }: {
+export function DeviceTwinPanel({ device, descriptor, full = false, onToggle, className }: {
   device: DeviceView
   descriptor: DeviceDescriptor | null
+  full?: boolean
+  onToggle?: () => void
+  className?: string
 }) {
   const { t } = useTranslation('devices')
   const now = useNow()
   const nowSeconds = Math.floor(now.getTime() / 1000)
   const resolution = useMemo(() => resolveDeviceTwin(device, descriptor, nowSeconds), [device, descriptor, nowSeconds])
+  const viewerId = useId()
   if (!resolution) return null
+
+  const viewerHeight = 'h-72 sm:h-80'
 
   return (
     <Panel
-      className="mb-5 overflow-hidden"
+      className={cn('overflow-hidden', className)}
       title={<span className="flex items-center gap-2"><Box size={16} aria-hidden="true" />{t('twin.title')}</span>}
-      right={<Badge tone={device.online ? 'ok' : 'idle'}>{device.online ? t('twin.live') : t('twin.offline')}</Badge>}
+      right={
+        <div className="flex items-center gap-2">
+          <Badge tone={device.online ? 'ok' : 'idle'}>{device.online ? t('twin.live') : t('twin.offline')}</Badge>
+          {onToggle && (
+            <IconButton
+              variant="ghost"
+              size="sm"
+              label={t(full ? 'twin.collapse' : 'twin.expand')}
+              aria-expanded={full}
+              aria-controls={viewerId}
+              onClick={onToggle}
+            >
+              {full ? <Minimize2 size={14} aria-hidden="true" /> : <Maximize2 size={14} aria-hidden="true" />}
+            </IconButton>
+          )}
+        </div>
+      }
     >
-      <p className="mb-3 max-w-[76ch] text-meta leading-relaxed text-ink-3">{t('twin.note')}</p>
-      <div className="relative h-80 overflow-hidden rounded-tile bg-surface-2 lg:h-96">
+      <div
+        id={viewerId}
+        className={`relative overflow-hidden rounded-tile bg-surface-2 ring-1 ring-hairline transition-[height] duration-300 ${viewerHeight}`}
+      >
         <Suspense fallback={<p className="grid h-full place-items-center px-6 text-center text-body text-ink-2">{t('twin.loading')}</p>}>
           <StcbBoardTwin state={resolution.visualState} label={t('twin.aria')} />
         </Suspense>
-        <div className="pointer-events-none absolute left-3 top-3 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-2">
-          {resolution.indicators.map((indicator) => (
-            <Badge key={indicator.kind} tone={indicator.tone === 'good' ? 'ok' : 'warn'}>
-              {t(INDICATOR_LABEL[indicator.kind])} {indicator.value}
-            </Badge>
-          ))}
-        </div>
       </div>
     </Panel>
   )
