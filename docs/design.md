@@ -4,7 +4,7 @@
 设备侧协议见 [protocol.md](protocol.md)；架构状态分层见 [architecture.md](architecture.md)；
 面向使用者的说明见根 [README.md](../README.md)。
 
-> 状态：以当前 `main` 为实现基线，最新发布版本为 `v0.2.31`。外部 Driver Host、Registry、
+> 状态：以当前 `main` 为实现基线，最新发布版本为 `v0.2.41`。外部 Driver Host、Registry、
 > Application Runtime 与多租户隔离已实现；目标态与未实现项见 [architecture.md](architecture.md) §11。
 > 历史记录用于解释设计取舍，不代表当前缺口。
 
@@ -326,7 +326,7 @@ devices:
 | 类型一致性 | `scripts/check_contract.py`（`task check:contract`） | Go `internal/api/types.go` ↔ TS `webui/src/lib/types.ts` 同名类型的 JSON 字段集合一致（含 `extends` 平面化）；`--self-test` 是解析器红队自检 |
 | e2e | 真机手工清单 | 见下；验证证据按发布/真板记录另行归档，不写入公开仓 |
 
-参考设备真机回归清单（使用任意已声明动作的真实 Driver；多设备现场 E2E 另列验证）：
+参考设备真机回归清单（使用任意已声明动作的真实 Driver；多设备现场 E2E 需按设备和 ACK 逐项复核）：
 
 1. `task build` 出双二进制；启动 server 后内嵌管理台可见，无设备时是空状态而非报错。
 2. 启动 edge 后，网关与设备出现在管理台；`GET /api/edges`、`GET /api/devices` 与界面一致。

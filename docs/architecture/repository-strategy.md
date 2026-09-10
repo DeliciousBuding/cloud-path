@@ -1,6 +1,6 @@
 # 仓库组合、命名与公开边界
 
-最后更新：2026-09-09
+最后更新：2026-09-10
 
 > 本文定义 CloudPath 的公开仓库组合、命名、插件开发/拆仓策略和公开边界。用户侧中文名称见
 > [name-lexicon.md](name-lexicon.md)；插件发现与信任链见
@@ -28,7 +28,10 @@
 | `cloud-path-driver-stcb` | STC-B Driver Plugin；板级容错、串口协议、Capability 映射 | 已拆仓，独立维护 |
 | [cloud-path-app-scheduled-compartment](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment) | 硬件无关的定时隔间 Application Plugin | 独立维护；现役源码入口 |
 | [cloud-path-app-button-indicator](https://github.com/DeliciousBuding/cloud-path-app-button-indicator) | 按键指示 Application Plugin | 独立维护；现役源码入口 |
-| [cloud-path-app-environment-guard](https://github.com/DeliciousBuding/cloud-path-app-environment-guard) | 环境监护 Application Plugin | 独立维护；现役源码入口 |
+| [cloud-path-app-music-player](https://github.com/DeliciousBuding/cloud-path-app-music-player) | 音乐播放 Application Plugin | 独立维护；现役源码入口 |
+| [cloud-path-app-sensor-alert](https://github.com/DeliciousBuding/cloud-path-app-sensor-alert) | 传感器告警 Application Plugin | 独立维护；现役源码入口 |
+| [cloud-path-app-environment-guard](https://github.com/DeliciousBuding/cloud-path-app-environment-guard) | 环境监护 Application Plugin | 已退役，不再现役；能力由 sensor-alert 覆盖 |
+| [cloud-path-app-hall-pillbox](https://github.com/DeliciousBuding/cloud-path-app-hall-pillbox) | 定时隔间 Application Plugin | 已退役，不再现役；能力由 scheduled-compartment 覆盖 |
 | `cloud-path-plugin-template-go` | 官方 Go 插件模板、CI、Release、conformance 示例 | 第二个外部插件前 |
 
 暂不创建 `cloud-path-docs`、`cloud-path-sdk-*` 等空仓库。文档、Go SDK、Schema、harness 在接口稳定前留在核心仓库，避免跨仓同步成本。
@@ -115,7 +118,7 @@ Core 的 `examples/scheduled-compartment` 与 [split 生成器](../../deploy/spl
 | token/password/cookie/私钥/生产 URL/IP/内部昵称 | 不公开，secret store；仓库只写 key 名和 example |
 | 云服务运营控制面、计费、内部告警与拓扑 | 默认不公开，闭源增值 |
 
-公开截图必须人工复查：账号、真实设备名、主机/IP、串口、事件正文、浏览器书签和桌面路径均不得出现。
+公开截图必须人工复查：账号、真实设备名、主机/IP、串口、事件正文、浏览器书签和桌面路径均不得出现。公开部署示例只使用保留的 `example.com` 主机名和占位证书路径；真实域名、证书路径、主机名与内部拓扑留在私有部署层。
 
 ## 7. 版本与发布
 
