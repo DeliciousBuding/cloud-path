@@ -10,19 +10,27 @@ import { resolveDeviceTwin } from './device-twin'
 const loadStcbBoardTwin = () => import('./StcbBoardTwin')
 const StcbBoardTwin = lazy(loadStcbBoardTwin)
 
+/** Keep the idle warm-up result for the lifetime of the device page module. */
+let stcbBoardTwinWarm = false
+
 /**
  * 设备详情先完成首屏绘制，再利用浏览器空闲时间预热 3D 模块。
  * 模块本身仍由 React.lazy 加载，既不阻塞路由首屏，也不在列表/首页强制下载 three.js。
  */
 function useIdleReady(enabled: boolean) {
-  const [ready, setReady] = useState(false)
+  const [ready, setReady] = useState(stcbBoardTwinWarm)
   useEffect(() => {
     if (!enabled) return
+    if (stcbBoardTwinWarm) {
+      setReady(true)
+      return
+    }
     let active = true
     let idleID: number | undefined
     let timeoutID: number | undefined
     const warm = () => {
       if (!active) return
+      stcbBoardTwinWarm = true
       void loadStcbBoardTwin().catch(() => undefined)
       setReady(true)
     }
@@ -85,7 +93,7 @@ export function DeviceTwinPanel({ device, descriptor, full = false, onToggle, cl
       >
         {twinReady ? (
           <Suspense fallback={<p className="grid h-full place-items-center px-6 text-center text-body text-ink-2">{t('twin.loading')}</p>}>
-            <StcbBoardTwin state={resolution.visualState} label={t('twin.aria')} />
+            <StcbBoardTwin cacheKey={device.id} state={resolution.visualState} label={t('twin.aria')} />
           </Suspense>
         ) : (
           <p className="grid h-full place-items-center px-6 text-center text-body text-ink-2">{t('twin.loading')}</p>

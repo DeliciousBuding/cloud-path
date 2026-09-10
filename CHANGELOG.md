@@ -36,6 +36,11 @@ shasum -a 256 -c checksums.txt --ignore-missing      # macOS
 certutil -hashfile <文件> SHA256                      # Windows（逐项对照）
 ```
 
+## v0.2.36 — 2026-09-10
+
+- 设备页数字孪生：按设备缓存 WebGL runtime 与场景；在「设备操作」和「概览」之间切换时复用同一画布、相机和材质，不再重建三维场景。
+- 设备页加载：3D 空闲预热结果在设备详情模块生命周期内保留，切换分区不再重新等待加载占位；尺寸未变化时跳过重复渲染尺寸配置。
+
 ## v0.2.35 — 2026-09-10
 
 - WebUI 加载：图表库不再被入口预加载，设备详情仅在打开趋势视图时加载 Recharts；three.js 独立为 vendor chunk，3D 在首屏绘制后的空闲阶段预热。
