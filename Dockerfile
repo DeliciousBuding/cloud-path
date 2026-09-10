@@ -24,11 +24,13 @@ RUN CGO_ENABLED=0 go build -tags embed_ui -trimpath -ldflags "-s -w -X main.vers
     CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/cloudpath-edge ./cmd/cloudpath-edge
 
 FROM alpine:3.21
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 RUN apk add --no-cache ca-certificates && \
     addgroup -S cloudpath && adduser -S -G cloudpath -u 65532 cloudpath && \
     mkdir -p /app /data && chown -R cloudpath:cloudpath /app /data
 COPY --from=builder --chown=cloudpath:cloudpath /out/cloudpath-server /app/cloudpath-server
 COPY --from=builder --chown=cloudpath:cloudpath /out/cloudpath-edge /app/cloudpath-edge
+COPY --chown=cloudpath:cloudpath LICENSE NOTICE /app/
 ENV CLOUDPATH_ADDR=0.0.0.0:8080 \
     CLOUDPATH_DB=/data/cloudpath.db \
     CLOUDPATH_APP_PLUGINS_DIR=/data/app-plugins.d \

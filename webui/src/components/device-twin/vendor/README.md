@@ -10,3 +10,6 @@ Vendored from: viewer `v0.1.0` (`3f0a0da`)
 The copied files intentionally retain their renderer-owned colors and geometry
 constants, so the design-token gate excludes this directory. CloudPath UI code
 must not import vendor files directly outside `DeviceTwinPanel` / `StcbBoardTwin`.
+
+The vendored renderer remains under the upstream MIT License; a copy is kept at
+`stcb/LICENSE` and its attribution is recorded in the repository `NOTICE`.

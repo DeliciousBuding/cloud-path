@@ -36,6 +36,8 @@ Release 资产命名规范（`<version>` 例如 `v0.1.0`）：
 cloudpath-edge_<version>_<os>_<arch>[.exe]      # 你要的这个
 cloudpath_<version>_<os>_<arch>[.exe]           # 可选：插件管理 CLI
 cloudpath-server_<version>_<os>_<arch>[.exe]    # 服务端（客户端不需要）
+LICENSE                                         # Apache License 2.0 正文
+NOTICE                                          # 项目与 vendored 组件归属
 checksums.txt                                   # 全部资产的 sha256
 ```
 

@@ -8,7 +8,7 @@ with real-time visibility, remote control, tenant isolation, and an embedded Web
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![SQLite](https://img.shields.io/badge/SQLite-WAL-003B57?logo=sqlite&logoColor=white)](https://sqlite.org/)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![CI](https://github.com/DeliciousBuding/cloud-path/actions/workflows/ci.yml/badge.svg)](https://github.com/DeliciousBuding/cloud-path/actions)
 
 </div>
@@ -176,4 +176,4 @@ acknowledgement, and device event.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

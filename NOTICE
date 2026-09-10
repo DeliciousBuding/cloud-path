@@ -1,0 +1,17 @@
+CloudPath
+Copyright 2026 CloudPath Authors
+
+This product includes software developed by the CloudPath Authors.
+
+CloudPath distributions also include third-party open-source packages. Those
+components remain under their respective licenses; dependency versions are
+declared in go.mod, go.sum, webui/package.json, and webui/pnpm-lock.yaml.
+
+Vendored component
+
+STC-B board 3D renderer
+Copyright (c) 2026 STC-B Board 3D Viewer contributors
+License: MIT
+Source: https://github.com/DeliciousBuding/stcb-board-3d-viewer
+Vendored path: webui/src/components/device-twin/vendor/stcb/
+A copy of the MIT License is included in that vendored directory.

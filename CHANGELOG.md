@@ -16,12 +16,14 @@
 cloudpath-server_<version>_<os>_<arch>[.exe]   # 中心服务（内嵌 WebUI，构建标签 embed_ui）
 cloudpath-edge_<version>_<os>_<arch>[.exe]     # 边缘客户端（接入设备的那台电脑上运行）
 cloudpath_<version>_<os>_<arch>[.exe]          # 插件管理 CLI
+LICENSE                                        # Apache License 2.0 正文
+NOTICE                                         # 项目与 vendored 组件归属
 checksums.txt                                  # 全部资产的 sha256（sha256sum 两空格格式）
 ```
 
 - `<version>` 与 git tag 一致（例如 `v0.1.0`）；版本串会被安全化，不能携带路径分隔符或 `..`。
 - `<os>` ∈ `linux` | `windows` | `darwin`；`<arch>` ∈ `amd64` | `arm64`。六个平台组合全部产出，
-  共 18 个二进制 + 1 个 `checksums.txt`。
+  共 18 个二进制 + `LICENSE` + `NOTICE` + `checksums.txt`（21 个 Release 资产）。
 - **`linux/arm64` 是硬性要求**：发布矩阵必须产出该目标，`--verify-only` 会因缺少该产物直接失败。
 - 全部产物 `CGO_ENABLED=0`、`-trimpath`、`-ldflags "-s -w -X main.version=<version>"`。
 - 每个产物构建后都会经 [scripts/assert_arch.py](scripts/assert_arch.py) 断言：容器头
@@ -35,6 +37,12 @@ sha256sum -c checksums.txt --ignore-missing          # Linux
 shasum -a 256 -c checksums.txt --ignore-missing      # macOS
 certutil -hashfile <文件> SHA256                      # Windows（逐项对照）
 ```
+
+## v0.2.42 — 2026-09-10
+
+- 许可证：项目从 MIT 切换为标准 Apache License 2.0；新增 `NOTICE`，保留 vendored STC-B renderer 的 MIT 许可与版权归属。
+- 元数据：同步 README badge/许可段落、WebUI package metadata、OCI image license label、拆仓生成物与 GitHub Release 描述。
+- 发布：仅做许可证与元数据收口；不改运行时代码，不启动或部署 Server/Edge，临时生产服务继续保持退役状态。
 
 ## v0.2.41 — 2026-09-10
 
@@ -317,6 +325,7 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 | `v0.2.20` | 已发布（2026-09-09） | 持久化设备最后已知 Descriptor（schema v11），离线重启后可水合并恢复 Application 绑定；详见 [§v0.2.20](#v0220--2026-09-09) |
 | `v0.2.21` | 已发布（2026-09-09） | WebUI 易用性、响应式布局与文案收口；离线设备操作 fail-closed；应用结果与原始 JSON 分层展示；RBAC 稳定错误体与 AppHost observed 即时投影；全仓静态检查清零 |
 | `v0.2.22` | 已发布（2026-09-09） | 修复设备详情「概览」标签点击后被默认「设备操作」弹回 |
+| `v0.2.42` | 已发布（2026-09-10） | 许可证与元数据收口：MIT → Apache-2.0，补充 NOTICE、vendored MIT 归属和发布资产；不改变运行逻辑与生产退役状态 |
 | `v0.2.41` | 已发布（2026-09-10） | 实时设备状态先到、REST 元数据后到时补回 adapter、显示名和端口，避免新设备退化为裸 ID 或丢失数字孪生 |
 | `v0.2.40` | 已发布（2026-09-10） | 应用绑定支持显式 `device_id`，命令按 `(device_id, entity_id)` 精确路由，避免多板同名实体歧义 |
 | `v0.2.39` | 已发布（2026-09-10） | 动作布局与文案收口；同时累计发布未单独打 tag 的 v0.2.36–v0.2.38 设备页数字孪生与加载优化 |
@@ -338,4 +347,4 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 
 > 仓库没有 `v0.2.16` / `v0.2.17` tag；`v0.2.18` 覆盖 `v0.2.15` 之后累计的变更。
 > 仓库也没有 `v0.2.36`–`v0.2.38` tag；`v0.2.39` 覆盖这三个版本记录中的累计变更。
-> 当前最新发布版本为 `v0.2.41`。
+> 当前最新发布版本为 `v0.2.42`。

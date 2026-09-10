@@ -43,7 +43,7 @@ CloudPath 的公共设备模型是 **Device / Entity / Capability / Observation 
 | 协议面 | 当前接入状态 |
 |---|---|
 | Driver `Initialize` / `Describe` / `ConfigureInstance` / `OpenDevice` / `CloseDevice` / `Watch` / `Execute` / `Health` / `Shutdown` | 当前 Edge Plugin Host / external driver 路径已接入 |
-| Driver `Discover` / `DiscoveryEvent` | SDK 与 conformance harness 已定义；当前生产 Edge 宿主不调用，属未来/可选发现层 |
+| Driver `Discover` / `DiscoveryEvent` | SDK 与 conformance harness 已定义；当前 Edge 宿主不调用，属未来/可选发现层 |
 | `WatchRequest.resume_from_sequence`、`max_buffered`、`InitializeResponse.replay_supported` | 协议保留；当前 Edge 宿主不请求/不依赖 replay，不能当成已交付能力 |
 | `CommandProgress` / `Diagnostic` | 协议保留；当前 external driver 消费路径不处理，属未来/诊断扩展 |
 | Application `Initialize` / `Describe` / `ConfigureInstance` / `ValidateBinding` / `HandleEvents` / `RunJob` / `Health` / `Shutdown` | 当前 AppHost/appruntime 已接入；`RunJob` 服务手动/调度任务 |

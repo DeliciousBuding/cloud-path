@@ -9,7 +9,7 @@
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![SQLite](https://img.shields.io/badge/SQLite-WAL-003B57?logo=sqlite&logoColor=white)](https://sqlite.org/)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![CI](https://github.com/DeliciousBuding/cloud-path/actions/workflows/ci.yml/badge.svg)](https://github.com/DeliciousBuding/cloud-path/actions)
 
 </div>
@@ -429,7 +429,7 @@ cloud-path/
 打 `v*` tag 即触发 [.github/workflows/release.yml](.github/workflows/release.yml)：
 6 平台矩阵构建（server 带 `-tags embed_ui`）→ release job 合并资产后用
 `scripts/build_matrix.py --verify-only` 复验（含强制 linux/arm64 与 `embed_ui`）
-并生成唯一 `checksums.txt` → 创建 GitHub Release。
+并生成唯一 `checksums.txt`；`LICENSE` 与 `NOTICE` 同时进入 Release 资产 → 创建 GitHub Release。
 产物命名与校验方式见 [CHANGELOG.md](CHANGELOG.md)。
 
 ---
@@ -487,4 +487,4 @@ Connector/通知运行时、Transform/WASM、MQTT/Modbus 接入、远程 OTA、�
 
 ## 许可
 
-MIT © CloudPath Authors — 见 [LICENSE](LICENSE)。
+Apache License 2.0 © 2026 CloudPath Authors — 见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。

@@ -1,9 +1,8 @@
 name: release
 
 # Triggered by a version tag. Builds the full platform matrix, asserts every
-# artifact's OS/arch (linux/arm64 is mandatory: the production host is native
-# arm64 with no emulation fallback), writes sha256 checksums.txt and publishes
-# a GitHub Release.
+# artifact's OS/arch (linux/arm64 is mandatory for deployment compatibility),
+# writes sha256 checksums.txt and publishes a GitHub Release.
 #
 # Artifact naming (SSOT: scripts/build_matrix.py, documented in CHANGELOG.md):
 #   cloudpath-server_<version>_<os>_<arch>[.exe]   (built with -tags embed_ui)
@@ -171,6 +170,12 @@ jobs:
       - name: Verify artifacts and write checksums
         run: python scripts/build_matrix.py --verify-only --out dist
 
+      - name: Include license and notices in release assets
+        run: |
+          cp LICENSE NOTICE dist/
+          cd dist
+          sha256sum LICENSE NOTICE >> checksums.txt
+
       - name: Show release assets
         run: |
           ls -l dist
@@ -191,9 +196,11 @@ jobs:
 
             The server embeds the WebUI (built with `-tags embed_ui`) and every
             artifact is `CGO_ENABLED=0 -trimpath`. `linux/arm64` is the
-            production deployment target; see `deploy/README.md` for the
-            systemd + nginx SOP and `deploy/compose/README.md` for the
-            containerized form. A multi-arch image of the same tag is published
-            to GHCR by `.github/workflows/container.yml`.
+            required release target; see `deploy/README.md` for the systemd
+            + nginx SOP and `deploy/compose/README.md` for the containerized
+            form. A multi-arch image of the same tag is published to GHCR by
+            `.github/workflows/container.yml`. CloudPath is licensed under the
+            Apache License 2.0; `LICENSE` and `NOTICE` are included as
+            release assets.
           files: |
             dist/*

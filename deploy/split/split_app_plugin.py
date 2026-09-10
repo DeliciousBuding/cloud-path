@@ -5,7 +5,7 @@ Bootstrap input: ``examples/scheduled-compartment`` in this monorepo, NOT the
 maintained application source. Current applications evolve in their independent
 repositories (see deploy/split/README.md); never regenerate over those repos.
 The generator writes a repository tree (own ``go.mod``, README, LICENSE,
-.gitignore, CI, release workflow, manifest and manifest validator) into a
+NOTICE, .gitignore, CI, release workflow, manifest and manifest validator) into a
 **local scratch output directory**.
 
 Hard boundaries enforced by this script:
@@ -390,8 +390,10 @@ jobs:
         run: |
           set -euo pipefail
           cd release-assets
-          sha256sum * > checksums.txt
           cp ../plugin.yaml plugin.yaml
+          cp ../LICENSE LICENSE
+          cp ../NOTICE NOTICE
+          sha256sum * > checksums.txt
           ls -l
 
       - name: Create release
@@ -408,6 +410,7 @@ EXPECTED_FILES = (
     "go.mod",
     "README.md",
     "LICENSE",
+    "NOTICE",
     ".gitignore",
     "plugin.yaml",
     "requirements.yaml",
@@ -493,6 +496,15 @@ def generate(out_dir: pathlib.Path, core_version: str, core_path: str | None, fo
         raise SplitError("core LICENSE not found; the plugin repository needs the same license text")
     dst = out_dir / "LICENSE"
     write_text(dst, read_text(license_src))
+    written.append(dst)
+
+    dst = out_dir / "NOTICE"
+    write_text(dst, (
+        f"{PLUGIN_REPO_SLUG}\n"
+        "Copyright 2026 CloudPath Authors\n\n"
+        "This product includes software developed by the CloudPath Authors\n"
+        "and is derived from CloudPath Core. See LICENSE for the Apache License 2.0 text.\n"
+    ))
     written.append(dst)
 
     dst = out_dir / ".gitignore"

@@ -108,7 +108,7 @@ Core 的 `examples/scheduled-compartment` 与 [split 生成器](../../deploy/spl
 
 | 内容 | 公开仓库 | 私有层/其他家 |
 |---|---|---|
-| Core/Edge/Server/WebUI、通用 SDK/Schema/协议 | 公开，MIT |
+| Core/Edge/Server/WebUI、通用 SDK/Schema/协议 | 公开，Apache-2.0 |
 | 通用 reference Driver/Application | 公开，去行业/个人语义 |
 | 无凭据的 Docker/反代/配置示例 | 公开 |
 | 架构、公开 API、安全模型、威胁边界 | 公开 |

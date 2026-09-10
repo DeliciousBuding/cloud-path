@@ -2,7 +2,7 @@
 
 > 生成器：[split_app_plugin.py](split_app_plugin.py)（Python 3 stdlib only，无第三方依赖）。
 > 作用：把 Core 内的参考快照 `examples/scheduled-compartment` 生成成一个
-> **独立 `go.mod`** 的插件仓库目录树，带自己的 README、LICENSE(MIT)、`.gitignore`、CI、
+> **独立 `go.mod`** 的插件仓库目录树，带自己的 README、LICENSE(Apache-2.0)、NOTICE、`.gitignore`、CI、
 > Release workflow、manifest 与 manifest 校验器。
 >
 > 拆仓门（何时才允许拆）见
@@ -95,7 +95,8 @@ python deploy/split/split_app_plugin.py --out dist/split/plugin-repo --core-vers
 ├── .github/workflows/ci.yml        # build/vet/test/gofmt + 无 internal import 门禁 + manifest 门禁
 ├── .github/workflows/release.yml   # v* tag：6 平台构建 + checksums.txt + GitHub Release
 ├── .gitignore
-├── LICENSE                         # 从主仓 LICENSE 原样复制（MIT）
+├── LICENSE                         # 从主仓 LICENSE 原样复制（Apache-2.0）
+├── NOTICE                          # 独立插件仓的 CloudPath Authors 归属
 ├── README.md                       # 上游 README + 生成的仓库头 + 断言式改写（去掉 monorepo-only 指令）
 ├── go.mod                          # 独立 module；require 发布态 core；可选本地 replace
 ├── plugin.yaml                     # 原样复制（id/version/protocol/entrypoint/requirements/contributes）
