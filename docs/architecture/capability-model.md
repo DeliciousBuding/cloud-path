@@ -150,7 +150,7 @@ requirements:
 ```
 
 当前绑定由运行时 Binder 根据 Capability Requirement 自动匹配；需要确定选择时，实例 config 的
-可选 `app_bindings` 以完整 `{requirement_id,entity_id}` 数组显式指定，非法或不完整选择 fail-closed，
+可选 `app_bindings` 以完整 `{requirement_id,entity_id,device_id?}` 数组显式指定，非法或不完整选择 fail-closed，
 不会回退到任意在线实体。独立的可视化绑定向导仍是目标态。
 
 ```text
@@ -160,9 +160,8 @@ compartments[0]    →    <entity_id>
 local-display      →    <entity_id>
 ```
 
-绑定保存稳定 `entity_id`；端口、Edge 重连和 Driver 重启不应改变绑定。当前命令/事件路由仍以
-`entity_id` 全局唯一为前提，`(device_key, entity_id)` 尚未贯穿；同租户同型号多板需由 Driver 保证
-`entity_id` 全局唯一，或按单板边界使用。
+绑定保存稳定 `entity_id` 和可选 `device_id`；端口、Edge 重连和 Driver 重启不应改变绑定。命令与事件
+按 `(device_id, entity_id)` 精确路由，多台同型号设备通过配置页或 `app_bindings.device_id` 明确选择。
 
 ### 5.1 执行器独占
 

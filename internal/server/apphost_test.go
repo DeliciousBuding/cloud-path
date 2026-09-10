@@ -440,37 +440,42 @@ func TestRouteDeviceEventIsolation(t *testing.T) {
 		t.Helper()
 		ah.mu.Lock()
 		defer ah.mu.Unlock()
-		ah.running[appInstKey{tenant, instance}] = &appInstanceRun{
-			row:         store.PluginInstanceRow{TenantID: tenant, InstanceID: instance},
-			tenantStr:   strconv.FormatInt(tenant, 10),
-			reqByEntity: entities,
+		run := &appInstanceRun{
+			row:       store.PluginInstanceRow{TenantID: tenant, InstanceID: instance},
+			tenantStr: strconv.FormatInt(tenant, 10),
 		}
+		for entity, requirement := range entities {
+			run.bindings = append(run.bindings, api.AppBindingView{
+				RequirementID: requirement, EntityID: entity, DeviceID: "e1/d1",
+			})
+		}
+		ah.running[appInstKey{tenant, instance}] = run
 	}
 	mkRun(tid, "box-a", map[string]string{"key1": "compartments", "buzz": "reminder-output"})
 	mkRun(tid, "box-b", map[string]string{"key2": "compartments"})
 	mkRun(tid+1, "box-foreign", map[string]string{"key1": "compartments"})
 
 	// 同租户 + 已绑定：只路由到绑定该实体的实例
-	routes := ah.routeDeviceEvent(tid, "key1")
+	routes := ah.routeDeviceEvent(tid, "e1/d1", "key1")
 	if len(routes) != 1 || routes[0].run.row.InstanceID != "box-a" || routes[0].req != "compartments" {
 		t.Fatalf("key1 路由 = %+v（want 仅 box-a/compartments）", routes)
 	}
 	// 另一实体路由到另一实例（绑定映射按实体区分）
-	routes = ah.routeDeviceEvent(tid, "key2")
+	routes = ah.routeDeviceEvent(tid, "e1/d1", "key2")
 	if len(routes) != 1 || routes[0].run.row.InstanceID != "box-b" {
 		t.Fatalf("key2 路由 = %+v（want 仅 box-b）", routes)
 	}
 	// 未绑定实体：不投递
-	if routes := ah.routeDeviceEvent(tid, "key9-unbound"); len(routes) != 0 {
+	if routes := ah.routeDeviceEvent(tid, "e1/d1", "key9-unbound"); len(routes) != 0 {
 		t.Fatalf("未绑定实体不得投递: %+v", routes)
 	}
 	// 跨租户：其他租户的事件只路由到该租户自己的实例
-	routes = ah.routeDeviceEvent(tid+1, "key1")
+	routes = ah.routeDeviceEvent(tid+1, "e1/d1", "key1")
 	if len(routes) != 1 || routes[0].run.row.InstanceID != "box-foreign" {
 		t.Fatalf("跨租户事件路由 = %+v（want 仅 box-foreign，绝不进 box-a）", routes)
 	}
 	// 空实体：no-op
-	if routes := ah.routeDeviceEvent(tid, ""); len(routes) != 0 {
+	if routes := ah.routeDeviceEvent(tid, "e1/d1", ""); len(routes) != 0 {
 		t.Fatalf("空实体 = %+v", routes)
 	}
 	// nil 接收者安全（未启用 AppHost 的 Server 直接调用路径）

@@ -19,7 +19,13 @@ func TestApplicationObservationRoutesPreserveFactsAndScope(t *testing.T) {
 	srv.descriptors["e1/d2"] = model.Descriptor{Entities: []model.Entity{{EntityID: "foreign", Capabilities: []string{cap}}}}
 	h := &AppHost{srv: srv, running: map[appInstKey]*appInstanceRun{}}
 	for tid, id := range map[int64]string{1: "mine", 2: "other"} {
-		h.running[appInstKey{tid, id}] = &appInstanceRun{row: store.PluginInstanceRow{TenantID: tid, InstanceID: id}, reqByEntity: map[string]string{"own": "input", "foreign": "input"}, bindings: []api.AppBindingView{{RequirementID: "input", EntityID: "own", Capability: cap}, {RequirementID: "input", EntityID: "foreign", Capability: cap}}}
+		h.running[appInstKey{tid, id}] = &appInstanceRun{
+			row: store.PluginInstanceRow{TenantID: tid, InstanceID: id},
+			bindings: []api.AppBindingView{
+				{RequirementID: "input", EntityID: "own", DeviceID: "e1/d1", Capability: cap},
+				{RequirementID: "input", EntityID: "foreign", DeviceID: "e1/d2", Capability: cap},
+			},
+		}
 	}
 	at := time.Unix(1700000000, 0).UTC()
 	obs := model.Observation{Capability: cap, Property: "value", Value: 12.5, Quality: model.QualityUncertain, ObservedAt: at, ReceivedAt: at.Add(time.Second), Sequence: 42}

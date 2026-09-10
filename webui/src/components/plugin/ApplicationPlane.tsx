@@ -184,10 +184,11 @@ function ApplicationPlaneContent({ instanceID, lifecycleKey, runtimeState, desir
         <p className="mb-3 text-meta text-ink-3">{t('plane.bindingsHelp')}</p>
         <ul className="divide-y divide-hairline">{bindings.data?.bindings.map((binding, index) => {
           const labels = bindingLabels(binding, presentation)
-          return <li key={JSON.stringify([binding.requirement_id, binding.entity_id])} className="min-w-0 py-3 first:pt-0">
+          return <li key={JSON.stringify([binding.requirement_id, binding.device_id, binding.entity_id])} className="min-w-0 py-3 first:pt-0">
             <p className="break-words text-body font-medium [overflow-wrap:anywhere]">{labels.entity || t('plane.bindingFallback', { number: index + 1 })}</p>
+            {binding.device_id && <p className="mt-1 break-all font-mono text-meta text-ink-3">{binding.device_id}</p>}
             {labels.capability !== labels.entity && <p className="mt-1 break-words text-meta text-ink-2">{labels.capability}</p>}
-            <TechnicalDetails><p>{t('plane.bindingFallback', { number: binding.entity_id })}</p><p>{t('plane.capabilityId')}{binding.capability}</p><p>{t('plane.requirementId')}{binding.requirement_id}</p></TechnicalDetails>
+            <TechnicalDetails><p>{t('plane.bindingFallback', { number: binding.entity_id })}</p>{binding.device_id && <p>{t('plane.deviceId')}{binding.device_id}</p>}<p>{t('plane.capabilityId')}{binding.capability}</p><p>{t('plane.requirementId')}{binding.requirement_id}</p></TechnicalDetails>
           </li>
         })}</ul>
       </ReadContent>

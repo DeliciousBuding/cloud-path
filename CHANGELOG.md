@@ -36,6 +36,12 @@ shasum -a 256 -c checksums.txt --ignore-missing      # macOS
 certutil -hashfile <文件> SHA256                      # Windows（逐项对照）
 ```
 
+## v0.2.40 — 2026-09-10
+
+- 应用绑定：`app_bindings` 支持可选 `device_id`，实例配置页可按需求选择具体设备；自动匹配也会把目标设备写入运行态绑定。
+- 命令路由：应用 effect 携带绑定目标，命令按 `(device_id, entity_id)` 精确下发；双板在线不再报 `ambiguous across online devices`。
+- 兼容边界：旧绑定未写 `device_id` 时仅在实体唯一时可继续；多设备同名实体必须显式选择，避免随机打错板。
+
 ## v0.2.39 — 2026-09-10
 
 - 应用操作：需要填写参数的动作在展开后，提交按钮也使用动作名（例如「播放小星星」「播放单音」），不再统一叫「执行操作」。

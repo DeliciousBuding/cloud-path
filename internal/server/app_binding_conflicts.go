@@ -41,11 +41,15 @@ func (h *AppHost) bindingConflicts(tenantID int64, selfInstanceID string, bindin
 				continue
 			}
 			for _, existing := range run.bindings {
-				if existing.EntityID == candidate.EntityID && existing.Capability == capability {
-					conflicts = append(conflicts, fmt.Sprintf(
-						"entity %q capability %q is already bound by instance %q (requirement %q)",
-						candidate.EntityID, capability, key.instanceID, existing.RequirementID))
+				if existing.EntityID != candidate.EntityID || existing.Capability != capability {
+					continue
 				}
+				if existing.DeviceID != "" && candidate.DeviceID != "" && existing.DeviceID != candidate.DeviceID {
+					continue
+				}
+				conflicts = append(conflicts, fmt.Sprintf(
+					"entity %q on device %q capability %q is already bound by instance %q (requirement %q)",
+					candidate.EntityID, candidate.DeviceID, capability, key.instanceID, existing.RequirementID))
 			}
 		}
 	}

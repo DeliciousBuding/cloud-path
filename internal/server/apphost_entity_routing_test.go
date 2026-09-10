@@ -46,3 +46,32 @@ func TestDeviceKeyForEntityUsesUniqueOnlineProvider(t *testing.T) {
 		t.Fatalf("missing entity must fail explicitly: key=%q err=%v", got, err)
 	}
 }
+
+func TestDeviceKeyForBindingTargetsExplicitProvider(t *testing.T) {
+	srv, _ := setup(t)
+	const entityID = "buzzer"
+	srv.mu.Lock()
+	for _, key := range []string{"edge-a/device-a", "edge-b/device-b"} {
+		srv.descriptors[key] = model.Descriptor{Entities: []model.Entity{{EntityID: entityID}}}
+		srv.devices[key] = &api.DeviceView{ID: key, Online: true}
+	}
+	srv.mu.Unlock()
+
+	got, err := srv.deviceKeyForBinding("edge-b/device-b", entityID)
+	if err != nil || got != "edge-b/device-b" {
+		t.Fatalf("explicit target = %q err=%v", got, err)
+	}
+	if got, err := srv.deviceKeyForBinding("edge-b/device-b", "missing"); err == nil || got != "" || !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("missing target entity = %q err=%v", got, err)
+	}
+	if got, err := srv.deviceKeyForBinding("edge-missing/device", entityID); err == nil || got != "" || !strings.Contains(err.Error(), "no descriptor") {
+		t.Fatalf("missing target device = %q err=%v", got, err)
+	}
+
+	srv.mu.Lock()
+	srv.devices["edge-b/device-b"].Online = false
+	srv.mu.Unlock()
+	if got, err := srv.deviceKeyForBinding("edge-b/device-b", entityID); err == nil || got != "" || !strings.Contains(err.Error(), "offline") {
+		t.Fatalf("offline explicit target = %q err=%v", got, err)
+	}
+}

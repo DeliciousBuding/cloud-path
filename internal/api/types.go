@@ -383,6 +383,25 @@ type AppBindingView struct {
 	RequirementID string `json:"requirement_id"`
 	Capability    string `json:"capability"`
 	EntityID      string `json:"entity_id"`
+	DeviceID      string `json:"device_id,omitempty"`
+}
+
+// AppBindingRequirementView is the sanitized requirement metadata needed by
+// the manual device-target selector.
+type AppBindingRequirementView struct {
+	ID          string `json:"id"`
+	Capability  string `json:"capability"`
+	Cardinality string `json:"cardinality"`
+	MinItems    int    `json:"min_items,omitempty"`
+	AllowReuse  bool   `json:"allow_reuse,omitempty"`
+}
+
+// AppBindingCandidateView is one selectable provider target for a requirement.
+type AppBindingCandidateView struct {
+	EntityID     string   `json:"entity_id"`
+	DeviceID     string   `json:"device_id"`
+	Name         string   `json:"name,omitempty"`
+	Capabilities []string `json:"capabilities"`
 }
 
 // AppDomainRecordView 是领域记录 REST 行。
@@ -407,9 +426,11 @@ type AppDomainRecordsView struct {
 // AppBindingsView 是 GET /api/plugin-instances/{id}/bindings 响应。
 // Running=false 表示 AppHost 未启用或实例未在运行——绑定是运行态，非持久态。
 type AppBindingsView struct {
-	InstanceID string           `json:"instance_id"`
-	Running    bool             `json:"running"`
-	Bindings   []AppBindingView `json:"bindings"`
+	InstanceID   string                      `json:"instance_id"`
+	Running      bool                        `json:"running"`
+	Bindings     []AppBindingView            `json:"bindings"`
+	Requirements []AppBindingRequirementView `json:"requirements"`
+	Candidates   []AppBindingCandidateView   `json:"candidates"`
 }
 
 // AppScheduledJobView 是一条声明式 cron 任务（schedule_job 效果声明，DB 持久）。

@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"github.com/DeliciousBuding/cloud-path/internal/api"
+	"github.com/DeliciousBuding/cloud-path/internal/application"
 	"github.com/DeliciousBuding/cloud-path/internal/appruntime"
 	"github.com/DeliciousBuding/cloud-path/internal/auth"
+	"github.com/DeliciousBuding/cloud-path/internal/model"
 	"github.com/DeliciousBuding/cloud-path/internal/store"
 )
 
@@ -223,20 +225,40 @@ func TestAppBindingsJobsRuntimeProjection(t *testing.T) {
 		t.Fatalf("nil apphost jobs = %d %+v", resp.StatusCode, jv)
 	}
 
+	// 场景 0.5：实例未运行/启动失败时，desired app_bindings 仍能生成设备选择选项。
+	if _, err := srv.cfg.Store.CreatePluginInstance(store.PluginInstanceRow{
+		TenantID: 1, EdgeID: AppHostEdgeID, InstanceID: "box-1", PluginID: "app-x", Version: "1.0.0",
+		Enabled: true, ConfigJSON: `{"app_bindings":"[{\"requirement_id\":\"sound\",\"entity_id\":\"buzzer\"}]"}`,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	srv.mu.Lock()
+	srv.descriptors["e1/d1"] = model.Descriptor{Entities: []model.Entity{{EntityID: "buzzer", Capabilities: []string{"cloudpath.dev/capability/buzzer@1"}}}}
+	srv.descriptors["e1/d2"] = model.Descriptor{Entities: []model.Entity{{EntityID: "buzzer", Capabilities: []string{"cloudpath.dev/capability/buzzer@1"}}}}
+	srv.devices["e1/d1"] = &api.DeviceView{ID: "e1/d1", Online: true}
+	srv.devices["e1/d2"] = &api.DeviceView{ID: "e1/d2", Online: true}
+	srv.mu.Unlock()
+	resp = doJSON(t, http.MethodGet, ts.URL+"/api/plugin-instances/box-1/bindings", "", nil, cookie)
+	bv = decodeAppPlane[api.AppBindingsView](t, resp)
+	if bv.Running || len(bv.Bindings) != 1 || len(bv.Requirements) != 1 || len(bv.Candidates) != 2 {
+		t.Fatalf("stopped fallback bindings = %+v", bv)
+	}
+
 	// 场景 1：注入运行态（包内构造，绕过进程握手）
 	row := store.PluginInstanceRow{TenantID: 1, InstanceID: "box-1", PluginID: "app-x", Enabled: true}
 	srv.SetAppHost(&AppHost{
 		logger: slog.Default(),
 		running: map[appInstKey]*appInstanceRun{
 			{1, "box-1"}: {
-				row:         row,
-				tenantStr:   "1",
-				reqByEntity: map[string]string{"alarm-1": "reminder-output"},
+				row:       row,
+				tenantStr: "1",
 				bindings: []api.AppBindingView{
-					{RequirementID: "reminder-output", Capability: "cloudpath.dev/capability/alarm@1", EntityID: "alarm-1"},
-					{RequirementID: "compartments", Capability: "cloudpath.dev/capability/contact@1", EntityID: "comp-1"},
+					{RequirementID: "reminder-output", Capability: "cloudpath.dev/capability/alarm@1", EntityID: "alarm-1", DeviceID: "e1/d1"},
+					{RequirementID: "compartments", Capability: "cloudpath.dev/capability/contact@1", EntityID: "comp-1", DeviceID: "e1/d1"},
 				},
-				jobIDs: []string{"window-check"},
+				requirements: []application.Requirement{{ID: "reminder-output", Capability: "cloudpath.dev/capability/alarm@1", Cardinality: application.CardinalityOne}},
+				candidates:   []application.Candidate{{EntityID: "alarm-1", DeviceID: "e1/d1", TenantID: "1", Capabilities: []string{"cloudpath.dev/capability/alarm@1"}}},
+				jobIDs:       []string{"window-check"},
 			},
 		},
 	})
@@ -244,7 +266,8 @@ func TestAppBindingsJobsRuntimeProjection(t *testing.T) {
 	resp = doJSON(t, http.MethodGet, ts.URL+"/api/plugin-instances/box-1/bindings", "", nil, cookie)
 	bv = decodeAppPlane[api.AppBindingsView](t, resp)
 	if !bv.Running || len(bv.Bindings) != 2 || bv.Bindings[0].EntityID != "alarm-1" ||
-		bv.Bindings[0].Capability != "cloudpath.dev/capability/alarm@1" {
+		bv.Bindings[0].Capability != "cloudpath.dev/capability/alarm@1" || bv.Bindings[0].DeviceID != "e1/d1" ||
+		len(bv.Requirements) != 1 || len(bv.Candidates) != 1 || bv.Candidates[0].DeviceID != "e1/d1" {
 		t.Fatalf("bindings = %+v", bv)
 	}
 	resp = doJSON(t, http.MethodGet, ts.URL+"/api/plugin-instances/box-1/jobs", "", nil, cookie)

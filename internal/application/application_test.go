@@ -289,3 +289,50 @@ func TestCandidateWithMixedCapabilityVersions(t *testing.T) {
 		t.Fatalf("a compatible buzzer@2 capability must win over buzzer@1, got error: %v", err)
 	}
 }
+
+func TestDeviceScopedBindingAndAmbiguity(t *testing.T) {
+	binder := Binder{TenantID: "tenant-a", PluginInstanceID: "music-room"}
+	req := []Requirement{{ID: "sound", Capability: capBuzzer, Cardinality: CardinalityOne}}
+	candidates := []Candidate{
+		{EntityID: "buzzer", DeviceID: "edge/board-1", TenantID: "tenant-a", Capabilities: []string{capBuzzer}},
+		{EntityID: "buzzer", DeviceID: "edge/board-2", TenantID: "tenant-a", Capabilities: []string{capBuzzer}},
+	}
+
+	auto, err := binder.Match(req, candidates)
+	if err != nil {
+		t.Fatalf("automatic match: %v", err)
+	}
+	if len(auto.Bindings) != 1 || auto.Bindings[0].DeviceID != "edge/board-1" {
+		t.Fatalf("automatic match did not retain first deterministic device: %+v", auto.Bindings)
+	}
+
+	explicit := []Binding{{RequirementID: "sound", EntityID: "buzzer", DeviceID: "edge/board-2"}}
+	if res := binder.Validate(req, candidates, explicit); !res.Valid {
+		t.Fatalf("explicit device target must validate: %+v", res.Issues)
+	}
+	legacy := []Binding{{RequirementID: "sound", EntityID: "buzzer"}}
+	res := binder.Validate(req, candidates, legacy)
+	if res.Valid || !res.HasCode(CodeAmbiguousEntity) {
+		t.Fatalf("legacy ambiguous binding must fail closed: %+v", res.Issues)
+	}
+}
+
+func TestSameEntityIDOnDifferentDevicesIsRejected(t *testing.T) {
+	binder := Binder{TenantID: "tenant-a"}
+	reqs := []Requirement{
+		{ID: "left", Capability: capKey, Cardinality: CardinalityOne},
+		{ID: "right", Capability: capKey, Cardinality: CardinalityOne},
+	}
+	candidates := []Candidate{
+		{EntityID: "key1", DeviceID: "edge/board-1", TenantID: "tenant-a", Capabilities: []string{capKey}},
+		{EntityID: "key1", DeviceID: "edge/board-2", TenantID: "tenant-a", Capabilities: []string{capKey}},
+	}
+	bindings := []Binding{
+		{RequirementID: "left", EntityID: "key1", DeviceID: "edge/board-1"},
+		{RequirementID: "right", EntityID: "key1", DeviceID: "edge/board-2"},
+	}
+	res := binder.Validate(reqs, candidates, bindings)
+	if res.Valid || !res.HasCode(CodeAmbiguousEntity) {
+		t.Fatalf("same local entity id on different devices must fail early: %+v", res.Issues)
+	}
+}

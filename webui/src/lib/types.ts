@@ -776,11 +776,27 @@ export interface AppBindingView {
   requirement_id: string
   capability: string
   entity_id: string
+  device_id?: string
+}
+export interface AppBindingRequirementView {
+  id: string
+  capability: string
+  cardinality: 'one' | 'zero-or-one' | 'one-or-more' | string
+  min_items?: number
+  allow_reuse?: boolean
+}
+export interface AppBindingCandidateView {
+  entity_id: string
+  device_id: string
+  name?: string
+  capabilities: string[]
 }
 export interface AppBindingsView {
   instance_id: string
   running: boolean
   bindings: AppBindingView[]
+  requirements?: AppBindingRequirementView[]
+  candidates?: AppBindingCandidateView[]
 }
 export interface AppScheduledJobView {
   schedule_id: string

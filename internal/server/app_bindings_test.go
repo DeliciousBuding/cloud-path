@@ -21,6 +21,13 @@ func TestApplicationExplicitBindingsPreserveSelectionAndRejectFallback(t *testin
 	if err != nil || len(got.Bindings) != 1 || got.Bindings[0].EntityID != "chosen" {
 		t.Fatalf("selection=%+v err=%v", got, err)
 	}
+	deviceScoped, err := selectApplicationBindings(binder, reqs, []application.Candidate{
+		{EntityID: "chosen", DeviceID: "edge/board-1", TenantID: "1", Capabilities: []string{cap}},
+		{EntityID: "chosen", DeviceID: "edge/board-2", TenantID: "1", Capabilities: []string{cap}},
+	}, wrap(`[{"requirement_id":"source","entity_id":"chosen","device_id":"edge/board-2"}]`))
+	if err != nil || len(deviceScoped.Bindings) != 1 || deviceScoped.Bindings[0].DeviceID != "edge/board-2" {
+		t.Fatalf("device-scoped selection=%+v err=%v", deviceScoped, err)
+	}
 	auto, err := selectApplicationBindings(binder, reqs, candidates, "{}")
 	if err != nil || auto.Bindings[0].EntityID != "first" {
 		t.Fatalf("legacy match=%+v err=%v", auto, err)

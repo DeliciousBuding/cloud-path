@@ -85,28 +85,31 @@ func (r Requirement) Validate() error {
 	return errors.Join(errs...)
 }
 
-// Candidate is the bindable view of an Entity. Only EntityID, TenantID and
-// Capabilities participate in matching and validation. Name, DeviceID and
-// DriverID are observational metadata; the engine MUST never use them to
-// select or accept a binding. This is the device-independent boundary: an
-// entity may be produced by any Driver, at any port, on any device.
+// Candidate is the bindable view of an Entity. EntityID, DeviceID, TenantID and
+// Capabilities participate in matching and validation once an instance has been
+// bound: DeviceID is opaque to the application protocol but is retained by Core
+// so command effects can be routed to the exact provider selected at bind time.
+// Name and DriverID remain observational metadata and never participate in
+// matching.
 type Candidate struct {
 	EntityID     string   `json:"entity_id" yaml:"entity_id"`
 	Name         string   `json:"name,omitempty" yaml:"name,omitempty"`
 	TenantID     string   `json:"tenant_id" yaml:"tenant_id"`
 	Capabilities []string `json:"capabilities" yaml:"capabilities"`
-	// DeviceID is metadata only. Not used for matching.
+	// DeviceID is Core's stable device key ("<edge>/<device>"). It is carried
+	// with a binding but is not sent to Application Protocol v1.
 	DeviceID string `json:"device_id,omitempty" yaml:"device_id,omitempty"`
 	// DriverID is metadata only. Not used for matching.
 	DriverID string `json:"driver_id,omitempty" yaml:"driver_id,omitempty"`
 }
 
-// Binding pairs a Requirement with the stable entity_id that satisfies it.
-// Bindings persist the entity_id only; the display name, port and connection
-// are intentionally not stored.
+// Binding pairs a Requirement with the stable entity/provider that satisfies it.
+// DeviceID is optional for backward compatibility: when omitted, legacy
+// single-provider bindings remain valid only if EntityID resolves uniquely.
 type Binding struct {
 	RequirementID string `json:"requirement_id" yaml:"requirement_id"`
 	EntityID      string `json:"entity_id" yaml:"entity_id"`
+	DeviceID      string `json:"device_id,omitempty" yaml:"device_id,omitempty"`
 }
 
 // BindingSet is the set of Bindings for one Application instance in a tenant.
@@ -123,6 +126,7 @@ type Issue struct {
 	Code          string `json:"code"`
 	RequirementID string `json:"requirement_id,omitempty"`
 	EntityID      string `json:"entity_id,omitempty"`
+	DeviceID      string `json:"device_id,omitempty"`
 	Message       string `json:"message"`
 }
 
@@ -169,6 +173,8 @@ const (
 	// CodeUnknownEntity means a binding references an entity id that is not a
 	// known candidate.
 	CodeUnknownEntity = "unknown_entity"
+	// CodeAmbiguousEntity means an omitted device_id matched multiple providers.
+	CodeAmbiguousEntity = "ambiguous_entity"
 	// CodeEmptyRequirementID means a binding has no requirement id.
 	CodeEmptyRequirementID = "empty_requirement_id"
 	// CodeEmptyEntityID means a binding has no entity id.
