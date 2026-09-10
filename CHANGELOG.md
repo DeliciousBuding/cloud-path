@@ -38,9 +38,9 @@ shasum -a 256 -c checksums.txt --ignore-missing      # macOS
 certutil -hashfile <文件> SHA256                      # Windows（逐项对照）
 ```
 
-## v0.2.43 — 未发布（2026-09-10）
+## v0.2.43 — 2026-09-10
 
-> 状态：发布代码准备中；合并后由维护者创建 `v0.2.43` tag/Release。生产 Server/Edge 与临时 CloudPath 服务继续保持退役。
+> 状态：已发布（2026-09-10）；[v0.2.43 Release](https://github.com/DeliciousBuding/cloud-path/releases/tag/v0.2.43) 含六平台 18 个二进制与 `checksums.txt`。生产 Server/Edge 与临时 CloudPath 服务继续保持退役，不做部署。
 
 - 插件目录：新增 monorepo 根 `plugins.yaml` catalog 解析与校验；`tagPrefix` 必须严格等于插件 `path`，条目可用 `id`、`slug` 或 `path` 精确选择，`archived: true` 不进入搜索/检查/安装候选。
 - Release：catalog 插件按 `<path>/v*` 列出 Release 并选最高 semver，再断言 tag 严格等于 `<path>/v<manifest.version>`；单插件仓库继续使用 `/releases/latest`。
@@ -336,7 +336,7 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 | `v0.2.20` | 已发布（2026-09-09） | 持久化设备最后已知 Descriptor（schema v11），离线重启后可水合并恢复 Application 绑定；详见 [§v0.2.20](#v0220--2026-09-09) |
 | `v0.2.21` | 已发布（2026-09-09） | WebUI 易用性、响应式布局与文案收口；离线设备操作 fail-closed；应用结果与原始 JSON 分层展示；RBAC 稳定错误体与 AppHost observed 即时投影；全仓静态检查清零 |
 | `v0.2.22` | 已发布（2026-09-09） | 修复设备详情「概览」标签点击后被默认「设备操作」弹回 |
-| `v0.2.43` | 未发布 | 插件 monorepo catalog、selector、prefix Release 与 tag/lock 绑定；显式 source 迁移门禁；单插件仓库继续兼容 |
+| `v0.2.43` | 已发布（2026-09-10） | 插件 monorepo catalog、selector、prefix Release 与 tag/lock 绑定；安装/迁移信任硬化；当前平台资产 fail-closed；单插件仓库继续兼容 |
 | `v0.2.42` | 已发布（2026-09-10） | 许可证与元数据收口：MIT → Apache-2.0，补充 NOTICE、vendored MIT 归属和发布资产；不改变运行逻辑与生产退役状态 |
 | `v0.2.41` | 已发布（2026-09-10） | 实时设备状态先到、REST 元数据后到时补回 adapter、显示名和端口，避免新设备退化为裸 ID 或丢失数字孪生 |
 | `v0.2.40` | 已发布（2026-09-10） | 应用绑定支持显式 `device_id`，命令按 `(device_id, entity_id)` 精确路由，避免多板同名实体歧义 |
@@ -359,4 +359,4 @@ certutil -hashfile <文件> SHA256                      # Windows（逐项对照
 
 > 仓库没有 `v0.2.16` / `v0.2.17` tag；`v0.2.18` 覆盖 `v0.2.15` 之后累计的变更。
 > 仓库也没有 `v0.2.36`–`v0.2.38` tag；`v0.2.39` 覆盖这三个版本记录中的累计变更。
-> 当前最新发布版本为 `v0.2.42`。
+> 当前最新发布版本为 `v0.2.43`。
