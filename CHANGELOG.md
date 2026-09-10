@@ -36,6 +36,10 @@ shasum -a 256 -c checksums.txt --ignore-missing      # macOS
 certutil -hashfile <文件> SHA256                      # Windows（逐项对照）
 ```
 
+## v0.2.33 — 2026-09-10
+
+- 应用命令路由：实体解析只选择唯一在线设备；离线候选不再被误选，多个在线候选 fail-closed，避免同租户遗留设备劫持执行器命令。
+
 ## v0.2.32 — 2026-09-10
 
 - 运行时：实例事件队列改为非阻塞背压，单实例积压不再卡住共享 Edge/WS 读循环；`RunJob` 增加独立超时。

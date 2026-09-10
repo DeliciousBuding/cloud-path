@@ -93,11 +93,11 @@ func TestDispatchDeviceCommandAppPath(t *testing.T) {
 	}
 	srv.mu.Unlock()
 
-	if key := srv.deviceKeyForEntity("buzzer"); key != "e1/d1" {
-		t.Fatalf("deviceKeyForEntity = %q", key)
+	if key, err := srv.deviceKeyForEntity("buzzer"); err != nil || key != "e1/d1" {
+		t.Fatalf("deviceKeyForEntity = %q err=%v", key, err)
 	}
-	if key := srv.deviceKeyForEntity("nope"); key != "" {
-		t.Fatalf("unknown entity should be empty, got %q", key)
+	if key, err := srv.deviceKeyForEntity("nope"); err == nil || key != "" {
+		t.Fatalf("unknown entity should fail closed: key=%q err=%v", key, err)
 	}
 
 	ctx := context.Background()
