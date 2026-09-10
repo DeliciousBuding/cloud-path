@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -1035,9 +1036,9 @@ func (e *appEffectExecutor) execRequestCommand(ctx context.Context, effect appru
 	if err != nil {
 		return fmt.Errorf("apphost: effect tenant %q: %w", effect.TenantID, err)
 	}
-	deviceKey := e.host.srv.deviceKeyForEntity(p.EntityID)
-	if deviceKey == "" {
-		err := fmt.Errorf("apphost: entity %q not found on any device", p.EntityID)
+	deviceKey, routeErr := e.host.srv.deviceKeyForEntity(p.EntityID)
+	if routeErr != nil {
+		err := fmt.Errorf("apphost: %w", routeErr)
 		e.host.dispatchRequestCompleted(ref, sdkapplication.CommandStateFailed, err.Error())
 		return err
 	}
@@ -1073,8 +1074,8 @@ func (e *appEffectExecutor) execRequestCommand(ctx context.Context, effect appru
 // appCandidates 构造某租户的全部可绑定实体（来自最近 Descriptor 快照）。
 //
 // 已知边界：Candidate.EntityID 是设备内局部 ID（如 key1）；多台同型号设备会出现
-// 同名实体，当前按先注册者绑定、命令按首个匹配设备下发。协议层引入限定实体 ID
-// （device/entity）前不扩展——单一 reference 设备场景下语义正确。
+// 同名实体，当前按先注册者绑定。命令侧 deviceKeyForEntity 只接受唯一在线提供者，
+// 多在线候选 fail-closed；完整消歧仍需协议层引入限定实体 ID（device/entity）。
 func (s *Server) appCandidates(tenantID int64) []coreapplication.Candidate {
 	// Resolve ownership outside the memory lock. Never relabel all devices as
 	// the requesting tenant merely to make the binder accept them.
@@ -1113,18 +1114,42 @@ func (s *Server) appCandidates(tenantID int64) []coreapplication.Candidate {
 	return out
 }
 
-// deviceKeyForEntity 返回提供该实体的设备 key（"<edge>/<dev>"）；找不到为空。
-func (s *Server) deviceKeyForEntity(entityID string) string {
+// deviceKeyForEntity 返回唯一在线设备提供的实体 key（"<edge>/<dev>"）。
+// EntityID 仍是设备内局部标识；多台同型号设备可能同名。离线候选永远不能被误选，
+// 多个在线候选也必须 fail-closed，等待协议层引入设备限定实体 ID。
+func (s *Server) deviceKeyForEntity(entityID string) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	var online, offline []string
 	for key, desc := range s.descriptors {
-		for _, e := range desc.Entities {
-			if e.EntityID == entityID {
-				return key
+		found := false
+		for _, entity := range desc.Entities {
+			if entity.EntityID == entityID {
+				found = true
+				break
 			}
 		}
+		if !found {
+			continue
+		}
+		if v, ok := s.devices[key]; ok && v.Online {
+			online = append(online, key)
+		} else {
+			offline = append(offline, key)
+		}
 	}
-	return ""
+	sort.Strings(online)
+	sort.Strings(offline)
+	switch {
+	case len(online) == 1:
+		return online[0], nil
+	case len(online) > 1:
+		return "", fmt.Errorf("entity %q is ambiguous across online devices: %s", entityID, strings.Join(online, ", "))
+	case len(offline) > 0:
+		return "", fmt.Errorf("entity %q is only present on offline device(s): %s", entityID, strings.Join(offline, ", "))
+	default:
+		return "", fmt.Errorf("entity %q not found on any device", entityID)
+	}
 }
 
 // dispatchDeviceCommandWithHook 是应用效果 → 设备命令的下发内核（与
