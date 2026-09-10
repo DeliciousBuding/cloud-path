@@ -1,0 +1,1854 @@
+{
+  "source": "reference-board-schematic.pdf",
+  "sha256": "79169b0c899826dfc7f8bde2eacd1b7281f5c47511f8124587e65ca0e4ee8362",
+  "boardMm": [
+    92,
+    72
+  ],
+  "layers": [
+    {
+      "name": "front-silk",
+      "page": 1,
+      "framePt": [
+        166.14,
+        325.44,
+        260.88,
+        201.6
+      ],
+      "backView": false,
+      "paths": 1459,
+      "sha256": "d6a830ae20cdfb5433f754381c587f2a554adf2540ef12a009248fa0e2d6a542"
+    },
+    {
+      "name": "front-copper",
+      "page": 2,
+      "framePt": [
+        166.98,
+        320.16,
+        260.88,
+        201.6
+      ],
+      "backView": false,
+      "paths": 6611,
+      "sha256": "c399d1e51c32e4c6fe0592f972c19657bc0b974f2467319750fd27f3c5d58fb3"
+    },
+    {
+      "name": "back-silk",
+      "page": 3,
+      "framePt": [
+        166.98,
+        320.16,
+        260.88,
+        201.6
+      ],
+      "backView": true,
+      "paths": 11809,
+      "sha256": "6e812b59eaa3e2cf0a238a2c6c357882d3478baab66fe3ec9e5614660ebd1fd1"
+    },
+    {
+      "name": "back-copper",
+      "page": 4,
+      "framePt": [
+        166.98,
+        320.16,
+        260.88,
+        201.6
+      ],
+      "backView": true,
+      "paths": 5857,
+      "sha256": "a6cc76c8dae4d5cbf0181288d57dc246fe4051b189ea6dc7490db1e0f39b43a3"
+    }
+  ],
+  "holes": [
+    {
+      "x": 12.9282,
+      "z": 24.0429,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 12.9282,
+      "z": 31.6286,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 15.4568,
+      "z": 40.7571,
+      "artworkRadius": 0.4972,
+      "shape": "round",
+      "padWidth": 0.9945,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 17.4775,
+      "z": 57.2143,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 12.9282,
+      "z": 26.1,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 12.9282,
+      "z": 29.3143,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 19.7732,
+      "z": 32.025,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 17.742,
+      "z": 23.4107,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 30.5538,
+      "z": 9.6429,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 15.5837,
+      "z": 13.3821,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 15.9646,
+      "z": 11.7107,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 27.5175,
+      "z": 17.1107,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 28.914,
+      "z": 22.8964,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 25.8671,
+      "z": 23.1536,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 24.4706,
+      "z": 23.2821,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 24.7139,
+      "z": 29.9571,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 30.5644,
+      "z": 20.7107,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 30.1835,
+      "z": 22.125,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 31.0722,
+      "z": 28.9393,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 31.0405,
+      "z": 30.7607,
+      "artworkRadius": 0.4655,
+      "shape": "round",
+      "padWidth": 0.931,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 7.0883,
+      "z": 41.1429,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 14.822,
+      "z": 42.5679,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 12.7907,
+      "z": 42.0536,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 30.8183,
+      "z": 51.6964,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 10.897,
+      "z": 53.4857,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 11.1403,
+      "z": 48.8679,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 10.3786,
+      "z": 47.325,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 12.5368,
+      "z": 57.0964,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 11.7751,
+      "z": 55.425,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 28.5331,
+      "z": 28.9393,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 27.2636,
+      "z": 34.9821,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 72.1845,
+      "z": 45.6536,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 83.092,
+      "z": 35.3679,
+      "artworkRadius": 0.4655,
+      "shape": "round",
+      "padWidth": 0.931,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 79.5478,
+      "z": 31.2536,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 56.442,
+      "z": 35.625,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 38.6789,
+      "z": 18.6429,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 51.6283,
+      "z": 53.8714,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 37.9172,
+      "z": 14.6679,
+      "artworkRadius": 0.4655,
+      "shape": "round",
+      "padWidth": 0.931,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 42.3606,
+      "z": 24.1714,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 32.839,
+      "z": 47.4429,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 56.4526,
+      "z": 50.1429,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 47.4282,
+      "z": 47.0679,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 31.1251,
+      "z": 67.5643,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 45.5239,
+      "z": 44.3679,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 46.9204,
+      "z": 44.3679,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 48.3169,
+      "z": 44.625,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 33.9287,
+      "z": 65.8607,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 32.5957,
+      "z": 61.725,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 36.2668,
+      "z": 61.8536,
+      "artworkRadius": 0.4655,
+      "shape": "round",
+      "padWidth": 0.931,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 51.4908,
+      "z": 42.5679,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 38.9328,
+      "z": 46.425,
+      "artworkRadius": 0.4655,
+      "shape": "round",
+      "padWidth": 0.931,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 77.7705,
+      "z": 56.8393,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 79.2939,
+      "z": 57.225,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 77.3896,
+      "z": 55.2964,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 43.8735,
+      "z": 17.3679,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 44.3813,
+      "z": 16.0821,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 47.5552,
+      "z": 16.0821,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 76.5009,
+      "z": 25.0821,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 63.8054,
+      "z": 8.2393,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 60.7585,
+      "z": 2.5821,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 58.9811,
+      "z": 10.9393,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 56.442,
+      "z": 9.6536,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 53.9029,
+      "z": 12.8679,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 52.6334,
+      "z": 4.3821,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 77.3896,
+      "z": 49.5107,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 78.0244,
+      "z": 47.5821,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 78.0244,
+      "z": 45.6536,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 46.2856,
+      "z": 23.7964,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 48.8248,
+      "z": 23.7964,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 51.3638,
+      "z": 23.7964,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 53.9029,
+      "z": 23.7964,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 56.442,
+      "z": 23.7964,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 58.9811,
+      "z": 23.7964,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 61.5202,
+      "z": 23.7964,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 64.0593,
+      "z": 23.7964,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 66.5984,
+      "z": 5.7964,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 42.9848,
+      "z": 9.6536,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 36.7746,
+      "z": 9.525,
+      "artworkRadius": 0.4655,
+      "shape": "round",
+      "padWidth": 0.931,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 66.5984,
+      "z": 9.6536,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 50.856,
+      "z": 8.2393,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 63.1707,
+      "z": 61.9821,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 66.0695,
+      "z": 61.875,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 55.2994,
+      "z": 62.1107,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 56.569,
+      "z": 55.425,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 61.7742,
+      "z": 66.3536,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 72.5653,
+      "z": 66.9964,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 51.2369,
+      "z": 65.9679,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 83.092,
+      "z": 53.7536,
+      "artworkRadius": 0.4655,
+      "shape": "round",
+      "padWidth": 0.931,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 53.776,
+      "z": 47.325,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 55.9342,
+      "z": 47.325,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 59.1081,
+      "z": 47.4536,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 59.8698,
+      "z": 48.9964,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 70.1532,
+      "z": 29.0679,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 67.741,
+      "z": 40.3821,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 69.2645,
+      "z": 46.1679,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 70.788,
+      "z": 46.1679,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 51.4908,
+      "z": 50.4107,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 51.4908,
+      "z": 47.1964,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 83.092,
+      "z": 34.0821,
+      "artworkRadius": 0.4655,
+      "shape": "round",
+      "padWidth": 0.931,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 83.092,
+      "z": 32.7964,
+      "artworkRadius": 0.4655,
+      "shape": "round",
+      "padWidth": 0.931,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 58.9811,
+      "z": 36.525,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 50.0943,
+      "z": 61.8536,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 48.19,
+      "z": 61.725,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 65.4558,
+      "z": 20.1964,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 67.4871,
+      "z": 20.0679,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 87.2815,
+      "z": 23.4,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 53.7866,
+      "z": 55.6714,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 44.138,
+      "z": 70.0714,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 64.0488,
+      "z": 50.5286,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 88.5511,
+      "z": 33.9429,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 53.3951,
+      "z": 42.0536,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 58.2194,
+      "z": 42.0536,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 52.8873,
+      "z": 38.8393,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 44.3813,
+      "z": 40.5107,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 56.0612,
+      "z": 40.5107,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 56.442,
+      "z": 39.0964,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 45.397,
+      "z": 35.4964,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 51.2369,
+      "z": 40.3821,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 44.6352,
+      "z": 33.0536,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 45.6509,
+      "z": 29.0679,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 44.3813,
+      "z": 28.0393,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 43.1118,
+      "z": 26.8821,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 57.9655,
+      "z": 35.625,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 57.3307,
+      "z": 31.3821,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 58.7272,
+      "z": 30.8679,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 55.9342,
+      "z": 31.7679,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 66.7254,
+      "z": 41.1536,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 87.5354,
+      "z": 30.0857,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 76.374,
+      "z": 38.5821,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 74.9775,
+      "z": 38.5821,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 73.581,
+      "z": 38.5821,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 72.1845,
+      "z": 38.5821,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 90.0745,
+      "z": 48.2143,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 65.7098,
+      "z": 39.8679,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 67.741,
+      "z": 36.0107,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 69.3915,
+      "z": 32.2821,
+      "artworkRadius": 0.4549,
+      "shape": "round",
+      "padWidth": 0.9098,
+      "padDepth": 0.9214
+    },
+    {
+      "x": 75.7286,
+      "z": 29.7,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 77.8868,
+      "z": 38.3143,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 74.0782,
+      "z": 31.2429,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 75.7286,
+      "z": 51.3,
+      "artworkRadius": 0.5078,
+      "shape": "round",
+      "padWidth": 1.0156,
+      "padDepth": 1.0286
+    },
+    {
+      "x": 78.2889,
+      "z": 70.1571,
+      "artworkRadius": 0.8887,
+      "shape": "round",
+      "padWidth": 1.7774,
+      "padDepth": 1.8
+    },
+    {
+      "x": 78.2889,
+      "z": 63.5786,
+      "artworkRadius": 0.8887,
+      "shape": "round",
+      "padWidth": 1.7774,
+      "padDepth": 1.8
+    },
+    {
+      "x": 5.9669,
+      "z": 54.6857,
+      "artworkRadius": 0.4655,
+      "shape": "round",
+      "padWidth": 0.931,
+      "padDepth": 0.9
+    },
+    {
+      "x": 38.827,
+      "z": 49.4357,
+      "artworkRadius": 0.8887,
+      "shape": "round",
+      "padWidth": 1.7774,
+      "padDepth": 1.8
+    },
+    {
+      "x": 39.8215,
+      "z": 60.4286,
+      "artworkRadius": 0.5078,
+      "shape": "oval",
+      "padWidth": 1.0156,
+      "padDepth": 1.2857
+    },
+    {
+      "x": 38.827,
+      "z": 56.0143,
+      "artworkRadius": 0.8887,
+      "shape": "round",
+      "padWidth": 1.7774,
+      "padDepth": 1.8
+    },
+    {
+      "x": 71.1053,
+      "z": 54.075,
+      "artworkRadius": 0.5184,
+      "shape": "round",
+      "padWidth": 1.0368,
+      "padDepth": 1.05
+    },
+    {
+      "x": 3.1527,
+      "z": 68.7857,
+      "artworkRadius": 1.9043,
+      "shape": "round",
+      "padWidth": 3.8086,
+      "padDepth": 3.8572
+    },
+    {
+      "x": 5.9669,
+      "z": 59.1429,
+      "artworkRadius": 0.4655,
+      "shape": "round",
+      "padWidth": 0.931,
+      "padDepth": 0.9
+    },
+    {
+      "x": 23.4549,
+      "z": 64.5536,
+      "artworkRadius": 0.4126,
+      "shape": "round",
+      "padWidth": 0.8252,
+      "padDepth": 0.8357
+    },
+    {
+      "x": 23.4549,
+      "z": 56.8393,
+      "artworkRadius": 0.5396,
+      "shape": "round",
+      "padWidth": 1.0791,
+      "padDepth": 1.0929
+    },
+    {
+      "x": 56.7277,
+      "z": 70.1571,
+      "artworkRadius": 0.8887,
+      "shape": "round",
+      "padWidth": 1.7774,
+      "padDepth": 1.8
+    },
+    {
+      "x": 56.7277,
+      "z": 63.5786,
+      "artworkRadius": 0.8887,
+      "shape": "round",
+      "padWidth": 1.7774,
+      "padDepth": 1.8
+    },
+    {
+      "x": 41.345,
+      "z": 60.4286,
+      "artworkRadius": 0.5078,
+      "shape": "oval",
+      "padWidth": 1.0156,
+      "padDepth": 1.2857
+    },
+    {
+      "x": 43.3551,
+      "z": 56.0143,
+      "artworkRadius": 0.8887,
+      "shape": "round",
+      "padWidth": 1.7774,
+      "padDepth": 1.8
+    },
+    {
+      "x": 61.2346,
+      "z": 70.1571,
+      "artworkRadius": 0.8887,
+      "shape": "round",
+      "padWidth": 1.7774,
+      "padDepth": 1.8
+    },
+    {
+      "x": 61.2346,
+      "z": 63.5786,
+      "artworkRadius": 0.8887,
+      "shape": "round",
+      "padWidth": 1.7774,
+      "padDepth": 1.8
+    },
+    {
+      "x": 67.5189,
+      "z": 70.1571,
+      "artworkRadius": 0.8887,
+      "shape": "round",
+      "padWidth": 1.7774,
+      "padDepth": 1.8
+    },
+    {
+      "x": 72.0258,
+      "z": 70.1571,
+      "artworkRadius": 0.8887,
+      "shape": "round",
+      "padWidth": 1.7774,
+      "padDepth": 1.8
+    },
+    {
+      "x": 67.5189,
+      "z": 63.5786,
+      "artworkRadius": 0.8887,
+      "shape": "round",
+      "padWidth": 1.7774,
+      "padDepth": 1.8
+    },
+    {
+      "x": 72.0258,
+      "z": 63.5786,
+      "artworkRadius": 0.8887,
+      "shape": "round",
+      "padWidth": 1.7774,
+      "padDepth": 1.8
+    },
+    {
+      "x": 43.3551,
+      "z": 49.4357,
+      "artworkRadius": 0.8887,
+      "shape": "round",
+      "padWidth": 1.7774,
+      "padDepth": 1.8
+    },
+    {
+      "x": 68.4287,
+      "z": 51.3643,
+      "artworkRadius": 0.3809,
+      "shape": "round",
+      "padWidth": 0.7617,
+      "padDepth": 0.7714
+    },
+    {
+      "x": 19.0115,
+      "z": 46.9393,
+      "artworkRadius": 0.7935,
+      "shape": "round",
+      "padWidth": 1.5869,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 19.0115,
+      "z": 41.7964,
+      "artworkRadius": 0.7935,
+      "shape": "round",
+      "padWidth": 1.5869,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 4.4752,
+      "z": 21.9321,
+      "artworkRadius": 0.6242,
+      "shape": "round",
+      "padWidth": 1.2484,
+      "padDepth": 1.2643
+    },
+    {
+      "x": 10.4632,
+      "z": 21.975,
+      "artworkRadius": 0.6242,
+      "shape": "round",
+      "padWidth": 1.2484,
+      "padDepth": 1.2643
+    },
+    {
+      "x": 27.8878,
+      "z": 47.7,
+      "artworkRadius": 1.0156,
+      "shape": "round",
+      "padWidth": 2.0313,
+      "padDepth": 2.0571
+    },
+    {
+      "x": 27.8878,
+      "z": 41.0143,
+      "artworkRadius": 1.0156,
+      "shape": "round",
+      "padWidth": 2.0313,
+      "padDepth": 2.0571
+    },
+    {
+      "x": 35.5051,
+      "z": 31.5107,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 38.0442,
+      "z": 31.5,
+      "artworkRadius": 0.6348,
+      "shape": "round",
+      "padWidth": 1.2696,
+      "padDepth": 1.2857
+    },
+    {
+      "x": 82.8169,
+      "z": 70.1571,
+      "artworkRadius": 0.8887,
+      "shape": "round",
+      "padWidth": 1.7774,
+      "padDepth": 1.8
+    },
+    {
+      "x": 82.8169,
+      "z": 63.5786,
+      "artworkRadius": 0.8887,
+      "shape": "round",
+      "padWidth": 1.7774,
+      "padDepth": 1.8
+    },
+    {
+      "x": 88.805,
+      "z": 68.7857,
+      "artworkRadius": 1.9043,
+      "shape": "round",
+      "padWidth": 3.8086,
+      "padDepth": 3.8572
+    },
+    {
+      "x": 90.0957,
+      "z": 55.95,
+      "artworkRadius": 0.6348,
+      "shape": "square",
+      "padWidth": 1.2696,
+      "padDepth": 1.2857
+    },
+    {
+      "x": 80.5529,
+      "z": 27.6536,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 81.1877,
+      "z": 18.6429,
+      "artworkRadius": 0.7617,
+      "shape": "round",
+      "padWidth": 1.5235,
+      "padDepth": 1.5429
+    },
+    {
+      "x": 83.7268,
+      "z": 18.6429,
+      "artworkRadius": 0.7617,
+      "shape": "round",
+      "padWidth": 1.5235,
+      "padDepth": 1.5429
+    },
+    {
+      "x": 84.3615,
+      "z": 27.6536,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 90.0745,
+      "z": 53.3571,
+      "artworkRadius": 0.6348,
+      "shape": "round",
+      "padWidth": 1.2696,
+      "padDepth": 1.2857
+    },
+    {
+      "x": 90.0957,
+      "z": 45.675,
+      "artworkRadius": 0.7829,
+      "shape": "square",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 90.0745,
+      "z": 43.0821,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 90.0745,
+      "z": 40.5107,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 90.0745,
+      "z": 37.9393,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 90.0745,
+      "z": 35.3679,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 90.0957,
+      "z": 27.675,
+      "artworkRadius": 0.7829,
+      "shape": "square",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 90.0745,
+      "z": 25.0821,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 90.0745,
+      "z": 22.5107,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 90.0745,
+      "z": 19.9393,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 88.805,
+      "z": 3.2143,
+      "artworkRadius": 1.9043,
+      "shape": "round",
+      "padWidth": 3.8086,
+      "padDepth": 3.8571
+    },
+    {
+      "x": 39.3137,
+      "z": 2.5821,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 39.3137,
+      "z": 12.8679,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 13.0446,
+      "z": 5.1536,
+      "artworkRadius": 0.7935,
+      "shape": "round",
+      "padWidth": 1.5869,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 15.5837,
+      "z": 5.1536,
+      "artworkRadius": 0.7935,
+      "shape": "round",
+      "padWidth": 1.5869,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 7.2153,
+      "z": 3.8679,
+      "artworkRadius": 0.5078,
+      "shape": "oval",
+      "padWidth": 1.0156,
+      "padDepth": 1.4357
+    },
+    {
+      "x": 3.1527,
+      "z": 3.2143,
+      "artworkRadius": 1.9043,
+      "shape": "round",
+      "padWidth": 3.8086,
+      "padDepth": 3.8571
+    },
+    {
+      "x": 8.8657,
+      "z": 3.8679,
+      "artworkRadius": 0.5078,
+      "shape": "oval",
+      "padWidth": 1.0156,
+      "padDepth": 1.4357
+    },
+    {
+      "x": 10.5161,
+      "z": 3.8679,
+      "artworkRadius": 0.5078,
+      "shape": "oval",
+      "padWidth": 1.0156,
+      "padDepth": 1.4357
+    },
+    {
+      "x": 21.0428,
+      "z": 12.8679,
+      "artworkRadius": 0.7935,
+      "shape": "round",
+      "padWidth": 1.5869,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 23.5819,
+      "z": 12.8679,
+      "artworkRadius": 0.7935,
+      "shape": "round",
+      "padWidth": 1.5869,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 34.2567,
+      "z": 12.8893,
+      "artworkRadius": 0.7829,
+      "shape": "square",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 36.7746,
+      "z": 12.8679,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 18.144,
+      "z": 5.175,
+      "artworkRadius": 0.7935,
+      "shape": "square",
+      "padWidth": 1.5869,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 34.2355,
+      "z": 2.5821,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 36.7746,
+      "z": 2.5821,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 41.8528,
+      "z": 12.8679,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 44.3919,
+      "z": 12.8679,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 46.931,
+      "z": 12.8679,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 64.0805,
+      "z": 12.8893,
+      "artworkRadius": 0.7935,
+      "shape": "square",
+      "padWidth": 1.5869,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 41.8528,
+      "z": 2.5821,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 44.3919,
+      "z": 2.5821,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 46.931,
+      "z": 2.5821,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 66.5984,
+      "z": 12.8679,
+      "artworkRadius": 0.7935,
+      "shape": "round",
+      "padWidth": 1.5869,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 69.1375,
+      "z": 12.8679,
+      "artworkRadius": 0.7935,
+      "shape": "round",
+      "padWidth": 1.5869,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 71.666,
+      "z": 12.8679,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 74.2052,
+      "z": 12.8679,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 76.7443,
+      "z": 12.8679,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 64.0593,
+      "z": 2.5821,
+      "artworkRadius": 0.7935,
+      "shape": "round",
+      "padWidth": 1.5869,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 66.5984,
+      "z": 2.5821,
+      "artworkRadius": 0.7935,
+      "shape": "round",
+      "padWidth": 1.5869,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 69.1375,
+      "z": 2.5821,
+      "artworkRadius": 0.7935,
+      "shape": "round",
+      "padWidth": 1.5869,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 71.666,
+      "z": 2.5821,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 74.2052,
+      "z": 2.5821,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    },
+    {
+      "x": 76.7443,
+      "z": 2.5821,
+      "artworkRadius": 0.7829,
+      "shape": "round",
+      "padWidth": 1.5658,
+      "padDepth": 1.6071
+    }
+  ],
+  "registration": {
+    "backMirrorX": true,
+    "matchedCenters": 219,
+    "maxErrorMm": 0.04754,
+    "method": "bijective nearest pad symbols after PCB-frame normalization"
+  }
+}

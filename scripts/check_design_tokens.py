@@ -56,7 +56,9 @@ def production_files() -> list[pathlib.Path]:
     return sorted(
         path
         for path in SRC.rglob("*")
-        if path.suffix in {".ts", ".tsx"} and "__tests__" not in path.parts
+        if path.suffix in {".ts", ".tsx"}
+        and "__tests__" not in path.parts
+        and "vendor" not in path.parts
     )
 
 

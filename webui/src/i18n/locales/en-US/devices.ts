@@ -87,6 +87,16 @@ export default {
   source: {
     ws: 'Live sync', inline: 'Device report', rest: 'Device connection', bulk: 'Bulk sync', none: 'Not synced', error: 'Load failed',
   },
+  twin: {
+    title: '3D digital twin',
+    live: 'Live sync',
+    offline: 'Device offline',
+    loading: 'Loading 3D model…',
+    loadFailed: 'Could not load the 3D model',
+    aria: 'Three-dimensional digital twin of the STC-B development board',
+    note: 'Online state, LEDs and display mode come from the current device state. Unreported glyphs are never inferred; the model is read-only.',
+    indicator: { led: 'LED bank', mode: 'Display mode', page: 'Page' },
+  },
   stateValue: {
     free: 'Free', busy: 'Busy', idle: 'Idle', running: 'Running', stopped: 'Stopped',
     on: 'On', off: 'Off', clock: 'Clock mode',

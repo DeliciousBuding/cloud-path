@@ -14,6 +14,7 @@ import {
 } from '@/components/SchemaRenderer'
 import { ActionPanel } from '@/components/ActionPanel'
 import { CommandHistory } from '@/components/CommandHistory'
+import { DeviceTwinPanel } from '@/components/device-twin/DeviceTwinPanel'
 import { TimeSeriesChart } from '@/components/charts'
 import { EventFeed, eventDisplayLabel } from '@/components/EventFeed'
 import { RowSkeleton } from '@/components/Skeleton'
@@ -297,6 +298,8 @@ export default function DeviceDetail() {
             : t('detail.header.lastSeen', { time: timeAgo(d.last_seen) })}
         </span>
       </header>
+
+      <DeviceTwinPanel device={d} descriptor={descriptor} />
 
       <div className="mb-5 [&_button]:min-h-touch sm:[&_button]:min-h-0">
         <TabBar items={tabs} value={tab} onChange={setTab} label={t('detail.tabsAria')} />

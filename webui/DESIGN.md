@@ -96,6 +96,8 @@ Application Plane 的展示入口位于运行实例详情。应用目录声明 `
 `open`（L0/认证探针不可用）可读但强制只读，账号模式仍要求合法 `tenant_id>0`；服务令牌的
 `user.id=0` 是合法身份。写操作继续只允许已登录的 operator/admin。插件业务导航、`/apps/:route`
 路由和自定义 iframe bridge 的契约见 `webui/src/components/plugin-ui/README.md`。
+设备详情页的参考 3D 数字孪生只在 WebUI 内按 adapter 显式适配，边界与状态映射见
+`webui/src/components/device-twin/README.md`；它不改变 Driver、Manifest 或 Core 契约。
 
 普通视图展示可辨认的结构化字段、公开 Descriptor / Capability 名称与本地化时间。已知通用字段沿用
 公共词汇；无展示声明的字段保留原字段名，不能用“数据项 1”掩盖含义。标题/名称、状态类字段与已填

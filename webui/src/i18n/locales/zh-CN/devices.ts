@@ -87,6 +87,16 @@ export default {
   source: {
     ws: '实时同步', inline: '设备上报', rest: '设备直连', bulk: '批量同步', none: '尚未同步', error: '加载失败',
   },
+  twin: {
+    title: '3D 数字孪生',
+    live: '实时同步',
+    offline: '设备离线',
+    loading: '正在加载 3D 模型…',
+    loadFailed: '3D 模型加载失败',
+    aria: 'STC-B 开发板三维数字孪生模型',
+    note: '在线、LED 与显示模式来自当前设备状态；未上报的字形不推测，模型为只读视图。',
+    indicator: { led: 'LED', mode: '显示模式', page: '页面' },
+  },
   stateValue: {
     free: '空闲', busy: '忙碌', idle: '空闲', running: '运行中', stopped: '已停止',
     on: '已开启', off: '已关闭', clock: '时钟模式',

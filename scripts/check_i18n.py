@@ -65,6 +65,7 @@ IGNORED_SOURCE_PREFIXES = (
     ("webui/src/test/", "test harness"),
 )
 IGNORED_SOURCE_MARKERS = (
+    ("/vendor/", "vendored renderer source with its own upstream presentation copy"),
     ("/__tests__/", "test fixtures and assertions"),
     (".test.ts", "test file"),
     (".test.tsx", "test file"),
