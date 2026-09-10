@@ -308,9 +308,13 @@ func TestEventBackpressure(t *testing.T) {
 
 	shortCtx, shortCancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer shortCancel()
+	start := time.Now()
 	err := rt.DispatchEvent(shortCtx, "tenant-a", "inst-1", event("three"))
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("dispatch three error = %v, want DeadlineExceeded", err)
+	if !errors.Is(err, ErrEventQueueFull) {
+		t.Fatalf("dispatch three error = %v, want ErrEventQueueFull", err)
+	}
+	if elapsed := time.Since(start); elapsed > 20*time.Millisecond {
+		t.Fatalf("full queue blocked shared dispatcher for %s", elapsed)
 	}
 
 	close(stream.sendDelay)
@@ -374,6 +378,131 @@ func TestEffectIdempotency(t *testing.T) {
 // 回归背景（2026-09-05 真板实测）：键只含 record_type/record_id 时，
 // UpsertDomainRecord 被降级成一次性 create——窗口记录 opened→completed/
 // missed、提醒回执落痕的全部更新都被 Duplicate 静默吞掉。
+type flakyExecutor struct {
+	calls int
+}
+
+type blockingExecutor struct {
+	started chan struct{}
+	release chan struct{}
+	calls   int
+}
+
+func (e *blockingExecutor) Execute(context.Context, Effect) error {
+	e.calls++
+	e.started <- struct{}{}
+	<-e.release
+	return nil
+}
+
+func (e *flakyExecutor) Execute(context.Context, Effect) error {
+	e.calls++
+	if e.calls == 1 {
+		return errors.New("transient executor failure")
+	}
+	return nil
+}
+
+func TestFailedEffectIdempotencyKeyCanRetry(t *testing.T) {
+	exec := &flakyExecutor{}
+	stream := newFakeStream()
+	cli := newFakeClient(testDescriptor(), stream)
+	rt := newTestRuntime(t, cli, exec, 0)
+	defer rt.Close(context.Background())
+	startTestInstance(t, rt, testSpec())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	effect := Effect{
+		ID: "effect-retry", IdempotencyKey: "retry-key", TenantID: "tenant-a",
+		Kind:             EffectSendNotification,
+		SendNotification: &SendNotification{Title: "hello", Body: "world", Severity: "info"},
+	}
+	if _, err := rt.ExecuteEffects(ctx, "tenant-a", "inst-1", []Effect{effect}); err == nil {
+		t.Fatal("first execution unexpectedly succeeded")
+	}
+	res, err := rt.ExecuteEffects(ctx, "tenant-a", "inst-1", []Effect{effect})
+	if err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	if res.Executed != 1 || len(res.Results) != 1 || res.Results[0].Duplicate {
+		t.Fatalf("retry result = %+v", res)
+	}
+	if exec.calls != 2 {
+		t.Fatalf("executor calls = %d, want 2", exec.calls)
+	}
+}
+
+func TestConcurrentInFlightEffectIsNotExecutedTwice(t *testing.T) {
+	exec := &blockingExecutor{started: make(chan struct{}, 1), release: make(chan struct{})}
+	stream := newFakeStream()
+	cli := newFakeClient(testDescriptor(), stream)
+	rt := newTestRuntime(t, cli, exec, 0)
+	defer rt.Close(context.Background())
+	startTestInstance(t, rt, testSpec())
+
+	effect := Effect{
+		ID: "effect-inflight", IdempotencyKey: "inflight-key", TenantID: "tenant-a",
+		Kind:             EffectSendNotification,
+		SendNotification: &SendNotification{Title: "hello", Body: "world", Severity: "info"},
+	}
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := rt.ExecuteEffects(context.Background(), "tenant-a", "inst-1", []Effect{effect})
+		firstDone <- err
+	}()
+	select {
+	case <-exec.started:
+	case <-time.After(time.Second):
+		t.Fatal("executor did not start")
+	}
+
+	res, err := rt.ExecuteEffects(context.Background(), "tenant-a", "inst-1", []Effect{effect})
+	if err != nil {
+		t.Fatalf("duplicate execute: %v", err)
+	}
+	if res.Executed != 0 || len(res.Results) != 1 || !res.Results[0].Duplicate {
+		t.Fatalf("duplicate result = %+v", res)
+	}
+	if exec.calls != 1 {
+		t.Fatalf("executor calls = %d, want 1 while first effect is still in flight", exec.calls)
+	}
+
+	close(exec.release)
+	if err := <-firstDone; err != nil {
+		t.Fatalf("first execute: %v", err)
+	}
+}
+
+func TestRunJobHasIndependentTimeout(t *testing.T) {
+	exec := &fakeExecutor{}
+	stream := newFakeStream()
+	cli := newFakeClient(testDescriptor(), stream)
+	cli.jobFn = func(ctx context.Context, _ *sdkapplication.RunJobRequest) error {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	rt, err := NewRuntime(RuntimeOptions{
+		Dialer:     func(InstanceSpec) (sdkapplication.ApplicationClient, error) { return cli, nil },
+		Executor:   exec,
+		JobTimeout: 25 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rt.Close(context.Background())
+	startTestInstance(t, rt, testSpec())
+
+	start := time.Now()
+	_, err = rt.RunJob(context.Background(), "tenant-a", "inst-1", &sdkapplication.RunJobRequest{JobID: "hang"})
+	if err == nil || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("RunJob error = %v, want deadline exceeded", err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("RunJob blocked for %s", elapsed)
+	}
+}
+
 func TestDomainRecordUpsertKeyIsContentAddressed(t *testing.T) {
 	src := EffectSource{PluginInstanceID: "inst-1", TenantID: "tenant-a"}
 	mk := func(data string) Effect {

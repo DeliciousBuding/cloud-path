@@ -38,11 +38,11 @@ devices:
   #   adapter: stcb                    # 适配器名（见 GET /api/adapters）
   #   name: 参考板                      # 展示名（可选）
   #   port: COM3                       # Windows: COM3；Linux: /dev/ttyUSB0；macOS: /dev/cu.usbserial
-  #   baud: 9600
+  #   baud: 115200
   # - id: board-2
   #   adapter: stcb
   #   port: COM4
-  #   baud: 9600
+  #   baud: 115200
 
 # 可选的进程内外部 Driver Plugin Host（默认不启用，保持纯内置 adapter 行为）。
 # 启用后由 desired-state + plugins.lock 启动外部 driver 实例；edge 退出时优雅关闭。

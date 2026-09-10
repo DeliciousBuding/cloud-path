@@ -695,6 +695,10 @@ func TestPluginInstanceInvalidInput(t *testing.T) {
 		`{"edge_id":"e1","instance_id":"b1","plugin_id":"p1","version":""}`,
 		`{"edge_id":"e1","instance_id":"b1","plugin_id":"p1","version":"1.0.0","isolation":"docker"}`,
 		`{"edge_id":"e1","instance_id":"b1","plugin_id":"p1","version":"1.0.0","config":{"":"v"}}`,
+		`{"edge_id":"e1","instance_id":"b1","plugin_id":"p1","version":"1.0.0","config":{"app_config":"[]"}}`,
+		`{"edge_id":"e1","instance_id":"b1","plugin_id":"p1","version":"1.0.0","config":{"app_config":"not-json"}}`,
+		`{"edge_id":"e1","instance_id":"b1","plugin_id":"p1","version":"1.0.0","config":{"app_bindings":"{}"}}`,
+		`{"edge_id":"e1","instance_id":"b1","plugin_id":"p1","version":"1.0.0","config":{"app_bindings":"null"}}`,
 	}
 	for i, body := range bad {
 		rec := servePlugin(t, srv, http.MethodPost, "/api/plugin-instances", body,

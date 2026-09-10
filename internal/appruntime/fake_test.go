@@ -51,6 +51,7 @@ type fakeClient struct {
 	requestErr    error
 	jobResp       *sdkapplication.RunJobResponse
 	jobErr        error
+	jobFn         func(context.Context, *sdkapplication.RunJobRequest) error
 	healthResp    *sdkapplication.HealthResponse
 	healthErr     error
 	shutdownResp  *sdkapplication.ShutdownResponse
@@ -116,9 +117,14 @@ func (c *fakeClient) HandleRequest(ctx context.Context, req *sdkapplication.Plug
 
 func (c *fakeClient) RunJob(ctx context.Context, req *sdkapplication.RunJobRequest) (*sdkapplication.RunJobResponse, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	c.jobReqs = append(c.jobReqs, req)
-	return c.jobResp, c.jobErr
+	fn := c.jobFn
+	resp, err := c.jobResp, c.jobErr
+	c.mu.Unlock()
+	if fn != nil {
+		err = fn(ctx, req)
+	}
+	return resp, err
 }
 
 func (c *fakeClient) Health(ctx context.Context) (*sdkapplication.HealthResponse, error) {
