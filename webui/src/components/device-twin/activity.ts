@@ -5,6 +5,8 @@ export type DeviceTwinActivity = {
   id: string
   deviceId: string
   label: string
+  entityID?: string
+  eventType?: string
   detail?: string
   tone: Tone
   at: number

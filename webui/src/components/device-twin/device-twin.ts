@@ -1,5 +1,7 @@
 import { observationsOf } from '@/lib/descriptor'
 import type { DeviceDescriptor, DeviceView } from '@/lib/types'
+import type { HighlightTone } from './vendor/stcb/board-model'
+import type { DeviceTwinActivity } from './activity'
 import type { BoardVisualState } from './vendor/stcb/visual-state'
 
 export type DeviceTwinIndicator = {
@@ -96,6 +98,33 @@ function resolveStcb(device: DeviceView, descriptor: DeviceDescriptor | null, no
  */
 export function supportsDeviceTwin(device: DeviceView): boolean {
   return device.adapter === 'stcb'
+}
+
+/** Resolve a platform event/command to the STC-B model parts that represent it. */
+export function resolveDeviceTwinHighlight(
+  device: DeviceView,
+  activity: DeviceTwinActivity,
+): { componentIDs: string[]; tone: HighlightTone } | undefined {
+  if (!supportsDeviceTwin(device)) return undefined
+  const text = `${activity.entityID ?? ''} ${activity.eventType ?? ''}`.toLowerCase()
+  const rules: Array<{ patterns: RegExp[]; componentIDs: string[] }> = [
+    { patterns: [/\bkey1\b/, /\bk1\b/], componentIDs: ['button-1'] },
+    { patterns: [/\bkey2\b/, /\bk2\b/], componentIDs: ['button-2'] },
+    { patterns: [/\bkey3\b/, /\bk3\b/], componentIDs: ['button-3'] },
+    { patterns: [/buzzer/, /(?:^|[._:-])tone(?:$|[._:-])/], componentIDs: ['buzzer'] },
+    { patterns: [/display/, /digit/, /segment/], componentIDs: ['display-1', 'display-2'] },
+    { patterns: [/(?:^|[._:-])led(?:$|[._:-])/, /led-bank/, /(?:^|[._:-])mask(?:$|[._:-])/], componentIDs: ['led-row'] },
+    { patterns: [/navigation/, /joystick/, /direction/], componentIDs: ['joystick'] },
+    { patterns: [/vibration/, /quake/], componentIDs: ['vibration'] },
+    { patterns: [/hall/], componentIDs: ['hall'] },
+    { patterns: [/motor/, /step/], componentIDs: ['header-sm', 'uln'] },
+    { patterns: [/temperature/, /thermistor/], componentIDs: ['thermistor'] },
+    { patterns: [/illuminance/, /(?:^|[._:-])ldr(?:$|[._:-])/, /light/], componentIDs: ['ldr'] },
+    { patterns: [/clock/, /(?:^|[._:-])rtc(?:$|[._:-])/, /time/], componentIDs: ['ds1302', 'crystal-2'] },
+    { patterns: [/reset/, /(?:^|[._:-])rst(?:$|[._:-])/], componentIDs: ['reset'] },
+  ]
+  const componentIDs = rules.find((rule) => rule.patterns.some((pattern) => pattern.test(text)))?.componentIDs
+  return componentIDs ? { componentIDs, tone: activity.tone } : undefined
 }
 
 export function resolveDeviceTwin(

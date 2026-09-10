@@ -11,6 +11,7 @@ import { ARTWORK_HOLES, boardLayerTextures, type BoardArtwork } from './board-ar
 import { createPackage, createDiscretePackage, materials, type PackageModel } from './packages'
 
 export type BoardPart = PackageModel & { component: Component; label: CSS2DObject; basePosition: THREE.Vector3 }
+export type HighlightTone = 'accent' | 'ok' | 'warn' | 'bad' | 'idle'
 
 function pcbGeometry() {
   const w = BOARD.width / 2, d = BOARD.depth / 2, r = BOARD.cornerRadius
@@ -177,6 +178,102 @@ export function createBoardModel(artwork: BoardArtwork) {
     pkg.group.add(label); root.add(pkg.group)
     return { ...pkg, component, label, basePosition: pkg.group.position.clone() }
   })
+  type HighlightVisual = {
+    mesh: THREE.Mesh
+    helper: THREE.Box3Helper
+    ring: THREE.Mesh
+    beam: THREE.Line
+    light: THREE.PointLight
+  }
+  const highlightRoot = new THREE.Group()
+  highlightRoot.name = 'component-highlights'
+  root.add(highlightRoot)
+  let highlightVisuals: HighlightVisual[] = []
+  let highlightStart = 0
+  let highlightDuration = 0
+
+  const clearComponentHighlight = () => {
+    for (const visual of highlightVisuals) {
+      highlightRoot.remove(visual.mesh, visual.helper, visual.ring, visual.beam, visual.light)
+      visual.mesh.geometry.dispose()
+      ;(visual.mesh.material as THREE.Material).dispose()
+      visual.helper.geometry.dispose()
+      ;(visual.helper.material as THREE.Material).dispose()
+      visual.ring.geometry.dispose()
+      ;(visual.ring.material as THREE.Material).dispose()
+      visual.beam.geometry.dispose()
+      ;(visual.beam.material as THREE.Material).dispose()
+    }
+    highlightVisuals = []
+    highlightDuration = 0
+  }
+
+  const setComponentHighlight = (ids: readonly string[], tone: HighlightTone, duration = 2200) => {
+    clearComponentHighlight()
+    const selected = new Set(ids)
+    if (!selected.size) return
+    const color = new THREE.Color({ accent: 0x2f7df6, ok: 0x1fa971, warn: 0xd98a16, bad: 0xe2483d, idle: 0x667085 }[tone])
+    for (const part of parts) {
+      if (!selected.has(part.component.id)) continue
+      const box = new THREE.Box3().setFromObject(part.group)
+      const size = box.getSize(new THREE.Vector3())
+      const center = box.getCenter(new THREE.Vector3())
+      const extent = Math.max(size.x, size.y, size.z, 5)
+      const geometry = new RoundedBoxGeometry(size.x + 1.1, size.y + 1.1, size.z + 1.1, 2, 0.18)
+      const material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending })
+      const mesh = new THREE.Mesh(geometry, material)
+      mesh.position.copy(center)
+      mesh.renderOrder = 80
+      const helper = new THREE.Box3Helper(box.clone().expandByScalar(0.45), color)
+      const helperMaterial = helper.material as THREE.LineBasicMaterial
+      helperMaterial.transparent = true
+      helperMaterial.depthTest = false
+      helperMaterial.opacity = 0.72
+      helper.renderOrder = 81
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(extent * 0.48, extent * 0.66, 36),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.62, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+      )
+      ring.rotation.x = -Math.PI / 2
+      ring.position.set(center.x, box.max.y + Math.max(3, extent * 0.8), center.z)
+      ring.renderOrder = 82
+      const beamGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(center.x, box.max.y + 0.2, center.z),
+        new THREE.Vector3(center.x, ring.position.y, center.z),
+      ])
+      const beam = new THREE.Line(beamGeometry, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.54, depthTest: false, depthWrite: false }))
+      beam.renderOrder = 82
+      const light = new THREE.PointLight(color, 5, extent * 3.2, 2)
+      light.position.copy(center).add(new THREE.Vector3(0, extent * 1.25, 0))
+      highlightRoot.add(mesh, helper, ring, beam, light)
+      highlightVisuals.push({ mesh, helper, ring, beam, light })
+    }
+    highlightStart = performance.now()
+    highlightDuration = duration
+  }
+
+  const updateComponentHighlight = (now: number) => {
+    if (!highlightVisuals.length) return false
+    const progress = Math.min(1, Math.max(0, (now - highlightStart) / highlightDuration))
+    const pulse = 0.5 + 0.5 * Math.sin(progress * Math.PI * 4)
+    const fade = 1 - Math.max(0, (progress - 0.72) / 0.28)
+    for (const visual of highlightVisuals) {
+      ;(visual.mesh.material as THREE.MeshBasicMaterial).opacity = (0.10 + 0.18 * pulse) * fade
+      visual.mesh.scale.setScalar(0.985 + 0.035 * pulse)
+      const helperMaterial = visual.helper.material as THREE.LineBasicMaterial
+      helperMaterial.opacity = (0.42 + 0.52 * pulse) * fade
+      ;(visual.ring.material as THREE.MeshBasicMaterial).opacity = (0.38 + 0.52 * pulse) * fade
+      visual.ring.scale.setScalar(0.92 + 0.16 * pulse)
+      ;(visual.beam.material as THREE.LineBasicMaterial).opacity = (0.30 + 0.48 * pulse) * fade
+      visual.light.intensity = (3 + 4 * pulse) * fade
+    }
+    if (progress >= 1) {
+      clearComponentHighlight()
+      return false
+    }
+    return true
+  }
+
   let state = DEFAULT_VISUAL_STATE
   const updateDisplay = () => {
     for (const part of parts) {
@@ -191,7 +288,7 @@ export function createBoardModel(artwork: BoardArtwork) {
   updateDisplay()
   return {
     root, parts,
-    setComponentsVisible(visible: boolean) { surfaceDetails.visible = visible; parts.forEach(p => { p.group.visible = visible }) },
+    setComponentsVisible(visible: boolean) { surfaceDetails.visible = visible; highlightRoot.visible = visible; parts.forEach(p => { p.group.visible = visible }) },
     setCopperVisible(exposed: boolean) {
       for (const [mat, layers] of [[frontMaterial, frontLayers], [backMaterial, backLayers]] as const) {
         mat.map = exposed ? layers.exposed : layers.covered
@@ -203,6 +300,8 @@ export function createBoardModel(artwork: BoardArtwork) {
     setVisualState,
     setPower: (value: boolean) => setVisualState({ powered: value }),
     setDisplayText: (text: string) => setVisualState({ display: text }),
+    setComponentHighlight,
+    updateComponentHighlight,
     setExplode(amount: number) {
       for (const part of parts) {
         part.group.position.copy(part.basePosition)

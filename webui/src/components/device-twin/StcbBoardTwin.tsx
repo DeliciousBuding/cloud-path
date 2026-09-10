@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { loadBoardArtwork } from './vendor/stcb/board-artwork'
-import { createBoardModel } from './vendor/stcb/board-model'
+import { createBoardModel, type HighlightTone } from './vendor/stcb/board-model'
 import { createStudio, type StudioTheme } from './vendor/stcb/render-studio'
 import type { BoardVisualState } from './vendor/stcb/visual-state'
 
@@ -13,6 +13,7 @@ type StcbBoardTwinProps = {
   cacheKey: string
   state: BoardVisualState
   label: string
+  highlight?: { id: string; componentIDs: string[]; tone: HighlightTone }
 }
 
 type BoardRuntime = {
@@ -21,6 +22,7 @@ type BoardRuntime = {
   detach(): void
   setTheme(theme: StudioTheme): void
   setVisualState(state: BoardVisualState): void
+  setHighlight(componentIDs: string[], tone: HighlightTone): void
   dispose(): void
 }
 
@@ -118,8 +120,9 @@ async function createRuntime(key: string, initialState: BoardVisualState, initia
       frame = 0
       if (disposed || !host) return
       const moving = controls.update()
+      const animating = model.updateComponentHighlight(performance.now())
       studio.render()
-      if (moving) invalidate()
+      if (moving || animating) invalidate()
     })
   }
 
@@ -185,6 +188,10 @@ async function createRuntime(key: string, initialState: BoardVisualState, initia
       model.setVisualState(state)
       invalidate()
     },
+    setHighlight(componentIDs, tone) {
+      model.setComponentHighlight(componentIDs, tone)
+      invalidate()
+    },
     dispose() {
       disposed = true
       if (frame) cancelAnimationFrame(frame)
@@ -238,16 +245,18 @@ function acquireRuntime(key: string, state: BoardVisualState, dark: boolean): Pr
 }
 
 /** Device-page renderer. It intentionally exposes no controls beyond orbit/zoom. */
-export default function StcbBoardTwin({ cacheKey, state, label }: StcbBoardTwinProps) {
+export default function StcbBoardTwin({ cacheKey, state, label, highlight }: StcbBoardTwinProps) {
   const { t } = useTranslation('devices')
   const hostRef = useRef<HTMLDivElement>(null)
   const runtimeRef = useRef<BoardRuntime | null>(null)
   const stateRef = useRef(state)
   const darkTheme = useDarkDocumentTheme()
   const darkThemeRef = useRef(darkTheme)
+  const highlightRef = useRef(highlight)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   stateRef.current = state
   darkThemeRef.current = darkTheme
+  highlightRef.current = highlight
 
   useLayoutEffect(() => {
     const host = hostRef.current
@@ -259,6 +268,7 @@ export default function StcbBoardTwin({ cacheKey, state, label }: StcbBoardTwinP
       runtime.attach(host)
       runtime.setTheme(darkThemeRef.current ? 'dark' : 'light')
       runtime.setVisualState(stateRef.current)
+      if (highlightRef.current) runtime.setHighlight(highlightRef.current.componentIDs, highlightRef.current.tone)
       runtimeRef.current = runtime
       setStatus('ready')
     }
@@ -289,6 +299,10 @@ export default function StcbBoardTwin({ cacheKey, state, label }: StcbBoardTwinP
   useEffect(() => {
     runtimeRef.current?.setVisualState(state)
   }, [state])
+
+  useEffect(() => {
+    if (highlight) runtimeRef.current?.setHighlight(highlight.componentIDs, highlight.tone)
+  }, [highlight])
 
   return (
     <div className="relative h-full w-full" role="img" aria-label={label}>

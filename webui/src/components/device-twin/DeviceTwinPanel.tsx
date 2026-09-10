@@ -1,12 +1,12 @@
 import { lazy, Suspense, useEffect, useId, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Activity as ActivityIcon, Box, Maximize2, Minimize2 } from 'lucide-react'
+import { Box, Maximize2, Minimize2 } from 'lucide-react'
 import { Badge, IconButton, Panel } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { useDeviceTwinActivity } from './activity'
 import { useNow } from '@/hooks/useNow'
 import type { DeviceDescriptor, DeviceView } from '@/lib/types'
-import { resolveDeviceTwin } from './device-twin'
+import { resolveDeviceTwin, resolveDeviceTwinHighlight } from './device-twin'
 
 const loadStcbBoardTwin = () => import('./StcbBoardTwin')
 const StcbBoardTwin = lazy(loadStcbBoardTwin)
@@ -70,18 +70,23 @@ export function DeviceTwinPanel({ device, descriptor, full = false, onToggle, cl
       setVisibleActivity(undefined)
       return
     }
-    if (Date.now() / 1000 - activity.at > 8) return
+    if (Date.now() / 1000 - activity.at > 8) {
+      setVisibleActivity(undefined)
+      return
+    }
     setVisibleActivity(activity)
-    const timer = window.setTimeout(() => setVisibleActivity(undefined), 5200)
+    const timer = window.setTimeout(() => setVisibleActivity(undefined), 2400)
     return () => window.clearTimeout(timer)
   }, [activity])
 
   if (!resolution) return null
 
   const viewerHeight = 'h-72 sm:h-80'
-  const activityColor = visibleActivity
-    ? { ok: 'var(--color-ok)', warn: 'var(--color-warn)', bad: 'var(--color-bad)', accent: 'var(--color-accent)', idle: 'var(--color-ink-3)' }[visibleActivity.tone]
-    : undefined
+  const highlight = useMemo(() => {
+    if (!visibleActivity) return undefined
+    const resolved = resolveDeviceTwinHighlight(device, visibleActivity)
+    return resolved ? { id: visibleActivity.id, ...resolved } : undefined
+  }, [device, visibleActivity])
 
   return (
     <Panel
@@ -109,22 +114,9 @@ export function DeviceTwinPanel({ device, descriptor, full = false, onToggle, cl
         id={viewerId}
         className={`relative overflow-hidden rounded-tile bg-surface-2 ring-1 ring-hairline transition-[height] duration-300 ${viewerHeight}`}
       >
-        {visibleActivity && (
-          <>
-            <div className="twin-event-ring pointer-events-none absolute inset-0 z-10 rounded-tile" style={{ boxShadow: `inset 0 0 0 2px ${activityColor}` }} />
-            <div key={visibleActivity.id} role="status" aria-live="polite" className="twin-event-in pointer-events-none absolute inset-x-3 top-3 z-20 rounded-tile border border-hairline/80 bg-surface/95 px-3 py-2 shadow-lift backdrop-blur-sm">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="h-2 w-2 shrink-0 rounded-pill" style={{ backgroundColor: activityColor }} aria-hidden="true" />
-                <ActivityIcon size={13} className="shrink-0 text-ink-3" aria-hidden="true" />
-                <span className="min-w-0 truncate text-meta font-semibold text-ink">{visibleActivity.label}</span>
-              </div>
-              {visibleActivity.detail && <p className="mt-1 truncate pl-[30px] text-micro text-ink-3">{visibleActivity.detail}</p>}
-            </div>
-          </>
-        )}
         {twinReady ? (
           <Suspense fallback={<p className="grid h-full place-items-center px-6 text-center text-body text-ink-2">{t('twin.loading')}</p>}>
-            <StcbBoardTwin cacheKey={device.id} state={resolution.visualState} label={t('twin.aria')} />
+            <StcbBoardTwin cacheKey={device.id} state={resolution.visualState} label={t('twin.aria')} highlight={highlight} />
           </Suspense>
         ) : (
           <p className="grid h-full place-items-center px-6 text-center text-body text-ink-2">{t('twin.loading')}</p>

@@ -92,10 +92,10 @@ function ScopedCommandButton({ deviceId, targetLabel, action, args, buttonLabel,
     if (ack.status === 'ok') {
       const detail = ackDetailCopy(ack.detail, t('command.ackDetail'))
       toast.ok(t('command.completed', { label }), detail)
-      reportDeviceTwinActivity({ id: `command-${pendingId}-ok`, deviceId, tone: 'ok', label: t('command.completed', { label }), detail, at: Date.now() / 1000 })
+      reportDeviceTwinActivity({ id: `command-${pendingId}-ok`, deviceId, tone: 'ok', label: t('command.completed', { label }), entityID: action.cmd, eventType: action.cmd, detail, at: Date.now() / 1000 })
     } else {
       toast.bad(t('command.failed', { label }), t('command.failedDetail'))
-      reportDeviceTwinActivity({ id: `command-${pendingId}-failed`, deviceId, tone: 'bad', label: t('command.failed', { label }), detail: t('command.failedDetail'), at: Date.now() / 1000 })
+      reportDeviceTwinActivity({ id: `command-${pendingId}-failed`, deviceId, tone: 'bad', label: t('command.failed', { label }), entityID: action.cmd, eventType: action.cmd, detail: t('command.failedDetail'), at: Date.now() / 1000 })
     }
   }, [acks, pendingId, label, current, refreshHistory])
 
@@ -109,7 +109,7 @@ function ScopedCommandButton({ deviceId, targetLabel, action, args, buttonLabel,
       setPendingId(null)
       refreshHistory()
       toast.info(t('command.pending', { label }), t('command.pendingDetail'))
-      reportDeviceTwinActivity({ id: `command-${pendingId}-timeout`, deviceId, tone: 'warn', label: t('command.pending', { label }), detail: t('command.pendingDetail'), at: Date.now() / 1000 })
+      reportDeviceTwinActivity({ id: `command-${pendingId}-timeout`, deviceId, tone: 'warn', label: t('command.pending', { label }), entityID: action.cmd, eventType: action.cmd, detail: t('command.pendingDetail'), at: Date.now() / 1000 })
     }, ACK_TIMEOUT_MS)
     return () => clearTimeout(timer)
   }, [pendingId, label, current, refreshHistory])
@@ -125,14 +125,14 @@ function ScopedCommandButton({ deviceId, targetLabel, action, args, buttonLabel,
       if (!current()) return
       setPendingId(cv.id)
       refreshHistory()
-      reportDeviceTwinActivity({ id: `command-${cv.id}-sent`, deviceId, tone: 'accent', label: t('command.running'), detail: label, at: Date.now() / 1000 })
+      reportDeviceTwinActivity({ id: `command-${cv.id}-sent`, deviceId, tone: 'accent', label: t('command.running'), entityID: action.cmd, eventType: action.cmd, detail: label, at: Date.now() / 1000 })
     } catch (e) {
       if (!current()) return
       sending.current = false
       setBusy(false)
       const detail = commandErrorCopy(e)
       toast.bad(t('command.notRun', { label }), detail)
-      reportDeviceTwinActivity({ id: `command-request-${Date.now()}-failed`, deviceId, tone: 'bad', label: t('command.notRun', { label }), detail, at: Date.now() / 1000 })
+      reportDeviceTwinActivity({ id: `command-request-${Date.now()}-failed`, deviceId, tone: 'bad', label: t('command.notRun', { label }), entityID: action.cmd, eventType: action.cmd, detail, at: Date.now() / 1000 })
     }
   }
 

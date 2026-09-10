@@ -15,9 +15,10 @@ changing the Driver, plugin manifest, API, or Core contracts.
   orbit/zoom canvas interaction. Its side console is not included, and the scene
   background follows the app theme: white in light mode, studio-dark in dark mode.
 - `activity.ts` carries short-lived UI feedback from live device events and
-  command lifecycle updates. It adds an animated prompt and edge pulse to the
-  twin, but never mutates hardware-derived state or claims a physical event that
-  the device did not report.
+  command lifecycle updates. `device-twin.ts` maps the event entity or command
+  to model parts such as K1, the buzzer, the display, or the LED bank, then the
+  renderer pulses a localized outline and light on those parts. It never mutates
+  hardware-derived state or claims a physical event that the device did not report.
 - `vendor/stcb/` is the isolated copy of the public STC-B viewer renderer. The
   i18n/design-token gates exclude this directory because it owns upstream
   presentation constants and device-specific copy.

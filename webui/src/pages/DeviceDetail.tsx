@@ -59,6 +59,15 @@ function displayStateValue(value: unknown, t: TFunction): string {
   return key ? t(key) : formatValue(value)
 }
 
+function eventEntityID(payload: string): string | undefined {
+  try {
+    const value = JSON.parse(payload) as { entity_id?: unknown }
+    return typeof value.entity_id === 'string' && value.entity_id.trim() ? value.entity_id : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function descriptorErrorCopy(status: number | null, t: TFunction): { title: string; hint: string } {
   if (status === 504) return {
     title: t('error.descriptor.timeoutTitle'),
@@ -283,6 +292,8 @@ export default function DeviceDetail() {
       id: `event-${latest.id}`,
       deviceId: key,
       label: eventDisplayLabel(latest.type, capabilities, payloadLabel(latest.payload)),
+      entityID: eventEntityID(latest.payload),
+      eventType: latest.type,
       detail: payloadLabel(latest.payload),
       tone,
       at: latest.ts,
