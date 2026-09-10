@@ -309,6 +309,7 @@ export default {
   },
   summary: {
     status: 'Status', success: 'Succeeded', failure: 'Failed', pending: 'In progress', sent: 'Sent',
+    armed: 'Armed', disarmed: 'Disarmed', triggered: 'Alert triggered', recovered: 'Recovered',
     runCount: 'Runs', finishedAt: 'Finished',
   },
   schedule: {

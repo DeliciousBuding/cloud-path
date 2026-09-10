@@ -309,6 +309,7 @@ export default {
   },
   summary: {
     status: '状态', success: '成功', failure: '失败', pending: '处理中', sent: '已发送',
+    armed: '已布防', disarmed: '已撤防', triggered: '已触发告警', recovered: '已恢复',
     runCount: '执行次数', finishedAt: '完成时间',
   },
   schedule: {
