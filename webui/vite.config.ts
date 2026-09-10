@@ -7,15 +7,15 @@ import { fileURLToPath, URL } from 'node:url'
 // 生产态：vite build → dist/ → go:embed 进 server 单二进制（-tags embed_ui）
 
 // 供应商分包（函数式，按真实路径判定）：
-// 关键点——react-is / scheduler 等「React 生态小依赖」同时被 recharts 使用，
-// 若用对象式 manualChunks（charts: ['recharts']），Rollup 会把这些共享模块塞进 charts chunk，
-// 于是入口 chunk 静态 import charts → index.html 出现 charts 的 modulepreload，
-// 390KB 图表库被拖进首屏，路由级懒加载白做。故必须显式把它们钉在 react chunk。
+// 关键点——clsx / react-is / scheduler 等基础依赖同时被业务入口和 recharts 使用。
+// 若它们被归入 charts，入口会静态 import charts，index.html 就会 modulepreload
+// 整个图表库，路由级懒加载白做。共享基础依赖统一钉在 react chunk。
 function vendorChunk(id: string): string | undefined {
   if (!id.includes('node_modules')) return undefined
   const at = (re: RegExp) => re.test(id)
-  if (at(/[\\/]node_modules[\\/](react|react-dom|react-is|react-router|scheduler|use-sync-external-store)[\\/]/)) return 'react'
+  if (at(/[\\/]node_modules[\\/](react|react-dom|react-is|react-router|scheduler|use-sync-external-store|clsx)[\\/]/)) return 'react'
   if (at(/[\\/]node_modules[\\/]@tanstack[\\/]/)) return 'query'
+  if (at(/[\\/]node_modules[\\/]three[\\/]/)) return 'three'
   if (at(/[\\/]node_modules[\\/](recharts|react-smooth|victory-vendor|reselect|decimal\.js-light|d3-[^\\/]+)[\\/]/)) return 'charts'
   return undefined
 }

@@ -456,6 +456,22 @@ describe('metricTiles（概览 KPI 摘要）', () => {
     expect(t[1]).toMatchObject({ text: '否', kind: 'boolean' })
   })
 
+  it('带单位/语义的指标优先于 Raw ADC 调试通道', () => {
+    const d = makeDescriptor({
+      entities: [
+        entity({
+          entity_id: 'ext0', unique_key: 'ext0',
+          observations: { raw: obs('cloudpath.dev/capability/analog-input@1', 'raw', 173) },
+        }),
+        entity({
+          entity_id: 'temperature', unique_key: 'temperature',
+          observations: { value: obs('cloudpath.dev/capability/temperature@1', 'value', 26.5, { unit: 'Cel' }) },
+        }),
+      ],
+    })
+    expect(metricTiles(d, EMPTY_INDEX, 1)[0]).toMatchObject({ label: 'Temperature', text: '26.5', unit: '°C' })
+  })
+
   it('unitLabel 只转时频/温度符号，其余原样（科学单位翻中文反而啰嗦）', () => {
     expect(unitLabel('s')).toBe('秒')
     expect(unitLabel('ms')).toBe('毫秒')

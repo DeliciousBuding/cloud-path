@@ -11,6 +11,7 @@ import type { CommandView, UserView } from '@/lib/types'
 import { useAuth } from '@/store/auth'
 import type { AuthState } from '@/store/auth'
 import { useLive } from '@/store/ws'
+import { useDeviceTwinActivity } from '@/components/device-twin/activity'
 import { toast, useToasts } from '@/store/toast'
 import { resetStores } from '@/test/render'
 
@@ -230,11 +231,13 @@ describe('POST / WS ACK / history / timeout 生命周期', () => {
     const invalidate = vi.spyOn(view.queryClient, 'invalidateQueries')
     await clickRead()
     expect(screen.getByRole('button', { name: '读取' })).toHaveAttribute('aria-busy', 'true')
+    expect(useDeviceTwinActivity.getState().byDevice[KEY]).toMatchObject({ deviceId: KEY, tone: 'accent', label: '正在执行…' })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['device-commands', KEY] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['device-events', KEY] })
     expect(invalidate).toHaveBeenCalledTimes(2)
     act(() => useLive.setState({ acks: { [id]: { command_id: id, status: 'ok', detail: 'done' } } }))
     expect(screen.getByRole('button', { name: '读取' })).toHaveAttribute('aria-busy', 'false')
+    expect(useDeviceTwinActivity.getState().byDevice[KEY]).toMatchObject({ deviceId: KEY, tone: 'ok', label: '读取已完成', detail: 'done' })
     expect(invalidate).toHaveBeenCalledTimes(4)
     act(() => useLive.setState({ acks: { [id]: { command_id: id, status: 'ok', detail: 'duplicate' } } }))
     expect(ok).toHaveBeenCalledExactlyOnceWith('读取已完成', 'done')
@@ -256,6 +259,7 @@ describe('POST / WS ACK / history / timeout 生命周期', () => {
     expect(screen.getByRole('button', { name: '读取' })).toBeEnabled()
     expect(invalidate).toHaveBeenCalledTimes(4)
     expect(useToasts.getState().items.at(-1)).toMatchObject({ title: '读取失败', detail: '设备返回失败，请在操作记录中查看结果。', tone: 'bad' })
+    expect(useDeviceTwinActivity.getState().byDevice[KEY]).toMatchObject({ deviceId: KEY, tone: 'bad', label: '读取失败' })
   })
   it('15s 未确认只提示仍在等待，不把设备未回执误报为失败', async () => {
     vi.useFakeTimers()

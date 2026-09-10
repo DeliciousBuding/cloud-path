@@ -8,6 +8,7 @@ import type { ReactElement } from 'react'
 import { useAuth } from '@/store/auth'
 import { useLive } from '@/store/ws'
 import { useToasts } from '@/store/toast'
+import { useDeviceTwinActivity } from '@/components/device-twin/activity'
 
 export function renderWithProviders(ui: ReactElement, route = '/') {
   const queryClient = new QueryClient({
@@ -31,5 +32,6 @@ export function resetStores(): void {
     status: 'closed', failures: 0, domainRecord: null, connectionEpoch: 0, devices: {}, edges: {}, events: [], series: {}, descriptors: {}, acks: {},
   })
   useToasts.setState({ items: [] })
+  useDeviceTwinActivity.setState({ byDevice: {} })
   document.documentElement.classList.remove('dark')
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DeviceDescriptor, DeviceView } from '@/lib/types'
-import { resolveDeviceTwin } from '../device-twin'
+import { resolveDeviceTwin, resolveDeviceTwinHighlight } from '../device-twin'
 
 const device: DeviceView = {
   id: 'edge-1/board-1',
@@ -66,5 +66,14 @@ describe('device twin resolution', () => {
 
   it('fails closed for adapters without an installed frontend model', () => {
     expect(resolveDeviceTwin({ ...device, adapter: 'demo' }, descriptor)).toBeUndefined()
+  })
+
+  it('maps events and commands to the specific STC-B model part', () => {
+    const activity = { id: 'e1', deviceId: device.id, label: 'K1', tone: 'accent' as const, at: 1_010 }
+    expect(resolveDeviceTwinHighlight(device, { ...activity, entityID: 'key1', eventType: 'key.press' }))
+      .toEqual({ componentIDs: ['button-1'], tone: 'accent' })
+    expect(resolveDeviceTwinHighlight(device, { ...activity, entityID: 'buzzer', eventType: 'tone' }))
+      .toEqual({ componentIDs: ['buzzer'], tone: 'accent' })
+    expect(resolveDeviceTwinHighlight(device, { ...activity, eventType: 'unknown.event' })).toBeUndefined()
   })
 })

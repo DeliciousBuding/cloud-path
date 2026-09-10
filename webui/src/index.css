@@ -253,6 +253,7 @@ body {
 }
 @keyframes shimmer { 100% { transform: translateX(100%); } }
 
+
 /* 键盘焦点：细环，不破坏圆角视觉 */
 :focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);

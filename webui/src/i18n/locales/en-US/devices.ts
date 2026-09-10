@@ -94,6 +94,8 @@ export default {
     loading: 'Loading 3D model…',
     loadFailed: 'Could not load the 3D model',
     aria: 'Three-dimensional digital twin of the STC-B development board',
+    expand: 'Expand 3D model',
+    collapse: 'Collapse 3D model',
     note: 'Online state, LEDs and display mode come from the current device state. Unreported glyphs are never inferred; the model is read-only.',
     indicator: { led: 'LED bank', mode: 'Display mode', page: 'Page' },
   },

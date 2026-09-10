@@ -752,14 +752,36 @@ function obsToSummary(
 export function metricTiles(d: DeviceDescriptor, idx: CapabilityIndex = EMPTY_INDEX, max = 4): SummaryValue[] {
   const ordered = [...d.entities].sort((a, b) =>
     CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category))
-  const out: SummaryValue[] = []
-  for (const e of ordered) {
-    if (out.length >= max) break
-    const primary = primaryObservation(e, idx)
-    if (!primary || !isScalar(primary.value)) continue
-    out.push(obsToSummary(e, primary, idx))
+  const candidates: { entity: DescriptorEntity; observation: Observation; score: number }[] = []
+  for (const entity of ordered) {
+    const observation = primaryObservation(entity, idx)
+    if (!observation || !isScalar(observation.value)) continue
+    candidates.push({ entity, observation, score: metricScore(entity, observation, idx) })
   }
-  return out
+  // Metrics with a declared unit / semantic capability rise first. Raw debug
+  // channels remain available as a fallback when a device exposes nothing else.
+  candidates.sort((a, b) => b.score - a.score)
+  return candidates.slice(0, max).map(({ entity, observation }) => obsToSummary(entity, observation, idx))
+}
+
+function metricScore(entity: DescriptorEntity, observation: Observation, idx: CapabilityIndex): number {
+  const property = observation.property.toLowerCase()
+  const parsed = parseCapabilityRef(observation.capability)
+  const widget = widgetFor(observation, idx)
+  let score = 0
+  if (observation.unit) score += 40
+  if (property === 'value') score += 30
+  else if (property === 'time' && parsed.name === 'clock') score += 30
+  else if (property === 'raw') score -= 80
+  else score += 10
+  if (widget === 'metric' || widget === 'gauge' || widget === 'progress') score += 15
+  else if (widget === 'number') score += 10
+  if (knownText('noun', parsed.name)) score += 25
+  if (property === 'state') score -= 10
+  if (/key|button|gpio|digital-input/i.test(parsed.name) || /^(key|button|gpio)/i.test(entity.unique_key || entity.entity_id)) score -= 60
+  if (parsed.name === 'analog-input') score -= 40
+  if (/^(ext|adc)\d*$/i.test(entity.unique_key || entity.entity_id)) score -= 40
+  return score
 }
 
 /** legacy raw（诊断面）→ 卡片摘要：完全通用，按键顺序取标量，数组转胶囊组 */
