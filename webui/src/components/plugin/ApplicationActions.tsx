@@ -99,7 +99,7 @@ function Action({ instanceID, job, scope, enabled }: {
         {t('actions.openParameters')}
       </summary>
       <div className="border-t border-hairline px-3.5 py-3">
-        <ActionForm instanceID={instanceID} job={job} scope={scope} schema={schema} enabled={enabled} />
+        <ActionForm instanceID={instanceID} job={job} scope={scope} schema={schema} enabled={enabled} submitLabel={title} />
       </div>
     </details>
     {error && <p role="alert" className="mt-2 text-meta text-bad">{error}</p>}

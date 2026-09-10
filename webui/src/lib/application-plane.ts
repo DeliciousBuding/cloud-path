@@ -121,6 +121,14 @@ export function applicationResultSummary(value: unknown): { text?: string; usedK
         return i18n.t('plugin:summary.pending')
       case 'sent':
         return i18n.t('plugin:summary.sent')
+      case 'armed':
+        return i18n.t('plugin:summary.armed')
+      case 'disarmed':
+        return i18n.t('plugin:summary.disarmed')
+      case 'triggered':
+        return i18n.t('plugin:summary.triggered')
+      case 'recovered':
+        return i18n.t('plugin:summary.recovered')
       default:
         return undefined
     }

@@ -8,7 +8,20 @@ import { useApplicationPlane } from '@/hooks/useApplicationPlane'
 import { applicationRunningState } from '@/lib/application-plane'
 import { resolveLocalizedText } from '@/i18n/pluginText'
 import { ApplicationSection, ApplicationStatusStrip } from './ApplicationSections'
-import type { PluginCatalogView, PluginInstanceView, PluginUIPage } from '@/lib/types'
+import type { PluginCatalogView, PluginInstanceView, PluginUIPage, PluginUISection } from '@/lib/types'
+
+// 主任务优先：动作排在只读数据之前，避免“最近一次发生过什么”压住
+// “我现在能做什么”。同一槽位内保持 manifest 的声明顺序。
+export function sectionSlot(section: Pick<PluginUISection, 'type'>): number {
+  switch (section.type) {
+    case 'actions': return 0
+    case 'metrics': return 1
+    case 'chart': return 2
+    case 'records':
+    case 'timeline': return 3
+    default: return 4
+  }
+}
 
 export function ApplicationConsole({ instance, catalog, page, readOnly, lifecycleKey }: {
   instance: PluginInstanceView
@@ -41,7 +54,9 @@ export function ApplicationConsole({ instance, catalog, page, readOnly, lifecycl
     .filter((item) => item.section.type !== 'status')
   const isAdvanced = ({ type, source }: typeof page.sections[number]) => type === 'form' || type === 'diagnostics'
     || (type === 'table' && source === 'bindings')
-  const main = visible.filter((item) => !isAdvanced(item.section))
+  const main = visible
+    .filter((item) => !isAdvanced(item.section))
+    .sort((a, b) => sectionSlot(a.section) - sectionSlot(b.section) || a.index - b.index)
   const advanced = visible.filter((item) => isAdvanced(item.section))
   const renderSection = ({ section, index }: typeof visible[number]) => <ApplicationSection
     key={`${section.type}:${index}`}
