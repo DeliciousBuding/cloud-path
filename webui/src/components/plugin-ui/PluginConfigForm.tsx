@@ -13,11 +13,11 @@ import { safeConfigEntries } from '@/lib/plugins'
 import { resolveUIFieldDescription, resolveUIFieldLabel, resolveUIFieldValue } from '@/lib/plugin-ui'
 import type { PluginInstanceView, PluginUIField, PluginUISection } from '@/lib/types'
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
-function parseRoot(config: Record<string, string>, root: string): Record<string, unknown> | null {
+export function parseConfigRoot(config: Record<string, string>, root: string): Record<string, unknown> | null {
   const raw = config[root]
   if (typeof raw !== 'string' || !raw.trim()) return null
   try {
@@ -26,10 +26,10 @@ function parseRoot(config: Record<string, string>, root: string): Record<string,
   } catch { return null }
 }
 
-function getPath(config: Record<string, string>, key: string): unknown {
+export function getConfigPath(config: Record<string, string>, key: string): unknown {
   if (!key.includes('.')) return config[key]
   const [root, ...parts] = key.split('.')
-  let current: unknown = parseRoot(config, root)
+  let current: unknown = parseConfigRoot(config, root)
   for (const part of parts) {
     if (!isRecord(current)) return undefined
     current = current[part]
@@ -37,7 +37,7 @@ function getPath(config: Record<string, string>, key: string): unknown {
   return current
 }
 
-function typedFieldValue(field: PluginUIField, value: unknown): unknown {
+export function typedConfigFieldValue(field: PluginUIField, value: unknown): unknown {
   if (field.type === 'array') return Array.isArray(value) ? value : []
   const text = typeof value === 'string' ? value : value === undefined || value === null ? '' : String(value)
   if (text === '') return undefined
@@ -52,7 +52,7 @@ function typedFieldValue(field: PluginUIField, value: unknown): unknown {
  * `app_config.timezone` / `app_config.reminder.freq` / `app_config.beep_on_press`
  * therefore preserve string, number and boolean types in the persisted JSON.
  */
-function setPath(config: Record<string, string>, key: string, value: unknown, t: (key: string, options?: Record<string, unknown>) => string): Record<string, string> {
+export function setConfigPath(config: Record<string, string>, key: string, value: unknown, t: (key: string, options?: Record<string, unknown>) => string): Record<string, string> {
   if (!key.includes('.')) {
     const next = { ...config }
     if (value === undefined) delete next[key]
@@ -63,7 +63,7 @@ function setPath(config: Record<string, string>, key: string, value: unknown, t:
   const existing = config[root]
   const rootValue = existing === undefined || existing === ''
     ? {}
-    : parseRoot(config, root)
+    : parseConfigRoot(config, root)
   if (!rootValue) throw new Error(t('config.invalidJson'))
   let current: Record<string, unknown> = rootValue
   for (const part of parts.slice(0, -1)) {
@@ -78,13 +78,43 @@ function setPath(config: Record<string, string>, key: string, value: unknown, t:
   return { ...config, [root]: JSON.stringify(rootValue) }
 }
 
-function fieldValue(config: Record<string, string>, field: PluginUIField): unknown {
-  const value = getPath(config, field.key)
+export function configFieldValue(config: Record<string, string>, field: PluginUIField): unknown {
+  const value = getConfigPath(config, field.key)
   if (value === undefined || value === null) return field.default
   return value
 }
 
-function validateField(field: PluginUIField, value: unknown, t: (key: string, options?: Record<string, unknown>) => string): string | undefined {
+export type ConfigTranslator = (key: string, options?: Record<string, unknown>) => string
+
+/** Read the declared fields from a config map without exposing raw JSON to the caller. */
+export function valuesFromConfigFields(fields: PluginUIField[], config: Record<string, string>): Record<string, unknown> {
+  const values: Record<string, unknown> = {}
+  for (const field of fields) values[field.key] = configFieldValue(config, field)
+  return values
+}
+
+/** Validate the current UI values and return errors keyed by field key. */
+export function validateConfigFields(
+  fields: PluginUIField[], values: Record<string, unknown>, t: ConfigTranslator,
+): Record<string, string> {
+  const errors: Record<string, string> = {}
+  for (const field of fields) {
+    const message = validateConfigField(field, values[field.key], t)
+    if (message) errors[field.key] = message
+  }
+  return errors
+}
+
+/** Apply only declared fields to an existing config map, preserving undeclared keys. */
+export function applyConfigFields(
+  config: Record<string, string>, fields: PluginUIField[], values: Record<string, unknown>, t: ConfigTranslator,
+): Record<string, string> {
+  let next = { ...config }
+  for (const field of fields) next = setConfigPath(next, field.key, typedConfigFieldValue(field, values[field.key]), t)
+  return next
+}
+
+export function validateConfigField(field: PluginUIField, value: unknown, t: (key: string, options?: Record<string, unknown>) => string): string | undefined {
   if (field.type === 'array') {
     const items = Array.isArray(value) ? value : []
     if (field.required && items.length === 0) return t('config.required')
@@ -93,7 +123,7 @@ function validateField(field: PluginUIField, value: unknown, t: (key: string, op
     for (const item of items) {
       const record = isRecord(item) ? item : {}
       for (const itemField of field.itemFields ?? []) {
-        const itemError = validateField(itemField, record[itemField.key], t)
+        const itemError = validateConfigField(itemField, record[itemField.key], t)
         if (itemError) return `${resolveUIFieldLabel(itemField) || itemField.key}：${itemError}`
       }
     }
@@ -199,6 +229,69 @@ function ArrayField({ field, value, disabled, error, onChange }: {
   </div>
 }
 
+export function PluginConfigFields({ fields, values, errors, disabled, onChange }: {
+  fields: PluginUIField[]
+  values: Record<string, unknown>
+  errors: Record<string, string>
+  disabled: boolean
+  onChange: (key: string, value: unknown) => void
+}) {
+  const { t } = useTranslation('plugin')
+  return <div className="grid gap-4 sm:grid-cols-2">
+    {fields.map((field) => {
+      const value = values[field.key]
+      const textValue = typeof value === 'string' ? value : value === undefined || value === null ? '' : String(value)
+      const common = {
+        label: resolveUIFieldLabel(field) || field.key,
+        hint: resolveUIFieldDescription(field),
+        error: errors[field.key],
+        disabled,
+      }
+      const message = common.error || resolveUIFieldDescription(field)
+      const messageId = message ? `${field.key}-message` : undefined
+      if (field.type === 'array') {
+        return <ArrayField key={field.key} field={field} value={value} disabled={common.disabled} error={common.error}
+          onChange={(next) => onChange(field.key, next)} />
+      }
+      if (field.type === 'boolean') {
+        return <div key={field.key} className="min-w-0 self-end">
+          <label className="flex min-h-touch items-center gap-2 text-body text-ink-2">
+            <Checkbox checked={value === true || value === 'true'} disabled={common.disabled} aria-describedby={messageId}
+              onChange={(event) => onChange(field.key, String(event.target.checked))} />
+            <span>{common.label}</span>
+          </label>
+          {message && <p id={messageId} className={common.error ? 'mt-1.5 text-meta text-bad' : 'mt-1.5 text-meta leading-relaxed text-ink-3'}>{message}</p>}
+        </div>
+      }
+      if (field.enum?.length || field.type === 'select') {
+        return <label key={field.key} className="min-w-0 text-compact font-medium text-ink-2">
+          <span className="mb-1.5 block">{common.label}{field.required ? ' *' : ''}</span>
+          <Select className="w-full" value={textValue} disabled={common.disabled} required={field.required}
+            aria-invalid={common.error ? true : undefined} aria-describedby={messageId}
+            onChange={(event) => onChange(field.key, event.target.value)}>
+            <option value="">{t('config.select')}</option>
+            {(field.enum ?? []).map((option) => <option key={String(option)} value={String(option)}>{resolveUIFieldValue(field, option) ?? String(option)}</option>)}
+          </Select>
+          {message && <p id={messageId} className={common.error ? 'mt-1.5 text-meta text-bad' : 'mt-1.5 text-meta leading-relaxed text-ink-3'}>{message}</p>}
+        </label>
+      }
+      if (field.type === 'textarea') {
+        return <TextareaField key={field.key} label={common.label} hint={common.hint} error={common.error}
+          disabled={common.disabled} required={field.required} value={textValue} rows={4}
+          autoComplete="off" spellCheck={false}
+          placeholder={field.secret ? t('config.secretPlaceholder') : field.placeholder}
+          onChange={(event) => onChange(field.key, event.target.value)} />
+      }
+      return <TextField key={field.key} {...common} required={field.required}
+        type={field.type === 'number' || field.type === 'integer' ? 'number' : 'text'}
+        step={field.type === 'integer' ? 1 : 'any'} value={textValue}
+        autoComplete="off" spellCheck={false}
+        placeholder={field.secret ? t('config.secretPlaceholder') : field.placeholder}
+        onChange={(event) => onChange(field.key, event.target.value)} />
+    })}
+  </div>
+}
+
 export function PluginConfigForm({ instance, section, readOnly }: {
   instance: PluginInstanceView
   section: PluginUISection
@@ -213,9 +306,7 @@ export function PluginConfigForm({ instance, section, readOnly }: {
   const config = useMemo(() => instance.desired.config ?? {}, [instance.desired.config])
 
   useEffect(() => {
-    const next: Record<string, unknown> = {}
-    for (const field of fields) next[field.key] = fieldValue(config, field)
-    setValues(next)
+    setValues(valuesFromConfigFields(fields, config))
     setErrors({})
   }, [instance.id, instance.desired.revision, fields, config])
 
@@ -231,16 +322,11 @@ export function PluginConfigForm({ instance, section, readOnly }: {
 
   async function submit(event: FormEvent) {
     event.preventDefault()
-    const nextErrors: Record<string, string> = {}
-    for (const field of fields) {
-      const message = validateField(field, values[field.key], t)
-      if (message) nextErrors[field.key] = message
-    }
+    const nextErrors = validateConfigFields(fields, values, t)
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) return
-    let nextConfig = { ...config }
     try {
-      for (const field of fields) nextConfig = setPath(nextConfig, field.key, typedFieldValue(field, values[field.key]), t)
+      const nextConfig = applyConfigFields(config, fields, values, t)
       setError(null)
       await update.mutateAsync({ id: instance.id, body: { config: nextConfig } })
     } catch (cause) {
@@ -250,59 +336,9 @@ export function PluginConfigForm({ instance, section, readOnly }: {
 
   return <form className="space-y-4" onSubmit={(event) => void submit(event)}>
     {readOnly && <p className="rounded-tile bg-ink-3/10 px-3.5 py-3 text-body text-ink-2">{t('config.readOnly')}</p>}
-    <div className="grid gap-4 sm:grid-cols-2">
-      {fields.map((field) => {
-        const value = values[field.key]
-        const textValue = typeof value === 'string' ? value : value === undefined || value === null ? '' : String(value)
-        const common = {
-          label: resolveUIFieldLabel(field) || field.key,
-          hint: resolveUIFieldDescription(field),
-          error: errors[field.key],
-          disabled: readOnly || update.isPending,
-        }
-        const message = common.error || resolveUIFieldDescription(field)
-        const messageId = message ? `${field.key}-message` : undefined
-        if (field.type === 'array') {
-          return <ArrayField key={field.key} field={field} value={value} disabled={common.disabled} error={common.error}
-            onChange={(next) => setValues((current) => ({ ...current, [field.key]: next }))} />
-        }
-        if (field.type === 'boolean') {
-          return <div key={field.key} className="min-w-0 self-end">
-            <label className="flex min-h-touch items-center gap-2 text-body text-ink-2">
-              <Checkbox checked={value === true || value === 'true'} disabled={common.disabled} aria-describedby={messageId}
-                onChange={(event) => setValues((current) => ({ ...current, [field.key]: String(event.target.checked) }))} />
-              <span>{common.label}</span>
-            </label>
-            {message && <p id={messageId} className={common.error ? 'mt-1.5 text-meta text-bad' : 'mt-1.5 text-meta leading-relaxed text-ink-3'}>{message}</p>}
-          </div>
-        }
-        if (field.enum?.length || field.type === 'select') {
-          return <label key={field.key} className="min-w-0 text-compact font-medium text-ink-2">
-            <span className="mb-1.5 block">{common.label}{field.required ? ' *' : ''}</span>
-            <Select className="w-full" value={textValue} disabled={common.disabled} required={field.required}
-              aria-invalid={common.error ? true : undefined} aria-describedby={messageId}
-              onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))}>
-              <option value="">{t('config.select')}</option>
-              {(field.enum ?? []).map((option) => <option key={String(option)} value={String(option)}>{resolveUIFieldValue(field, option) ?? String(option)}</option>)}
-            </Select>
-            {message && <p id={messageId} className={common.error ? 'mt-1.5 text-meta text-bad' : 'mt-1.5 text-meta leading-relaxed text-ink-3'}>{message}</p>}
-          </label>
-        }
-        if (field.type === 'textarea') {
-          return <TextareaField key={field.key} label={common.label} hint={common.hint} error={common.error}
-            disabled={common.disabled} required={field.required} value={textValue} rows={4}
-            autoComplete="off" spellCheck={false}
-            placeholder={field.secret ? t('config.secretPlaceholder') : field.placeholder}
-            onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))} />
-        }
-        return <TextField key={field.key} {...common} required={field.required}
-          type={field.type === 'number' || field.type === 'integer' ? 'number' : 'text'}
-          step={field.type === 'integer' ? 1 : 'any'} value={textValue}
-          autoComplete="off" spellCheck={false}
-          placeholder={field.secret ? t('config.secretPlaceholder') : field.placeholder}
-          onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))} />
-      })}
-    </div>
+    <PluginConfigFields fields={fields} values={values} errors={errors}
+      disabled={readOnly || update.isPending}
+      onChange={(key, value) => setValues((current) => ({ ...current, [key]: value }))} />
     {error ? <PluginErrorNote error={error} /> : null}
     {!readOnly && <div className="flex justify-end border-t border-hairline pt-4">
       <Button type="submit" disabled={update.isPending}><Save size={14} />{update.isPending ? t('config.saving') : t('config.save')}</Button>

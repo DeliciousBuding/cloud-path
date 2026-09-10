@@ -56,13 +56,20 @@ func (r *Runtime) executeOnce(rec *instanceRecord, effect Effect) EffectResult {
 		return EffectResult{Effect: effect, Err: err}
 	}
 	rec.mu.Lock()
-	if rec.executed[effect.IdempotencyKey] {
+	if rec.executed[effect.IdempotencyKey] || rec.inFlight[effect.IdempotencyKey] {
 		rec.mu.Unlock()
 		return EffectResult{Effect: effect, Duplicate: true}
 	}
-	rec.executed[effect.IdempotencyKey] = true
+	rec.inFlight[effect.IdempotencyKey] = true
 	rec.mu.Unlock()
 
 	err := r.opts.Executor.Execute(recCtx(rec), effect)
+
+	rec.mu.Lock()
+	delete(rec.inFlight, effect.IdempotencyKey)
+	if err == nil {
+		rec.executed[effect.IdempotencyKey] = true
+	}
+	rec.mu.Unlock()
 	return EffectResult{Effect: effect, Executed: true, Err: err}
 }

@@ -17,6 +17,7 @@ import (
 const (
 	defaultEventQueueSize  = 64
 	defaultShutdownTimeout = 5 * time.Second
+	defaultJobTimeout      = 30 * time.Second
 )
 
 // Runtime manages Application Instances and their SDK service sessions. It is
@@ -45,6 +46,7 @@ type instanceRecord struct {
 	err      error
 	seq      uint64
 	executed map[string]bool
+	inFlight map[string]bool
 	rejected int
 
 	cancel context.CancelFunc
@@ -67,6 +69,9 @@ func NewRuntime(opts RuntimeOptions) (*Runtime, error) {
 	}
 	if opts.ShutdownTimeout <= 0 {
 		opts.ShutdownTimeout = defaultShutdownTimeout
+	}
+	if opts.JobTimeout <= 0 {
+		opts.JobTimeout = defaultJobTimeout
 	}
 	if opts.Logger == nil {
 		opts.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -128,6 +133,7 @@ func newInstanceRecord(spec InstanceSpec, queueSize int) *instanceRecord {
 	return &instanceRecord{
 		spec:     spec,
 		executed: map[string]bool{},
+		inFlight: map[string]bool{},
 		state:    StateCreated,
 		done:     make(chan struct{}),
 		events:   make(chan *sdkapplication.ApplicationEvent, queueSize),
@@ -350,9 +356,9 @@ func (r *Runtime) Describe(tenantID, instanceID string) (*sdkapplication.Applica
 	return rec.descriptor, nil
 }
 
-// DispatchEvent enqueues one event for the instance's event stream. It blocks
-// while the queue is full (backpressure) and returns on ctx cancellation or
-// instance shutdown.
+// DispatchEvent enqueues one event for the instance's event stream. It never
+// blocks the shared Edge/WS read loop: a full per-instance queue returns
+// ErrEventQueueFull so other devices/instances keep making progress.
 func (r *Runtime) DispatchEvent(ctx context.Context, tenantID, instanceID string, event *sdkapplication.ApplicationEvent) error {
 	if event == nil {
 		return fmt.Errorf("%w: nil event", ErrInvalidEffect)
@@ -382,6 +388,8 @@ func (r *Runtime) DispatchEvent(ctx context.Context, tenantID, instanceID string
 		return ctx.Err()
 	case <-rec.done:
 		return ErrInstanceNotRunning
+	default:
+		return ErrEventQueueFull
 	}
 }
 
@@ -431,7 +439,9 @@ func (r *Runtime) RunJob(ctx context.Context, tenantID, instanceID string, req *
 	}
 	out := *req
 	out.PluginInstanceID = rec.spec.PluginInstanceID
-	return rec.cli.RunJob(ctx, &out)
+	jobCtx, cancel := context.WithTimeout(ctx, r.opts.JobTimeout)
+	defer cancel()
+	return rec.cli.RunJob(jobCtx, &out)
 }
 
 // Health forwards a health probe to the instance's plugin.

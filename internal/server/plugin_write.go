@@ -789,6 +789,9 @@ func normalizePluginConfig(cfg map[string]string, refs, prevRefs []string) (map[
 			return nil, nil, newPluginWriteErrorWithParams(api.PluginErrInvalidConfig, http.StatusBadRequest,
 				map[string]any{"field": "config", "max_value_len": maxPluginConfigValueLen}, "config value is invalid")
 		}
+		if werr := validateStructuredPluginConfigValue(kt, v); werr != nil {
+			return nil, nil, werr
+		}
 		if strings.HasPrefix(v, secrethandle.Scheme) {
 			h, err := secrethandle.Parse(v)
 			if err != nil {
@@ -819,6 +822,27 @@ func normalizePluginConfig(cfg map[string]string, refs, prevRefs []string) (map[
 			map[string]any{"field": "secret_refs", "max_items": maxPluginSecretRefs}, "too many secret_refs")
 	}
 	return out, merged, nil
+}
+
+// validateStructuredPluginConfigValue rejects malformed application config at the
+// write boundary. The plugin remains authoritative for business fields, but a
+// value that is not even a JSON object/array must never enter desired state.
+func validateStructuredPluginConfigValue(key, value string) *pluginWriteError {
+	switch key {
+	case appConfigKey:
+		var object map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(value), &object); err != nil || object == nil {
+			return newPluginWriteErrorWithParams(api.PluginErrInvalidConfig, http.StatusBadRequest,
+				map[string]any{"field": key}, "app_config must be a JSON object")
+		}
+	case appBindingsKey:
+		var bindings []json.RawMessage
+		if err := json.Unmarshal([]byte(value), &bindings); err != nil || bindings == nil || len(bindings) > 64 {
+			return newPluginWriteErrorWithParams(api.PluginErrInvalidConfig, http.StatusBadRequest,
+				map[string]any{"field": key, "max_items": 64}, "app_bindings must be a JSON array with at most 64 items")
+		}
+	}
+	return nil
 }
 
 // normalizeSecretNames 接受裸名或完整 handle，统一归一为 handle 名。

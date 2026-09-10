@@ -130,7 +130,7 @@ function getConfigPath(config: Record<string, string>, key: string): unknown {
   return current
 }
 
-interface ConfigFieldGroup {
+export interface ConfigFieldGroup {
   key: string
   title?: string
   description?: string
@@ -138,7 +138,7 @@ interface ConfigFieldGroup {
 }
 
 /** 只读取插件声明的配置字段；机器字段名和原始 JSON 不进入普通设置区。 */
-function declaredConfigGroups(catalog: PluginCatalogView | undefined, locale: string): ConfigFieldGroup[] {
+export function declaredConfigGroups(catalog: PluginCatalogView | undefined, locale: string): ConfigFieldGroup[] {
   const contributions = [
     ...(catalog?.contributes.applications ?? []),
     ...(catalog?.contributes.drivers ?? []),

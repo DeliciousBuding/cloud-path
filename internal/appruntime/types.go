@@ -99,6 +99,8 @@ type RuntimeOptions struct {
 	EventQueueSize int
 	// ShutdownTimeout bounds one graceful instance shutdown.
 	ShutdownTimeout time.Duration
+	// JobTimeout bounds one plugin RunJob call. Zero selects the runtime default.
+	JobTimeout time.Duration
 	// Context is the parent context for all instance event loops.
 	Context context.Context
 }
@@ -116,6 +118,10 @@ var (
 	// ErrInstanceNotRunning means the instance exists but cannot accept the
 	// operation in its current state.
 	ErrInstanceNotRunning = errors.New("appruntime: instance not running")
+	// ErrEventQueueFull means the per-instance event queue is full. The caller
+	// must not block the shared Edge/WS read loop; the event is dropped and
+	// logged so the stream can recover when the plugin catches up.
+	ErrEventQueueFull = errors.New("appruntime: event queue full")
 	// ErrTenantMismatch means a caller-supplied request/effect tried to act as
 	// a tenant different from the instance tenant.
 	ErrTenantMismatch = errors.New("appruntime: tenant mismatch")
