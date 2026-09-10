@@ -17,6 +17,8 @@ type RegistryEntry struct {
 	Kind              string `yaml:"kind" json:"kind"`
 	Source            string `yaml:"source" json:"source"`
 	Digest            string `yaml:"digest" json:"digest"`
+	Tag               string `yaml:"tag,omitempty" json:"tag,omitempty"`
+	PluginPath        string `yaml:"pluginPath,omitempty" json:"pluginPath,omitempty"`
 	VerifiedPublisher string `yaml:"verifiedPublisher,omitempty" json:"verifiedPublisher,omitempty"`
 	Protocol          int    `yaml:"protocol" json:"protocol"`
 	Compatibility     string `yaml:"compatibility" json:"compatibility"`
@@ -84,6 +86,14 @@ func ValidateRegistryEntry(entry RegistryEntry) error {
 	}
 	if strings.TrimSpace(entry.Compatibility) == "" {
 		return errors.New("registry entry: compatibility is required")
+	}
+	if entry.Tag != "" && entry.Tag != strings.TrimSpace(entry.Tag) {
+		return errors.New("registry entry: tag must not have surrounding whitespace")
+	}
+	if entry.PluginPath != "" {
+		if err := validateCatalogRepositoryPath(entry.PluginPath, "registry entry.pluginPath"); err != nil {
+			return err
+		}
 	}
 	return nil
 }

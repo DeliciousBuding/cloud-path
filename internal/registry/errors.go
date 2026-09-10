@@ -6,6 +6,8 @@ import "errors"
 var (
 	// ErrInvalidManifest means the root plugin.yaml failed schema validation.
 	ErrInvalidManifest = errors.New("invalid plugin manifest")
+	// ErrInvalidCatalog means a monorepo plugins.yaml failed validation.
+	ErrInvalidCatalog = errors.New("invalid plugin catalog")
 	// ErrCoreIncompatible means compatibility.core does not cover current Core.
 	ErrCoreIncompatible = errors.New("core version incompatible")
 	// ErrProtocolIncompatible means the plugin declares an unsupported protocol.

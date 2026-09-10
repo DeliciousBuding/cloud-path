@@ -137,6 +137,12 @@ isolation, device supervision and offline buffering, external Driver Plugin Host
 Runtime, SQLite persistence, Registry CLI, and release/deployment assets. See
 [docs/architecture.md](docs/architecture.md) for the full current-versus-target list.
 
+The plugin CLI supports both legacy single-plugin repositories and monorepo
+catalogs. A monorepo keeps a root `plugins.yaml`; install/inspect select an entry
+with an exact `--plugin <slug|id|path>` selector, and each entry uses the exact
+release tag `<path>/v<manifest.version>`. Archived entries are excluded. The
+catalog contract is [spec/plugin-catalog.schema.json](spec/plugin-catalog.schema.json).
+
 Not current capabilities: Connector runtime and notification delivery (`SendNotification` fails
 closed with `not_implemented`), Transform/WASM, multi-Server scaling, distributed quotas,
 centralized KMS/Vault, MQTT/Modbus gateways, remote OTA, time-series analytics, and arbitrary

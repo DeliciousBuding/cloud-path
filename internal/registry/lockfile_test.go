@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -13,7 +14,9 @@ func TestLockfileRoundtrip(t *testing.T) {
 			ID:            "io.github.example.driver",
 			Version:       "0.1.0",
 			Digest:        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			Source:        "https://github.com/example/driver",
+			Source:        "https://github.com/example/plugins",
+			Tag:           "drivers/example/v0.1.0",
+			PluginPath:    "drivers/example",
 			Verified:      true,
 			Protocol:      1,
 			Compatibility: ">=0.1.0 <0.2.0",
@@ -32,8 +35,34 @@ func TestLockfileRoundtrip(t *testing.T) {
 	plugin := got.Plugins[0]
 	if plugin.ID != original.Plugins[0].ID || plugin.Version != original.Plugins[0].Version ||
 		plugin.Digest != original.Plugins[0].Digest || plugin.Source != original.Plugins[0].Source ||
+		plugin.Tag != original.Plugins[0].Tag || plugin.PluginPath != original.Plugins[0].PluginPath ||
 		!plugin.Verified || plugin.Protocol != 1 || plugin.Compatibility != original.Plugins[0].Compatibility {
 		t.Fatalf("roundtrip mismatch: %+v", plugin)
+	}
+}
+
+func TestLegacyLockfileWithoutTagAndPathRemainsReadable(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plugins.lock")
+	legacy := `format_version: 1
+plugins:
+  - id: io.github.example.driver
+    version: 0.1.0
+    digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    source: https://github.com/example/driver
+    verified: true
+    protocol: 1
+    compatibility: ">=0.1.0 <0.2.0"
+`
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := LoadLockFile(path)
+	if err != nil {
+		t.Fatalf("legacy lock should remain readable: %v", err)
+	}
+	entry, ok := lock.Find("io.github.example.driver")
+	if !ok || entry.Tag != "" || entry.PluginPath != "" {
+		t.Fatalf("legacy fields should default empty: %+v", entry)
 	}
 }
 

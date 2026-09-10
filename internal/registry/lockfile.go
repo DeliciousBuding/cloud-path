@@ -22,6 +22,8 @@ type LockedPlugin struct {
 	Version           string    `yaml:"version" json:"version"`
 	Digest            string    `yaml:"digest" json:"digest"`
 	Source            string    `yaml:"source" json:"source"`
+	Tag               string    `yaml:"tag,omitempty" json:"tag,omitempty"`
+	PluginPath        string    `yaml:"pluginPath,omitempty" json:"pluginPath,omitempty"`
 	Verified          bool      `yaml:"verified" json:"verified"`
 	Mode              TrustMode `yaml:"mode,omitempty" json:"mode,omitempty"`
 	Evidence          string    `yaml:"evidence,omitempty" json:"evidence,omitempty"`

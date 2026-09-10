@@ -1,6 +1,6 @@
 # Plugin System 设计与运行时
 
-最后更新：2026-09-09
+最后更新：2026-09-10
 
 > 状态：Manifest、SDK 与进程运行时以当前代码、`spec/` 和
 > [how-to-build-driver.md](how-to-build-driver.md) 为准。本文说明多类型插件边界、控制面同步与故障语义；
@@ -8,7 +8,7 @@
 
 ## 1. 统一平台，多类插件
 
-插件仓库根目录的 `plugin.yaml` 是安装与信任的机器可读声明。Manifest 的 `kind` 决定贡献类型：
+单插件仓库的根 `plugin.yaml`、或 monorepo catalog 中 `<path>/plugin.yaml` 是安装与信任的机器可读声明。Manifest 的 `kind` 决定贡献类型：
 
 | kind | Protocol | 默认宿主 | 当前状态 |
 |---|---|---|---|
@@ -23,7 +23,8 @@ Descriptor/Capability schema 渲染通用界面。Transform/WASM 属于后续目
 
 ## 2. Manifest v1alpha1
 
-插件仓库根文件固定为 `plugin.yaml`。顶层字段必须符合
+单插件仓库使用根 `plugin.yaml`；monorepo 的根 `plugins.yaml` 只负责选择条目，Manifest 固定在
+`<path>/plugin.yaml`。顶层字段必须符合
 [`spec/plugin-manifest.schema.json`](../../spec/plugin-manifest.schema.json)；`kind` 只能是
 `Driver`、`Application` 或 `Connector`。
 

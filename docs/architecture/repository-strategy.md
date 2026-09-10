@@ -24,6 +24,7 @@
 | 仓库 | 职责 | 源码状态 / 创建条件 |
 |---|---|---|
 | `cloud-path` | Core、Server、Edge、WebUI、公共 API/Schema、Go SDK、测试 harness | 当前主仓库 |
+| [`cloud-path-plugins`](https://github.com/DeliciousBuding/cloud-path-plugins) | 插件 monorepo：根 `plugins.yaml` + 各插件 `<path>/plugin.yaml`；不改变单插件仓库兼容性 | 插件 catalog 发布入口 |
 | `cloud-path-registry` | 精选插件索引、发布者策略、digest/attestation 元数据；不存二进制 | Registry 接口稳定后 |
 | `cloud-path-driver-stcb` | STC-B Driver Plugin；板级容错、串口协议、Capability 映射 | 已拆仓，独立维护 |
 | [cloud-path-app-scheduled-compartment](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment) | 硬件无关的定时隔间 Application Plugin | 独立维护；现役源码入口 |
@@ -55,12 +56,21 @@ cloud-path-app-scheduled-compartment
 cloud-path-connector-home-assistant
 ```
 
-社区插件不强制仓库前缀，但必须：
+仓库可以是**单插件仓库**或**插件 monorepo**，Core 对两者兼容：
+
+- 单插件仓库：根有 `plugin.yaml`，Release tag 为 `v<manifest.version>`；
+- monorepo：根有 `plugins.yaml` catalog，每个条目声明 `id`、`slug`、`kind`、`path`、
+  `tagPrefix`、可选 `asset`、`archived`；manifest 位于 `<path>/plugin.yaml`，`tagPrefix`
+  必须严格等于 `path`，Release tag 为 `<path>/v<manifest.version>`。
+
+社区仓库不强制 `cloud-path-*` 前缀，但必须：
 
 1. 添加 Topic `cloudpath-plugin`；
-2. 仓库根有 `plugin.yaml`；
+2. 单插件有根 `plugin.yaml`，monorepo 有根
+   [`plugin-catalog.schema.json`](../../spec/plugin-catalog.schema.json) 和 `<path>/plugin.yaml`；
 3. plugin id 使用发布者命名空间；
-4. Release 资产有摘要，安装前通过 Manifest/兼容性/digest 验证。
+4. Release 资产有摘要；monorepo 安装时用精确 `--plugin <slug\|id\|path>` 选择条目，安装前
+   仍通过 Manifest/兼容性/digest 验证。
 
 ## 4. 核心仓库边界
 
@@ -99,7 +109,8 @@ Application ─X→ Driver ID / 端口 / 厂商字段
 
 拆仓使用 `git filter-repo`/subtree 保留相关历史；核心仓库删除编译期 import，仅保留安装示例和 Registry 指针。
 
-**拆仓后以独立仓库为源码事实源**：修复、配置格式、SDK 依赖与发布在各应用仓维护。
+**拆仓后源码事实源由发布形态决定**：单插件仓库以自身仓库为事实源；迁移到 monorepo 后以该
+`<path>` 为事实源。迁移必须保留精确 version/tag/path 与 digest 证据，不能静默改写安装来源。
 Core 的 `examples/scheduled-compartment` 与 [split 生成器](../../deploy/split/README.md)
 只保留参考 / 历史 bootstrap；[Go 模板](../../templates/go-plugin/README.md)仅供新插件起步。
 这些材料不自动跟随独立应用演进，不得重新生成或复制覆盖现役应用。
